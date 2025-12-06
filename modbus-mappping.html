@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Mapping - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* Protocol Mapping specific styles */
+        .compact-table {
+            font-size: 12px;
+        }
+        
+        .compact-table th {
+            padding: 8px 12px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        
+        .compact-table td {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+        
+        .protocol-badge {
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        
+        .protocol-badge.modbus {
+            background: #EFF6FF;
+            color: #2563EB;
+            border: 1px solid #BFDBFE;
+        }
+        
+        .protocol-badge.can {
+            background: #FEF3C7;
+            color: #D97706;
+            border: 1px solid #FDE68A;
+        }
+        
+        .protocol-badge.ethernet {
+            background: #F3E8FF;
+            color: #7C3AED;
+            border: 1px solid #E9D5FF;
+        }
+        
+        .protocol-badge.serial {
+            background: #DCFCE7;
+            color: #166534;
+            border: 1px solid #BBF7D0;
+        }
+        
+        .data-type-badge {
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .data-type-badge.int16 {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+        
+        .data-type-badge.int32 {
+            background: #BFDBFE;
+            color: #1E3A8A;
+        }
+        
+        .data-type-badge.float32 {
+            background: #F3E8FF;
+            color: #5B21B6;
+        }
+        
+        .data-type-badge.uint16 {
+            background: #DCFCE7;
+            color: #166534;
+        }
+        
+        .data-type-badge.bool {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+        
+        .device-badge {
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+            background: #F1F5F9;
+            color: #475569;
+            border: 1px solid #CBD5E1;
+            white-space: nowrap;
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .status-indicator.online::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10B981;
+            margin-right: 4px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.offline::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #EF4444;
+            margin-right: 4px;
+        }
+        
+        .status-indicator.warning::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #F59E0B;
+            margin-right: 4px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .compact-tag-card {
+            padding: 10px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #E2E8F0;
+            font-size: 12px;
+        }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 550px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .dynamic-section {
+            display: none;
+        }
+        
+        .dynamic-section.active {
+            display: block;
+        }
+        
+        .compact-input {
+            padding: 6px 10px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+        }
+        
+        .compact-input:focus {
+            outline: none;
+            border-color: #2563EB;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        
+        .compact-select {
+            padding: 6px 10px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+        }
+        
+        .compact-select:focus {
+            outline: none;
+            border-color: #2563EB;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        
+        .compact-button {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+        }
+        
+        .tab-container {
+            border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .tab {
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748B;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: #2563EB;
+        }
+        
+        .tab.active {
+            color: #2563EB;
+            border-bottom-color: #2563EB;
+        }
+        
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .step-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .step-circle.active {
+            background: #2563EB;
+            color: white;
+        }
+        
+        .step-circle.inactive {
+            background: #E2E8F0;
+            color: #64748B;
+        }
+        
+        .step-line {
+            height: 2px;
+            width: 40px;
+            background: #E2E8F0;
+        }
+        
+        .step-label {
+            font-size: 10px;
+            color: #64748B;
+            white-space: nowrap;
+        }
+        
+        .step-label.active {
+            color: #2563EB;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Edit Mapping Modal -->
+    <div class="modal-overlay" id="editMappingModal">
+        <div class="modal">
+            <div class="p-5">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="text-base font-semibold text-slate-800">
+                        <span id="modalTitle">Add New Mapping</span>
+                    </h2>
+                    <button class="text-slate-400 hover:text-slate-600" id="closeEditMappingModal">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+                
+                <!-- Step Indicator -->
+                <div class="step-indicator mb-6">
+                    <div class="step">
+                        <div class="step-circle active" id="step1">1</div>
+                        <div class="step-label active">Device & Address</div>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step">
+                        <div class="step-circle inactive" id="step2">2</div>
+                        <div class="step-label">Data Type</div>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step">
+                        <div class="step-circle inactive" id="step3">3</div>
+                        <div class="step-label">Tag Definition</div>
+                    </div>
+                </div>
+                
+                <!-- Device Selection (Always visible) -->
+                <div class="mb-5 p-3 bg-slate-50 rounded-lg text-sm">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="text-xs text-slate-600 mb-1">Selected Device</div>
+                            <div class="text-sm font-medium text-slate-900" id="mappingDeviceName">-</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-600 mb-1">Protocol</div>
+                            <div class="text-sm" id="mappingProtocol">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabs for different protocol configurations -->
+                <div class="tab-container mb-5">
+                    <div class="flex space-x-1">
+                        <div class="tab active" data-tab="modbus">Modbus</div>
+                        <div class="tab" data-tab="can">CAN</div>
+                        <div class="tab" data-tab="ethernet">EtherNet/IP</div>
+                        <div class="tab" data-tab="advanced">Advanced</div>
+                    </div>
+                </div>
+                
+                <!-- Dynamic Form Content -->
+                <div id="modalContent">
+                    <!-- Step 1: Address Configuration -->
+                    <div class="dynamic-section active" id="step1-content">
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-xs font-semibold text-slate-900 mb-2">Address Configuration</h3>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div id="address-type-container">
+                                        <!-- Dynamically loaded based on protocol -->
+                                    </div>
+                                    <div id="address-value-container">
+                                        <!-- Dynamically loaded -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Protocol-specific fields -->
+                            <div id="protocol-specific-fields">
+                                <!-- Dynamically loaded -->
+                            </div>
+                            
+                            <!-- Next button -->
+                            <div class="mt-6 pt-4 border-t border-slate-200 flex justify-end">
+                                <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="nextStep1Btn">
+                                    Next: Data Type <i class="fa-solid fa-arrow-right ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: Data Type Configuration -->
+                    <div class="dynamic-section" id="step2-content">
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-xs font-semibold text-slate-900 mb-2">Data Type & Decoding</h3>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Data Type</label>
+                                        <select class="w-full compact-select bg-white" id="mappingDataType">
+                                            <option value="INT16">INT16 (16-bit signed)</option>
+                                            <option value="UINT16">UINT16 (16-bit unsigned)</option>
+                                            <option value="INT32">INT32 (32-bit signed)</option>
+                                            <option value="UINT32">UINT32 (32-bit unsigned)</option>
+                                            <option value="FLOAT32">FLOAT32 (32-bit float)</option>
+                                            <option value="FLOAT64">FLOAT64 (64-bit float)</option>
+                                            <option value="BOOL">BOOL (1-bit boolean)</option>
+                                            <option value="BYTE">BYTE (8-bit)</option>
+                                            <option value="STRING">STRING (ASCII)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Endianness</label>
+                                        <select class="w-full compact-select bg-white" id="mappingEndianness">
+                                            <option value="big-endian">Big Endian (ABCD)</option>
+                                            <option value="little-endian">Little Endian (DCBA)</option>
+                                            <option value="big-endian-byte-swap">Big Endian Byte Swap (BADC)</option>
+                                            <option value="little-endian-byte-swap">Little Endian Byte Swap (CDAB)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Dynamic data type options -->
+                            <div id="data-type-options">
+                                <!-- Will be populated based on data type selection -->
+                            </div>
+                            
+                            <!-- Navigation buttons -->
+                            <div class="mt-6 pt-4 border-t border-slate-200 flex justify-between">
+                                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="prevStep2Btn">
+                                    <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                                </button>
+                                <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="nextStep2Btn">
+                                    Next: Tag Definition <i class="fa-solid fa-arrow-right ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: Tag Definition -->
+                    <div class="dynamic-section" id="step3-content">
+                        <div class="space-y-4">
+                            <div>
+                                <h3 class="text-xs font-semibold text-slate-900 mb-2">Tag Definition</h3>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Tag Name *</label>
+                                        <input type="text" class="w-full compact-input" placeholder="e.g., Hoist_Load" id="mappingTagName">
+                                        <div class="text-xs text-slate-500 mt-1">Use underscores, no spaces</div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Engineering Unit</label>
+                                        <select class="w-full compact-select bg-white" id="mappingUnit">
+                                            <option value="">None</option>
+                                            <optgroup label="Weight">
+                                                <option value="tons">tons</option>
+                                                <option value="kg">kg</option>
+                                                <option value="lbs">lbs</option>
+                                            </optgroup>
+                                            <optgroup label="Temperature">
+                                                <option value="°C">°C</option>
+                                                <option value="°F">°F</option>
+                                                <option value="K">K</option>
+                                            </optgroup>
+                                            <optgroup label="Speed">
+                                                <option value="m/s">m/s</option>
+                                                <option value="km/h">km/h</option>
+                                                <option value="RPM">RPM</option>
+                                            </optgroup>
+                                            <optgroup label="Pressure">
+                                                <option value="PSI">PSI</option>
+                                                <option value="bar">bar</option>
+                                                <option value="kPa">kPa</option>
+                                            </optgroup>
+                                            <optgroup label="Angle">
+                                                <option value="degrees">degrees</option>
+                                                <option value="radians">radians</option>
+                                            </optgroup>
+                                            <optgroup label="Other">
+                                                <option value="%">%</option>
+                                                <option value="V">Volts</option>
+                                                <option value="A">Amps</option>
+                                                <option value="Hz">Hz</option>
+                                                <option value="flag">Flag</option>
+                                            </optgroup>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Description</label>
+                                <textarea class="w-full compact-input h-16" placeholder="Description of this measurement..." id="mappingDescription"></textarea>
+                            </div>
+                            
+                            <!-- Scaling -->
+                            <div>
+                                <h3 class="text-xs font-semibold text-slate-900 mb-2">Scaling & Transformation</h3>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Scale Factor</label>
+                                        <input type="number" step="0.001" value="1" class="w-full compact-input" id="mappingScale">
+                                        <div class="text-xs text-slate-500 mt-1">Raw value × scale</div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Offset</label>
+                                        <input type="number" step="0.01" value="0" class="w-full compact-input" id="mappingOffset">
+                                        <div class="text-xs text-slate-500 mt-1">(Raw × scale) + offset</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Polling & Category -->
+                            <div>
+                                <h3 class="text-xs font-semibold text-slate-900 mb-2">Polling & Category</h3>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Poll Interval (ms)</label>
+                                        <div class="flex items-center space-x-2">
+                                            <select class="flex-1 compact-select bg-white" id="mappingPollPreset">
+                                                <option value="100">Fast (100ms)</option>
+                                                <option value="200" selected>Standard (200ms)</option>
+                                                <option value="500">Medium (500ms)</option>
+                                                <option value="1000">Slow (1s)</option>
+                                                <option value="5000">Very Slow (5s)</option>
+                                                <option value="custom">Custom...</option>
+                                            </select>
+                                            <input type="number" value="200" class="w-20 compact-input" id="mappingPollInterval" style="display: none;">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Category</label>
+                                        <select class="w-full compact-select bg-white" id="mappingCategory">
+                                            <option value="Sensors">Sensors</option>
+                                            <option value="Motor">Motor</option>
+                                            <option value="Safety">Safety</option>
+                                            <option value="Diagnostic">Diagnostic</option>
+                                            <option value="Load Monitoring">Load Monitoring</option>
+                                            <option value="Position Tracking">Position Tracking</option>
+                                            <option value="Status">Status</option>
+                                            <option value="Configuration">Configuration</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Validation (optional) -->
+                            <div class="collapse-section">
+                                <div class="flex items-center justify-between cursor-pointer" onclick="toggleSection('validation-section')">
+                                    <h3 class="text-xs font-semibold text-slate-900">Validation & Alarms (Optional)</h3>
+                                    <i class="fa-solid fa-chevron-down text-xs text-slate-400" id="validation-chevron"></i>
+                                </div>
+                                <div id="validation-section" class="mt-3 space-y-3 hidden">
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Min Valid Value</label>
+                                            <input type="number" class="w-full compact-input" placeholder="Minimum" id="mappingMinValue">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Max Valid Value</label>
+                                            <input type="number" class="w-full compact-input" placeholder="Maximum" id="mappingMaxValue">
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Warning Threshold</label>
+                                            <input type="number" class="w-full compact-input" placeholder="Warning level" id="mappingWarning">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Threshold</label>
+                                            <input type="number" class="w-full compact-input" placeholder="Alarm level" id="mappingAlarm">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Navigation buttons -->
+                            <div class="mt-6 pt-4 border-t border-slate-200 flex justify-between">
+                                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="prevStep3Btn">
+                                    <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                                </button>
+                                <div class="flex space-x-2">
+                                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelEditMapping">
+                                        Cancel
+                                    </button>
+                                    <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="saveMappingBtn">
+                                        <i class="fa-solid fa-save mr-1"></i> Save Mapping
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-plug mr-2"></i>Protocols</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">Protocol Mapping</span>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="header-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="mb-8">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold text-slate-900">Protocol Mapping</h1>
+                            <p class="text-slate-500 text-sm mt-1">Map device registers to tags for data processing</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                <i class="fa-solid fa-file-import mr-2 text-sm"></i> Import
+                            </button>
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                <i class="fa-solid fa-file-export mr-2 text-sm"></i> Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Device List -->
+                <section class="bg-white rounded-xl shadow-sm border border-border mb-8">
+                    <div class="p-6 border-b border-border flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-list mr-2 text-primary"></i> 
+                            Device List
+                        </h2>
+                        <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 flex items-center gap-1" onclick="window.location.href='device-management.html'">
+                            <i class="fa-solid fa-plus text-sm"></i> Add Device
+                        </button>
+                    </div>
+                    
+                    <!-- Device Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full compact-table">
+                            <thead class="bg-slate-50 border-b border-border">
+                                <tr>
+                                    <th class="text-left">Device</th>
+                                    <th class="text-left">Protocol</th>
+                                    <th class="text-left">Address</th>
+                                    <th class="text-left">Status</th>
+                                    <th class="text-left">Tags</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border" id="devicesTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Register Mapping Table -->
+                    <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-border">
+                        <div class="p-6 border-b border-border flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-table mr-2 text-primary"></i> 
+                                Register Mappings
+                            </h2>
+                            <div class="flex items-center space-x-3">
+                                <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceFilter">
+                                    <option>All Devices</option>
+                                    <option>LoadCell_1</option>
+                                    <option>Inclin_Arm</option>
+                                    <option>HoistDrive</option>
+                                    <option>WindSensor</option>
+                                </select>
+                                <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center" id="addMappingBtn">
+                                    <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Mapping
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Mapping Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full compact-table">
+                                <thead class="bg-slate-50 border-b border-border">
+                                    <tr>
+                                        <th class="text-left">Device</th>
+                                        <th class="text-left">Address</th>
+                                        <th class="text-left">Tag</th>
+                                        <th class="text-left">Type</th>
+                                        <th class="text-left">Unit</th>
+                                        <th class="text-left">Poll</th>
+                                        <th class="text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border" id="mappingTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Table Info -->
+                        <div class="p-4 border-t border-border bg-slate-50 text-sm text-slate-500">
+                            Showing <span class="font-medium text-slate-900" id="mappingCount">0</span> mappings
+                        </div>
+                    </section>
+
+                    <!-- Tag Browser -->
+                    <section class="bg-white rounded-xl shadow-sm border border-border">
+                        <div class="p-6 border-b border-border">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-tags mr-2 text-primary"></i> 
+                                Tag Browser
+                            </h2>
+                        </div>
+                        
+                        <div class="p-5">
+                            <!-- Search -->
+                            <div class="relative mb-4">
+                                <input type="text" placeholder="Search tags..." class="w-full pl-10 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" id="tagSearch">
+                                <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
+                            </div>
+                            
+                            <!-- Tags List -->
+                            <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2" id="tagsList">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Actions -->
+        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="testDeviceBtn">
+                        <i class="fa-solid fa-bolt mr-2 text-slate-400"></i> Test Device
+                    </button>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="validateAllBtn">
+                        <i class="fa-solid fa-check-circle mr-2 text-slate-400"></i> Validate All
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
+                        <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center">
+                        <i class="fa-solid fa-power-off mr-2"></i> Reboot Gateway
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div> <!-- End of main content container -->
+
+    <script>
+        // SIDEBAR LOADING - Using the same fetch method
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Initialize sidebar after loading
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Create minimal fallback sidebar
+                createFallbackSidebar();
+            }
+        }
+
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device Management
+                            </a>
+                        </div>
+                        
+                        <div class="nav-section">
+                            <div class="section-title">Protocols</div>
+                            <a href="protocol-mapping.html" class="nav-item active">
+                                <i class="fa-solid fa-plug"></i>
+                                Protocol Mapping
+                                <span class="nav-item-count">18</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">A</div>
+                            <div class="user-info">
+                                <h4>Admin</h4>
+                                <p>System Admin</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            // Toggle sidebar
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                const icon = this.querySelector('i');
+                icon.className = sidebar.classList.contains('active') 
+                    ? 'fa-solid fa-times' 
+                    : 'fa-solid fa-bars';
+            });
+            
+            // Handle responsive behavior
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            // Update on resize
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed', 'active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        // Protocol Mapping Application Code
+        // Global state
+        let devices = [];
+        let mappings = [];
+        let tags = [];
+        let selectedDeviceId = null;
+        let selectedMappingId = null;
+        let currentStep = 1;
+        let currentProtocol = 'modbus';
+
+        // Sample data
+        const sampleDevices = [
+            {
+                id: 1,
+                name: 'LoadCell_1',
+                type: 'Load Cell',
+                protocol: 'modbus-rtu',
+                address: '01',
+                status: 'online',
+                pollRate: '200',
+                tags: 4,
+                description: 'Main hoist load cell'
+            },
+            {
+                id: 2,
+                name: 'Inclin_Arm',
+                type: 'Inclinometer',
+                protocol: 'modbus-tcp',
+                address: '192.168.1.21:502',
+                status: 'online',
+                pollRate: '500',
+                tags: 3,
+                description: 'Boom angle sensor'
+            },
+            {
+                id: 3,
+                name: 'HoistDrive',
+                type: 'Drive Controller',
+                protocol: 'can',
+                address: '0x32',
+                status: 'offline',
+                pollRate: '100',
+                tags: 6,
+                description: 'Main hoist drive'
+            },
+            {
+                id: 4,
+                name: 'WindSensor',
+                type: 'Wind Sensor',
+                protocol: 'modbus-rtu',
+                address: '02',
+                status: 'warning',
+                pollRate: '1000',
+                tags: 2,
+                description: 'Wind speed sensor'
+            }
+        ];
+
+        const sampleMappings = [
+            {
+                id: 1,
+                deviceId: 1,
+                address: '30001',
+                tagName: 'Hoist_Load',
+                dataType: 'INT16',
+                scale: '0.01',
+                offset: '0',
+                unit: 'tons',
+                pollInterval: '200',
+                category: 'Load Monitoring',
+                description: 'Main hoist load measurement',
+                minValid: '0',
+                maxValid: '200',
+                endianness: 'big-endian'
+            }
+        ];
+
+        // Initialize application
+        function initApp() {
+            devices = [...sampleDevices];
+            mappings = [...sampleMappings];
+            
+            generateTags();
+            renderDevicesTable();
+            renderMappingsTable();
+            renderTagsList();
+            setupEventListeners();
+        }
+
+        // Generate tags from mappings
+        function generateTags() {
+            tags = mappings.map(mapping => {
+                const device = devices.find(d => d.id === mapping.deviceId);
+                return {
+                    id: mapping.id,
+                    name: mapping.tagName,
+                    description: mapping.description,
+                    deviceId: mapping.deviceId,
+                    deviceName: device?.name || 'Unknown',
+                    deviceProtocol: device?.protocol || 'Unknown',
+                    value: getRandomValue(mapping),
+                    lastUpdated: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    unit: mapping.unit,
+                    address: mapping.address,
+                    category: mapping.category,
+                    usedBy: getUsedBy(mapping.category)
+                };
+            });
+        }
+
+        function getRandomValue(mapping) {
+            const ranges = {
+                'tons': {min: 0, max: 200},
+                'degrees': {min: -10, max: 85},
+                'm/s': {min: 0, max: 50},
+                'RPM': {min: -100, max: 3000},
+                'flag': {min: 0, max: 65535},
+                'default': {min: 0, max: 100}
+            };
+            
+            const range = ranges[mapping.unit] || ranges.default;
+            const random = range.min + Math.random() * (range.max - range.min);
+            
+            if (mapping.dataType.includes('FLOAT')) {
+                return random.toFixed(2);
+            } else {
+                return Math.round(random);
+            }
+        }
+
+        function getUsedBy(category) {
+            const usage = {
+                'Load Monitoring': ['Rules', 'CraneIQ', 'Dash'],
+                'Safety': ['Rules', 'Alerts'],
+                'Position Tracking': ['CraneIQ', 'Dash'],
+                'Sensors': ['Rules', 'Dash'],
+                'Motor': ['Rules', 'CraneIQ'],
+                'Diagnostic': ['Rules', 'Logging'],
+                'default': ['Rules', 'Dash']
+            };
+            return usage[category] || usage.default;
+        }
+
+        // Render devices table
+        function renderDevicesTable() {
+            const tbody = document.getElementById('devicesTableBody');
+            tbody.innerHTML = '';
+            
+            devices.forEach(device => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 cursor-pointer';
+                row.dataset.deviceId = device.id;
+                
+                // Protocol badge
+                let protocolClass = 'protocol-badge ';
+                switch(device.protocol) {
+                    case 'modbus-rtu':
+                    case 'modbus-tcp':
+                        protocolClass += 'modbus'; break;
+                    case 'can':
+                        protocolClass += 'can'; break;
+                    case 'ethernet-ip':
+                        protocolClass += 'ethernet'; break;
+                    default:
+                        protocolClass += 'serial';
+                }
+                
+                // Status
+                let statusClass = 'status-indicator ';
+                let statusText = device.status.charAt(0).toUpperCase() + device.status.slice(1);
+                switch(device.status) {
+                    case 'online': statusClass += 'online'; break;
+                    case 'offline': statusClass += 'offline'; break;
+                    case 'warning': statusClass += 'warning'; break;
+                }
+                
+                row.innerHTML = `
+                    <td>
+                        <div class="font-medium text-slate-900">${device.name}</div>
+                        <div class="text-xs text-slate-500">${device.type}</div>
+                    </td>
+                    <td>
+                        <span class="${protocolClass}">${device.protocol.replace('-', ' ').toUpperCase()}</span>
+                    </td>
+                    <td class="font-mono">${device.address}</td>
+                    <td>
+                        <span class="${statusClass}">${statusText}</span>
+                    </td>
+                    <td>${device.tags}</td>
+                    <td class="text-right">
+                        <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary text-xs" onclick="editDevice(${device.id})">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // Render mappings table
+        function renderMappingsTable() {
+            const tbody = document.getElementById('mappingTableBody');
+            tbody.innerHTML = '';
+            
+            const deviceFilter = document.getElementById('deviceFilter').value;
+            let filteredMappings = mappings;
+            
+            if (deviceFilter !== 'All Devices') {
+                const deviceName = deviceFilter;
+                const device = devices.find(d => d.name === deviceName);
+                if (device) {
+                    filteredMappings = mappings.filter(m => m.deviceId === device.id);
+                }
+            }
+            
+            filteredMappings.forEach(mapping => {
+                const device = devices.find(d => d.id === mapping.deviceId);
+                if (!device) return;
+                
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50';
+                row.dataset.mappingId = mapping.id;
+                
+                // Data type badge
+                let dataTypeClass = 'data-type-badge ';
+                if (mapping.dataType.includes('INT16')) dataTypeClass += 'int16';
+                else if (mapping.dataType.includes('INT32')) dataTypeClass += 'int32';
+                else if (mapping.dataType.includes('FLOAT')) dataTypeClass += 'float32';
+                else if (mapping.dataType.includes('UINT')) dataTypeClass += 'uint16';
+                else dataTypeClass += 'bool';
+                
+                row.innerHTML = `
+                    <td>
+                        <div class="font-medium">${device.name}</div>
+                        <div class="text-xs text-slate-500">${device.type}</div>
+                    </td>
+                    <td class="font-mono">${mapping.address}</td>
+                    <td>
+                        <div class="font-medium">${mapping.tagName}</div>
+                        <div class="text-xs text-slate-500 truncate max-w-[120px]">${mapping.description}</div>
+                    </td>
+                    <td><span class="${dataTypeClass}">${mapping.dataType}</span></td>
+                    <td>${mapping.unit}</td>
+                    <td class="font-mono">${mapping.pollInterval}</td>
+                    <td class="text-right">
+                        <div class="flex justify-end space-x-1">
+                            <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary text-xs" onclick="editMapping(${mapping.id})">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-danger hover:border-danger text-xs" onclick="deleteMapping(${mapping.id})">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            // Update mapping count
+            document.getElementById('mappingCount').textContent = filteredMappings.length;
+        }
+
+        // Render tags list
+        function renderTagsList() {
+            const container = document.getElementById('tagsList');
+            container.innerHTML = '';
+            
+            const searchTerm = document.getElementById('tagSearch').value.toLowerCase();
+            let filteredTags = tags;
+            
+            if (searchTerm) {
+                filteredTags = tags.filter(tag => 
+                    tag.name.toLowerCase().includes(searchTerm) ||
+                    tag.description.toLowerCase().includes(searchTerm) ||
+                    tag.deviceName.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            filteredTags.forEach(tag => {
+                const device = devices.find(d => d.id === tag.deviceId);
+                const mapping = mappings.find(m => m.id === tag.id);
+                
+                let protocolClass = 'protocol-badge ';
+                if (device) {
+                    switch(device.protocol) {
+                        case 'modbus-rtu':
+                        case 'modbus-tcp':
+                            protocolClass += 'modbus'; break;
+                        case 'can':
+                            protocolClass += 'can'; break;
+                        case 'ethernet-ip':
+                            protocolClass += 'ethernet'; break;
+                        default:
+                            protocolClass += 'serial';
+                    }
+                }
+                
+                const tagElement = document.createElement('div');
+                tagElement.className = 'compact-tag-card';
+                tagElement.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="font-medium text-slate-900">${tag.name}</div>
+                            <div class="text-xs text-slate-500">${tag.description}</div>
+                        </div>
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="${protocolClass}">${device?.protocol.replace('-', ' ').toUpperCase() || ''}</span>
+                            <span class="device-badge">${tag.deviceName}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between text-xs mb-2">
+                        <div class="text-slate-600">
+                            <i class="fa-solid fa-hashtag mr-1"></i>${tag.address}
+                        </div>
+                        <div class="text-slate-500">
+                            <i class="fa-solid fa-clock mr-1"></i>${tag.lastUpdated}
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-lg font-bold text-primary">${tag.value}</div>
+                        <div class="text-sm font-medium">${tag.unit}</div>
+                    </div>
+                    
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        ${tag.usedBy.map(module => 
+                            `<span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">${module}</span>`
+                        ).join('')}
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">${mapping?.category || 'General'}</span>
+                    </div>
+                `;
+                container.appendChild(tagElement);
+            });
+        }
+
+        // Edit device
+        function editDevice(id) {
+            selectedDeviceId = id;
+            const device = devices.find(d => d.id === id);
+            if (device) {
+                document.getElementById('deviceFilter').value = device.name;
+                renderMappingsTable();
+            }
+        }
+
+        // Add new mapping
+        function addNewMapping() {
+            if (!selectedDeviceId) {
+                alert('Please select a device first by clicking on it in the device list.');
+                return;
+            }
+            
+            const device = devices.find(d => d.id === selectedDeviceId);
+            if (!device) return;
+            
+            // Reset modal state
+            resetModal();
+            
+            // Update modal title
+            document.getElementById('modalTitle').textContent = 'Add New Mapping';
+            
+            // Fill device info
+            document.getElementById('mappingDeviceName').textContent = device.name;
+            document.getElementById('mappingProtocol').textContent = device.protocol.toUpperCase() + ' | Addr: ' + device.address;
+            
+            // Set current protocol based on device
+            currentProtocol = getProtocolType(device.protocol);
+            
+            // Load protocol-specific configuration
+            loadProtocolConfiguration(currentProtocol);
+            
+            // Show modal
+            document.getElementById('editMappingModal').classList.add('active');
+        }
+
+        // Edit mapping
+        function editMapping(id) {
+            selectedMappingId = id;
+            const mapping = mappings.find(m => m.id === id);
+            const device = mapping ? devices.find(d => d.id === mapping.deviceId) : null;
+            
+            if (mapping && device) {
+                // Reset modal state
+                resetModal();
+                
+                // Update modal title
+                document.getElementById('modalTitle').textContent = 'Edit Mapping';
+                
+                // Fill device info
+                document.getElementById('mappingDeviceName').textContent = device.name;
+                document.getElementById('mappingProtocol').textContent = device.protocol.toUpperCase() + ' | Addr: ' + device.address;
+                
+                // Set current protocol
+                currentProtocol = getProtocolType(device.protocol);
+                
+                // Load protocol configuration
+                loadProtocolConfiguration(currentProtocol);
+                
+                // Fill form with existing data
+                document.getElementById('mappingTagName').value = mapping.tagName;
+                document.getElementById('mappingDescription').value = mapping.description;
+                document.getElementById('mappingDataType').value = mapping.dataType;
+                document.getElementById('mappingEndianness').value = mapping.endianness || 'big-endian';
+                document.getElementById('mappingUnit').value = mapping.unit;
+                document.getElementById('mappingScale').value = mapping.scale;
+                document.getElementById('mappingOffset').value = mapping.offset;
+                document.getElementById('mappingMinValue').value = mapping.minValid || '';
+                document.getElementById('mappingMaxValue').value = mapping.maxValid || '';
+                document.getElementById('mappingPollInterval').value = mapping.pollInterval;
+                document.getElementById('mappingPollPreset').value = getPollPreset(mapping.pollInterval);
+                document.getElementById('mappingCategory').value = mapping.category;
+                
+                // Set address based on mapping
+                const addressType = getAddressType(mapping.address, device.protocol);
+                document.getElementById('mappingAddressType').value = addressType;
+                document.getElementById('mappingAddressValue').value = mapping.address;
+                
+                // Show modal
+                document.getElementById('editMappingModal').classList.add('active');
+                
+                // Go to step 3 for editing
+                goToStep(3);
+            }
+        }
+
+        // Helper functions
+        function getProtocolType(protocol) {
+            if (protocol.includes('modbus')) return 'modbus';
+            if (protocol === 'can') return 'can';
+            if (protocol.includes('ethernet')) return 'ethernet';
+            return 'modbus';
+        }
+
+        function getAddressType(address, protocol) {
+            if (address.startsWith('0x')) return 'hex';
+            if (address.includes('.')) return 'ip';
+            if (protocol === 'can') return 'can-id';
+            return 'decimal';
+        }
+
+        function getPollPreset(interval) {
+            const presets = {
+                '100': '100',
+                '200': '200',
+                '500': '500',
+                '1000': '1000',
+                '5000': '5000'
+            };
+            return presets[interval] || 'custom';
+        }
+
+        // Load protocol-specific configuration
+        function loadProtocolConfiguration(protocol) {
+            currentProtocol = protocol;
+            
+            // Update active tab
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.dataset.tab === protocol) {
+                    tab.classList.add('active');
+                }
+            });
+            
+            // Load address configuration
+            loadAddressConfiguration(protocol);
+            
+            // Load protocol-specific fields
+            loadProtocolSpecificFields(protocol);
+        }
+
+        // Load address configuration
+        function loadAddressConfiguration(protocol) {
+            const addressTypeContainer = document.getElementById('address-type-container');
+            const addressValueContainer = document.getElementById('address-value-container');
+            
+            let addressTypeOptions = '';
+            let addressValuePlaceholder = '';
+            
+            switch(protocol) {
+                case 'modbus':
+                    addressTypeOptions = `
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Register Type</label>
+                        <select class="w-full compact-select bg-white" id="mappingAddressType">
+                            <option value="holding">Holding Register (4x)</option>
+                            <option value="input">Input Register (3x)</option>
+                            <option value="coil">Coil (0x)</option>
+                            <option value="discrete">Discrete Input (1x)</option>
+                        </select>
+                    `;
+                    addressValuePlaceholder = 'e.g., 40001';
+                    break;
+                    
+                case 'can':
+                    addressTypeOptions = `
+                        <label class="block text-xs font-medium text-slate-700 mb-1">CAN ID Type</label>
+                        <select class="w-full compact-select bg-white" id="mappingAddressType">
+                            <option value="standard">Standard (11-bit)</option>
+                            <option value="extended">Extended (29-bit)</option>
+                            <option value="canopen">CANOpen</option>
+                            <option value="j1939">J1939</option>
+                        </select>
+                    `;
+                    addressValuePlaceholder = 'e.g., 0x212';
+                    break;
+                    
+                case 'ethernet':
+                    addressTypeOptions = `
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Data Type</label>
+                        <select class="w-full compact-select bg-white" id="mappingAddressType">
+                            <option value="tag">Tag Name</option>
+                            <option value="symbolic">Symbolic Address</option>
+                            <option value="direct">Direct Address</option>
+                        </select>
+                    `;
+                    addressValuePlaceholder = 'e.g., MotorRPM';
+                    break;
+                    
+                default:
+                    addressTypeOptions = `
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Address Type</label>
+                        <select class="w-full compact-select bg-white" id="mappingAddressType">
+                            <option value="decimal">Decimal</option>
+                            <option value="hex">Hexadecimal</option>
+                            <option value="binary">Binary</option>
+                        </select>
+                    `;
+                    addressValuePlaceholder = 'Enter address';
+            }
+            
+            addressTypeContainer.innerHTML = addressTypeOptions;
+            addressValueContainer.innerHTML = `
+                <label class="block text-xs font-medium text-slate-700 mb-1">Address Value</label>
+                <input type="text" class="w-full compact-input font-mono" placeholder="${addressValuePlaceholder}" id="mappingAddressValue">
+            `;
+        }
+
+        // Load protocol-specific fields
+        function loadProtocolSpecificFields(protocol) {
+            const container = document.getElementById('protocol-specific-fields');
+            let fields = '';
+            
+            switch(protocol) {
+                case 'modbus':
+                    fields = `
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Register Count</label>
+                                <input type="number" min="1" max="125" value="1" class="w-full compact-input" id="mappingRegisterCount">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Byte Order</label>
+                                <select class="w-full compact-select bg-white" id="mappingByteOrder">
+                                    <option value="12">Big Endian (1-2)</option>
+                                    <option value="21">Little Endian (2-1)</option>
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'can':
+                    fields = `
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">DLC (Bytes)</label>
+                                <select class="w-full compact-select bg-white" id="mappingDLC">
+                                    <option value="1">1 byte</option>
+                                    <option value="2">2 bytes</option>
+                                    <option value="4" selected>4 bytes</option>
+                                    <option value="8">8 bytes</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Start Byte</label>
+                                <input type="number" min="0" max="7" value="0" class="w-full compact-input" id="mappingStartByte">
+                            </div>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'ethernet':
+                    fields = `
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Data Size</label>
+                                <select class="w-full compact-select bg-white" id="mappingDataSize">
+                                    <option value="BOOL">BOOL (1 bit)</option>
+                                    <option value="SINT">SINT (8-bit)</option>
+                                    <option value="INT">INT (16-bit)</option>
+                                    <option value="DINT" selected>DINT (32-bit)</option>
+                                    <option value="REAL">REAL (32-bit float)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Array Size</label>
+                                <input type="number" min="1" value="1" class="w-full compact-input" id="mappingArraySize">
+                            </div>
+                        </div>
+                    `;
+                    break;
+                    
+                default:
+                    fields = '';
+            }
+            
+            container.innerHTML = fields;
+        }
+
+        // Reset modal state
+        function resetModal() {
+            currentStep = 1;
+            updateStepIndicator();
+            
+            // Show step 1, hide others
+            document.querySelectorAll('.dynamic-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById('step1-content').classList.add('active');
+            
+            // Reset form values
+            document.getElementById('mappingTagName').value = '';
+            document.getElementById('mappingDescription').value = '';
+            document.getElementById('mappingDataType').value = 'INT16';
+            document.getElementById('mappingEndianness').value = 'big-endian';
+            document.getElementById('mappingUnit').value = '';
+            document.getElementById('mappingScale').value = '1';
+            document.getElementById('mappingOffset').value = '0';
+            document.getElementById('mappingMinValue').value = '';
+            document.getElementById('mappingMaxValue').value = '';
+            document.getElementById('mappingWarning').value = '';
+            document.getElementById('mappingAlarm').value = '';
+            document.getElementById('mappingPollInterval').value = '200';
+            document.getElementById('mappingPollPreset').value = '200';
+            document.getElementById('mappingCategory').value = 'Sensors';
+            
+            // Reset advanced sections
+            document.getElementById('validation-section').classList.add('hidden');
+            document.getElementById('validation-chevron').className = 'fa-solid fa-chevron-down text-xs text-slate-400';
+        }
+
+        // Update step indicator
+        function updateStepIndicator() {
+            // Update circles
+            for (let i = 1; i <= 3; i++) {
+                const circle = document.getElementById(`step${i}`);
+                const label = circle.nextElementSibling;
+                
+                if (i === currentStep) {
+                    circle.className = 'step-circle active';
+                    label.className = 'step-label active';
+                } else if (i < currentStep) {
+                    circle.className = 'step-circle active';
+                    label.className = 'step-label';
+                } else {
+                    circle.className = 'step-circle inactive';
+                    label.className = 'step-label';
+                }
+            }
+            
+            // Show/hide sections
+            document.querySelectorAll('.dynamic-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(`step${currentStep}-content`).classList.add('active');
+        }
+
+        // Navigate between steps
+        function goToStep(step) {
+            if (step >= 1 && step <= 3) {
+                currentStep = step;
+                updateStepIndicator();
+            }
+        }
+
+        // Toggle section
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const chevron = document.getElementById(sectionId.replace('section', 'chevron'));
+            
+            section.classList.toggle('hidden');
+            chevron.className = section.classList.contains('hidden') 
+                ? 'fa-solid fa-chevron-down text-xs text-slate-400'
+                : 'fa-solid fa-chevron-up text-xs text-slate-400';
+        }
+
+        // Delete mapping
+        function deleteMapping(id) {
+            const mapping = mappings.find(m => m.id === id);
+            if (!mapping) return;
+            
+            if (confirm(`Delete mapping "${mapping.tagName}"?`)) {
+                // Remove mapping
+                mappings = mappings.filter(m => m.id !== id);
+                
+                // Update device tag count
+                const device = devices.find(d => d.id === mapping.deviceId);
+                if (device) {
+                    device.tags = mappings.filter(m => m.deviceId === device.id).length;
+                }
+                
+                generateTags();
+                renderDevicesTable();
+                renderMappingsTable();
+                renderTagsList();
+                
+                alert('Mapping deleted successfully!');
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Device filter
+            document.getElementById('deviceFilter').addEventListener('change', renderMappingsTable);
+
+            // Tag search
+            document.getElementById('tagSearch').addEventListener('input', renderTagsList);
+
+            // Add Mapping button
+            document.getElementById('addMappingBtn').addEventListener('click', addNewMapping);
+
+            // Modal tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const protocol = this.dataset.tab;
+                    loadProtocolConfiguration(protocol);
+                });
+            });
+
+            // Step navigation
+            document.getElementById('nextStep1Btn').addEventListener('click', () => goToStep(2));
+            document.getElementById('prevStep2Btn').addEventListener('click', () => goToStep(1));
+            document.getElementById('nextStep2Btn').addEventListener('click', () => goToStep(3));
+            document.getElementById('prevStep3Btn').addEventListener('click', () => goToStep(2));
+
+            // Poll preset selector
+            document.getElementById('mappingPollPreset').addEventListener('change', function() {
+                const customInput = document.getElementById('mappingPollInterval');
+                if (this.value === 'custom') {
+                    customInput.style.display = 'block';
+                    customInput.value = '500';
+                } else {
+                    customInput.style.display = 'none';
+                    document.getElementById('mappingPollInterval').value = this.value;
+                }
+            });
+
+            // Data type change
+            document.getElementById('mappingDataType').addEventListener('change', function() {
+                const optionsContainer = document.getElementById('data-type-options');
+                const dataType = this.value;
+                
+                let options = '';
+                
+                if (dataType === 'STRING') {
+                    options = `
+                        <div class="grid grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">String Length</label>
+                                <input type="number" min="1" max="255" value="20" class="w-full compact-input" id="mappingStringLength">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Encoding</label>
+                                <select class="w-full compact-select bg-white" id="mappingStringEncoding">
+                                    <option value="ascii">ASCII</option>
+                                    <option value="utf8">UTF-8</option>
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                } else if (dataType === 'BOOL') {
+                    options = `
+                        <div class="grid grid-cols-2 gap-3 mt-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Bit Position</label>
+                                <input type="number" min="0" max="15" value="0" class="w-full compact-input" id="mappingBitPosition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Inverted Logic</label>
+                                <select class="w-full compact-select bg-white" id="mappingInverted">
+                                    <option value="false">Normal (1=ON)</option>
+                                    <option value="true">Inverted (0=ON)</option>
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                optionsContainer.innerHTML = options;
+            });
+
+            // Edit mapping modal controls
+            document.getElementById('closeEditMappingModal').addEventListener('click', function() {
+                document.getElementById('editMappingModal').classList.remove('active');
+            });
+
+            document.getElementById('cancelEditMapping').addEventListener('click', function() {
+                document.getElementById('editMappingModal').classList.remove('active');
+            });
+
+            // Save mapping
+            document.getElementById('saveMappingBtn').addEventListener('click', function() {
+                const tagName = document.getElementById('mappingTagName').value.trim();
+                const addressValue = document.getElementById('mappingAddressValue').value.trim();
+                
+                if (!tagName) {
+                    alert('Tag name is required');
+                    return;
+                }
+                
+                if (!addressValue) {
+                    alert('Address value is required');
+                    return;
+                }
+                
+                // Construct address based on protocol
+                let address = addressValue;
+                const addressType = document.getElementById('mappingAddressType')?.value;
+                
+                if (currentProtocol === 'modbus' && addressType) {
+                    const prefixes = {
+                        'holding': '4',
+                        'input': '3',
+                        'coil': '0',
+                        'discrete': '1'
+                    };
+                    if (prefixes[addressType]) {
+                        address = prefixes[addressType] + addressValue;
+                    }
+                }
+                
+                if (selectedMappingId) {
+                    // Update existing mapping
+                    const mapping = mappings.find(m => m.id === selectedMappingId);
+                    if (mapping) {
+                        Object.assign(mapping, {
+                            tagName: tagName,
+                            address: address,
+                            description: document.getElementById('mappingDescription').value,
+                            dataType: document.getElementById('mappingDataType').value,
+                            endianness: document.getElementById('mappingEndianness').value,
+                            unit: document.getElementById('mappingUnit').value,
+                            scale: document.getElementById('mappingScale').value,
+                            offset: document.getElementById('mappingOffset').value,
+                            minValid: document.getElementById('mappingMinValue').value || undefined,
+                            maxValid: document.getElementById('mappingMaxValue').value || undefined,
+                            pollInterval: document.getElementById('mappingPollInterval').value,
+                            category: document.getElementById('mappingCategory').value,
+                            protocol: currentProtocol
+                        });
+                        
+                        alert('Mapping updated successfully!');
+                    }
+                } else {
+                    // Add new mapping
+                    const newMapping = {
+                        id: mappings.length > 0 ? Math.max(...mappings.map(m => m.id)) + 1 : 1,
+                        deviceId: selectedDeviceId,
+                        address: address,
+                        tagName: tagName,
+                        dataType: document.getElementById('mappingDataType').value,
+                        endianness: document.getElementById('mappingEndianness').value,
+                        scale: document.getElementById('mappingScale').value,
+                        offset: document.getElementById('mappingOffset').value,
+                        unit: document.getElementById('mappingUnit').value,
+                        pollInterval: document.getElementById('mappingPollInterval').value,
+                        category: document.getElementById('mappingCategory').value,
+                        description: document.getElementById('mappingDescription').value,
+                        minValid: document.getElementById('mappingMinValue').value || undefined,
+                        maxValid: document.getElementById('mappingMaxValue').value || undefined,
+                        protocol: currentProtocol
+                    };
+                    
+                    mappings.push(newMapping);
+                    
+                    // Update device tag count
+                    const device = devices.find(d => d.id === selectedDeviceId);
+                    if (device) {
+                        device.tags = mappings.filter(m => m.deviceId === selectedDeviceId).length;
+                    }
+                    
+                    alert('Mapping added successfully!');
+                }
+                
+                // Refresh UI
+                generateTags();
+                renderDevicesTable();
+                renderMappingsTable();
+                renderTagsList();
+                
+                // Close modal
+                document.getElementById('editMappingModal').classList.remove('active');
+            });
+
+            // Device table click
+            document.getElementById('devicesTableBody').addEventListener('click', function(e) {
+                const row = e.target.closest('tr[data-device-id]');
+                if (row && !e.target.closest('button')) {
+                    selectedDeviceId = parseInt(row.dataset.deviceId);
+                    const device = devices.find(d => d.id === selectedDeviceId);
+                    if (device) {
+                        document.getElementById('deviceFilter').value = device.name;
+                        renderMappingsTable();
+                    }
+                }
+            });
+
+            // Test buttons
+            document.getElementById('testDeviceBtn').addEventListener('click', function() {
+                if (!selectedDeviceId) {
+                    alert('Please select a device first');
+                    return;
+                }
+                const device = devices.find(d => d.id === selectedDeviceId);
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-xs"></i> Testing...';
+                btn.disabled = true;
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert(`Device "${device.name}" test successful!\nResponse time: ${Math.floor(Math.random() * 100)}ms`);
+                }, 1500);
+            });
+
+            document.getElementById('validateAllBtn').addEventListener('click', function() {
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-xs"></i> Validating...';
+                btn.disabled = true;
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert(`Validation complete!\n${mappings.length} mappings validated successfully.`);
+                }, 2000);
+            });
+
+            // Save buttons
+            document.getElementById('header-save-btn').addEventListener('click', saveConfiguration);
+            document.getElementById('footer-save-btn').addEventListener('click', saveConfiguration);
+
+            // Cancel buttons
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (confirm('Discard all unsaved changes?')) {
+                    location.reload();
+                }
+            });
+            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
+                if (confirm('Discard all unsaved changes?')) {
+                    location.reload();
+                }
+            });
+
+            // Gateway select
+            document.getElementById('gateway-select').addEventListener('change', function() {
+                if (confirm('Switch gateway? Unsaved changes will be lost.')) {
+                    location.reload();
+                } else {
+                    this.value = 'Univa-GW-01';
+                }
+            });
+        }
+
+        function saveConfiguration() {
+            const btns = [document.getElementById('header-save-btn'), document.getElementById('footer-save-btn')];
+            btns.forEach(btn => {
+                if (btn) {
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
+                    btn.disabled = true;
+                    
+                    setTimeout(() => {
+                        btn.innerHTML = original;
+                        btn.disabled = false;
+                    }, 1000);
+                }
+            });
+            
+            setTimeout(() => {
+                alert('Configuration saved successfully!');
+            }, 1000);
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load sidebar first
+            loadSidebar();
+            
+            // Then initialize the app
+            initApp();
+        });
+    </script>
+</body>
+</html>

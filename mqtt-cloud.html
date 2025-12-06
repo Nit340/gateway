@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT / Cloud Integration - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 220px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 16px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 12px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 16px 6px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 16px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 18px;
+            margin-right: 10px;
+            font-size: 13px;
+            text-align: center;
+        }
+        
+        .sidebar-footer {
+            padding: 12px 16px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 220px;
+            top: 16px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 4px 4px 0;
+            padding: 8px 6px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            font-size: 14px;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 220px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-220px);
+                width: 220px;
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+                font-size: 14px;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 220px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        /* Compact Table Styles */
+        .compact-table {
+            font-size: 12px;
+        }
+        
+        .compact-table th {
+            padding: 8px 12px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        
+        .compact-table td {
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+        
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .status-indicator.online::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10B981;
+            margin-right: 4px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.offline::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #EF4444;
+            margin-right: 4px;
+        }
+        
+        .status-indicator.warning::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #F59E0B;
+            margin-right: 4px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* Protocol Badges */
+        .protocol-badge {
+            font-size: 9px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        
+        .protocol-badge.mqtt {
+            background: #EFF6FF;
+            color: #2563EB;
+            border: 1px solid #BFDBFE;
+        }
+        
+        .protocol-badge.http {
+            background: #FEF3C7;
+            color: #D97706;
+            border: 1px solid #FDE68A;
+        }
+        
+        .protocol-badge.influx {
+            background: #F3E8FF;
+            color: #7C3AED;
+            border: 1px solid #E9D5FF;
+        }
+        
+        .protocol-badge.websocket {
+            background: #DCFCE7;
+            color: #166534;
+            border: 1px solid #BBF7D0;
+        }
+        
+        /* Card Styles */
+        .config-card {
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        /* Smaller form controls */
+        .compact-input {
+            padding: 6px 10px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+            transition: all 0.2s;
+        }
+        
+        .compact-input:focus {
+            outline: none;
+            border-color: #2563EB;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        
+        .compact-select {
+            padding: 6px 10px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid #E2E8F0;
+            transition: all 0.2s;
+        }
+        
+        .compact-select:focus {
+            outline: none;
+            border-color: #2563EB;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        
+        .compact-button {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #CBD5E1;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #10B981;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(16px);
+        }
+        
+        /* Tab Styles */
+        .tab-button {
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748B;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tab-button:hover {
+            color: #2563EB;
+            border-bottom-color: #E2E8F0;
+        }
+        
+        .tab-button.active {
+            color: #2563EB;
+            border-bottom-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        /* Tag selection table */
+        .tag-table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        .tag-table tr:hover {
+            background-color: #F8FAFC;
+        }
+        
+        .tag-table th {
+            text-align: left;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 1px solid #E2E8F0;
+        }
+        
+        .tag-table td {
+            border-bottom: 1px solid #E2E8F0;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Modals -->
+    <!-- Add Tag Modal -->
+    <div id="addTagModal" class="modal">
+        <div class="modal-content">
+            <div class="p-4 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-slate-900">Add Tags to Publish</h3>
+                    <button onclick="closeModal('addTagModal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <input type="text" placeholder="Search tags..." class="w-full compact-input mb-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium text-slate-700">Available Tags (24)</span>
+                        <button class="text-xs text-primary hover:text-primaryHover">Select All</button>
+                    </div>
+                    <div class="max-h-60 overflow-y-auto border border-slate-200 rounded">
+                        <div class="p-2 border-b border-slate-100 flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-700">Hoist_Load</span>
+                            <span class="ml-auto text-xs text-slate-500">Load</span>
+                        </div>
+                        <div class="p-2 border-b border-slate-100 flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-700">Boom_Angle</span>
+                            <span class="ml-auto text-xs text-slate-500">Angle</span>
+                        </div>
+                        <div class="p-2 border-b border-slate-100 flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-700">WindSpeed</span>
+                            <span class="ml-auto text-xs text-slate-500">Weather</span>
+                        </div>
+                        <div class="p-2 border-b border-slate-100 flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-700">Motor_Temp</span>
+                            <span class="ml-auto text-xs text-slate-500">Motor</span>
+                        </div>
+                        <div class="p-2 border-b border-slate-100 flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-700">Hoist_Speed</span>
+                            <span class="ml-auto text-xs text-slate-500">Speed</span>
+                        </div>
+                        <div class="p-2 flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-700">Battery_Level</span>
+                            <span class="ml-auto text-xs text-slate-500">Diagnostics</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button onclick="closeModal('addTagModal')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="addSelectedTags()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Add Selected Tags
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Upload Certificate Modal -->
+    <div id="uploadCertModal" class="modal">
+        <div class="modal-content">
+            <div class="p-4 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-slate-900">Upload Certificate</h3>
+                    <button onclick="closeModal('uploadCertModal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-slate-700 mb-2">Certificate Type</label>
+                    <select class="w-full compact-select mb-4">
+                        <option>CA Certificate</option>
+                        <option>Client Certificate</option>
+                        <option>Private Key</option>
+                    </select>
+                    
+                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center mb-4">
+                        <i class="fa-solid fa-file-upload text-3xl text-slate-400 mb-2"></i>
+                        <p class="text-xs text-slate-600 mb-2">Drag & drop your certificate file here</p>
+                        <p class="text-xs text-slate-500 mb-3">or</p>
+                        <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                            Browse Files
+                        </button>
+                    </div>
+                    
+                    <div class="text-xs text-slate-500">
+                        <p class="font-medium mb-1">Supported formats:</p>
+                        <p>.pem, .crt, .cer, .key</p>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button onclick="closeModal('uploadCertModal')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="uploadCertificate()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Upload Certificate
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Connection Results Modal -->
+    <div id="testResultsModal" class="modal">
+        <div class="modal-content">
+            <div class="p-4 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-slate-900">Connection Test Results</h3>
+                    <button onclick="closeModal('testResultsModal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <div class="flex items-center mb-4">
+                        <div class="w-8 h-8 rounded-full bg-success flex items-center justify-center mr-3">
+                            <i class="fa-solid fa-check text-white text-sm"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-slate-900">Connection Successful!</h4>
+                            <p class="text-xs text-slate-600">MQTT broker is reachable and authenticated</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3 mb-4">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-600">Broker URL:</span>
+                            <span class="font-mono text-slate-900">mqtts://broker.company.com:8883</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-600">Connection Time:</span>
+                            <span class="font-mono text-slate-900">145 ms</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-600">TLS Version:</span>
+                            <span class="font-mono text-slate-900">TLS 1.2</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-600">QoS Level:</span>
+                            <span class="font-mono text-slate-900">1 (At least once)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-50 p-3 rounded border border-slate-200">
+                        <p class="text-xs text-slate-700 font-medium mb-1">Test Message Published:</p>
+                        <pre class="text-xs text-slate-600 font-mono bg-white p-2 rounded border border-slate-200 overflow-x-auto">
+{
+  "test": "connection",
+  "timestamp": 1736004933,
+  "gateway_id": "GW-01"
+}</pre>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="closeModal('testResultsModal')" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">
+                <i class="fa-solid fa-satellite-dish mr-2"></i> Univa IoT
+            </div>
+        </div>
+        
+        <div class="sidebar-nav">
+            <div class="nav-section">
+                <div class="section-title">Configuration</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-sliders"></i>
+                    General
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-microchip"></i>
+                    Devices
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="section-title">Protocols</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-plug"></i>
+                    Protocol Mapping
+                </a>
+                <a href="mqtt-cloud.html" class="nav-item active">
+                    <i class="fa-solid fa-cloud"></i>
+                    MQTT / Cloud
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="section-title">Data</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-database"></i>
+                    Retention
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-file-lines"></i>
+                    Logging
+                </a>
+            </div>
+        </div>
+        
+        <div class="sidebar-footer">
+            <div class="flex items-center gap-2 text-xs text-slate-600">
+                <i class="fa-solid fa-circle text-success"></i>
+                <span>Gateway: GW-01</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar Toggle Button -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fa-solid fa-bars"></i>
+    </div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 h-14 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="hidden md:flex items-center text-xs text-slate-500">
+                        <span><i class="fa-solid fa-cloud mr-1"></i>Protocols</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-1"></i>
+                        <span class="text-slate-900 font-medium">MQTT / Cloud Integration</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-xs px-2 py-1 rounded hover:bg-slate-100" id="cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-xs px-3 py-1 rounded shadow-sm flex items-center" id="header-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-1"></i> Save
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow">
+            <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-6">
+                <div class="mb-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-xl font-bold text-slate-900">MQTT / Cloud Integration (Outgoing Data)</h1>
+                            <p class="text-slate-500 text-xs mt-1">Configure how processed data from the gateway is published to external servers</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                <i class="fa-solid fa-file-import mr-1 text-xs"></i> Import
+                            </button>
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                <i class="fa-solid fa-file-export mr-1 text-xs"></i> Export
+                            </button>
+                            <button onclick="showHelp()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                <i class="fa-solid fa-circle-question mr-1 text-xs"></i> Help
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <!-- Left Column: Integrations List -->
+                    <section class="lg:col-span-1 bg-white rounded-lg shadow-sm border border-border">
+                        <div class="p-4 border-b border-border">
+                            <h2 class="text-sm font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-list mr-2 text-primary text-xs"></i> 
+                                MQTT Connections
+                            </h2>
+                        </div>
+                        
+                        <div class="p-3 space-y-2">
+                            <!-- Primary Connection -->
+                            <div id="primary-connection" class="p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer" onclick="selectConnection('primary')">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="protocol-badge mqtt">MQTT</span>
+                                        <span class="status-indicator online">Online</span>
+                                    </div>
+                                    <div class="text-xs text-slate-500 flex items-center">
+                                        <i class="fa-solid fa-star text-yellow-500 mr-1"></i> Primary
+                                    </div>
+                                </div>
+                                <div class="font-medium text-slate-900">Production Broker</div>
+                                <div class="text-xs text-slate-500 truncate">mqtts://broker.company.com:8883</div>
+                            </div>
+                            
+                            <!-- Secondary Connection -->
+                            <div id="secondary-connection" class="p-3 bg-white border border-slate-200 hover:border-blue-200 rounded-lg cursor-pointer" onclick="selectConnection('secondary')">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="protocol-badge mqtt">MQTT</span>
+                                        <span class="status-indicator warning">Reconnecting</span>
+                                    </div>
+                                </div>
+                                <div class="font-medium text-slate-700">Backup Broker</div>
+                                <div class="text-xs text-slate-400 truncate">mqtts://backup.company.com:8883</div>
+                            </div>
+                            
+                            <!-- Add New Button -->
+                            <div class="pt-2">
+                                <button onclick="showAddConnection()" class="w-full compact-button border border-dashed border-slate-300 text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50 flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-plus text-xs"></i> Add Connection
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Right Column: Configuration -->
+                    <section class="lg:col-span-2 space-y-4">
+                        <!-- Connection Status Card -->
+                        <div class="config-card p-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-slate-900">Primary MQTT Broker</h3>
+                                    <p class="text-xs text-slate-500">Primary cloud connection for telemetry data</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-medium text-slate-700">Enabled</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked id="mqtt-enabled">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Quick Stats -->
+                            <div class="grid grid-cols-4 gap-3 mb-4">
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Messages</div>
+                                    <div class="text-sm font-bold text-slate-900">14,593</div>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Errors</div>
+                                    <div class="text-sm font-bold text-success">0</div>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Last Sent</div>
+                                    <div class="text-sm font-bold text-slate-900">2.3s ago</div>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Latency</div>
+                                    <div class="text-sm font-bold text-slate-900">124 ms</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Configuration Tabs -->
+                        <div class="config-card">
+                            <!-- Tabs -->
+                            <div class="flex border-b border-border">
+                                <button onclick="switchTab('connection')" class="tab-button active" id="tab-connection">Connection</button>
+                                <button onclick="switchTab('topics')" class="tab-button" id="tab-topics">Topics & Format</button>
+                                <button onclick="switchTab('publishing')" class="tab-button" id="tab-publishing">Tag Publishing</button>
+                                <button onclick="switchTab('advanced')" class="tab-button" id="tab-advanced">Advanced</button>
+                            </div>
+                            
+                            <!-- Connection Settings (Tab 1) -->
+                            <div id="tab-content-connection" class="p-4 space-y-6">
+                                <!-- Server Configuration -->
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Broker Settings</h4>
+                                    <div class="space-y-3">
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Server URL</label>
+                                                <input type="text" id="server-url" value="mqtt.example.com" class="w-full compact-input">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                                                <input type="number" id="server-port" value="8883" class="w-full compact-input">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
+                                                <input type="text" id="client-id" value="AUTO-GENERATED" class="w-full compact-input">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive</label>
+                                                <input type="number" id="keep-alive" value="60" class="w-full compact-input">
+                                                <span class="text-xs text-slate-500">seconds</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Authentication -->
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Authentication & Security</h4>
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-xs text-slate-700">Use TLS/SSL</span>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="use-tls" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-3" id="tls-settings">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-certificate text-green-600"></i>
+                                                    <span class="text-xs font-medium">CA Certificate</span>
+                                                </div>
+                                                <div class="flex items-center gap-1">
+                                                    <button onclick="showUploadModal('uploadCertModal')" class="text-xs text-primary hover:text-primaryHover">
+                                                        <i class="fa-solid fa-upload"></i> Upload
+                                                    </button>
+                                                    <span class="text-xs text-slate-500 px-2 py-1 bg-white rounded border">Uploaded</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-key text-blue-600"></i>
+                                                    <span class="text-xs font-medium">Client Certificate</span>
+                                                </div>
+                                                <div class="flex items-center gap-1">
+                                                    <button onclick="showUploadModal('uploadCertModal')" class="text-xs text-primary hover:text-primaryHover">
+                                                        <i class="fa-solid fa-upload"></i> Upload
+                                                    </button>
+                                                    <button class="text-xs text-red-600 hover:text-red-700">
+                                                        <i class="fa-solid fa-trash"></i> Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <i class="fa-solid fa-lock text-purple-600"></i>
+                                                    <span class="text-xs font-medium">Private Key</span>
+                                                </div>
+                                                <button onclick="showUploadModal('uploadCertModal')" class="text-xs text-primary hover:text-primaryHover">
+                                                    <i class="fa-solid fa-upload"></i> Upload Key
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                                                <input type="text" id="username" value="admin" class="w-full compact-input">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                                                <input type="password" id="password" value="********" class="w-full compact-input">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- MQTT Options -->
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">MQTT Options</h4>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">QoS Level</label>
+                                            <div class="flex space-x-4">
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="qos" value="0" class="mr-1">
+                                                    <span class="text-xs">0</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="qos" value="1" checked class="mr-1">
+                                                    <span class="text-xs">1</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="qos" value="2" class="mr-1">
+                                                    <span class="text-xs">2</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Clean Session</label>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="clean-session" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="pt-4 border-t border-slate-200">
+                                    <div class="flex space-x-2">
+                                        <button onclick="testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                            <i class="fa-solid fa-bolt mr-1"></i> Test Connection
+                                        </button>
+                                        <button onclick="saveBrokerSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
+                                            <i class="fa-solid fa-save mr-1"></i> Save Broker Settings
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Topics & Format (Tab 2) -->
+                            <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;">
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Topic Configuration</h4>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Base Topic</label>
+                                            <input type="text" id="base-topic" value="univa/crane/${DEVICE_ID}" class="w-full compact-input font-mono text-xs">
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Data Topic</label>
+                                                <input type="text" id="data-topic" value="univa/crane/${DEVICE_ID}/data" class="w-full compact-input font-mono text-xs">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Status Topic</label>
+                                                <input type="text" id="status-topic" value="univa/crane/${DEVICE_ID}/status" class="w-full compact-input font-mono text-xs">
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Event Topic</label>
+                                                <input type="text" id="event-topic" value="univa/crane/${DEVICE_ID}/event" class="w-full compact-input font-mono text-xs">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Command Topic</label>
+                                                <input type="text" id="command-topic" value="univa/crane/${DEVICE_ID}/cmd" class="w-full compact-input font-mono text-xs">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Payload Format -->
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Payload Format</h4>
+                                    <div class="space-y-3">
+                                        <div class="flex space-x-4 mb-3">
+                                            <label class="flex items-center">
+                                                <input type="radio" name="payload-format" value="json" checked class="mr-1">
+                                                <span class="text-xs">JSON</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="radio" name="payload-format" value="key-value" class="mr-1">
+                                                <span class="text-xs">Key-Value Pairs</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="radio" name="payload-format" value="raw" class="mr-1">
+                                                <span class="text-xs">Raw Binary</span>
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- JSON Preview -->
+                                        <div class="bg-slate-900 rounded border border-slate-800 p-3">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-xs font-medium text-slate-300">Payload Preview</span>
+                                                <span class="text-xs text-slate-500">JSON Format</span>
+                                            </div>
+                                            <pre class="text-xs text-slate-300 font-mono overflow-x-auto" id="json-preview">
+{
+  "device_id": "CRN001",
+  "timestamp": 1736004933,
+  "Hoist_Load": 18.5,
+  "Boom_Angle": 45,
+  "WindSpeed": 12
+}</pre>
+                                        </div>
+                                        
+                                        <div class="text-xs text-slate-500">
+                                            <p class="font-medium mb-1">Available Variables:</p>
+                                            <div class="flex flex-wrap gap-1">
+                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${DEVICE_ID}</span>
+                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${TIMESTAMP}</span>
+                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${GATEWAY_ID}</span>
+                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${TAG_NAME}</span>
+                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${VALUE}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-slate-200">
+                                    <button onclick="saveTopicSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                                        Save Topic Settings
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tag Publishing (Tab 3) -->
+                            <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;">
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Tag Publishing Rules</h4>
+                                    
+                                    <div class="space-y-3 mb-4">
+                                        <div class="flex items-center space-x-4">
+                                            <label class="flex items-center">
+                                                <input type="radio" name="publish-mode" value="all" class="mr-1">
+                                                <span class="text-xs">Publish All Tags</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="radio" name="publish-mode" value="selected" checked class="mr-1">
+                                                <span class="text-xs">Publish Selected Tags</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="radio" name="publish-mode" value="custom" class="mr-1">
+                                                <span class="text-xs">Custom Tag Sets</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Tag Selection Table -->
+                                    <div class="mb-4">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <span class="text-xs font-medium text-slate-700">Selected Tags (4)</span>
+                                            <div class="flex space-x-2">
+                                                <button onclick="showAddTagModal()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs flex items-center">
+                                                    <i class="fa-solid fa-plus mr-1"></i> Add Tags
+                                                </button>
+                                                <button onclick="removeSelectedTags()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs flex items-center">
+                                                    <i class="fa-solid fa-trash mr-1"></i> Remove Selected
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="border border-slate-200 rounded overflow-hidden">
+                                            <table class="tag-table w-full">
+                                                <thead class="bg-slate-50">
+                                                    <tr>
+                                                        <th class="p-2 w-8">
+                                                            <input type="checkbox">
+                                                        </th>
+                                                        <th class="p-2">Tag Name</th>
+                                                        <th class="p-2">Group</th>
+                                                        <th class="p-2">Publish</th>
+                                                        <th class="p-2">Filter</th>
+                                                        <th class="p-2">Poll Rate</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td class="p-2 text-center">
+                                                            <input type="checkbox">
+                                                        </td>
+                                                        <td class="p-2 font-mono text-xs">Hoist_Load</td>
+                                                        <td class="p-2">
+                                                            <span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">Load</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <label class="toggle-switch">
+                                                                <input type="checkbox" checked>
+                                                                <span class="toggle-slider"></span>
+                                                            </label>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">Δ > 0.5</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">200ms</span>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="p-2 text-center">
+                                                            <input type="checkbox">
+                                                        </td>
+                                                        <td class="p-2 font-mono text-xs">Boom_Angle</td>
+                                                        <td class="p-2">
+                                                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Angle</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <label class="toggle-switch">
+                                                                <input type="checkbox" checked>
+                                                                <span class="toggle-slider"></span>
+                                                            </label>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">Δ > 0.2</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">100ms</span>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="p-2 text-center">
+                                                            <input type="checkbox">
+                                                        </td>
+                                                        <td class="p-2 font-mono text-xs">WindSpeed</td>
+                                                        <td class="p-2">
+                                                            <span class="px-2 py-1 bg-yellow-50 text-yellow-700 rounded text-xs">Weather</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <label class="toggle-switch">
+                                                                <input type="checkbox" checked>
+                                                                <span class="toggle-slider"></span>
+                                                            </label>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">Periodic 1s</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">1s</span>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="p-2 text-center">
+                                                            <input type="checkbox">
+                                                        </td>
+                                                        <td class="p-2 font-mono text-xs">Motor_Temp</td>
+                                                        <td class="p-2">
+                                                            <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Motor</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <label class="toggle-switch">
+                                                                <input type="checkbox" checked>
+                                                                <span class="toggle-slider"></span>
+                                                            </label>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">Periodic 2s</span>
+                                                        </td>
+                                                        <td class="p-2">
+                                                            <span class="text-xs">2s</span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Publishing Options -->
+                                    <div>
+                                        <h5 class="text-xs font-semibold text-slate-900 mb-3">Publishing Options</h5>
+                                        <div class="grid grid-cols-2 gap-4 mb-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-2">Publish Mode</label>
+                                                <div class="space-y-2">
+                                                    <label class="flex items-center">
+                                                        <input type="radio" name="publish-trigger" value="on-change" checked class="mr-1">
+                                                        <span class="text-xs">On Change</span>
+                                                    </label>
+                                                    <label class="flex items-center">
+                                                        <input type="radio" name="publish-trigger" value="periodic" class="mr-1">
+                                                        <span class="text-xs">Periodic</span>
+                                                    </label>
+                                                    <label class="flex items-center">
+                                                        <input type="radio" name="publish-trigger" value="event-only" class="mr-1">
+                                                        <span class="text-xs">Event Only</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-2">Batching Options</label>
+                                                <div class="space-y-2">
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enable-batching" class="mr-1">
+                                                        <span class="text-xs">Enable Batching</span>
+                                                    </label>
+                                                    <div class="ml-6">
+                                                        <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
+                                                        <input type="number" id="batch-size" value="10" class="w-full compact-input" disabled>
+                                                        <span class="text-xs text-slate-500">tags per message</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-slate-200">
+                                    <button onclick="savePublishingRules()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                                        Save Publishing Rules
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Advanced (Tab 4) -->
+                            <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;">
+                                <div>
+                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Advanced Options</h4>
+                                    
+                                    <div class="space-y-4">
+                                        <!-- Compression -->
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="text-xs font-medium text-slate-700">Compression (gzip)</span>
+                                                <p class="text-xs text-slate-500">Compress payloads for low-bandwidth mode</p>
+                                            </div>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="compression-enabled">
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- Timestamp Sync -->
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-2">Timestamp Format</label>
+                                            <div class="flex space-x-4">
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="timestamp-format" value="utc" checked class="mr-1">
+                                                    <span class="text-xs">UTC</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="timestamp-format" value="local" class="mr-1">
+                                                    <span class="text-xs">Local Time</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="timestamp-format" value="epoch" class="mr-1">
+                                                    <span class="text-xs">Epoch Milliseconds</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Offline Buffer -->
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="text-xs font-medium text-slate-700">Offline Buffer (Store & Forward)</span>
+                                                <p class="text-xs text-slate-500">Store messages when connection is lost</p>
+                                            </div>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="offline-buffer-enabled" checked>
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- Buffer Settings -->
+                                        <div class="ml-6 space-y-2" id="buffer-settings">
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-xs font-medium text-slate-700 mb-1">Queue Size</label>
+                                                    <input type="number" id="queue-size" value="1000" class="w-full compact-input">
+                                                    <span class="text-xs text-slate-500">messages</span>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                                                    <input type="number" id="retention-period" value="24" class="w-full compact-input">
+                                                    <span class="text-xs text-slate-500">hours</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Last Will & Testament -->
+                                        <div class="pt-2">
+                                            <h5 class="text-xs font-semibold text-slate-900 mb-3">Last Will & Testament</h5>
+                                            <div class="space-y-3">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-xs font-medium text-slate-700">Enable LWT</span>
+                                                    <label class="toggle-switch">
+                                                        <input type="checkbox" id="lwt-enabled">
+                                                        <span class="toggle-slider"></span>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div class="ml-6 space-y-2" id="lwt-settings" style="display: none;">
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-slate-700 mb-1">Will Topic</label>
+                                                        <input type="text" id="will-topic" value="gateway/status" class="w-full compact-input">
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-slate-700 mb-1">Will Message</label>
+                                                        <input type="text" id="will-message" value='{"status": "offline"}' class="w-full compact-input">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-slate-200">
+                                    <button onclick="saveAdvancedSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                                        Save Advanced Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Connection Monitor -->
+                        <div class="config-card p-4">
+                            <h4 class="text-xs font-semibold text-slate-900 mb-3">Connection Diagnostics</h4>
+                            
+                            <div class="grid grid-cols-2 gap-6">
+                                <!-- Status Panel -->
+                                <div>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Status:</span>
+                                            <span class="status-indicator online">Connected</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Last Message Published:</span>
+                                            <span class="text-xs font-mono text-slate-900">2.3 sec ago</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Packets Sent:</span>
+                                            <span class="text-xs font-mono text-slate-900">14,593</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Packets Received:</span>
+                                            <span class="text-xs font-mono text-slate-900">129</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Last Error:</span>
+                                            <span class="text-xs font-mono text-green-600">None</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Round-trip Latency:</span>
+                                            <span class="text-xs font-mono text-slate-900">124 ms</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Downlink Commands -->
+                                <div>
+                                    <h5 class="text-xs font-medium text-slate-700 mb-2">Recent Downlink Commands</h5>
+                                    <div class="border border-slate-200 rounded overflow-hidden">
+                                        <table class="w-full text-xs">
+                                            <thead class="bg-slate-50">
+                                                <tr>
+                                                    <th class="p-2 text-left">Timestamp</th>
+                                                    <th class="p-2 text-left">Command</th>
+                                                    <th class="p-2 text-left">Result</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="border-t border-slate-100">
+                                                    <td class="p-2">10:43:12</td>
+                                                    <td class="p-2 font-mono">SetSpeed=12</td>
+                                                    <td class="p-2">
+                                                        <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
+                                                    </td>
+                                                </tr>
+                                                <tr class="border-t border-slate-100">
+                                                    <td class="p-2">10:41:04</td>
+                                                    <td class="p-2 font-mono">ResetWarning</td>
+                                                    <td class="p-2">
+                                                        <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Failed</span>
+                                                    </td>
+                                                </tr>
+                                                <tr class="border-t border-slate-100">
+                                                    <td class="p-2">10:38:55</td>
+                                                    <td class="p-2 font-mono">GetStatus</td>
+                                                    <td class="p-2">
+                                                        <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-border mt-8">
+            <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 h-16 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <button onclick="testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="testConnectionBtn">
+                        <i class="fa-solid fa-bolt mr-1 text-slate-400 text-xs"></i> Test Connection
+                    </button>
+                    <button onclick="viewLogs()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="viewLogsBtn">
+                        <i class="fa-solid fa-scroll mr-1 text-slate-400 text-xs"></i> View Logs
+                    </button>
+                    <button onclick="resetToDefaults()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="resetBtn">
+                        <i class="fa-solid fa-rotate-left mr-1 text-slate-400 text-xs"></i> Reset to Defaults
+                    </button>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="cancelChanges()" class="text-slate-500 hover:text-slate-700 hover:bg-slate-50 font-medium text-xs px-3 py-1.5 rounded" id="footer-cancel-btn">
+                        Cancel
+                    </button>
+                    <button onclick="saveConfiguration()" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center shadow-sm" id="footer-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-1"></i> Save All Configuration
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Initialize application state
+        let currentConnection = 'primary';
+        let currentTab = 'connection';
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            setupEventListeners();
+            setupToggles();
+        });
+        
+        function initializeApp() {
+            // Sidebar toggle
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                this.querySelector('i').className = sidebar.classList.contains('active') 
+                    ? 'fa-solid fa-times' 
+                    : 'fa-solid fa-bars';
+            });
+            
+            // Responsive behavior
+            function handleResponsive() {
+                if (window.innerWidth <= 1024) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.style.display = 'block';
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                } else {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.style.display = 'none';
+                }
+            }
+            
+            handleResponsive();
+            window.addEventListener('resize', handleResponsive);
+            
+            // Initialize tab states
+            updatePayloadPreview();
+        }
+        
+        function setupEventListeners() {
+            // TLS toggle
+            document.getElementById('use-tls').addEventListener('change', function() {
+                const tlsSettings = document.getElementById('tls-settings');
+                if (this.checked) {
+                    tlsSettings.style.display = 'block';
+                } else {
+                    tlsSettings.style.display = 'none';
+                }
+            });
+            
+            // Batching toggle
+            document.getElementById('enable-batching').addEventListener('change', function() {
+                const batchSize = document.getElementById('batch-size');
+                batchSize.disabled = !this.checked;
+            });
+            
+            // Offline buffer toggle
+            document.getElementById('offline-buffer-enabled').addEventListener('change', function() {
+                const bufferSettings = document.getElementById('buffer-settings');
+                if (this.checked) {
+                    bufferSettings.style.display = 'block';
+                } else {
+                    bufferSettings.style.display = 'none';
+                }
+            });
+            
+            // LWT toggle
+            document.getElementById('lwt-enabled').addEventListener('change', function() {
+                const lwtSettings = document.getElementById('lwt-settings');
+                if (this.checked) {
+                    lwtSettings.style.display = 'block';
+                } else {
+                    lwtSettings.style.display = 'none';
+                }
+            });
+            
+            // Payload format change
+            document.querySelectorAll('input[name="payload-format"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    updatePayloadPreview();
+                });
+            });
+        }
+        
+        function setupToggles() {
+            // Setup all toggle switches
+            document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+                toggle.addEventListener('change', function() {
+                    const label = this.nextElementSibling;
+                    if (this.checked) {
+                        label.style.backgroundColor = '#10B981';
+                    } else {
+                        label.style.backgroundColor = '#CBD5E1';
+                    }
+                });
+            });
+        }
+        
+        // Modal Functions
+        function showUploadModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+        
+        function showAddTagModal() {
+            document.getElementById('addTagModal').classList.add('active');
+        }
+        
+        // Tab Switching
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(`tab-content-${tabName}`).style.display = 'block';
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            currentTab = tabName;
+        }
+        
+        // Connection Selection
+        function selectConnection(connection) {
+            currentConnection = connection;
+            
+            // Update UI for selected connection
+            if (connection === 'primary') {
+                document.getElementById('primary-connection').classList.add('bg-blue-50', 'border-blue-200');
+                document.getElementById('secondary-connection').classList.remove('bg-blue-50', 'border-blue-200');
+                document.getElementById('secondary-connection').classList.add('bg-white', 'border-slate-200');
+                
+                // Update connection status
+                document.querySelector('#primary-connection .status-indicator').className = 'status-indicator online';
+                document.querySelector('#primary-connection .status-indicator').textContent = 'Online';
+                
+                // Update stats
+                updateConnectionStats('primary');
+            } else {
+                document.getElementById('secondary-connection').classList.add('bg-blue-50', 'border-blue-200');
+                document.getElementById('primary-connection').classList.remove('bg-blue-50', 'border-blue-200');
+                document.getElementById('primary-connection').classList.add('bg-white', 'border-slate-200');
+                
+                // Update connection status
+                document.querySelector('#secondary-connection .status-indicator').className = 'status-indicator warning';
+                document.querySelector('#secondary-connection .status-indicator').textContent = 'Reconnecting';
+                
+                // Update stats
+                updateConnectionStats('secondary');
+            }
+        }
+        
+        function updateConnectionStats(connection) {
+            if (connection === 'primary') {
+                // Update UI with primary connection stats
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(1)').textContent = '14,593';
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(2)').textContent = '0';
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(3)').textContent = '2.3s ago';
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(4)').textContent = '124 ms';
+            } else {
+                // Update UI with secondary connection stats
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(1)').textContent = '3,245';
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(2)').textContent = '12';
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(3)').textContent = '45s ago';
+                document.querySelector('.config-card .text-sm.font-bold:nth-child(4)').textContent = '---';
+            }
+        }
+        
+        // Tag Management
+        function addSelectedTags() {
+            // In a real app, this would add the selected tags to the table
+            const modal = document.getElementById('addTagModal');
+            const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
+            
+            if (checkboxes.length > 0) {
+                alert(`${checkboxes.length} tags added successfully!`);
+                closeModal('addTagModal');
+                
+                // Reset checkboxes
+                modal.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = false;
+                });
+            } else {
+                alert('Please select at least one tag to add.');
+            }
+        }
+        
+        function removeSelectedTags() {
+            const selected = document.querySelectorAll('.tag-table input[type="checkbox"]:checked');
+            
+            if (selected.length > 0) {
+                if (confirm(`Remove ${selected.length} selected tags?`)) {
+                    // In a real app, this would remove the selected rows
+                    alert(`${selected.length} tags removed successfully!`);
+                    
+                    // Uncheck all checkboxes
+                    document.querySelectorAll('.tag-table input[type="checkbox"]').forEach(cb => {
+                        cb.checked = false;
+                    });
+                }
+            } else {
+                alert('Please select tags to remove.');
+            }
+        }
+        
+        // Save Functions
+        function saveBrokerSettings() {
+            showLoading('header-save-btn');
+            setTimeout(() => {
+                alert('Broker settings saved successfully!');
+                hideLoading('header-save-btn');
+            }, 1000);
+        }
+        
+        function saveTopicSettings() {
+            showLoading('footer-save-btn');
+            setTimeout(() => {
+                alert('Topic settings saved successfully!');
+                hideLoading('footer-save-btn');
+            }, 1000);
+        }
+        
+        function savePublishingRules() {
+            showLoading('footer-save-btn');
+            setTimeout(() => {
+                alert('Publishing rules saved successfully!');
+                hideLoading('footer-save-btn');
+            }, 1000);
+        }
+        
+        function saveAdvancedSettings() {
+            showLoading('footer-save-btn');
+            setTimeout(() => {
+                alert('Advanced settings saved successfully!');
+                hideLoading('footer-save-btn');
+            }, 1000);
+        }
+        
+        function saveConfiguration() {
+            const btns = ['header-save-btn', 'footer-save-btn'];
+            btns.forEach(btnId => showLoading(btnId));
+            
+            setTimeout(() => {
+                btns.forEach(btnId => hideLoading(btnId));
+                alert('All MQTT configuration saved successfully!');
+            }, 1500);
+        }
+        
+        function showLoading(buttonId) {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
+                btn.disabled = true;
+            }
+        }
+        
+        function hideLoading(buttonId) {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+                if (buttonId.includes('header')) {
+                    btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> Save';
+                } else {
+                    btn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> Save All Configuration';
+                }
+                btn.disabled = false;
+            }
+        }
+        
+        // Test Connection
+        function testConnection() {
+            const btn = document.getElementById('testConnectionBtn');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Testing...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = original;
+                btn.disabled = false;
+                document.getElementById('testResultsModal').classList.add('active');
+            }, 2000);
+        }
+        
+        // Other Functions
+        function viewLogs() {
+            alert('Opening MQTT connection logs...');
+        }
+        
+        function resetToDefaults() {
+            if (confirm('Reset all MQTT settings to default values?')) {
+                location.reload();
+            }
+        }
+        
+        function cancelChanges() {
+            if (confirm('Discard all unsaved changes?')) {
+                location.reload();
+            }
+        }
+        
+        function showAddConnection() {
+            alert('Add new MQTT connection dialog would open here.');
+        }
+        
+        function showHelp() {
+            alert('MQTT Configuration Help:\n\n1. Configure broker connection settings\n2. Set up topics and payload format\n3. Select which tags to publish\n4. Configure advanced options\n\nFor detailed documentation, visit our knowledge base.');
+        }
+        
+        function uploadCertificate() {
+            alert('Certificate upload functionality would be implemented here.');
+            closeModal('uploadCertModal');
+        }
+        
+        function updatePayloadPreview() {
+            const format = document.querySelector('input[name="payload-format"]:checked').value;
+            const preview = document.getElementById('json-preview');
+            
+            switch(format) {
+                case 'json':
+                    preview.textContent = `{
+  "device_id": "CRN001",
+  "timestamp": 1736004933,
+  "Hoist_Load": 18.5,
+  "Boom_Angle": 45,
+  "WindSpeed": 12
+}`;
+                    break;
+                case 'key-value':
+                    preview.textContent = `device_id=CRN001
+timestamp=1736004933
+Hoist_Load=18.5
+Boom_Angle=45
+WindSpeed=12`;
+                    break;
+                case 'raw':
+                    preview.textContent = 'Raw binary data preview not available';
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

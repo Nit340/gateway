@@ -1,0 +1,838 @@
+{
+  "app": {
+    "name": "Univa IoT Gateway",
+    "version": "2.4.1",
+    "maxConnections": 12
+  },
+  
+  "connectionTypes": {
+    "mqtt": {
+      "name": "MQTT Broker",
+      "description": "Standard IoT messaging protocol",
+      "icon": "fa-cloud",
+      "color": "blue",
+      "defaultName": "MQTT Broker",
+      "form": {
+        "sections": [
+          {
+            "title": "Broker Configuration",
+            "fields": [
+              {
+                "type": "protocol-select",
+                "id": "protocol",
+                "label": "Protocol",
+                "default": "mqtts://",
+                "options": [
+                  {"value": "mqtt://", "label": "MQTT"},
+                  {"value": "mqtts://", "label": "MQTTS (SSL)"},
+                  {"value": "tcp://", "label": "TCP"},
+                  {"value": "ws://", "label": "WebSocket"},
+                  {"value": "wss://", "label": "WebSocket Secure"}
+                ],
+                "required": true
+              },
+              {
+                "type": "host-port",
+                "hostId": "host",
+                "portId": "port",
+                "hostLabel": "Broker Hostname",
+                "portLabel": "Port",
+                "hostDefault": "broker.company.com",
+                "portDefault": 8883,
+                "required": true
+              },
+              {
+                "type": "text",
+                "id": "clientId",
+                "label": "Client ID",
+                "default": "univa-gateway-${randomId}",
+                "placeholder": "Enter unique client ID",
+                "required": true,
+                "help": "Must be unique across all connections"
+              },
+              {
+                "type": "number",
+                "id": "keepAlive",
+                "label": "Keep Alive Interval",
+                "default": 60,
+                "min": 5,
+                "max": 65535,
+                "unit": "seconds",
+                "help": "Seconds between keep-alive packets"
+              }
+            ]
+          },
+          {
+            "title": "Authentication",
+            "fields": [
+              {
+                "type": "text",
+                "id": "username",
+                "label": "Username",
+                "placeholder": "Enter username",
+                "help": "Leave empty if no authentication required"
+              },
+              {
+                "type": "password",
+                "id": "password",
+                "label": "Password",
+                "placeholder": "Enter password",
+                "showGenerate": false
+              },
+              {
+                "type": "toggle",
+                "id": "tls",
+                "label": "Enable TLS/SSL",
+                "default": true,
+                "help": "Secure connection with TLS/SSL"
+              }
+            ]
+          },
+          {
+            "title": "MQTT Options",
+            "fields": [
+              {
+                "type": "radio",
+                "id": "qos",
+                "label": "Quality of Service",
+                "default": 1,
+                "options": [
+                  {"value": 0, "label": "0 - At most once (Fire and forget)"},
+                  {"value": 1, "label": "1 - At least once (Acknowledged delivery)"},
+                  {"value": 2, "label": "2 - Exactly once (Assured delivery)"}
+                ],
+                "help": "Message delivery guarantee level"
+              },
+              {
+                "type": "toggle",
+                "id": "cleanSession",
+                "label": "Clean Session",
+                "default": true,
+                "help": "Start with a clean session (no persistent subscriptions)"
+              },
+              {
+                "type": "toggle",
+                "id": "retainMessages",
+                "label": "Retain Messages",
+                "default": false,
+                "help": "Server should retain last message"
+              }
+            ]
+          },
+          {
+            "title": "Last Will & Testament",
+            "fields": [
+              {
+                "type": "text",
+                "id": "lastWillTopic",
+                "label": "Will Topic",
+                "default": "gateway/status",
+                "placeholder": "topic/for/last/will",
+                "help": "Topic to publish last will message"
+              },
+              {
+                "type": "text",
+                "id": "lastWillMessage",
+                "label": "Will Message",
+                "default": "{\"status\":\"offline\"}",
+                "placeholder": "Last will message content",
+                "help": "Message published when connection drops unexpectedly"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "server": "mqtts://broker.company.com:8883",
+        "clientId": "univa-gw-01",
+        "qos": 1,
+        "username": "admin",
+        "tls": true,
+        "keepAlive": 60,
+        "cleanSession": true,
+        "reconnectDelay": 10,
+        "maxReconnect": 5
+      }
+    },
+    
+    "http": {
+      "name": "HTTP Endpoint",
+      "description": "REST API endpoints",
+      "icon": "fa-globe",
+      "color": "yellow",
+      "defaultName": "HTTP API",
+      "form": {
+        "sections": [
+          {
+            "title": "Endpoint Configuration",
+            "fields": [
+              {
+                "type": "text",
+                "id": "url",
+                "label": "Endpoint URL",
+                "default": "https://api.company.com/v1/data",
+                "placeholder": "https://example.com/api/endpoint",
+                "validation": "url",
+                "required": true,
+                "help": "Full URL including protocol (http:// or https://)"
+              },
+              {
+                "type": "select",
+                "id": "method",
+                "label": "HTTP Method",
+                "default": "POST",
+                "options": [
+                  {"value": "POST", "label": "POST (Create/Submit data)"},
+                  {"value": "PUT", "label": "PUT (Update resource)"},
+                  {"value": "PATCH", "label": "PATCH (Partial update)"},
+                  {"value": "GET", "label": "GET (Retrieve data)"}
+                ],
+                "required": true
+              },
+              {
+                "type": "select",
+                "id": "contentType",
+                "label": "Content Type",
+                "default": "application/json",
+                "options": [
+                  {"value": "application/json", "label": "application/json"},
+                  {"value": "application/x-www-form-urlencoded", "label": "application/x-www-form-urlencoded"},
+                  {"value": "text/plain", "label": "text/plain"},
+                  {"value": "application/xml", "label": "application/xml"}
+                ],
+                "help": "Content-Type header for HTTP requests"
+              }
+            ]
+          },
+          {
+            "title": "Push Settings",
+            "fields": [
+              {
+                "type": "select",
+                "id": "interval",
+                "label": "Push Interval",
+                "default": 300,
+                "options": [
+                  {"value": 0, "label": "Immediate (no batching)"},
+                  {"value": 10, "label": "10 seconds"},
+                  {"value": 30, "label": "30 seconds"},
+                  {"value": 60, "label": "1 minute"},
+                  {"value": 300, "label": "5 minutes"},
+                  {"value": 900, "label": "15 minutes"},
+                  {"value": 3600, "label": "1 hour"}
+                ],
+                "unit": "seconds",
+                "help": "How often to send batched data"
+              },
+              {
+                "type": "number",
+                "id": "batchSize",
+                "label": "Batch Size",
+                "default": 100,
+                "min": 1,
+                "max": 10000,
+                "help": "Maximum number of messages to batch before sending"
+              },
+              {
+                "type": "number",
+                "id": "timeout",
+                "label": "Request Timeout",
+                "default": 30,
+                "min": 1,
+                "max": 300,
+                "unit": "seconds",
+                "help": "Timeout for HTTP requests"
+              },
+              {
+                "type": "number",
+                "id": "retryCount",
+                "label": "Retry Attempts",
+                "default": 3,
+                "min": 0,
+                "max": 10,
+                "help": "Number of retries on failure"
+              }
+            ]
+          },
+          {
+            "title": "Authentication",
+            "fields": [
+              {
+                "type": "select",
+                "id": "authType",
+                "label": "Authentication Type",
+                "default": "bearer",
+                "options": [
+                  {"value": "none", "label": "None"},
+                  {"value": "basic", "label": "Basic Authentication"},
+                  {"value": "bearer", "label": "Bearer Token"},
+                  {"value": "apiKey", "label": "API Key"},
+                  {"value": "oauth2", "label": "OAuth 2.0"}
+                ],
+                "help": "Select authentication method"
+              },
+              {
+                "type": "password",
+                "id": "apiKey",
+                "label": "API Key / Token",
+                "placeholder": "Enter API key or token",
+                "showGenerate": true,
+                "help": "Authentication token or API key"
+              },
+              {
+                "type": "toggle",
+                "id": "compression",
+                "label": "Enable Compression",
+                "default": true,
+                "help": "Compress data with gzip before sending"
+              }
+            ]
+          },
+          {
+            "title": "Custom Headers",
+            "fields": [
+              {
+                "type": "key-value-list",
+                "id": "headers",
+                "label": "Additional Headers",
+                "default": [
+                  {"key": "X-Client-ID", "value": "univa-gateway"},
+                  {"key": "X-Version", "value": "2.4.1"}
+                ],
+                "keyPlaceholder": "Header Name",
+                "valuePlaceholder": "Header Value",
+                "help": "Custom HTTP headers to include in requests"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "url": "https://api.company.com/v1/data",
+        "method": "POST",
+        "interval": 300,
+        "batchSize": 100,
+        "contentType": "application/json",
+        "authType": "bearer",
+        "apiKey": "*******",
+        "compression": true,
+        "timeout": 30,
+        "retryCount": 3
+      }
+    },
+    
+    "aws": {
+      "name": "AWS IoT Core",
+      "description": "Amazon Web Services IoT",
+      "icon": "fa-brands fa-aws",
+      "color": "purple",
+      "defaultName": "AWS IoT",
+      "form": {
+        "sections": [
+          {
+            "title": "AWS Configuration",
+            "fields": [
+              {
+                "type": "text",
+                "id": "endpoint",
+                "label": "AWS IoT Endpoint",
+                "placeholder": "a3qj7x...iot.region.amazonaws.com",
+                "required": true,
+                "help": "From AWS IoT Console → Settings → Custom endpoint"
+              },
+              {
+                "type": "select",
+                "id": "region",
+                "label": "AWS Region",
+                "default": "us-east-1",
+                "options": [
+                  {"value": "us-east-1", "label": "us-east-1 (N. Virginia)"},
+                  {"value": "us-west-2", "label": "us-west-2 (Oregon)"},
+                  {"value": "eu-west-1", "label": "eu-west-1 (Ireland)"},
+                  {"value": "ap-southeast-1", "label": "ap-southeast-1 (Singapore)"},
+                  {"value": "ap-northeast-1", "label": "ap-northeast-1 (Tokyo)"}
+                ],
+                "required": true
+              },
+              {
+                "type": "text",
+                "id": "thingName",
+                "label": "Thing Name",
+                "default": "crane-gateway-01",
+                "placeholder": "Enter AWS IoT thing name",
+                "required": true,
+                "help": "Name of the IoT Thing in AWS IoT Core"
+              },
+              {
+                "type": "text",
+                "id": "clientId",
+                "label": "Client ID",
+                "default": "aws-iot-client-01",
+                "placeholder": "Enter MQTT client ID",
+                "help": "MQTT client identifier (defaults to thing name if empty)"
+              }
+            ]
+          },
+          {
+            "title": "MQTT Settings",
+            "fields": [
+              {
+                "type": "select",
+                "id": "qos",
+                "label": "QoS Level",
+                "default": 1,
+                "options": [
+                  {"value": 0, "label": "0 - At most once"},
+                  {"value": 1, "label": "1 - At least once"}
+                ],
+                "help": "AWS IoT supports QoS 0 and 1 only"
+              },
+              {
+                "type": "number",
+                "id": "keepAlive",
+                "label": "Keep Alive",
+                "default": 30,
+                "min": 5,
+                "max": 1200,
+                "unit": "seconds",
+                "help": "AWS maximum is 1200 seconds (20 minutes)"
+              },
+              {
+                "type": "toggle",
+                "id": "cleanSession",
+                "label": "Clean Session",
+                "default": true,
+                "help": "Start with clean MQTT session"
+              }
+            ]
+          },
+          {
+            "title": "Security Certificates",
+            "fields": [
+              {
+                "type": "file",
+                "id": "deviceCertificate",
+                "label": "Device Certificate",
+                "accept": ".pem,.crt,.cer",
+                "required": true,
+                "help": "Upload device certificate file (.pem, .crt)"
+              },
+              {
+                "type": "file",
+                "id": "privateKey",
+                "label": "Private Key",
+                "accept": ".pem,.key",
+                "required": true,
+                "help": "Upload private key file (.pem, .key)"
+              },
+              {
+                "type": "file",
+                "id": "rootCA",
+                "label": "Root CA Certificate",
+                "accept": ".pem,.crt",
+                "default": "Amazon Root CA",
+                "help": "Upload AWS root CA certificate (optional - uses Amazon default if not provided)"
+              }
+            ]
+          },
+          {
+            "title": "Device Shadow",
+            "fields": [
+              {
+                "type": "toggle",
+                "id": "shadowUpdate",
+                "label": "Enable Shadow Updates",
+                "default": true,
+                "help": "Sync device state with AWS IoT Device Shadow"
+              },
+              {
+                "type": "select",
+                "id": "shadowInterval",
+                "label": "Shadow Update Interval",
+                "default": 60,
+                "options": [
+                  {"value": 10, "label": "10 seconds"},
+                  {"value": 30, "label": "30 seconds"},
+                  {"value": 60, "label": "1 minute"},
+                  {"value": 300, "label": "5 minutes"}
+                ],
+                "unit": "seconds",
+                "help": "How often to update device shadow"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "endpoint": "a3qj7x...iot.us-east-1.amazonaws.com",
+        "region": "us-east-1",
+        "thingName": "crane-gw-01",
+        "clientId": "aws-iot-client-01",
+        "qos": 1,
+        "keepAlive": 30,
+        "cleanSession": true,
+        "shadowUpdate": true,
+        "shadowInterval": 60
+      }
+    },
+    
+    "azure": {
+      "name": "Azure IoT Hub",
+      "description": "Microsoft Azure IoT",
+      "icon": "fa-brands fa-microsoft",
+      "color": "blue",
+      "defaultName": "Azure IoT Hub",
+      "form": {
+        "sections": [
+          {
+            "title": "IoT Hub Configuration",
+            "fields": [
+              {
+                "type": "text",
+                "id": "hostname",
+                "label": "IoT Hub Hostname",
+                "placeholder": "my-hub.azure-devices.net",
+                "required": true,
+                "help": "Your Azure IoT Hub hostname"
+              },
+              {
+                "type": "text",
+                "id": "deviceId",
+                "label": "Device ID",
+                "default": "crane-gateway-01",
+                "placeholder": "Enter device ID",
+                "required": true,
+                "help": "Device identifier registered in Azure IoT Hub"
+              },
+              {
+                "type": "password",
+                "id": "connectionString",
+                "label": "Connection String",
+                "placeholder": "HostName=...;DeviceId=...;SharedAccessKey=...",
+                "required": true,
+                "help": "Device connection string from Azure Portal"
+              }
+            ]
+          },
+          {
+            "title": "Protocol & Security",
+            "fields": [
+              {
+                "type": "select",
+                "id": "protocol",
+                "label": "Protocol",
+                "default": "mqtt",
+                "options": [
+                  {"value": "mqtt", "label": "MQTT (Recommended)"},
+                  {"value": "amqp", "label": "AMQP"},
+                  {"value": "http", "label": "HTTP"}
+                ],
+                "help": "Communication protocol with Azure IoT Hub"
+              },
+              {
+                "type": "number",
+                "id": "sasTokenExpiry",
+                "label": "SAS Token Expiry",
+                "default": 3600,
+                "min": 300,
+                "max": 86400,
+                "unit": "seconds",
+                "help": "SAS token validity duration (1 hour default)"
+              },
+              {
+                "type": "toggle",
+                "id": "x509",
+                "label": "Use X.509 Certificates",
+                "default": false,
+                "help": "Use X.509 certificate authentication instead of SAS tokens"
+              }
+            ]
+          },
+          {
+            "title": "Device Features",
+            "fields": [
+              {
+                "type": "toggle",
+                "id": "deviceTwin",
+                "label": "Enable Device Twin",
+                "default": true,
+                "help": "Synchronize device state with Azure Device Twin"
+              },
+              {
+                "type": "toggle",
+                "id": "directMethods",
+                "label": "Enable Direct Methods",
+                "default": false,
+                "help": "Allow cloud-to-device direct method calls"
+              },
+              {
+                "type": "select",
+                "id": "telemetryInterval",
+                "label": "Telemetry Interval",
+                "default": 30,
+                "options": [
+                  {"value": 1, "label": "1 second"},
+                  {"value": 5, "label": "5 seconds"},
+                  {"value": 30, "label": "30 seconds"},
+                  {"value": 60, "label": "1 minute"}
+                ],
+                "unit": "seconds",
+                "help": "Interval for sending telemetry data"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "hostname": "my-hub.azure-devices.net",
+        "deviceId": "crane-gateway-01",
+        "protocol": "mqtt",
+        "sasTokenExpiry": 3600,
+        "deviceTwin": true,
+        "telemetryInterval": 30
+      }
+    },
+    
+    "grafana": {
+      "name": "Grafana Cloud",
+      "description": "Monitoring & Dashboards",
+      "icon": "fa-chart-line",
+      "color": "orange",
+      "defaultName": "Grafana Cloud",
+      "form": {
+        "sections": [
+          {
+            "title": "Grafana Configuration",
+            "fields": [
+              {
+                "type": "text",
+                "id": "url",
+                "label": "Grafana API URL",
+                "default": "https://grafana.company.com/api",
+                "placeholder": "https://your-grafana-instance.com/api",
+                "validation": "url",
+                "required": true,
+                "help": "Base URL of your Grafana instance API"
+              },
+              {
+                "type": "text",
+                "id": "organization",
+                "label": "Organization",
+                "default": "Univa IoT",
+                "placeholder": "Enter organization name",
+                "help": "Grafana organization name"
+              },
+              {
+                "type": "text",
+                "id": "dashboardId",
+                "label": "Dashboard ID",
+                "default": "crane-monitoring",
+                "placeholder": "Enter dashboard identifier",
+                "help": "Target dashboard ID for data"
+              },
+              {
+                "type": "password",
+                "id": "apiKey",
+                "label": "API Key",
+                "placeholder": "Enter Grafana API key",
+                "required": true,
+                "showGenerate": false,
+                "help": "Grafana API key with write permissions"
+              }
+            ]
+          },
+          {
+            "title": "Data Settings",
+            "fields": [
+              {
+                "type": "select",
+                "id": "dataSource",
+                "label": "Data Source",
+                "default": "influxdb",
+                "options": [
+                  {"value": "influxdb", "label": "InfluxDB"},
+                  {"value": "prometheus", "label": "Prometheus"},
+                  {"value": "postgres", "label": "PostgreSQL"},
+                  {"value": "mysql", "label": "MySQL"},
+                  {"value": "elasticsearch", "label": "Elasticsearch"}
+                ],
+                "help": "Type of database/data source"
+              },
+              {
+                "type": "text",
+                "id": "measurement",
+                "label": "Measurement / Table",
+                "default": "crane_metrics",
+                "placeholder": "Enter measurement or table name",
+                "help": "InfluxDB measurement or database table name"
+              },
+              {
+                "type": "number",
+                "id": "batchSize",
+                "label": "Batch Size",
+                "default": 1000,
+                "min": 1,
+                "max": 10000,
+                "help": "Number of data points to batch before sending"
+              },
+              {
+                "type": "number",
+                "id": "flushInterval",
+                "label": "Flush Interval",
+                "default": 10,
+                "min": 1,
+                "max": 300,
+                "unit": "seconds",
+                "help": "Maximum time to wait before flushing batch"
+              }
+            ]
+          },
+          {
+            "title": "Tags & Metadata",
+            "fields": [
+              {
+                "type": "key-value-list",
+                "id": "tags",
+                "label": "Default Tags",
+                "default": [
+                  {"key": "gateway", "value": "GW-01"},
+                  {"key": "location", "value": "site-a"},
+                  {"key": "device_type", "value": "crane"}
+                ],
+                "keyPlaceholder": "Tag Key",
+                "valuePlaceholder": "Tag Value",
+                "help": "Tags to include with all data points"
+              }
+            ]
+          },
+          {
+            "title": "Advanced Options",
+            "fields": [
+              {
+                "type": "select",
+                "id": "precision",
+                "label": "Timestamp Precision",
+                "default": "ms",
+                "options": [
+                  {"value": "ns", "label": "Nanoseconds"},
+                  {"value": "ms", "label": "Milliseconds"},
+                  {"value": "s", "label": "Seconds"}
+                ],
+                "help": "Timestamp precision for time-series data"
+              },
+              {
+                "type": "toggle",
+                "id": "retryOnError",
+                "label": "Retry on Error",
+                "default": true,
+                "help": "Automatically retry failed data pushes"
+              },
+              {
+                "type": "toggle",
+                "id": "realtimeStreaming",
+                "label": "Real-time Streaming",
+                "default": true,
+                "help": "Stream data in real-time instead of batches"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "url": "https://grafana.company.com/api",
+        "apiKey": "*******",
+        "dashboardId": "crane-monitor",
+        "organization": "Univa IoT",
+        "dataSource": "influxdb",
+        "measurement": "crane_metrics",
+        "batchSize": 1000,
+        "flushInterval": 10,
+        "precision": "ms",
+        "retryOnError": true
+      }
+    }
+  },
+  
+  "defaultStats": {
+    "messages": 0,
+    "errors": 0,
+    "latency": 0,
+    "uptime": "0h 0m",
+    "lastActive": "Never",
+    "bandwidth": "0 MB",
+    "successRate": "0%"
+  },
+  
+  "fieldTypes": {
+    "text": {
+      "template": "<input type='text' class='form-input' placeholder='{placeholder}' value='{value}' {required}>"
+    },
+    "password": {
+      "template": "<div class='flex gap-2'><input type='password' class='form-input flex-1' placeholder='{placeholder}' value='{value}' {required}><button type='button' class='btn-secondary' onclick='generatePassword(this)'>Generate</button></div>"
+    },
+    "number": {
+      "template": "<input type='number' class='form-input' value='{value}' min='{min}' max='{max}' step='{step}' {required}>"
+    },
+    "select": {
+      "template": "<select class='form-select' {required}>{options}</select>"
+    },
+    "toggle": {
+      "template": "<label class='toggle-switch'><input type='checkbox' {checked}><span class='toggle-slider'></span></label>"
+    },
+    "radio": {
+      "template": "<div class='radio-group'>{options}</div>"
+    },
+    "file": {
+      "template": "<div class='file-upload'><input type='file' accept='{accept}' class='hidden' onchange='handleFileUpload(this, \"{id}\")'><button type='button' class='btn-secondary' onclick='this.previousElementSibling.click()'>{label}</button><span class='file-name'>{value}</span></div>"
+    }
+  },
+  
+  "defaultConnections": {
+    "mqtt": {
+      "id": "mqtt-primary",
+      "type": "mqtt",
+      "name": "Production MQTT Broker",
+      "enabled": true,
+      "config": {
+        "server": "mqtts://broker.company.com:8883",
+        "clientId": "univa-gw-01",
+        "qos": 1,
+        "username": "admin",
+        "tls": true,
+        "keepAlive": 60,
+        "cleanSession": true
+      },
+      "stats": {
+        "messages": 8953,
+        "errors": 0,
+        "latency": 95,
+        "uptime": "8h 12m",
+        "lastActive": "2.3s ago",
+        "bandwidth": "2.4 MB",
+        "successRate": "99.8%"
+      }
+    },
+    "http": {
+      "id": "http-analytics",
+      "type": "http",
+      "name": "Analytics API",
+      "enabled": true,
+      "config": {
+        "url": "https://api.company.com/v1/data",
+        "method": "POST",
+        "interval": 300,
+        "batchSize": 100,
+        "contentType": "application/json"
+      },
+      "stats": {
+        "messages": 3245,
+        "errors": 12,
+        "latency": 210,
+        "uptime": "1h 45m",
+        "lastActive": "5 min ago",
+        "bandwidth": "1.2 MB",
+        "successRate": "99.6%"
+      }
+    }
+  }
+}

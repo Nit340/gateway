@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLAN Settings - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* VLAN Tag Colors */
+        .vlan-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .vlan-tag.mgmt { background: #DBEAFE; color: #1E40AF; }
+        .vlan-tag.iot { background: #D1FAE5; color: #065F46; }
+        .vlan-tag.camera { background: #FEF3C7; color: #92400E; }
+        .vlan-tag.control { background: #FCE7F3; color: #9D174D; }
+        .vlan-tag.guest { background: #E0E7FF; color: #3730A3; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Left: Breadcrumb -->
+            <div class="flex items-center space-x-4">
+                <a href="general-configuration.html" class="text-slate-500 hover:text-slate-700 text-sm flex items-center">
+                    <i class="fa-solid fa-chevron-left mr-2"></i> Back to General
+                </a>
+                <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                    <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                    <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                    <span class="text-slate-900 font-medium">VLAN Settings</span>
+                </div>
+            </div>
+
+            <!-- Right: Controls -->
+            <div class="flex items-center space-x-4">
+                <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    <i class="fa-solid fa-circle-question mr-2"></i> Help
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save VLAN Configuration
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-slate-900">
+                <i class="fa-solid fa-network-wired mr-2 text-primary"></i>
+                VLAN Configuration
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">Virtual LAN configuration for network segmentation and security</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: VLAN List and Management -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Add New VLAN -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-plus mr-2 text-primary"></i>
+                        Add New VLAN
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">VLAN ID <span class="text-red-500">*</span></label>
+                            <input type="number" min="1" max="4094" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="1-4094">
+                            <p class="text-xs text-slate-500 mt-1">Unique VLAN identifier (1-4094)</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">VLAN Name <span class="text-red-500">*</span></label>
+                            <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., Management, IoT, Camera">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Subnet <span class="text-red-500">*</span></label>
+                            <input type="text" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="192.168.10.0/24">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Gateway IP</label>
+                            <input type="text" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="192.168.10.1">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Assigned Ports</label>
+                            <div class="flex flex-wrap gap-3">
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked> 
+                                    <span class="ml-2 text-sm text-slate-700">eth0</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"> 
+                                    <span class="ml-2 text-sm text-slate-700">eth1</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked> 
+                                    <span class="ml-2 text-sm text-slate-700">wlan0</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary"> 
+                                    <span class="ml-2 text-sm text-slate-700">wwan0</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                            <textarea rows="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Optional description of this VLAN's purpose"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button class="text-slate-600 hover:text-slate-800 text-sm font-medium px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+                            Clear Form
+                        </button>
+                        <button class="bg-primary hover:bg-primaryHover text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center">
+                            <i class="fa-solid fa-plus mr-2"></i> Add VLAN
+                        </button>
+                    </div>
+                </section>
+
+                <!-- VLAN List -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold text-slate-800">
+                            <i class="fa-solid fa-list mr-2 text-primary"></i>
+                            Configured VLANs
+                        </h2>
+                        <span class="text-sm text-slate-500">3 VLANs configured</span>
+                    </div>
+                    
+                    <div class="overflow-hidden border border-slate-200 rounded-lg">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">VLAN ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Name & Description</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Subnet/Gateway</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Ports</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-slate-200">
+                                <!-- VLAN 10: Management -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="vlan-tag mgmt">VLAN 10</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Management</div>
+                                        <div class="text-xs text-slate-500">Gateway management interface</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-mono text-slate-700">192.168.10.0/24</div>
+                                        <div class="text-xs text-slate-500">GW: 192.168.10.1</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm text-slate-700">eth0</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full text-xs font-medium">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- VLAN 20: IoT -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="vlan-tag iot">VLAN 20</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">IoT Devices</div>
+                                        <div class="text-xs text-slate-500">IoT sensors and devices network</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-mono text-slate-700">192.168.20.0/24</div>
+                                        <div class="text-xs text-slate-500">GW: 192.168.20.1</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm text-slate-700">eth1, wlan0</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full text-xs font-medium">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- VLAN 30: Camera -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="vlan-tag camera">VLAN 30</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Security Cameras</div>
+                                        <div class="text-xs text-slate-500">IP camera network</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-mono text-slate-700">192.168.30.0/24</div>
+                                        <div class="text-xs text-slate-500">GW: 192.168.30.1</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm text-slate-700">eth1</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-slate-600 bg-slate-100 px-2 py-1 rounded-full text-xs font-medium">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Inactive
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Port Mapping & Statistics -->
+            <div class="space-y-6">
+                <!-- Port-VLAN Mapping -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-plug mr-2 text-primary"></i>
+                        Port-VLAN Mapping
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <!-- Ethernet Ports -->
+                        <div>
+                            <h3 class="text-sm font-medium text-slate-700 mb-2">Ethernet Ports</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fa-solid fa-ethernet text-slate-400 mr-2"></i>
+                                        <span class="text-sm text-slate-700">eth0</span>
+                                    </div>
+                                    <select class="text-sm border border-slate-300 rounded px-2 py-1">
+                                        <option>VLAN 10 (Management)</option>
+                                        <option>VLAN 20 (IoT)</option>
+                                        <option>VLAN 30 (Camera)</option>
+                                        <option>Untagged</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fa-solid fa-ethernet text-slate-400 mr-2"></i>
+                                        <span class="text-sm text-slate-700">eth1</span>
+                                    </div>
+                                    <select class="text-sm border border-slate-300 rounded px-2 py-1">
+                                        <option>VLAN 20 (IoT)</option>
+                                        <option>VLAN 10 (Management)</option>
+                                        <option>VLAN 30 (Camera)</option>
+                                        <option>Untagged</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Wireless Ports -->
+                        <div>
+                            <h3 class="text-sm font-medium text-slate-700 mb-2">Wireless Ports</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fa-solid fa-wifi text-slate-400 mr-2"></i>
+                                        <span class="text-sm text-slate-700">wlan0</span>
+                                    </div>
+                                    <select class="text-sm border border-slate-300 rounded px-2 py-1">
+                                        <option>VLAN 20 (IoT)</option>
+                                        <option>VLAN 10 (Management)</option>
+                                        <option>VLAN 30 (Camera)</option>
+                                        <option>Untagged</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i class="fa-solid fa-signal text-slate-400 mr-2"></i>
+                                        <span class="text-sm text-slate-700">wwan0</span>
+                                    </div>
+                                    <span class="text-sm text-slate-500">Untagged</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 text-right">
+                        <button class="text-primary hover:text-primaryHover text-sm font-medium">
+                            <i class="fa-solid fa-sync mr-1"></i> Apply Mapping
+                        </button>
+                    </div>
+                </section>
+
+                <!-- VLAN Statistics -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-chart-bar mr-2 text-primary"></i>
+                        VLAN Statistics
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">Active VLANs</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">2</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-network-wired text-blue-600 text-xl"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">Ports in Use</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">4</p>
+                            </div>
+                            <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-plug text-emerald-600 text-xl"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">Default VLAN</p>
+                                <p class="text-lg font-bold text-slate-900 mt-1">VLAN 1</p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-1 text-purple-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <h3 class="text-sm font-medium text-slate-700 mb-2">VLAN Distribution</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">Management (VLAN 10)</span>
+                                <span class="text-xs font-medium text-slate-700">1 port</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-blue-600 h-1.5 rounded-full" style="width: 25%"></div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">IoT (VLAN 20)</span>
+                                <span class="text-xs font-medium text-slate-700">2 ports</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-emerald-600 h-1.5 rounded-full" style="width: 50%"></div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">Camera (VLAN 30)</span>
+                                <span class="text-xs font-medium text-slate-700">1 port</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-amber-600 h-1.5 rounded-full" style="width: 25%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="bg-blue-50 border border-blue-100 rounded-xl p-5">
+                    <h3 class="text-blue-900 font-semibold text-sm uppercase tracking-wider mb-3">
+                        <i class="fa-solid fa-bolt mr-2"></i> Quick Actions
+                    </h3>
+                    <div class="space-y-2">
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-play mr-2 text-blue-600"></i>
+                            Activate All VLANs
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-stop mr-2 text-blue-600"></i>
+                            Deactivate All VLANs
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-rotate mr-2 text-blue-600"></i>
+                            Reset to Default
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-download mr-2 text-blue-600"></i>
+                            Export Configuration
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="text-sm text-slate-500">
+                <i class="fa-solid fa-circle-info mr-2"></i>
+                VLAN changes take effect after save and gateway reboot
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
+                    <i class="fa-solid fa-rotate-left mr-2"></i> Discard Changes
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save VLAN Configuration
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Simple form handling
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add VLAN form submission
+            const addVlanBtn = document.querySelector('button:contains("Add VLAN")');
+            if (addVlanBtn) {
+                addVlanBtn.addEventListener('click', function() {
+                    const vlanId = document.querySelector('input[type="number"]').value;
+                    const vlanName = document.querySelector('input[placeholder*="Management"]').value;
+                    
+                    if (vlanId && vlanName) {
+                        alert(`VLAN ${vlanId} (${vlanName}) added successfully!`);
+                        // In real implementation, you would add to table here
+                    } else {
+                        alert('Please fill in VLAN ID and Name');
+                    }
+                });
+            }
+            
+            // Clear form button
+            const clearFormBtn = document.querySelector('button:contains("Clear Form")');
+            if (clearFormBtn) {
+                clearFormBtn.addEventListener('click', function() {
+                    document.querySelectorAll('input, textarea').forEach(input => {
+                        if (input.type !== 'checkbox') {
+                            input.value = '';
+                        }
+                    });
+                    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                        cb.checked = false;
+                    });
+                });
+            }
+            
+            // Edit/Delete button handlers
+            document.querySelectorAll('button .fa-edit').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    alert('Edit VLAN functionality would open here');
+                });
+            });
+            
+            document.querySelectorAll('button .fa-trash').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    if (confirm('Are you sure you want to delete this VLAN?')) {
+                        alert('VLAN deleted successfully!');
+                        // In real implementation, you would remove from table here
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

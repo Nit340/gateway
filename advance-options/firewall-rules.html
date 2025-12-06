@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firewall Rules - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        .rule-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .rule-status.active { background: #D1FAE5; color: #065F46; }
+        .rule-status.inactive { background: #E5E7EB; color: #4B5563; }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Left: Breadcrumb -->
+            <div class="flex items-center space-x-4">
+                <a href="general-configuration.html" class="text-slate-500 hover:text-slate-700 text-sm flex items-center">
+                    <i class="fa-solid fa-chevron-left mr-2"></i> Back to General
+                </a>
+                <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                    <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                    <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                    <span class="text-slate-900 font-medium">Firewall Rules</span>
+                </div>
+            </div>
+
+            <!-- Right: Controls -->
+            <div class="flex items-center space-x-4">
+                <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    <i class="fa-solid fa-circle-question mr-2"></i> Help
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Firewall Rules
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-slate-900">
+                <i class="fa-solid fa-shield mr-2 text-primary"></i>
+                Firewall Rules Configuration
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">Control network traffic flow and security with firewall rules</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Create Rule & Rules List -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Create New Firewall Rule -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-plus-circle mr-2 text-primary"></i>
+                        Create New Firewall Rule
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Rule Name <span class="text-red-500">*</span></label>
+                            <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., Allow Web Traffic">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Action</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="allow">Allow</option>
+                                <option value="deny">Deny</option>
+                                <option value="reject">Reject</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Direction</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="in">Incoming</option>
+                                <option value="out">Outgoing</option>
+                                <option value="both">Both</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Protocol</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="any">Any</option>
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="icmp">ICMP</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Source IP/CIDR</label>
+                            <input type="text" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., 192.168.1.0/24 or any" value="any">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Destination IP/CIDR</label>
+                            <input type="text" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., 192.168.1.100 or any" value="any">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Destination Port(s)</label>
+                            <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., 80,443 or 1000-2000">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Interface</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="any">Any</option>
+                                <option value="eth0">eth0</option>
+                                <option value="eth1">eth1</option>
+                                <option value="wlan0">wlan0</option>
+                                <option value="wwan0">wwan0</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                            <textarea rows="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Optional description of this rule's purpose"></textarea>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <div class="flex items-center space-x-4">
+                                <label class="flex items-center">
+                                    <input type="radio" name="firewallStatus" value="active" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                    <span class="ml-2 text-sm text-slate-700">Active</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="firewallStatus" value="inactive" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                    <span class="ml-2 text-sm text-slate-700">Inactive</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button class="text-slate-600 hover:text-slate-800 text-sm font-medium px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+                            Clear Form
+                        </button>
+                        <button class="bg-primary hover:bg-primaryHover text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center">
+                            <i class="fa-solid fa-plus mr-2"></i> Create Rule
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Firewall Rules List -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-800">
+                                <i class="fa-solid fa-list mr-2 text-primary"></i>
+                                Firewall Rules
+                            </h2>
+                            <p class="text-sm text-slate-500 mt-1">Rules are processed in order of priority (1 = highest)</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-slate-500">Order:</span>
+                            <select class="text-xs border border-slate-300 rounded px-2 py-1">
+                                <option>Priority</option>
+                                <option>Name</option>
+                                <option>Action</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-hidden border border-slate-200 rounded-lg">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Priority</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Rule Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Action</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Source → Dest</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Protocol/Port</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-slate-200">
+                                <!-- Allow SSH -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm font-bold text-slate-900">1</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Allow SSH</div>
+                                        <div class="text-xs text-slate-500">Allow SSH to gateway</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-emerald-600">ALLOW</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-xs font-mono">
+                                            <div>any</div>
+                                            <div class="text-slate-400">→</div>
+                                            <div>192.168.1.100</div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <span class="font-medium">TCP</span>
+                                            <span class="text-slate-500 ml-1">:22</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="rule-status active">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                            <button class="text-amber-600 hover:text-amber-800">
+                                                <i class="fa-solid fa-up-down"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Allow HTTP/HTTPS -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm font-bold text-slate-900">2</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Allow HTTP/HTTPS</div>
+                                        <div class="text-xs text-slate-500">Allow web traffic</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-emerald-600">ALLOW</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-xs font-mono">
+                                            <div>any</div>
+                                            <div class="text-slate-400">→</div>
+                                            <div>192.168.1.100</div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <span class="font-medium">TCP</span>
+                                            <span class="text-slate-500 ml-1">:80,443</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="rule-status active">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                            <button class="text-amber-600 hover:text-amber-800">
+                                                <i class="fa-solid fa-up-down"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Block ICMP -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm font-bold text-slate-900">3</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Block ICMP</div>
+                                        <div class="text-xs text-slate-500">Block ping requests</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-red-600">DENY</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-xs font-mono">
+                                            <div>any</div>
+                                            <div class="text-slate-400">→</div>
+                                            <div>any</div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <span class="font-medium">ICMP</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="rule-status active">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                            <button class="text-amber-600 hover:text-amber-800">
+                                                <i class="fa-solid fa-up-down"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Allow DNS -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm font-bold text-slate-900">4</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Allow DNS</div>
+                                        <div class="text-xs text-slate-500">Allow DNS queries</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-emerald-600">ALLOW</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-xs font-mono">
+                                            <div>any</div>
+                                            <div class="text-slate-400">→</div>
+                                            <div>any</div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <span class="font-medium">UDP</span>
+                                            <span class="text-slate-500 ml-1">:53</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="rule-status active">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                            <button class="text-amber-600 hover:text-amber-800">
+                                                <i class="fa-solid fa-up-down"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Default Deny -->
+                                <tr>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm font-bold text-slate-900">5</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Default Deny</div>
+                                        <div class="text-xs text-slate-500">Default deny rule</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="text-sm font-medium text-red-600">DENY</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="text-xs font-mono">
+                                            <div>any</div>
+                                            <div class="text-slate-400">→</div>
+                                            <div>any</div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <span class="font-medium">Any</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="rule-status active">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Active
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                            <button class="text-amber-600 hover:text-amber-800">
+                                                <i class="fa-solid fa-up-down"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Statistics & Quick Actions -->
+            <div class="space-y-6">
+                <!-- Firewall Statistics -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-chart-line mr-2 text-primary"></i>
+                        Firewall Statistics
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-100">
+                            <div class="text-center">
+                                <p class="text-sm text-emerald-700">Allow Rules</p>
+                                <p class="text-2xl font-bold text-emerald-600 mt-1">12</p>
+                            </div>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                            <div class="text-center">
+                                <p class="text-sm text-red-700">Deny Rules</p>
+                                <p class="text-2xl font-bold text-red-600 mt-1">5</p>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                            <div class="text-center">
+                                <p class="text-sm text-slate-700">Active Rules</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">17</p>
+                            </div>
+                        </div>
+                        <div class="bg-amber-50 p-4 rounded-lg border border-amber-100">
+                            <div class="text-center">
+                                <p class="text-sm text-amber-700">Today's Blocks</p>
+                                <p class="text-2xl font-bold text-amber-600 mt-1">47</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="text-sm font-medium text-slate-700 mb-2">Traffic Distribution (Last 24h)</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-600">Allowed Traffic</span>
+                                    <span class="text-xs font-medium text-slate-700">84.2%</span>
+                                </div>
+                                <div class="w-full bg-slate-200 rounded-full h-2">
+                                    <div class="bg-emerald-600 h-2 rounded-full" style="width: 84.2%"></div>
+                                </div>
+                                
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-600">Blocked Traffic</span>
+                                    <span class="text-xs font-medium text-slate-700">15.8%</span>
+                                </div>
+                                <div class="w-full bg-slate-200 rounded-full h-2">
+                                    <div class="bg-red-600 h-2 rounded-full" style="width: 15.8%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-sm font-medium text-slate-700 mb-2">Protocol Distribution</h3>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-600">TCP Rules</span>
+                                    <span class="text-xs font-medium text-slate-700">8</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-600">UDP Rules</span>
+                                    <span class="text-xs font-medium text-slate-700">4</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-600">ICMP Rules</span>
+                                    <span class="text-xs font-medium text-slate-700">1</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-slate-600">Any Protocol</span>
+                                    <span class="text-xs font-medium text-slate-700">4</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Rule Processing Order -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-sort-numeric-down mr-2 text-primary"></i>
+                        Rule Processing Order
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded mr-2">1</span>
+                                <span class="text-sm text-slate-700">Allow SSH</span>
+                            </div>
+                            <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded">ALLOW</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded mr-2">2</span>
+                                <span class="text-sm text-slate-700">Allow HTTP/HTTPS</span>
+                            </div>
+                            <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded">ALLOW</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded mr-2">3</span>
+                                <span class="text-sm text-slate-700">Block ICMP</span>
+                            </div>
+                            <span class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">DENY</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg">
+                            <div class="flex items-center">
+                                <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded mr-2">4</span>
+                                <span class="text-sm text-slate-700">Allow DNS</span>
+                            </div>
+                            <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded">ALLOW</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between p-2 border border-slate-200 rounded-lg bg-slate-50">
+                            <div class="flex items-center">
+                                <span class="text-xs font-mono bg-slate-200 text-slate-700 px-2 py-1 rounded mr-2">5</span>
+                                <span class="text-sm text-slate-700 font-medium">Default Deny</span>
+                            </div>
+                            <span class="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">DENY</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 text-sm text-slate-500">
+                        <i class="fa-solid fa-circle-info mr-1"></i>
+                        Rules are processed top-to-bottom. First match wins.
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="bg-blue-50 border border-blue-100 rounded-xl p-5">
+                    <h3 class="text-blue-900 font-semibold text-sm uppercase tracking-wider mb-3">
+                        <i class="fa-solid fa-bolt mr-2"></i> Quick Actions
+                    </h3>
+                    <div class="space-y-2">
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-play mr-2 text-blue-600"></i>
+                            Enable All Rules
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-stop mr-2 text-blue-600"></i>
+                            Disable All Rules
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-arrow-up mr-2 text-blue-600"></i>
+                            Move Rule Up
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-arrow-down mr-2 text-blue-600"></i>
+                            Move Rule Down
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-download mr-2 text-blue-600"></i>
+                            Export Rules
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-800 hover:text-blue-900 p-2 hover:bg-blue-100 rounded-lg transition-colors flex items-center">
+                            <i class="fa-solid fa-upload mr-2 text-blue-600"></i>
+                            Import Rules
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Security Status -->
+                <section class="bg-emerald-50 border border-emerald-100 rounded-xl p-5">
+                    <h3 class="text-emerald-900 font-semibold text-sm uppercase tracking-wider mb-3">
+                        <i class="fa-solid fa-shield-check mr-2"></i> Security Status
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-emerald-700">Firewall Status</span>
+                            <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full">Active</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-emerald-700">Last Attack</span>
+                            <span class="text-xs text-emerald-700">2 hours ago</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-emerald-700">Protected Since</span>
+                            <span class="text-xs text-emerald-700">Mar 10, 2025</span>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <div class="text-3xl font-bold text-emerald-600">99.7%</div>
+                        <div class="text-xs text-emerald-700">Attack Block Rate</div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="text-sm text-slate-500">
+                <i class="fa-solid fa-circle-info mr-2"></i>
+                Firewall rule changes take effect immediately
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
+                    <i class="fa-solid fa-rotate-left mr-2"></i> Discard Changes
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Firewall Rules
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Simple form handling
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create Rule form submission
+            const createRuleBtn = document.querySelector('button:contains("Create Rule")');
+            if (createRuleBtn) {
+                createRuleBtn.addEventListener('click', function() {
+                    const ruleName = document.querySelector('input[placeholder*="Allow Web"]').value;
+                    
+                    if (ruleName) {
+                        alert(`Firewall rule "${ruleName}" created successfully!`);
+                        // In real implementation, you would add to table here
+                    } else {
+                        alert('Please fill in Rule Name');
+                    }
+                });
+            }
+            
+            // Clear form button
+            const clearFormBtn = document.querySelector('button:contains("Clear Form")');
+            if (clearFormBtn) {
+                clearFormBtn.addEventListener('click', function() {
+                    document.querySelectorAll('input, textarea, select').forEach(input => {
+                        if (input.type !== 'radio') {
+                            if (input.placeholder && (input.placeholder.includes('Source') || input.placeholder.includes('Destination'))) {
+                                input.value = 'any';
+                            } else {
+                                input.value = '';
+                            }
+                        }
+                    });
+                    document.querySelector('input[type="radio"][value="active"]').checked = true;
+                });
+            }
+            
+            // Edit/Delete button handlers
+            document.querySelectorAll('button .fa-edit').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    alert('Edit rule functionality would open here');
+                });
+            });
+            
+            document.querySelectorAll('button .fa-trash').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    if (confirm('Are you sure you want to delete this firewall rule?')) {
+                        alert('Rule deleted successfully!');
+                        // In real implementation, you would remove from table here
+                    }
+                });
+            });
+            
+            // Move up/down button handlers
+            document.querySelectorAll('button .fa-up-down').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    alert('Priority adjustment functionality would open here');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

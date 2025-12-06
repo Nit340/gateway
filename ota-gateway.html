@@ -1,0 +1,2233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateway-Level OTA & Recovery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#1e293b',
+                            900: '#0f172a',
+                        },
+                        blue: {
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes progress {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .animate-progress {
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+            background-size: 200% 100%;
+            animation: progress 2s linear infinite;
+        }
+        
+        /* Sidebar Styles - Exact copy from provided code */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        .signal-strength {
+            display: flex;
+            gap: 2px;
+        }
+        
+        .signal-bar {
+            width: 4px;
+            border-radius: 1px;
+        }
+        
+        .signal-bar.active {
+            background-color: #10B981;
+        }
+        
+        .signal-bar.inactive {
+            background-color: #E2E8F0;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center text-blue-700 font-bold text-xl">
+                        <i class="fa-solid fa-layer-group mr-2"></i>
+                        <span>Innospace</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-300 mx-2"></div>
+                    <nav class="flex text-sm font-medium text-slate-500">
+                        <span class="hover:text-slate-800 cursor-pointer">Univa Gateway Config</span>
+                        <span class="mx-2">/</span>
+                        <span class="text-slate-800 font-semibold">System OTA & Recovery</span>
+                    </nav>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <select id="gateway-select" class="appearance-none bg-slate-100 border border-slate-300 text-slate-700 py-1.5 pl-3 pr-8 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-Backup</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="reset-btn" class="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">Reset</button>
+                        <button id="cancel-btn" class="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">Cancel</button>
+                        <button id="save-btn" class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-6">
+            
+            <!-- Page Title -->
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold text-slate-900">Gateway Operating System Update & Recovery Management</h1>
+                <p class="text-slate-500 mt-1">Manage firmware upgrades, A/B partition logic, and system recovery snapshots.</p>
+            </div>
+
+            <!-- Section 1: System Info & Status -->
+            <section id="system-info-section" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- System Info Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-2">
+                    <div class="flex justify-between items-start mb-4">
+                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-microchip text-blue-600 mr-2"></i> System Information
+                        </h2>
+                        <div class="space-x-2">
+                            <button id="snapshot-btn" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md transition font-medium">
+                                <i class="fa-solid fa-download mr-1"></i> Snapshot
+                            </button>
+                            <button id="debug-btn" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md transition font-medium">
+                                <i class="fa-solid fa-bug mr-1"></i> Debug Bundle
+                            </button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-y-4 gap-x-8 text-sm">
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Gateway Model</p>
+                            <p id="model" class="font-medium text-slate-900 mt-1">Univa-GW-Pro</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">OS Version</p>
+                            <div class="flex items-center mt-1">
+                                <span id="os-version" class="font-medium text-slate-900 mr-2">v5.0.4</span>
+                                <span id="os-status" class="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">STABLE</span>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Kernel</p>
+                            <p id="kernel" class="font-medium text-slate-900 mt-1">6.1.33-LTS</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Uptime</p>
+                            <p id="uptime" class="font-medium text-slate-900 mt-1">19d 3h 12m</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Bootloader</p>
+                            <p id="bootloader" class="font-medium text-slate-900 mt-1">U-Boot 2024.01</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">RootFS</p>
+                            <p id="rootfs" class="font-medium text-slate-900 mt-1">ext4 (A/B Enabled)</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Recovery</p>
+                            <p id="recovery" class="font-medium text-slate-900 mt-1">Present (2.5 GB)</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 text-xs uppercase tracking-wider font-semibold">Last OTA</p>
+                            <p id="last-ota" class="font-medium text-slate-900 mt-1">2025-03-10 <span class="text-green-600 text-xs ml-1">(Success)</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Partition Status Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <i class="fa-solid fa-hard-drive text-blue-600 mr-2"></i> A/B Partitions
+                    </h2>
+                    <div class="space-y-4">
+                        <!-- Partition A -->
+                        <div id="partition-a" class="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold mr-3">A</div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">Active Partition</p>
+                                    <p id="partition-a-status" class="text-xs text-slate-500">v5.0.4 • Healthy</p>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-circle-check text-green-500"></i>
+                        </div>
+                        <!-- Partition B -->
+                        <div id="partition-b" class="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg opacity-80">
+                            <div class="flex items-center">
+                                <div class="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold mr-3">B</div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">Inactive Partition</p>
+                                    <p id="partition-b-status" class="text-xs text-slate-500">v5.0.3 • Target for OTA</p>
+                                </div>
+                            </div>
+                            <span id="partition-b-next" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">Next Boot</span>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-100">
+                            <div class="flex justify-between text-xs text-slate-500 mb-1">
+                                <span>Auto-Rollback</span>
+                                <span id="auto-rollback" class="text-slate-800 font-medium">Enabled (3 retries)</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-slate-500">
+                                <span>Boot Mode</span>
+                                <span id="boot-mode" class="text-slate-800 font-medium">Automatic Fallback</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: Available Updates -->
+            <section id="available-updates-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-cloud-download-alt text-blue-600 mr-2"></i> Available Updates
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button id="check-updates-btn" class="px-4 py-2 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors">
+                            <i class="fa-solid fa-arrows-rotate mr-2"></i> Check for Updates
+                        </button>
+                        <button id="auto-update-toggle" class="px-4 py-2 text-sm font-medium bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors">
+                            <i class="fa-solid fa-robot mr-2"></i> Auto-Update: On
+                        </button>
+                    </div>
+                </div>
+
+                <div id="updates-list" class="space-y-3">
+                    <!-- Update Item 1 -->
+                    <div class="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-2">
+                                    <span class="text-sm font-bold text-slate-800">Security Update v5.0.5</span>
+                                    <span class="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">CRITICAL</span>
+                                </div>
+                                <p class="text-sm text-slate-600 mb-3">Security patches for kernel vulnerabilities and network stack improvements. Includes fixes for CVE-2025-1234, CVE-2025-5678.</p>
+                                <div class="flex items-center text-xs text-slate-500">
+                                    <span class="mr-4"><i class="fa-solid fa-calendar mr-1"></i> Released: 2025-03-15</span>
+                                    <span class="mr-4"><i class="fa-solid fa-download mr-1"></i> Size: 452 MB</span>
+                                    <span><i class="fa-solid fa-shield mr-1"></i> Digital Signature: Verified</span>
+                                </div>
+                            </div>
+                            <button class="install-update-btn px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors" data-version="v5.0.5">
+                                Install Now
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Update Item 2 -->
+                    <div class="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-2">
+                                    <span class="text-sm font-bold text-slate-800">Feature Update v5.1.0</span>
+                                    <span class="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">FEATURE</span>
+                                </div>
+                                <p class="text-sm text-slate-600 mb-3">Major feature release with improved container runtime, enhanced monitoring tools, and new device drivers for peripherals.</p>
+                                <div class="flex items-center text-xs text-slate-500">
+                                    <span class="mr-4"><i class="fa-solid fa-calendar mr-1"></i> Released: 2025-03-10</span>
+                                    <span class="mr-4"><i class="fa-solid fa-download mr-1"></i> Size: 1.2 GB</span>
+                                    <span><i class="fa-solid fa-shield mr-1"></i> Digital Signature: Verified</span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button class="install-update-btn px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors" data-version="v5.1.0">
+                                    Install
+                                </button>
+                                <button class="px-3 py-2 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors">
+                                    <i class="fa-solid fa-info-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Update Item 3 -->
+                    <div class="border border-slate-200 rounded-lg p-4 opacity-60">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center mb-2">
+                                    <span class="text-sm font-bold text-slate-800">Beta Update v5.2.0-beta</span>
+                                    <span class="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">BETA</span>
+                                </div>
+                                <p class="text-sm text-slate-600 mb-3">Preview of upcoming features. Not recommended for production systems.</p>
+                                <div class="flex items-center text-xs text-slate-500">
+                                    <span class="mr-4"><i class="fa-solid fa-calendar mr-1"></i> Released: 2025-03-05</span>
+                                    <span class="mr-4"><i class="fa-solid fa-download mr-1"></i> Size: 1.5 GB</span>
+                                    <span><i class="fa-solid fa-triangle-exclamation mr-1 text-amber-500"></i> Testing Phase</span>
+                                </div>
+                            </div>
+                            <button class="px-4 py-2 text-sm font-medium bg-slate-100 text-slate-400 rounded-md cursor-not-allowed" disabled>
+                                Join Beta
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="no-updates" class="text-center py-8 hidden">
+                    <div class="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fa-solid fa-check text-green-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-2">You're up to date!</h3>
+                    <p class="text-slate-600">No updates available at this time.</p>
+                </div>
+
+                <div id="checking-updates" class="text-center py-8 hidden">
+                    <div class="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fa-solid fa-spinner fa-spin text-blue-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-2">Checking for updates...</h3>
+                    <p class="text-slate-600">Connecting to update server...</p>
+                </div>
+            </section>
+
+            <!-- Section 3: Upload & Config -->
+            <section id="ota-upload-section" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Upload Panel -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <i class="fa-solid fa-cloud-arrow-up text-blue-600 mr-2"></i> Manual Update Upload
+                    </h2>
+                    
+                    <div id="upload-dropzone" class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:bg-slate-50 transition-colors cursor-pointer group mb-6">
+                        <div id="upload-icon" class="h-12 w-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-file-arrow-up text-blue-600 text-xl"></i>
+                        </div>
+                        <p id="upload-text" class="text-sm font-medium text-slate-900">Click to upload OS image</p>
+                        <p id="upload-subtext" class="text-xs text-slate-500 mt-1">or drag and drop (.img, .tar.gz, .squashfs)</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Image Version</label>
+                                <input id="image-version" type="text" placeholder="e.g. v5.1.0" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Checksum (SHA256)</label>
+                                <input id="checksum" type="text" placeholder="Auto-calculated" disabled class="w-full text-sm bg-slate-50 border-slate-300 rounded-md shadow-sm text-slate-500 cursor-not-allowed">
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                            <h4 class="text-xs font-bold text-blue-800 uppercase mb-2">Metadata Preview</h4>
+                            <ul class="space-y-1 text-xs text-blue-900">
+                                <li class="flex justify-between"><span>Kernel:</span> <span id="metadata-kernel" class="font-mono text-slate-400">--</span></li>
+                                <li class="flex justify-between"><span>Build ID:</span> <span id="metadata-build" class="font-mono text-slate-400">--</span></li>
+                                <li class="flex justify-between"><span>Signature:</span> <span id="metadata-sig" class="font-mono text-slate-400">Not Verified</span></li>
+                            </ul>
+                        </div>
+
+                        <button id="verify-btn" disabled class="w-full bg-slate-200 text-slate-400 font-medium py-2 rounded-md cursor-not-allowed flex items-center justify-center">
+                            <i class="fa-solid fa-check mr-2"></i> Verify & Prepare Deployment
+                        </button>
+                        <div id="button-container"></div>
+                    </div>
+                </div>
+
+                <!-- Pre-Update Checks & Strategy -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <i class="fa-solid fa-clipboard-check text-blue-600 mr-2"></i> Update Settings & Schedule
+                    </h2>
+
+                    <div class="flex-grow">
+                        <div class="space-y-4">
+                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                <h4 class="text-sm font-semibold text-slate-800 mb-3">Automatic Update Settings</h4>
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Auto-download updates</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input id="auto-download" type="checkbox" checked class="sr-only peer">
+                                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Auto-install security updates</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input id="auto-security" type="checkbox" checked class="sr-only peer">
+                                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Reboot after install</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input id="auto-reboot" type="checkbox" class="sr-only peer">
+                                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Maintenance Window</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <select class="text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <option>Every Day</option>
+                                        <option>Weekdays</option>
+                                        <option>Weekends</option>
+                                        <option>Sunday</option>
+                                    </select>
+                                    <select class="text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <option>02:00 AM</option>
+                                        <option>03:00 AM</option>
+                                        <option>04:00 AM</option>
+                                        <option>05:00 AM</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-200 pt-4">
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Update Strategy</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label id="strategy-seamless" class="flex items-center p-3 border border-blue-500 bg-blue-50 rounded-md cursor-pointer">
+                                        <input type="radio" name="strategy" value="seamless" checked class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                                        <span class="ml-2 text-sm font-medium text-blue-900">Seamless A/B</span>
+                                    </label>
+                                    <label id="strategy-maintenance" class="flex items-center p-3 border border-slate-200 rounded-md cursor-pointer hover:bg-slate-50">
+                                        <input type="radio" name="strategy" value="maintenance" class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                                        <span class="ml-2 text-sm font-medium text-slate-700">Maintenance Window</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-4 border-t border-slate-200">
+                            <h4 class="text-sm font-semibold text-slate-800 mb-3">Update History</h4>
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-600">v5.0.4 Security Update</span>
+                                    <span class="text-slate-800 font-medium">2025-03-10</span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-600">v5.0.3 Hotfix</span>
+                                    <span class="text-slate-800 font-medium">2025-02-28</span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-600">v5.0.2 Feature Update</span>
+                                    <span class="text-slate-800 font-medium">2025-02-15</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 4: Recovery & Safety -->
+            <section id="recovery-safety-section" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Recovery Actions -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-2">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <i class="fa-solid fa-life-ring text-red-500 mr-2"></i> Recovery & Rollback
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
+                            <div class="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                                <i class="fa-solid fa-rotate-left text-slate-600"></i>
+                            </div>
+                            <h3 class="text-sm font-bold text-slate-800">Rollback to Partition A</h3>
+                            <p class="text-xs text-slate-500 mt-1 mb-3">Revert to the last known good active partition immediately.</p>
+                            <button id="rollback-btn" class="w-full py-1.5 text-xs font-medium bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-50">Execute Rollback</button>
+                        </div>
+                        
+                        <div class="p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
+                            <div class="h-10 w-10 bg-amber-50 rounded-full flex items-center justify-center mb-3">
+                                <i class="fa-solid fa-clock-rotate-left text-amber-600"></i>
+                            </div>
+                            <h3 class="text-sm font-bold text-slate-800">Restore Previous OS</h3>
+                            <p class="text-xs text-slate-500 mt-1 mb-3">Downgrade current partition to v5.0.3 from backup.</p>
+                            <button id="restore-btn" class="w-full py-1.5 text-xs font-medium bg-white border border-amber-300 rounded text-amber-700 hover:bg-amber-50">Start Restore</button>
+                        </div>
+
+                        <div class="p-4 border border-red-100 bg-red-50/30 rounded-lg hover:border-red-200 transition-colors">
+                            <div class="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center mb-3">
+                                <i class="fa-solid fa-triangle-exclamation text-red-600"></i>
+                            </div>
+                            <h3 class="text-sm font-bold text-slate-800">Factory Reset</h3>
+                            <p class="text-xs text-slate-500 mt-1 mb-3">Wipe /data partition and restore factory image.</p>
+                            <button id="factory-btn" class="w-full py-1.5 text-xs font-medium bg-red-600 border border-transparent rounded text-white hover:bg-red-700">Factory Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="text-sm font-semibold text-slate-800">Upload Recovery Image</h4>
+                            <span id="current-recovery" class="text-xs text-slate-500">Current: recovery_v1.2.img</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input id="recovery-file" type="file" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300"/>
+                            <button id="upload-recovery-btn" class="px-4 py-2 bg-slate-800 text-white text-xs font-medium rounded-md hover:bg-slate-700">Upload</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Safety Constraints -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <i class="fa-solid fa-lock text-slate-600 mr-2"></i> Safety Constraints
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="crane-safety" type="checkbox" checked disabled class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-slate-300 rounded disabled:opacity-50">
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="crane-safety" class="font-medium text-slate-700">Crane Motion Lock</label>
+                                <p class="text-slate-500 text-xs">Update blocked if crane is moving.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="acs-safety" type="checkbox" checked disabled class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-slate-300 rounded disabled:opacity-50">
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="acs-safety" class="font-medium text-slate-700">ACS Collision Warning</label>
+                                <p class="text-slate-500 text-xs">Update blocked if collision risk active.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="ups-safety" type="checkbox" checked class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-slate-300 rounded">
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="ups-safety" class="font-medium text-slate-700">UPS Battery Check</label>
+                                <p class="text-slate-500 text-xs">Require > 30% battery to start.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 pt-4 border-t border-slate-100">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-slate-700">Force Override</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input id="force-toggle" type="checkbox" value="" class="sr-only peer">
+                                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-600"></div>
+                                </label>
+                            </div>
+                            <p id="force-warning" class="text-xs text-red-500 mt-2 hidden"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Requires Admin PIN. Use only for service.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 5: Real-time Monitor -->
+            <section id="ota-monitor-section" class="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6 text-white overflow-hidden relative">
+                <div class="absolute top-0 right-0 p-4 opacity-10">
+                    <i class="fa-solid fa-terminal text-9xl"></i>
+                </div>
+                
+                <div class="relative z-10">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fa-solid fa-satellite-dish text-green-400 mr-2"></i> Live Update Monitor
+                        </h2>
+                        <div class="flex items-center space-x-3">
+                            <span id="update-badge" class="hidden text-xs font-bold bg-blue-500 px-2 py-1 rounded-full animate-pulse">
+                                Update In Progress
+                            </span>
+                            <span id="job-id" class="text-xs font-mono text-slate-400">ID: OTA-JOB-8821X</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- Progress -->
+                        <div>
+                            <div class="mb-6">
+                                <div class="flex justify-between text-sm mb-2">
+                                    <span id="status-text" class="text-slate-300">System Idle</span>
+                                    <span id="status-percent" class="text-green-400 font-bold">0%</span>
+                                </div>
+                                <div id="progress-bar" class="h-3 bg-slate-800 rounded-full overflow-hidden">
+                                    <div id="progress-fill" class="h-full bg-green-500 transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-400">Current Operation:</span>
+                                    <span id="current-operation" class="text-slate-300">Idle</span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-400">Download Speed:</span>
+                                    <span id="download-speed" class="text-slate-300">0 MB/s</span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-400">Estimated Time:</span>
+                                    <span id="eta" class="text-slate-300">--:--</span>
+                                </div>
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-400">Integrity Check:</span>
+                                    <span id="integrity-status" class="text-green-400">Pending</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Log Preview -->
+                        <div>
+                            <div class="bg-slate-850 rounded-lg p-4 h-full">
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-sm font-medium text-slate-300">Update Activity Log</span>
+                                    <button id="clear-log" class="text-xs text-slate-400 hover:text-white">Clear</button>
+                                </div>
+                                <div id="log-container" class="font-mono text-xs text-slate-400 space-y-1 max-h-32 overflow-y-auto">
+                                    <div>> System ready for updates</div>
+                                    <div>> Last checked: 2025-03-10 14:32:11 UTC</div>
+                                    <div>> Auto-update: Enabled</div>
+                                    <div>> Next check: Today 18:00 UTC</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Update Notification Banner -->
+        <div id="update-banner" class="fixed bottom-4 right-4 z-50 hidden">
+            <div class="bg-slate-800 text-white rounded-lg shadow-xl border border-slate-700 w-80 overflow-hidden">
+                <div class="p-4">
+                    <div class="flex items-center mb-3">
+                        <i class="fa-solid fa-download text-blue-400 text-lg mr-3"></i>
+                        <div>
+                            <h3 class="font-bold text-sm">Updates are ready</h3>
+                            <p class="text-xs text-slate-300">Security update v5.0.5 available</p>
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="install-now-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 rounded transition-colors">
+                            Install Now
+                        </button>
+                        <button id="schedule-btn" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium py-2 rounded transition-colors">
+                            Schedule
+                        </button>
+                        <button id="dismiss-btn" class="px-3 bg-slate-700 hover:bg-slate-600 text-white text-xs font-medium py-2 rounded transition-colors">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Container -->
+        <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+    </div> <!-- End of main content container -->
+
+    <!-- JavaScript -->
+    <script>
+        // Global variables
+        let currentFile = null;
+        let deploymentInProgress = false;
+        let autoUpdateEnabled = true;
+        let updateCheckInterval;
+        let currentUpdate = null;
+        let updateDownloadInterval;
+
+        // Available updates data
+        const availableUpdates = [
+            {
+                version: "v5.0.5",
+                type: "security",
+                critical: true,
+                size: "452 MB",
+                description: "Security patches for kernel vulnerabilities and network stack improvements.",
+                released: "2025-03-15",
+                changelog: [
+                    "Fixed CVE-2025-1234 (Kernel memory leak)",
+                    "Fixed CVE-2025-5678 (Network stack vulnerability)",
+                    "Improved system stability",
+                    "Updated security certificates"
+                ]
+            },
+            {
+                version: "v5.1.0",
+                type: "feature",
+                critical: false,
+                size: "1.2 GB",
+                description: "Major feature release with improved container runtime and enhanced monitoring.",
+                released: "2025-03-10",
+                changelog: [
+                    "New container runtime v2.0",
+                    "Enhanced monitoring dashboard",
+                    "Added USB 3.2 device support",
+                    "Improved network performance"
+                ]
+            },
+            {
+                version: "v5.2.0-beta",
+                type: "beta",
+                critical: false,
+                size: "1.5 GB",
+                description: "Preview of upcoming features. Not recommended for production systems.",
+                released: "2025-03-05",
+                changelog: [
+                    "Experimental GPU acceleration",
+                    "New API endpoints",
+                    "Enhanced logging system",
+                    "Beta features enabled"
+                ]
+            }
+        ];
+
+        // Fetch and insert sidebar from sidebar.html - EXACT IMPLEMENTATION FROM PROVIDED CODE
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                
+                // Insert the entire HTML content
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Fallback: create a basic sidebar if fetch fails
+                createFallbackSidebar();
+            }
+        }
+
+        // Create fallback sidebar if fetch fails
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device management
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Initialize sidebar functionality - EXACT IMPLEMENTATION FROM PROVIDED CODE
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            // Toggle sidebar
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.className = 'fa-solid fa-times';
+                } else {
+                    icon.className = 'fa-solid fa-bars';
+                }
+            });
+            
+            // Handle mobile menu
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            // Update on resize
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        // Simple Clock
+        setInterval(() => {
+            const now = new Date();
+            if (document.getElementById('clock')) {
+                document.getElementById('clock').innerText = now.toLocaleTimeString();
+            }
+        }, 1000);
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        // Close sidebar when clicking outside on mobile
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
+        // DOM Content Loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('OTA Management Dashboard Initialized');
+            
+            // Load sidebar first
+            loadSidebar();
+            
+            // Initialize all OTA components
+            initializeUpdateSystem();
+            initializeFileUpload();
+            initializeRadioButtons();
+            initializeSafetyToggle();
+            initializeRecoveryButtons();
+            initializeSystemStatus();
+            initializeLiveMonitor();
+            initializeButtons();
+            
+            // Check for updates on load
+            setTimeout(() => {
+                checkForUpdates(true); // Silent check on load
+            }, 1000);
+            
+            // Setup periodic update checks (every 5 minutes)
+            updateCheckInterval = setInterval(() => {
+                if (autoUpdateEnabled) {
+                    checkForUpdates(true);
+                }
+            }, 5 * 60 * 1000); // 5 minutes
+            
+            addLogEntry('System initialized');
+            addLogEntry('Auto-update system: Enabled');
+            addLogEntry('Next automatic check: ' + new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString());
+            
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+            
+            // Initial responsive setup
+            setTimeout(() => {
+                handleResponsive();
+            }, 100);
+        });
+
+        // Initialize update system
+        function initializeUpdateSystem() {
+            // Check for updates button
+            document.getElementById('check-updates-btn').addEventListener('click', function() {
+                checkForUpdates(false);
+            });
+            
+            // Auto-update toggle
+            document.getElementById('auto-update-toggle').addEventListener('click', function() {
+                toggleAutoUpdate();
+            });
+            
+            // Install update buttons
+            document.querySelectorAll('.install-update-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const version = this.getAttribute('data-version');
+                    const update = availableUpdates.find(u => u.version === version);
+                    if (update) {
+                        startUpdateDownload(update);
+                    }
+                });
+            });
+            
+            // Update banner buttons
+            document.getElementById('install-now-btn').addEventListener('click', function() {
+                if (currentUpdate) {
+                    startUpdateDownload(currentUpdate);
+                    hideUpdateBanner();
+                }
+            });
+            
+            document.getElementById('schedule-btn').addEventListener('click', function() {
+                showNotification('Update scheduled for 02:00 AM', 'info');
+                hideUpdateBanner();
+            });
+            
+            document.getElementById('dismiss-btn').addEventListener('click', function() {
+                hideUpdateBanner();
+            });
+            
+            // Auto-update settings
+            document.getElementById('auto-download').addEventListener('change', function() {
+                showNotification(`Auto-download: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
+            });
+            
+            document.getElementById('auto-security').addEventListener('change', function() {
+                showNotification(`Auto-install security updates: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
+            });
+            
+            document.getElementById('auto-reboot').addEventListener('change', function() {
+                showNotification(`Auto-reboot after install: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
+            });
+        }
+
+        // Check for updates
+        function checkForUpdates(silent = false) {
+            if (!silent) {
+                document.getElementById('checking-updates').classList.remove('hidden');
+                document.getElementById('updates-list').classList.add('hidden');
+                document.getElementById('no-updates').classList.add('hidden');
+                document.getElementById('check-updates-btn').innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Checking...';
+                document.getElementById('check-updates-btn').disabled = true;
+            }
+            
+            // Simulate API call to check for updates
+            setTimeout(() => {
+                // For demo: Always show updates
+                const currentVersion = document.getElementById('os-version').textContent;
+                const filteredUpdates = availableUpdates.filter(update => 
+                    update.version !== currentVersion
+                );
+                
+                if (!silent) {
+                    document.getElementById('checking-updates').classList.add('hidden');
+                    document.getElementById('check-updates-btn').innerHTML = '<i class="fa-solid fa-arrows-rotate mr-2"></i> Check for Updates';
+                    document.getElementById('check-updates-btn').disabled = false;
+                    
+                    if (filteredUpdates.length > 0) {
+                        document.getElementById('updates-list').classList.remove('hidden');
+                        updateUpdateList(filteredUpdates);
+                    } else {
+                        document.getElementById('no-updates').classList.remove('hidden');
+                    }
+                }
+                
+                // Show banner if there are updates
+                if (filteredUpdates.length > 0 && !deploymentInProgress) {
+                    currentUpdate = filteredUpdates[0]; // Show first available update
+                    showUpdateBanner(currentUpdate);
+                }
+                
+                addLogEntry(`Update check completed. Found ${filteredUpdates.length} update(s)`);
+                
+                // Update last checked time in log
+                const now = new Date();
+                addLogEntry(`Last checked: ${now.toLocaleString()}`);
+                
+            }, 2000);
+        }
+
+        // Update the updates list UI
+        function updateUpdateList(updates) {
+            const updatesList = document.getElementById('updates-list');
+            
+            // Update existing items
+            updates.forEach((update, index) => {
+                const item = updatesList.children[index];
+                if (item) {
+                    // Update version
+                    const versionSpan = item.querySelector('.text-sm.font-bold');
+                    if (versionSpan) versionSpan.textContent = update.version + (update.type === 'security' ? ' Security Update' : ' Feature Update');
+                    
+                    // Update description
+                    const descP = item.querySelector('.text-sm.text-slate-600');
+                    if (descP) descP.textContent = update.description;
+                    
+                    // Update size
+                    const sizeSpan = item.querySelector('.fa-download').parentElement;
+                    if (sizeSpan) sizeSpan.innerHTML = `<i class="fa-solid fa-download mr-1"></i> Size: ${update.size}`;
+                    
+                    // Update install button
+                    const installBtn = item.querySelector('.install-update-btn');
+                    if (installBtn) {
+                        installBtn.setAttribute('data-version', update.version);
+                        installBtn.textContent = update.type === 'security' ? 'Install Now' : 'Install';
+                    }
+                    
+                    // Update badge
+                    const badgeSpan = item.querySelector('.text-xs.bg-red-100, .text-xs.bg-blue-100, .text-xs.bg-purple-100');
+                    if (badgeSpan) {
+                        badgeSpan.className = 'text-xs px-2 py-0.5 rounded-full font-bold';
+                        if (update.type === 'security') {
+                            badgeSpan.classList.add('bg-red-100', 'text-red-700');
+                            badgeSpan.textContent = 'CRITICAL';
+                        } else if (update.type === 'feature') {
+                            badgeSpan.classList.add('bg-blue-100', 'text-blue-700');
+                            badgeSpan.textContent = 'FEATURE';
+                        } else {
+                            badgeSpan.classList.add('bg-purple-100', 'text-purple-700');
+                            badgeSpan.textContent = 'BETA';
+                        }
+                    }
+                }
+            });
+        }
+
+        // Toggle auto-update
+        function toggleAutoUpdate() {
+            autoUpdateEnabled = !autoUpdateEnabled;
+            const button = document.getElementById('auto-update-toggle');
+            const status = autoUpdateEnabled ? 'On' : 'Off';
+            
+            button.innerHTML = `<i class="fa-solid fa-robot mr-2"></i> Auto-Update: ${status}`;
+            button.className = `px-4 py-2 text-sm font-medium rounded-md transition-colors ${autoUpdateEnabled ? 'bg-blue-100 hover:bg-blue-200 text-blue-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`;
+            
+            showNotification(`Auto-update ${autoUpdateEnabled ? 'enabled' : 'disabled'}`, 'info');
+            addLogEntry(`Auto-update ${autoUpdateEnabled ? 'enabled' : 'disabled'}`);
+            
+            if (autoUpdateEnabled) {
+                // Check immediately when enabled
+                checkForUpdates(true);
+            }
+        }
+
+        // Show update banner
+        function showUpdateBanner(update) {
+            const banner = document.getElementById('update-banner');
+            const title = banner.querySelector('h3');
+            const desc = banner.querySelector('p');
+            
+            title.textContent = `${update.type === 'security' ? 'Security ' : ''}Update available`;
+            desc.textContent = `${update.version} - ${update.description.substring(0, 60)}...`;
+            
+            banner.classList.remove('hidden');
+            
+            // Auto-hide after 30 seconds
+            setTimeout(() => {
+                if (banner.classList.contains('hidden')) return;
+                hideUpdateBanner();
+            }, 30000);
+        }
+
+        // Hide update banner
+        function hideUpdateBanner() {
+            document.getElementById('update-banner').classList.add('hidden');
+        }
+
+        // Start update download
+        function startUpdateDownload(update) {
+            if (deploymentInProgress) {
+                showNotification('Another update is already in progress', 'warning');
+                return;
+            }
+            
+            deploymentInProgress = true;
+            currentUpdate = update;
+            
+            showNotification(`Starting download of ${update.version}...`, 'info');
+            addLogEntry(`Starting download: ${update.version} (${update.size})`);
+            
+            // Update UI
+            document.getElementById('update-badge').classList.remove('hidden');
+            document.getElementById('status-text').textContent = `Downloading ${update.version}...`;
+            document.getElementById('current-operation').textContent = 'Downloading';
+            document.getElementById('status-percent').textContent = '0%';
+            document.getElementById('progress-fill').style.width = '0%';
+            document.getElementById('progress-fill').className = 'h-full bg-blue-500 transition-all duration-1000';
+            
+            // Disable install buttons
+            document.querySelectorAll('.install-update-btn').forEach(btn => {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+            
+            // Start download simulation
+            simulateUpdateDownload(update);
+        }
+
+        // Simulate update download
+        function simulateUpdateDownload(update) {
+            let progress = 0;
+            let speed = 5 + Math.random() * 10; // Random speed between 5-15 MB/s
+            const totalSize = parseInt(update.size) * 1024; // Convert MB to KB for calculation
+            
+            updateDownloadInterval = setInterval(() => {
+                if (progress >= 100) {
+                    clearInterval(updateDownloadInterval);
+                    
+                    // Download complete, start verification
+                    setTimeout(() => {
+                        verifyUpdate(update);
+                    }, 500);
+                    return;
+                }
+                
+                // Increment progress
+                progress += Math.random() * 2;
+                if (progress > 100) progress = 100;
+                
+                // Update UI
+                document.getElementById('status-percent').textContent = `${Math.round(progress)}%`;
+                document.getElementById('progress-fill').style.width = `${progress}%`;
+                
+                // Update speed (vary slightly)
+                speed = Math.max(3, speed + (Math.random() - 0.5) * 2);
+                document.getElementById('download-speed').textContent = `${speed.toFixed(1)} MB/s`;
+                
+                // Update ETA
+                if (progress > 0) {
+                    const remaining = (100 - progress) / progress * (Date.now() - startTime) / 1000;
+                    const minutes = Math.floor(remaining / 60);
+                    const seconds = Math.floor(remaining % 60);
+                    document.getElementById('eta').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+                
+                // Update progress bar color
+                if (progress < 30) {
+                    document.getElementById('progress-fill').className = 'h-full bg-blue-500 transition-all duration-1000';
+                } else if (progress < 70) {
+                    document.getElementById('progress-fill').className = 'h-full bg-amber-500 transition-all duration-1000';
+                } else {
+                    document.getElementById('progress-fill').className = 'h-full bg-green-500 transition-all duration-1000';
+                }
+                
+                // Add log entries at milestones
+                if (Math.round(progress) % 25 === 0 && Math.round(progress) > 0) {
+                    addLogEntry(`Download progress: ${Math.round(progress)}%`);
+                }
+                
+            }, 200);
+            
+            const startTime = Date.now();
+            addLogEntry(`Download started: ${update.version}`);
+        }
+
+        // Verify downloaded update
+        function verifyUpdate(update) {
+            document.getElementById('status-text').textContent = `Verifying ${update.version}...`;
+            document.getElementById('current-operation').textContent = 'Verifying';
+            document.getElementById('integrity-status').textContent = 'Checking...';
+            document.getElementById('integrity-status').className = 'text-amber-400';
+            
+            addLogEntry(`Verifying update integrity: ${update.version}`);
+            
+            // Simulate verification process
+            setTimeout(() => {
+                document.getElementById('integrity-status').textContent = 'Verified ✓';
+                document.getElementById('integrity-status').className = 'text-green-400';
+                addLogEntry(`Update verified successfully: ${update.version}`);
+                
+                // Start installation
+                setTimeout(() => {
+                    installUpdate(update);
+                }, 1000);
+            }, 3000);
+        }
+
+        // Install update
+        function installUpdate(update) {
+            document.getElementById('status-text').textContent = `Installing ${update.version} to Partition B...`;
+            document.getElementById('current-operation').textContent = 'Installing';
+            document.getElementById('progress-fill').className = 'h-full animate-progress';
+            
+            addLogEntry(`Starting installation: ${update.version} to Partition B`);
+            
+            // Update partition B status
+            const partitionBStatus = document.getElementById('partition-b-status');
+            partitionBStatus.innerHTML = `${update.version} • <span class="text-amber-600 font-bold animate-pulse">Installing...</span>`;
+            
+            // Simulate installation
+            setTimeout(() => {
+                deploymentInProgress = false;
+                clearInterval(updateDownloadInterval);
+                
+                // Installation complete
+                document.getElementById('status-text').textContent = `Update ${update.version} installed successfully!`;
+                document.getElementById('current-operation').textContent = 'Ready to reboot';
+                document.getElementById('progress-fill').className = 'h-full bg-green-500';
+                document.getElementById('progress-fill').style.width = '100%';
+                document.getElementById('status-percent').textContent = '100%';
+                document.getElementById('update-badge').classList.add('hidden');
+                
+                // Update partition B status
+                partitionBStatus.innerHTML = `${update.version} • <span class="text-green-600 font-bold">Update complete</span>`;
+                
+                // Enable install buttons
+                document.querySelectorAll('.install-update-btn').forEach(btn => {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+                
+                showNotification(`${update.version} installed successfully! Ready for reboot.`, 'success');
+                addLogEntry(`Update installed successfully: ${update.version}`);
+                
+                // Update available updates list (remove installed update)
+                const updateIndex = availableUpdates.findIndex(u => u.version === update.version);
+                if (updateIndex !== -1) {
+                    availableUpdates.splice(updateIndex, 1);
+                    updateUpdateList(availableUpdates.filter(u => u.version !== document.getElementById('os-version').textContent));
+                }
+                
+                // Create reboot button
+                createRebootButton(update.version);
+                
+            }, 5000);
+        }
+
+        // Initialize file upload functionality
+        function initializeFileUpload() {
+            const dropArea = document.getElementById('upload-dropzone');
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.img,.tar.gz,.squashfs';
+            fileInput.style.display = 'none';
+            fileInput.multiple = false;
+            
+            dropArea.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            dropArea.parentNode.appendChild(fileInput);
+            
+            // Drag and drop events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            function highlight() {
+                dropArea.classList.add('border-blue-400', 'bg-blue-50');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('border-blue-400', 'bg-blue-50');
+            }
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }
+        }
+
+        // Handle file selection
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            handleFiles(files);
+        }
+
+        // Process uploaded files
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            const file = files[0];
+            const validExtensions = ['.img', '.tar.gz', '.squashfs'];
+            const fileName = file.name.toLowerCase();
+            
+            if (!validExtensions.some(ext => fileName.endsWith(ext))) {
+                showNotification('Invalid file type. Please upload .img, .tar.gz, or .squashfs files.', 'error');
+                return;
+            }
+            
+            currentFile = file;
+            
+            // Update UI with file info
+            const dropArea = document.getElementById('upload-dropzone');
+            const icon = document.getElementById('upload-icon');
+            const text = document.getElementById('upload-text');
+            const subtext = document.getElementById('upload-subtext');
+            
+            icon.innerHTML = '<i class="fa-solid fa-file-circle-check text-green-500 text-xl"></i>';
+            icon.classList.remove('bg-blue-50');
+            icon.classList.add('bg-green-50');
+            text.textContent = file.name;
+            text.classList.add('font-mono', 'text-sm');
+            subtext.textContent = `${formatFileSize(file.size)} • Ready for verification`;
+            
+            // Enable verify button
+            const verifyBtn = document.getElementById('verify-btn');
+            verifyBtn.disabled = false;
+            verifyBtn.classList.remove('bg-slate-200', 'text-slate-400', 'cursor-not-allowed');
+            verifyBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'cursor-pointer');
+            verifyBtn.onclick = () => verifyAndPrepare(file);
+            
+            // Auto-fill version from filename
+            const versionInput = document.getElementById('image-version');
+            const versionMatch = file.name.match(/v?\d+\.\d+\.\d+/);
+            if (versionMatch) {
+                versionInput.value = versionMatch[0];
+            }
+            
+            // Simulate checksum calculation
+            simulateChecksum(file);
+            
+            showNotification(`File "${file.name}" uploaded successfully`, 'success');
+            addLogEntry(`Manual upload: ${file.name} (${formatFileSize(file.size)})`);
+        }
+
+        // Simulate checksum calculation
+        function simulateChecksum(file) {
+            const checksumInput = document.getElementById('checksum');
+            checksumInput.placeholder = 'Calculating...';
+            
+            setTimeout(() => {
+                // Generate fake SHA256 (for demo)
+                const fakeHash = 'sha256:' + Array.from({length: 64}, () => 
+                    Math.floor(Math.random() * 16).toString(16)).join('');
+                checksumInput.value = fakeHash;
+                checksumInput.placeholder = '';
+                
+                // Simulate metadata extraction
+                simulateMetadataExtraction(file);
+            }, 1000);
+        }
+
+        // Simulate metadata extraction
+        function simulateMetadataExtraction(file) {
+            const metadataKernel = document.getElementById('metadata-kernel');
+            const metadataBuild = document.getElementById('metadata-build');
+            const metadataSig = document.getElementById('metadata-sig');
+            
+            metadataKernel.textContent = 'Extracting...';
+            metadataBuild.textContent = 'Extracting...';
+            metadataSig.textContent = 'Verifying...';
+            
+            setTimeout(() => {
+                metadataKernel.textContent = '6.2.0-LTS';
+                metadataKernel.className = 'font-mono text-green-600';
+                
+                setTimeout(() => {
+                    const buildId = 'BUILD-' + Date.now().toString().slice(-8);
+                    metadataBuild.textContent = buildId;
+                    metadataBuild.className = 'font-mono text-green-600';
+                    
+                    setTimeout(() => {
+                        metadataSig.textContent = 'Verified ✓';
+                        metadataSig.className = 'font-mono text-green-600 font-bold';
+                    }, 300);
+                }, 300);
+            }, 500);
+        }
+
+        // Verify and prepare manual deployment
+        function verifyAndPrepare(file) {
+            showNotification(`Verifying ${file.name}...`, 'info');
+            addLogEntry('Starting manual image verification');
+            
+            const verifyBtn = document.getElementById('verify-btn');
+            verifyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Verifying...';
+            verifyBtn.disabled = true;
+            
+            // Simulate verification process
+            setTimeout(() => {
+                verifyBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Verified Successfully';
+                verifyBtn.classList.remove('bg-blue-600');
+                verifyBtn.classList.add('bg-green-600');
+                
+                showNotification('Image verified successfully! Ready for deployment to Partition B.', 'success');
+                addLogEntry('Manual image verification passed');
+                
+                // Update partition B status
+                const partitionBStatus = document.getElementById('partition-b-status');
+                const version = document.getElementById('image-version').value || 'v5.1.0-rc1';
+                partitionBStatus.innerHTML = `${version} • <span class="text-blue-600 font-bold">Ready for update</span>`;
+                
+                // Create deploy button
+                createManualDeployButton(version);
+            }, 2000);
+        }
+
+        // Create manual deployment button
+        function createManualDeployButton(version) {
+            const buttonContainer = document.getElementById('button-container');
+            buttonContainer.innerHTML = '';
+            
+            const deployBtn = document.createElement('button');
+            deployBtn.id = 'deploy-btn';
+            deployBtn.className = 'w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-md flex items-center justify-center transition-colors mt-2';
+            deployBtn.innerHTML = '<i class="fa-solid fa-rocket mr-2"></i> Deploy to Partition B';
+            
+            deployBtn.addEventListener('click', () => startManualDeployment(version));
+            buttonContainer.appendChild(deployBtn);
+        }
+
+        // Start manual deployment
+        function startManualDeployment(version) {
+            if (deploymentInProgress) {
+                showNotification('Another update is already in progress', 'warning');
+                return;
+            }
+            
+            deploymentInProgress = true;
+            
+            showNotification('Starting manual deployment to Partition B...', 'info');
+            addLogEntry(`Initiating manual deployment of ${version} to Partition B`);
+            
+            // Update UI
+            const partitionBStatus = document.getElementById('partition-b-status');
+            partitionBStatus.innerHTML = `${version} • <span class="text-amber-600 font-bold animate-pulse">Installing...</span>`;
+            
+            // Update monitor
+            document.getElementById('update-badge').classList.remove('hidden');
+            document.getElementById('status-text').textContent = `Installing ${version}...`;
+            document.getElementById('current-operation').textContent = 'Installing';
+            document.getElementById('status-percent').textContent = '0%';
+            document.getElementById('progress-fill').style.width = '0%';
+            document.getElementById('progress-fill').className = 'h-full animate-progress';
+            
+            // Disable action buttons during deployment
+            document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
+                if (!btn.id.includes('cancel') && !btn.id.includes('reset')) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            });
+            
+            // Simulate manual deployment
+            simulateManualDeployment(version);
+        }
+
+        // Simulate manual deployment
+        function simulateManualDeployment(version) {
+            let progress = 0;
+            
+            const interval = setInterval(() => {
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    deploymentInProgress = false;
+                    
+                    // Deployment complete
+                    document.getElementById('status-text').textContent = `Manual deployment complete!`;
+                    document.getElementById('current-operation').textContent = 'Ready to reboot';
+                    document.getElementById('progress-fill').className = 'h-full bg-green-500';
+                    document.getElementById('progress-fill').style.width = '100%';
+                    document.getElementById('status-percent').textContent = '100%';
+                    document.getElementById('update-badge').classList.add('hidden');
+                    
+                    // Update partition B status
+                    const partitionBStatus = document.getElementById('partition-b-status');
+                    partitionBStatus.innerHTML = `${version} • <span class="text-green-600 font-bold">Update complete</span>`;
+                    
+                    // Enable action buttons
+                    document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    });
+                    
+                    showNotification(`Manual deployment of ${version} completed! Ready for reboot.`, 'success');
+                    addLogEntry(`Manual deployment completed: ${version}`);
+                    
+                    // Create reboot button
+                    createRebootButton(version);
+                    return;
+                }
+                
+                // Increment progress
+                progress += Math.random() * 3;
+                if (progress > 100) progress = 100;
+                
+                // Update progress
+                document.getElementById('status-percent').textContent = `${Math.round(progress)}%`;
+                document.getElementById('progress-fill').style.width = `${progress}%`;
+                
+                // Add log entries
+                if (Math.round(progress) % 25 === 0 && Math.round(progress) > 0) {
+                    addLogEntry(`Manual installation progress: ${Math.round(progress)}%`);
+                }
+                
+            }, 200);
+        }
+
+        // Create reboot button
+        function createRebootButton(version) {
+            const buttonContainer = document.getElementById('button-container');
+            buttonContainer.innerHTML = '';
+            
+            const rebootBtn = document.createElement('button');
+            rebootBtn.id = 'reboot-btn';
+            rebootBtn.className = 'w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-md flex items-center justify-center transition-colors mt-2';
+            rebootBtn.innerHTML = '<i class="fa-solid fa-power-off mr-2"></i> Reboot into Partition B';
+            
+            rebootBtn.addEventListener('click', () => {
+                if (confirm(`Reboot into updated Partition B (${version})? System will restart in 10 seconds.`)) {
+                    simulateReboot(version);
+                }
+            });
+            
+            buttonContainer.appendChild(rebootBtn);
+        }
+
+        // Initialize radio buttons
+        function initializeRadioButtons() {
+            const radios = document.querySelectorAll('input[name="strategy"]');
+            radios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    // Remove active styles from all labels
+                    document.querySelectorAll('label[id^="strategy-"]').forEach(label => {
+                        label.classList.remove('border-blue-500', 'bg-blue-50');
+                        label.classList.add('border-slate-200');
+                        label.querySelector('span').classList.remove('text-blue-900');
+                        label.querySelector('span').classList.add('text-slate-700');
+                    });
+                    
+                    // Add active style to selected label
+                    const label = this.closest('label');
+                    label.classList.remove('border-slate-200');
+                    label.classList.add('border-blue-500', 'bg-blue-50');
+                    label.querySelector('span').classList.remove('text-slate-700');
+                    label.querySelector('span').classList.add('text-blue-900');
+                    
+                    const strategyName = this.value === 'seamless' ? 'Seamless A/B' : 'Maintenance Window';
+                    showNotification(`Update strategy changed to: ${strategyName}`, 'info');
+                    addLogEntry(`Update strategy: ${strategyName}`);
+                });
+            });
+        }
+
+        // Initialize safety toggle
+        function initializeSafetyToggle() {
+            const forceToggle = document.getElementById('force-toggle');
+            const forceWarning = document.getElementById('force-warning');
+            
+            forceToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    forceWarning.classList.remove('hidden');
+                    showNotification('Force override enabled. Safety constraints will be ignored!', 'warning');
+                    
+                    // Show PIN prompt
+                    setTimeout(() => {
+                        const pin = prompt('Enter admin PIN to confirm force override:');
+                        if (pin !== '7392') { // Default PIN for demo
+                            this.checked = false;
+                            forceWarning.classList.add('hidden');
+                            showNotification('Invalid PIN. Force override cancelled.', 'error');
+                        } else {
+                            showNotification('Force override confirmed. Proceed with caution!', 'warning');
+                            addLogEntry('Force override enabled (Admin PIN verified)');
+                        }
+                    }, 300);
+                } else {
+                    forceWarning.classList.add('hidden');
+                    showNotification('Force override disabled. Safety constraints active.', 'info');
+                    addLogEntry('Force override disabled');
+                }
+            });
+        }
+
+        // Initialize recovery buttons
+        function initializeRecoveryButtons() {
+            // Rollback button
+            document.getElementById('rollback-btn').addEventListener('click', function() {
+                if (confirm('Are you sure you want to rollback to Partition A? This will switch active partition immediately.')) {
+                    simulateRollback();
+                }
+            });
+            
+            // Restore button
+            document.getElementById('restore-btn').addEventListener('click', function() {
+                if (confirm('Restore previous OS version v5.0.3? This will overwrite current partition.')) {
+                    simulateRestore();
+                }
+            });
+            
+            // Factory reset button
+            document.getElementById('factory-btn').addEventListener('click', function() {
+                if (confirm('⚠️ WARNING: This will wipe all data and restore factory settings. Are you absolutely sure?')) {
+                    const confirmPin = prompt('Enter factory reset PIN (0000 for demo):');
+                    if (confirmPin === '0000') {
+                        simulateFactoryReset();
+                    } else {
+                        showNotification('Invalid PIN. Factory reset cancelled.', 'error');
+                    }
+                }
+            });
+            
+            // Recovery image upload
+            document.getElementById('upload-recovery-btn').addEventListener('click', function() {
+                const fileInput = document.getElementById('recovery-file');
+                if (fileInput.files.length === 0) {
+                    showNotification('Please select a recovery image file first', 'warning');
+                    return;
+                }
+                
+                const file = fileInput.files[0];
+                showNotification(`Uploading recovery image: ${file.name}`, 'info');
+                addLogEntry(`Uploading recovery image: ${file.name}`);
+                
+                // Simulate upload
+                setTimeout(() => {
+                    document.getElementById('current-recovery').textContent = `Current: ${file.name}`;
+                    showNotification('Recovery image uploaded successfully', 'success');
+                    addLogEntry('Recovery image uploaded and verified');
+                }, 2000);
+            });
+        }
+
+        // Initialize system status updates
+        function initializeSystemStatus() {
+            // Update uptime every minute
+            setInterval(() => {
+                const uptimeElement = document.getElementById('uptime');
+                if (uptimeElement) {
+                    const match = uptimeElement.textContent.match(/(\d+)d (\d+)h (\d+)m/);
+                    if (match) {
+                        let [_, days, hours, minutes] = match;
+                        minutes = parseInt(minutes) + 1;
+                        
+                        if (minutes >= 60) {
+                            minutes = 0;
+                            hours = parseInt(hours) + 1;
+                        }
+                        if (hours >= 24) {
+                            hours = 0;
+                            days = parseInt(days) + 1;
+                        }
+                        
+                        uptimeElement.textContent = `${days}d ${hours}h ${minutes}m`;
+                    }
+                }
+            }, 60000);
+            
+            // Update CPU load randomly (for demo)
+            setInterval(() => {
+                const cpuElement = document.getElementById('cpu-status');
+                if (cpuElement) {
+                    const loads = [
+                        {text: 'OK (Low Load)', color: 'green'},
+                        {text: 'OK (Normal Load)', color: 'green'},
+                        {text: 'WARN (Medium Load)', color: 'amber'},
+                        {text: 'WARN (High Load)', color: 'amber'}
+                    ];
+                    const randomLoad = loads[Math.floor(Math.random() * loads.length)];
+                    
+                    cpuElement.textContent = randomLoad.text;
+                    cpuElement.className = 'text-xs font-bold px-2 py-1 rounded';
+                    cpuElement.classList.add(`text-${randomLoad.color}-600`);
+                    cpuElement.classList.add(`bg-${randomLoad.color}-50`);
+                }
+            }, 15000);
+        }
+
+        // Initialize live monitor
+        function initializeLiveMonitor() {
+            // Clear log button
+            document.getElementById('clear-log').addEventListener('click', function() {
+                document.getElementById('log-container').innerHTML = '';
+                addLogEntry('Log cleared');
+            });
+        }
+
+        // Initialize all buttons
+        function initializeButtons() {
+            // Save button
+            document.getElementById('save-btn').addEventListener('click', saveChanges);
+            
+            // Reset button
+            document.getElementById('reset-btn').addEventListener('click', function() {
+                if (confirm('Reset all settings to defaults?')) {
+                    resetSettings();
+                }
+            });
+            
+            // Cancel button
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (confirm('Cancel all pending operations?')) {
+                    cancelOperations();
+                }
+            });
+            
+            // Snapshot button
+            document.getElementById('snapshot-btn').addEventListener('click', function() {
+                showNotification('Creating system snapshot...', 'info');
+                addLogEntry('Creating system snapshot');
+                
+                setTimeout(() => {
+                    showNotification('System snapshot created successfully', 'success');
+                    addLogEntry('System snapshot saved');
+                }, 2000);
+            });
+            
+            // Debug button
+            document.getElementById('debug-btn').addEventListener('click', function() {
+                showNotification('Collecting debug information...', 'info');
+                addLogEntry('Starting debug bundle collection');
+                
+                setTimeout(() => {
+                    showNotification('Debug bundle downloaded', 'success');
+                    addLogEntry('Debug bundle collection complete');
+                }, 3000);
+            });
+        }
+
+        // Simulated operations
+        function simulateRollback() {
+            showNotification('Initiating rollback to Partition A...', 'warning');
+            addLogEntry('Starting rollback to Partition A');
+            
+            const partitionA = document.getElementById('partition-a');
+            const partitionB = document.getElementById('partition-b');
+            const partitionAStatus = document.getElementById('partition-a-status');
+            const partitionBStatus = document.getElementById('partition-b-status');
+            const partitionBNext = document.getElementById('partition-b-next');
+            
+            // Swap partition styles
+            partitionA.classList.remove('bg-green-50', 'border-green-200');
+            partitionA.classList.add('bg-slate-50', 'border-slate-200', 'opacity-80');
+            partitionA.querySelector('.fa-circle-check').classList.remove('text-green-500');
+            partitionA.querySelector('.fa-circle-check').classList.add('text-slate-400');
+            
+            partitionB.classList.remove('bg-slate-50', 'border-slate-200', 'opacity-80');
+            partitionB.classList.add('bg-green-50', 'border-green-200');
+            partitionB.querySelector('.text-slate-600').classList.replace('text-slate-600', 'text-green-600');
+            partitionBNext.textContent = 'Active';
+            partitionBNext.classList.replace('bg-blue-100', 'bg-green-100');
+            partitionBNext.classList.replace('text-blue-700', 'text-green-700');
+            partitionB.querySelector('.fa-solid').classList.replace('text-slate-400', 'text-green-500');
+            
+            // Swap status text
+            const tempStatus = partitionAStatus.textContent;
+            partitionAStatus.textContent = partitionBStatus.textContent;
+            partitionBStatus.textContent = tempStatus;
+            
+            setTimeout(() => {
+                showNotification('Rollback complete! System is now running on Partition A.', 'success');
+                addLogEntry('Rollback completed successfully');
+            }, 1500);
+        }
+
+        function simulateRestore() {
+            showNotification('Starting OS restore to v5.0.3...', 'info');
+            addLogEntry('Initiating OS restore to v5.0.3');
+            
+            setTimeout(() => {
+                showNotification('OS restore completed. Reboot required.', 'success');
+                addLogEntry('OS restore completed');
+            }, 3000);
+        }
+
+        function simulateFactoryReset() {
+            showNotification('Factory reset in progress... DO NOT POWER OFF!', 'error');
+            addLogEntry('Factory reset initiated');
+            
+            // Simulate countdown
+            let countdown = 30;
+            const countdownInterval = setInterval(() => {
+                showNotification(`System will reboot in ${countdown} seconds...`, 'error');
+                countdown--;
+                
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    
+                    // Reset all UI elements
+                    resetSettings();
+                    
+                    showNotification('Factory reset complete. Rebooting now...', 'success');
+                    addLogEntry('Factory reset completed, rebooting');
+                    
+                    // Show reboot animation
+                    simulateReboot('v5.0.1-factory');
+                }
+            }, 1000);
+        }
+
+        function simulateReboot(version) {
+            showNotification('System rebooting... Please wait.', 'warning');
+            addLogEntry(`Rebooting into ${version}`);
+            
+            // Show reboot overlay
+            const rebootOverlay = document.createElement('div');
+            rebootOverlay.className = 'fixed inset-0 bg-slate-900 flex items-center justify-center z-50';
+            rebootOverlay.innerHTML = `
+                <div class="text-center">
+                    <div class="text-6xl mb-4 animate-spin">⚙️</div>
+                    <h3 class="text-2xl text-white font-bold mb-2">System Rebooting</h3>
+                    <p class="text-slate-300">Switching to ${version}. This may take up to 2 minutes.</p>
+                    <div class="mt-6 h-1 w-64 bg-slate-700 rounded-full overflow-hidden mx-auto">
+                        <div class="h-full bg-green-500 animate-pulse"></div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(rebootOverlay);
+            
+            // Simulate reboot completion
+            setTimeout(() => {
+                document.body.removeChild(rebootOverlay);
+                
+                // Update system info
+                const osVersion = document.getElementById('os-version');
+                const osStatus = document.getElementById('os-status');
+                osVersion.textContent = version;
+                osStatus.textContent = version.includes('beta') ? 'TESTING' : 'STABLE';
+                osStatus.classList.replace('bg-green-100', version.includes('beta') ? 'bg-blue-100' : 'bg-green-100');
+                osStatus.classList.replace('text-green-700', version.includes('beta') ? 'text-blue-700' : 'text-green-700');
+                
+                showNotification(`Reboot complete! System is now running ${version}`, 'success');
+                addLogEntry(`System rebooted into ${version}`);
+                
+                // Update last OTA date
+                const now = new Date();
+                const formattedDate = now.toISOString().split('T')[0];
+                document.getElementById('last-ota').innerHTML = `${formattedDate} <span class="text-green-600 text-xs ml-1">(Success)</span>`;
+                
+                // Check for updates after reboot
+                setTimeout(() => {
+                    checkForUpdates(true);
+                }, 3000);
+            }, 5000);
+        }
+
+        // Save changes function
+        function saveChanges() {
+            showNotification('Saving configuration changes...', 'info');
+            addLogEntry('Saving configuration');
+            
+            // Collect settings
+            const strategy = document.querySelector('input[name="strategy"]:checked').value;
+            const safety = {
+                crane: document.getElementById('crane-safety').checked,
+                acs: document.getElementById('acs-safety').checked,
+                ups: document.getElementById('ups-safety').checked,
+                force: document.getElementById('force-toggle').checked
+            };
+            
+            // Auto-update settings
+            const autoSettings = {
+                download: document.getElementById('auto-download').checked,
+                security: document.getElementById('auto-security').checked,
+                reboot: document.getElementById('auto-reboot').checked
+            };
+            
+            // Simulate API call
+            setTimeout(() => {
+                console.log('Settings saved:', { strategy, safety, autoSettings });
+                showNotification('Configuration saved successfully!', 'success');
+                addLogEntry('Configuration saved');
+            }, 1000);
+        }
+
+        // Reset settings
+        function resetSettings() {
+            showNotification('Resetting settings to defaults...', 'info');
+            addLogEntry('Resetting all settings');
+            
+            // Reset file upload
+            document.getElementById('upload-icon').innerHTML = '<i class="fa-solid fa-file-arrow-up text-blue-600 text-xl"></i>';
+            document.getElementById('upload-icon').classList.remove('bg-green-50');
+            document.getElementById('upload-icon').classList.add('bg-blue-50');
+            document.getElementById('upload-text').textContent = 'Click to upload OS image';
+            document.getElementById('upload-text').classList.remove('font-mono', 'text-sm');
+            document.getElementById('upload-subtext').textContent = 'or drag and drop (.img, .tar.gz, .squashfs)';
+            
+            // Reset inputs
+            document.getElementById('image-version').value = '';
+            document.getElementById('checksum').value = '';
+            
+            // Reset metadata
+            document.getElementById('metadata-kernel').textContent = '--';
+            document.getElementById('metadata-kernel').className = 'font-mono text-slate-400';
+            document.getElementById('metadata-build').textContent = '--';
+            document.getElementById('metadata-build').className = 'font-mono text-slate-400';
+            document.getElementById('metadata-sig').textContent = 'Not Verified';
+            document.getElementById('metadata-sig').className = 'font-mono text-slate-400';
+            
+            // Reset verify button
+            const verifyBtn = document.getElementById('verify-btn');
+            verifyBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Verify & Prepare Deployment';
+            verifyBtn.disabled = true;
+            verifyBtn.classList.remove('bg-green-600', 'bg-blue-600', 'text-white');
+            verifyBtn.classList.add('bg-slate-200', 'text-slate-400', 'cursor-not-allowed');
+            
+            // Clear button container
+            document.getElementById('button-container').innerHTML = '';
+            
+            // Reset current file
+            currentFile = null;
+            
+            // Reset partition B status
+            document.getElementById('partition-b-status').textContent = 'v5.0.3 • Target for OTA';
+            document.getElementById('partition-b-status').classList.remove('text-blue-600', 'text-amber-600', 'text-green-600', 'font-bold');
+            
+            // Reset auto-update toggle
+            autoUpdateEnabled = true;
+            document.getElementById('auto-update-toggle').innerHTML = '<i class="fa-solid fa-robot mr-2"></i> Auto-Update: On';
+            document.getElementById('auto-update-toggle').className = 'px-4 py-2 text-sm font-medium bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors';
+            
+            // Reset auto-update checkboxes
+            document.getElementById('auto-download').checked = true;
+            document.getElementById('auto-security').checked = true;
+            document.getElementById('auto-reboot').checked = false;
+            
+            setTimeout(() => {
+                showNotification('Settings reset to defaults', 'success');
+            }, 500);
+        }
+
+        // Cancel operations
+        function cancelOperations() {
+            if (deploymentInProgress) {
+                if (confirm('Cancel deployment in progress?')) {
+                    deploymentInProgress = false;
+                    
+                    // Stop download/installation
+                    if (updateDownloadInterval) {
+                        clearInterval(updateDownloadInterval);
+                        updateDownloadInterval = null;
+                    }
+                    
+                    // Reset monitor UI
+                    document.getElementById('status-text').textContent = 'System Idle';
+                    document.getElementById('current-operation').textContent = 'Idle';
+                    document.getElementById('status-percent').textContent = '0%';
+                    document.getElementById('progress-fill').style.width = '0%';
+                    document.getElementById('progress-fill').className = 'h-full bg-green-500';
+                    document.getElementById('download-speed').textContent = '0 MB/s';
+                    document.getElementById('eta').textContent = '--:--';
+                    document.getElementById('integrity-status').textContent = 'Pending';
+                    document.getElementById('integrity-status').className = 'text-green-400';
+                    document.getElementById('update-badge').classList.add('hidden');
+                    
+                    // Reset partition B status
+                    document.getElementById('partition-b-status').textContent = 'v5.0.3 • Target for OTA';
+                    
+                    // Enable install buttons
+                    document.querySelectorAll('.install-update-btn').forEach(btn => {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    });
+                    
+                    // Enable other buttons
+                    document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    });
+                    
+                    showNotification('Deployment cancelled', 'warning');
+                    addLogEntry('Deployment cancelled by user');
+                }
+            } else {
+                showNotification('No operations to cancel', 'info');
+            }
+        }
+
+        // Add log entry
+        function addLogEntry(message) {
+            const logContainer = document.getElementById('log-container');
+            const timestamp = new Date().toLocaleTimeString('en-US', {hour12: false});
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Utility functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            
+            const notification = document.createElement('div');
+            notification.className = `px-4 py-3 rounded-md shadow-lg border transform transition-all duration-300 translate-x-64 opacity-0`;
+            
+            const colors = {
+                info: 'bg-blue-50 text-blue-800 border-blue-200',
+                success: 'bg-green-50 text-green-800 border-green-200',
+                warning: 'bg-amber-50 text-amber-800 border-amber-200',
+                error: 'bg-red-50 text-red-800 border-red-200'
+            };
+            
+            notification.className += ` ${colors[type]}`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fa-solid ${type === 'info' ? 'fa-circle-info' : type === 'success' ? 'fa-circle-check' : type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-xmark'} mr-2"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('translate-x-64', 'opacity-0');
+                notification.classList.add('translate-x-0', 'opacity-100');
+            }, 10);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.remove('translate-x-0', 'opacity-100');
+                notification.classList.add('translate-x-64', 'opacity-0');
+                
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+        }
+
+        // Clean up intervals on page unload
+        window.addEventListener('beforeunload', function() {
+            if (updateCheckInterval) clearInterval(updateCheckInterval);
+            if (updateDownloadInterval) clearInterval(updateDownloadInterval);
+        });
+    </script>
+</body>
+</html>

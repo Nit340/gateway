@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Port Forwarding - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        .port-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .port-status.open { background: #D1FAE5; color: #065F46; }
+        .port-status.closed { background: #FEE2E2; color: #991B1B; }
+        
+        .protocol-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #EFF6FF;
+            color: #1E40AF;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Left: Breadcrumb -->
+            <div class="flex items-center space-x-4">
+                <a href="general-configuration.html" class="text-slate-500 hover:text-slate-700 text-sm flex items-center">
+                    <i class="fa-solid fa-chevron-left mr-2"></i> Back to General
+                </a>
+                <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                    <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                    <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                    <span class="text-slate-900 font-medium">Port Forwarding</span>
+                </div>
+            </div>
+
+            <!-- Right: Controls -->
+            <div class="flex items-center space-x-4">
+                <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    <i class="fa-solid fa-circle-question mr-2"></i> Help
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Rules
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-slate-900">
+                <i class="fa-solid fa-share-from-square mr-2 text-primary"></i>
+                Port Forwarding Rules
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">Forward external ports to internal services and devices</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column: Add Rule & Rules List -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Add Port Forwarding Rule -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-plus mr-2 text-primary"></i>
+                        Add New Port Forwarding Rule
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Rule Name <span class="text-red-500">*</span></label>
+                            <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., Web Server Access">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">External Port <span class="text-red-500">*</span></label>
+                            <input type="number" min="1" max="65535" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., 8080">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Internal IP <span class="text-red-500">*</span></label>
+                            <input type="text" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="192.168.1.100">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Internal Port <span class="text-red-500">*</span></label>
+                            <input type="number" min="1" max="65535" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., 80">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Protocol</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option>TCP</option>
+                                <option>UDP</option>
+                                <option>TCP/UDP</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Source IP (Optional)</label>
+                            <input type="text" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., 203.0.113.0/24">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <div class="flex items-center space-x-4">
+                                <label class="flex items-center">
+                                    <input type="radio" name="ruleStatus" value="active" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                    <span class="ml-2 text-sm text-slate-700">Active</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="ruleStatus" value="inactive" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                    <span class="ml-2 text-sm text-slate-700">Inactive</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                            <textarea rows="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Optional description of this rule's purpose"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button class="text-slate-600 hover:text-slate-800 text-sm font-medium px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+                            Clear Form
+                        </button>
+                        <button class="bg-primary hover:bg-primaryHover text-white text-sm font-medium px-4 py-2 rounded-lg flex items-center">
+                            <i class="fa-solid fa-plus mr-2"></i> Add Rule
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Port Forwarding Rules List -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold text-slate-800">
+                            <i class="fa-solid fa-list mr-2 text-primary"></i>
+                            Active Port Forwarding Rules
+                        </h2>
+                        <span class="text-sm text-slate-500">3 active rules</span>
+                    </div>
+                    
+                    <div class="overflow-hidden border border-slate-200 rounded-lg">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Rule Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">External Port</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Internal IP:Port</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Protocol</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-slate-200">
+                                <!-- Web Server Rule -->
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">Web Server Access</div>
+                                        <div class="text-xs text-slate-500">Access to internal web server</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm">8080</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono text-sm">192.168.1.100:80</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="protocol-badge">TCP</span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="port-status open">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Open
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- SSH Access Rule -->
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">SSH Remote Access</div>
+                                        <div class="text-xs text-slate-500">Secure shell access to gateway</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm">2222</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono text-sm">192.168.1.101:22</div>
+                                        <div class="text-xs text-slate-500">Source: 203.0.113.0/24</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="protocol-badge">TCP</span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="port-status open">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Open
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- MQTT Broker Rule -->
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm font-medium text-slate-900">MQTT Broker</div>
+                                        <div class="text-xs text-slate-500">IoT message broker access</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="font-mono text-sm">8883</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono text-sm">192.168.1.102:1883</div>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="protocol-badge">TCP/UDP</span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="port-status closed">
+                                            <i class="fa-solid fa-circle text-[8px] mr-1"></i> Closed
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500">
+                                        <div class="flex items-center space-x-2">
+                                            <button class="text-blue-600 hover:text-blue-800">
+                                                <i class="fa-solid fa-edit"></i>
+                                            </button>
+                                            <button class="text-red-600 hover:text-red-800">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Visualization & Statistics -->
+            <div class="space-y-6">
+                <!-- Port Forwarding Visualization -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-diagram-project mr-2 text-primary"></i>
+                        Port Forwarding Visualization
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <!-- Web Server Flow -->
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <i class="fa-solid fa-globe text-blue-600"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <div class="text-sm font-medium text-slate-700">External Port 8080</div>
+                                        <div class="text-xs text-slate-500">TCP</div>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-slate-400"></i>
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                        <i class="fa-solid fa-server text-emerald-600"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <div class="text-sm font-medium text-slate-700">192.168.1.100:80</div>
+                                        <div class="text-xs text-slate-500">Web Server</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- SSH Flow -->
+                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <i class="fa-solid fa-globe text-blue-600"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <div class="text-sm font-medium text-slate-700">External Port 2222</div>
+                                        <div class="text-xs text-slate-500">TCP</div>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-slate-400"></i>
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                                        <i class="fa-solid fa-terminal text-purple-600"></i>
+                                    </div>
+                                    <div class="ml-3">
+                                        <div class="text-sm font-medium text-slate-700">192.168.1.101:22</div>
+                                        <div class="text-xs text-slate-500">SSH Server</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-xs text-slate-500">
+                                <i class="fa-solid fa-shield mr-1"></i> Restricted to 203.0.113.0/24
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Port Statistics -->
+                <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                        <i class="fa-solid fa-chart-pie mr-2 text-primary"></i>
+                        Port Statistics
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">Active Rules</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">2</p>
+                            </div>
+                            <div class="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-check text-emerald-600 text-xl"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">Inactive Rules</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">1</p>
+                            </div>
+                            <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-pause text-slate-600 text-xl"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">TCP Rules</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">2</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-t text-blue-600 text-xl"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-500">Today's Connections</p>
+                                <p class="text-2xl font-bold text-slate-900 mt-1">1,247</p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                                <i class="fa-solid fa-signal text-purple-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <h3 class="text-sm font-medium text-slate-700 mb-2">Port Usage</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">Well-known Ports (1-1023)</span>
+                                <span class="text-xs font-medium text-slate-700">1 rule</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-blue-600 h-1.5 rounded-full" style="width: 33%"></div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">Registered Ports (1024-49151)</span>
+                                <span class="text-xs font-medium text-slate-700">2 rules</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-emerald-600 h-1.5 rounded-full" style="width: 67%"></div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-600">Dynamic Ports (49152-65535)</span>
+                                <span class="text-xs font-medium text-slate-700">0 rules</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-1.5">
+                                <div class="bg-amber-600 h-1.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Security Tips -->
+                <section class="bg-amber-50 border border-amber-100 rounded-xl p-5">
+                    <h3 class="text-amber-900 font-semibold text-sm uppercase tracking-wider mb-3">
+                        <i class="fa-solid fa-shield-halved mr-2"></i> Security Tips
+                    </h3>
+                    <ul class="space-y-2 text-sm text-amber-800/80">
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle-exclamation mt-1 mr-2 text-amber-500"></i>
+                            <span>Always restrict source IPs when possible</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle-exclamation mt-1 mr-2 text-amber-500"></i>
+                            <span>Use non-standard ports for common services</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle-exclamation mt-1 mr-2 text-amber-500"></i>
+                            <span>Disable rules when not in use</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle-exclamation mt-1 mr-2 text-amber-500"></i>
+                            <span>Regularly audit active port forwarding rules</span>
+                        </li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="text-sm text-slate-500">
+                <i class="fa-solid fa-circle-info mr-2"></i>
+                Port forwarding changes take effect immediately after save
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
+                    <i class="fa-solid fa-rotate-left mr-2"></i> Discard Changes
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Port Forwarding Rules
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Simple form handling
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add Rule form submission
+            const addRuleBtn = document.querySelector('button:contains("Add Rule")');
+            if (addRuleBtn) {
+                addRuleBtn.addEventListener('click', function() {
+                    const ruleName = document.querySelector('input[placeholder*="Web Server"]').value;
+                    const externalPort = document.querySelector('input[placeholder*="8080"]').value;
+                    
+                    if (ruleName && externalPort) {
+                        alert(`Port forwarding rule "${ruleName}" added successfully!`);
+                        // In real implementation, you would add to table here
+                    } else {
+                        alert('Please fill in Rule Name and External Port');
+                    }
+                });
+            }
+            
+            // Clear form button
+            const clearFormBtn = document.querySelector('button:contains("Clear Form")');
+            if (clearFormBtn) {
+                clearFormBtn.addEventListener('click', function() {
+                    document.querySelectorAll('input, textarea, select').forEach(input => {
+                        if (input.type !== 'radio') {
+                            input.value = '';
+                        }
+                    });
+                    document.querySelector('input[type="radio"][value="active"]').checked = true;
+                });
+            }
+            
+            // Edit/Delete button handlers
+            document.querySelectorAll('button .fa-edit').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    alert('Edit rule functionality would open here');
+                });
+            });
+            
+            document.querySelectorAll('button .fa-trash').forEach(btn => {
+                btn.closest('button').addEventListener('click', function() {
+                    if (confirm('Are you sure you want to delete this rule?')) {
+                        alert('Rule deleted successfully!');
+                        // In real implementation, you would remove from table here
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

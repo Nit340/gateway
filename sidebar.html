@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .user-info h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1E293B;
+            margin: 0;
+        }
+        
+        .user-info p {
+            font-size: 12px;
+            color: #64748B;
+            margin: 2px 0 0;
+        }
+        
+        .sidebar-toggle {
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 50;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 8px 6px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .sidebar-toggle {
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <!-- Logo -->
+        <div class="sidebar-logo">
+            <div class="logo-text">
+                <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <div class="sidebar-nav">
+            <!-- Section: Configuration -->
+            <div class="nav-section">
+                <div class="section-title">Configuration</div>
+                <a href="general-config.html" class="nav-item active">
+                    <i class="fa-solid fa-sliders"></i>
+                    General Configuration
+                </a>
+                <a href="device-management.html" class="nav-item">
+                    <i class="fa-solid fa-microchip"></i>
+                    Device management
+                </a>
+            </div>
+            
+            <!-- Section: Protocols -->
+            <div class="nav-section">
+                <div class="section-title">Protocols & Integrations</div>
+                <a href="modbus-mappping.html" class="nav-item">
+                    <i class="fa-solid fa-plug"></i>
+                    Modbus & Protocols Mapping(in)
+                </a>
+                <a href="mqtt-cloud.html" class="nav-item">
+                    <i class="fa-solid fa-cloud"></i>
+                    MQTT / Cloud Integration(out)
+                </a>
+            </div>
+            
+            <!-- Section: OTA -->
+            <div class="nav-section">
+                <div class="section-title">OTA Firmware Management</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-upload"></i>
+                    OTA – Device-Level Firmware
+                </a>
+                <a href="ota-gateway.html" class="nav-item">
+                    <i class="fa-solid fa-server"></i>
+                    Gateway-Level OTA & Recovery
+                </a>
+            </div>
+            
+            <!-- Section: CraneIQ -->
+            <div class="nav-section">
+                <div class="section-title">CraneIQ Suite</div>
+                <a href="CraneIQ.html" class="nav-item">
+                    <i class="fa-solid fa-weight-hanging"></i>
+                    CraneIQ – Full Configuration
+                    <span class="nav-item-count">4</span>
+                </a>
+            </div>
+            
+            <!-- Section: Data -->
+            <div class="nav-section">
+                <div class="section-title">Data & Diagnostics</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-database"></i>
+                    Data Retention
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-file-lines"></i>
+                    Logging
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-bug"></i>
+                    Diagnostics & Live Terminal
+                </a>
+            </div>
+            
+            <!-- Section: Security -->
+            <div class="nav-section">
+                <div class="section-title">Security & Access</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-lock"></i>
+                    Security & Access Control
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-key"></i>
+                    Licensing & Subscriptions
+                </a>
+            </div>
+            
+            <!-- Section: Automation -->
+            <div class="nav-section">
+                <div class="section-title">Automation</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-clock"></i>
+                    Scheduler / Automation Jobs
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-bell"></i>
+                    Alerts & Event Classes
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-diagram-project"></i>
+                    Rule Engine
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-message"></i>
+                    Notification & Multi-Channel Alerts
+                </a>
+            </div>
+            
+            <!-- Section: Backup -->
+            <div class="nav-section">
+                <div class="section-title">System</div>
+                <a href="#" class="nav-item">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Backup, Restore & Snapshots
+                </a>
+            </div>
+        </div>
+        
+        <!-- Footer / User Profile -->
+        <div class="sidebar-footer">
+            <div class="user-profile">
+                <div class="user-avatar">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div class="user-info">
+                    <h4>Admin User</h4>
+                    <p>System Administrator</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar Toggle Button -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fa-solid fa-bars"></i>
+    </div>
+    
+    <script>
+        // Toggle sidebar
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+            
+            // Toggle icon
+            const icon = this.querySelector('i');
+            if (sidebar.classList.contains('collapsed')) {
+                icon.className = 'fa-solid fa-bars';
+            } else {
+                icon.className = 'fa-solid fa-times';
+            }
+        });
+        
+        // Set active page based on URL or storage
+        function setActivePage() {
+            // For demo purposes, set General Configuration as active
+            // In real implementation, use window.location.pathname or localStorage
+            const currentPage = 'General Configuration';
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            navItems.forEach(item => {
+                if (item.textContent.trim().includes(currentPage)) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+        
+        // Initialize
+        setActivePage();
+        
+        // Handle mobile menu
+        if (window.innerWidth <= 1024) {
+            document.getElementById('sidebar').classList.add('collapsed');
+        }
+        
+        // Update on resize
+        window.addEventListener('resize', function() {
+            if (window.innerWidth <= 1024) {
+                document.getElementById('sidebar').classList.add('collapsed');
+            } else {
+                document.getElementById('sidebar').classList.remove('collapsed');
+            }
+        });
+    </script>
+</body>
+</html>

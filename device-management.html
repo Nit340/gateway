@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Management - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* Sidebar styles from sidebar.html */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 50;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 8px 6px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .sidebar-toggle {
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        .add-device-panel {
+            position: fixed;
+            right: -400px;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background: white;
+            border-left: 1px solid #E2E8F0;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 50;
+            overflow-y: auto;
+        }
+        
+        .add-device-panel.active {
+            right: 0;
+        }
+        
+        .protocol-config {
+            display: none;
+        }
+        
+        .protocol-config.active {
+            display: block;
+        }
+        
+        .action-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .action-dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: white;
+            min-width: 160px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            z-index: 1000;
+            border: 1px solid #E2E8F0;
+            border-radius: 6px;
+            padding: 4px 0;
+        }
+        
+        .action-dropdown-content a {
+            color: #475569;
+            padding: 8px 16px;
+            text-decoration: none;
+            display: block;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+        
+        .action-dropdown-content a:hover {
+            background-color: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .show {
+            display: block;
+        }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+            min-width: 400px;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+    
+    <!-- Add Device Panel -->
+    <div class="add-device-panel" id="addDevicePanel">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800">Add New Device</h2>
+                <button class="text-slate-400 hover:text-slate-600" id="closeAddDevicePanel">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Device Type Selection -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-slate-700 mb-3">Device Type</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="device-type" value="modbus-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="device-type" value="modbus-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="device-type" value="canbus" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">CANBus</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="device-type" value="wireless" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Wireless IO</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="device-type" value="acs" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">ACS Sensor</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="device-type" value="custom" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Custom Device</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Common Device Information -->
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Common Device Information</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Name <span class="text-red-500">*</span></label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter device name" id="deviceNameInput">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Group (Optional)</label>
+                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceGroupSelect">
+                            <option>None</option>
+                            <option>Crane-01</option>
+                            <option>Crane-02</option>
+                            <option>Safety Sensors</option>
+                            <option>Motors & Brakes</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Protocol Specific Configuration -->
+            <div id="protocolConfigs">
+                <!-- Modbus RTU Configuration -->
+                <div id="modbus-rtu-config" class="protocol-config active">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus RTU Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Modbus Address</label>
+                            <input type="number" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="baudRate">
+                                    <option>9600</option>
+                                    <option>19200</option>
+                                    <option>38400</option>
+                                    <option>57600</option>
+                                    <option>115200</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="parity">
+                                    <option>None</option>
+                                    <option>Even</option>
+                                    <option>Odd</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Stop Bits</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="stopBits">
+                                    <option>1</option>
+                                    <option>2</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                                <input type="number" value="500" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
+                            <input type="number" value="200" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="timeout">
+                        </div>
+                        <div>
+                            <button class="text-primary hover:text-primaryHover font-medium text-sm px-3 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors" id="linkModbusBtn">
+                                <i class="fa-solid fa-link mr-2"></i> Link to Modbus Mapping (Page 4)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CANBus Configuration -->
+                <div id="canbus-config" class="protocol-config">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">CANBus Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">CAN ID</label>
+                            <input type="text" value="0x212" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="canId">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Protocol</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="canProtocol">
+                                    <option>CANOpen</option>
+                                    <option>J1939</option>
+                                    <option>CAN Raw</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Bitrate</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="bitrate">
+                                    <option>125K</option>
+                                    <option>250K</option>
+                                    <option>500K</option>
+                                    <option>1M</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Wireless Configuration -->
+                <div id="wireless-config" class="protocol-config">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Wireless Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">RF Address</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="text" value="Auto-Assign" class="flex-1 font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="rfAddress">
+                                <button class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="scanRfBtn">
+                                    Scan
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Signal Strength</label>
+                            <div class="text-sm text-slate-600" id="signalStrengthDisplay">-70 dBm</div>
+                        </div>
+                        <div>
+                            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="startPairingBtn">
+                                <i class="fa-solid fa-link mr-2"></i> Start Pairing
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Panel Actions -->
+            <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelAddDevice">
+                    Cancel
+                </button>
+                <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveDeviceBtn">
+                    Save Device
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Group Modal -->
+    <div class="modal-overlay" id="addGroupModal">
+        <div class="modal p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800">Add New Group</h2>
+                <button class="text-slate-400 hover:text-slate-600" id="closeGroupModal">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Group Name</label>
+                    <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter group name" id="groupNameInput">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+                    <textarea class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary h-24" placeholder="Group description..." id="groupDescription"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Color Tag</label>
+                    <div class="flex space-x-2">
+                        <button class="w-8 h-8 rounded-full bg-blue-500 border-2 border-blue-700 hover:border-blue-300 transition-colors" data-color="blue"></button>
+                        <button class="w-8 h-8 rounded-full bg-green-500 border-2 border-transparent hover:border-green-300 transition-colors" data-color="green"></button>
+                        <button class="w-8 h-8 rounded-full bg-purple-500 border-2 border-transparent hover:border-purple-300 transition-colors" data-color="purple"></button>
+                        <button class="w-8 h-8 rounded-full bg-orange-500 border-2 border-transparent hover:border-orange-300 transition-colors" data-color="orange"></button>
+                        <button class="w-8 h-8 rounded-full bg-red-500 border-2 border-transparent hover:border-red-300 transition-colors" data-color="red"></button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelGroupBtn">
+                    Cancel
+                </button>
+                <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveGroupBtn">
+                    Create Group
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-microchip mr-2"></i>Configuration</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">Device Management</span>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="header-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="mb-8">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold text-slate-900">Device Management</h1>
+                            <p class="text-slate-500 text-sm mt-1">Register, configure, monitor, and manage all devices connected to the Univa IoT Gateway.</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="scanNetworksBtn">
+                                <i class="fa-solid fa-wifi mr-2"></i> Scan Networks
+                            </button>
+                            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addDeviceBtn">
+                                <i class="fa-solid fa-plus mr-2"></i> Add Device
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-8">
+                    
+                    <!-- SECTION A: Device Overview Table -->
+                    <section id="section-devices" class="bg-white rounded-xl shadow-sm border border-border">
+                        <div class="p-6 border-b border-border">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-list mr-2 text-primary"></i> 
+                                <span class="mr-2">Device Overview Table</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                            </h2>
+                            <p class="text-slate-500 text-sm mt-2">View all connected devices with status, communication health, and last polled timestamp.</p>
+                        </div>
+                        
+                        <!-- Device Filters -->
+                        <div class="p-4 border-b border-border bg-slate-50 flex flex-wrap items-center gap-3">
+                            <div class="relative">
+                                <input type="text" placeholder="Search devices..." class="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg w-64 focus:ring-2 focus:ring-primary focus:border-primary" id="searchInput">
+                                <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                            </div>
+                            <select class="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceTypeFilter">
+                                <option>All Device Types</option>
+                                <option>Modbus RTU</option>
+                                <option>Modbus TCP</option>
+                                <option>CANBus</option>
+                                <option>Wireless IO</option>
+                                <option>ACS Sensor</option>
+                            </select>
+                            <select class="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="statusFilter">
+                                <option>All Status</option>
+                                <option>Online</option>
+                                <option>Offline</option>
+                                <option>Warning</option>
+                            </select>
+                            <select class="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="groupFilter">
+                                <option>All Groups</option>
+                                <option>Crane-01</option>
+                                <option>Crane-02</option>
+                                <option>Safety Sensors</option>
+                                <option>Motors & Brakes</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Devices Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full" id="devicesTable">
+                                <thead class="bg-slate-50 border-b border-border">
+                                    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider">
+                                        <th class="p-4 font-medium">Device Name</th>
+                                        <th class="p-4 font-medium">Type</th>
+                                        <th class="p-4 font-medium">Address/ID</th>
+                                        <th class="p-4 font-medium">Status</th>
+                                        <th class="p-4 font-medium">Last Poll</th>
+                                        <th class="p-4 font-medium text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border" id="devicesTableBody">
+                                    <!-- Devices will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- SECTION C: Device Details -->
+                    <section id="section-details" class="bg-white rounded-xl shadow-sm border border-border p-6" style="display: none;">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-info-circle mr-2 text-primary"></i> 
+                                <span class="mr-2" id="selectedDeviceTitle">Device Details</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION C</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full" id="selectedDeviceName">
+                                No device selected
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <!-- Device Health -->
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4">Device Health</h3>
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-600">Status:</span>
+                                        <span class="font-medium" id="deviceStatus">-</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-600">Last Response:</span>
+                                        <span class="font-mono" id="lastResponse">-</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-600">Retries:</span>
+                                        <span id="retries">-</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-600">Signal Strength:</span>
+                                        <span id="signalStrength">-</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-600">Firmware Version:</span>
+                                        <span id="firmwareVersion">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Communication Test -->
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4">Communication Test</h3>
+                                <div class="space-y-4">
+                                    <div class="flex space-x-3">
+                                        <button class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="pingDeviceBtn">
+                                            Ping Device
+                                        </button>
+                                        <button class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="viewPacketsBtn">
+                                            View Last 10 Packets
+                                        </button>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Packet Preview:</label>
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3" id="packetPreview">
+                                            <div class="font-mono text-xs space-y-1">
+                                                <div>10:02:01 → 01 03 00 10 00 02 C4 0B</div>
+                                                <div>10:02:01 ← 01 03 04 00 12 01 1A 69 85</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Calibration -->
+                            <div class="md:col-span-2">
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4">Calibration</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Scale Factor</label>
+                                        <input type="number" value="1.000" step="0.001" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="scaleFactor">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Zero Offset</label>
+                                        <input type="number" value="0.00" step="0.01" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="zeroOffset">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Test Reading</label>
+                                        <div class="text-lg font-semibold text-slate-900" id="testReading">2.34 tons</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="mt-8 pt-6 border-t border-slate-200">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-4">Actions</h3>
+                            <div class="flex space-x-3">
+                                <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm" id="disableDeviceBtn">
+                                    Disable Device
+                                </button>
+                                <button class="px-4 py-2 border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-sm" id="deleteDeviceBtn">
+                                    Delete Device
+                                </button>
+                                <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm" id="duplicateDeviceBtn">
+                                    Duplicate
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION D: Device Group Management -->
+                    <section id="section-groups" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-layer-group mr-2 text-primary"></i> 
+                                <span class="mr-2">Device Group Management</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION D</span>
+                            </h2>
+                            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addGroupBtn">
+                                <i class="fa-solid fa-plus mr-2"></i> Add New Group
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="groupsContainer">
+                            <!-- Groups will be populated by JavaScript -->
+                        </div>
+                        <p class="text-sm text-slate-500 mt-4">Assign/unassign devices quickly for organized management.</p>
+                    </section>
+
+                    <!-- SECTION E: Import / Export -->
+                    <section id="section-import-export" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-file-export mr-2 text-primary"></i> 
+                                <span class="mr-2">Import / Export</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION E</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Supports JSON / XML formats
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-4">
+                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="exportBtn">
+                                <i class="fa-solid fa-download mr-2"></i> Export Device List
+                            </button>
+                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="importBtn">
+                                <i class="fa-solid fa-upload mr-2"></i> Import Device Template
+                            </button>
+                        </div>
+                        <p class="text-sm text-slate-500 mt-3">Useful for deploying multiple gateways on similar cranes.</p>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Actions -->
+        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="refreshBtn">
+                        <i class="fa-solid fa-sync mr-2 text-slate-400"></i> Refresh
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg transition-colors" id="footer-cancel-btn">
+                        Back
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Global state
+        let devices = [];
+        let groups = [];
+        let selectedDeviceId = null;
+        let selectedColor = 'blue';
+
+        // Device data
+        const deviceData = [
+            {
+                id: 'loadcell',
+                name: 'LoadCell-Front',
+                type: 'Modbus',
+                address: '01',
+                status: 'Online',
+                lastPoll: '2 sec ago',
+                firmware: '1.2.4',
+                group: 'Safety Sensors',
+                details: {
+                    status: 'Online',
+                    lastResponse: '2 sec ago',
+                    retries: 0,
+                    signalStrength: 'N/A (Wired)',
+                    firmwareVersion: '1.2.4'
+                }
+            },
+            {
+                id: 'boomangle',
+                name: 'BoomAngleSensor',
+                type: 'CAN',
+                address: '0x212',
+                status: 'Online',
+                lastPoll: '500 ms ago',
+                firmware: '2.1.0',
+                group: 'Crane-01',
+                details: {
+                    status: 'Online',
+                    lastResponse: '500 ms ago',
+                    retries: 0,
+                    signalStrength: 'Good',
+                    firmwareVersion: '2.1.0'
+                }
+            },
+            {
+                id: 'acs',
+                name: 'ACS-Node-Left',
+                type: 'Wireless',
+                address: 'RF:0x09',
+                status: 'Offline',
+                lastPoll: '20 sec ago',
+                firmware: '1.5.2',
+                group: 'Safety Sensors',
+                details: {
+                    status: 'Offline',
+                    lastResponse: '20 sec ago',
+                    retries: 3,
+                    signalStrength: '-70 dBm',
+                    firmwareVersion: '1.5.2'
+                }
+            },
+            {
+                id: 'io',
+                name: 'IO-Mod-CT-3',
+                type: 'Wireless',
+                address: 'RF:0x11',
+                status: 'Online',
+                lastPoll: '1 sec ago',
+                firmware: '3.0.1',
+                group: 'Motors & Brakes',
+                details: {
+                    status: 'Online',
+                    lastResponse: '1 sec ago',
+                    retries: 0,
+                    signalStrength: '-65 dBm',
+                    firmwareVersion: '3.0.1'
+                }
+            }
+        ];
+
+        // Group data
+        const groupData = [
+            { id: 1, name: 'Crane 01', deviceCount: 3, color: 'blue' },
+            { id: 2, name: 'Crane 02', deviceCount: 2, color: 'green' },
+            { id: 3, name: 'Safety Sensors', deviceCount: 5, color: 'purple' },
+            { id: 4, name: 'Motors & Brakes', deviceCount: 4, color: 'orange' }
+        ];
+
+        // Fetch and insert sidebar
+        // Fetch and insert sidebar
+async function loadSidebar() {
+    try {
+        const response = await fetch('sidebar.html');
+        if (!response.ok) {
+            throw new Error(`Failed to load sidebar: ${response.status}`);
+        }
+        
+        const html = await response.text();
+        
+        // Insert the entire HTML content
+        document.getElementById('sidebar-container').innerHTML = html;
+        
+        // Update the active page to Device Management
+        updateActivePage();
+        
+        // Initialize sidebar functionality
+        initializeSidebar();
+        
+    } catch (error) {
+        console.error('Error loading sidebar:', error);
+        // Fallback: create a basic sidebar if fetch fails
+        createFallbackSidebar();
+    }
+}
+
+        // Create fallback sidebar if fetch fails
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-config.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item active">
+                                <i class="fa-solid fa-microchip"></i> Device management
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Update active page in sidebar
+        function updateActivePage() {
+            // Remove active class from all nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to Device Management
+            const deviceManagementLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Device management') || 
+                item.textContent.includes('Device Management')
+            );
+            
+            if (deviceManagementLink) {
+                deviceManagementLink.classList.add('active');
+            }
+        }
+
+        // Initialize sidebar functionality
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            // Toggle sidebar
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('collapsed');
+                
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (sidebar.classList.contains('collapsed')) {
+                    icon.className = 'fa-solid fa-bars';
+                } else {
+                    icon.className = 'fa-solid fa-times';
+                }
+            });
+            
+            // Handle mobile menu
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('collapsed');
+            }
+            
+            // Update on resize
+            window.addEventListener('resize', function() {
+                if (window.innerWidth <= 1024) {
+                    sidebar.classList.add('collapsed');
+                } else {
+                    sidebar.classList.remove('collapsed');
+                }
+            });
+        }
+
+        // Initialize application
+        function initApp() {
+            devices = [...deviceData];
+            groups = [...groupData];
+            
+            renderDevicesTable();
+            renderGroups();
+            setupEventListeners();
+            initGroupModal();
+        }
+
+        // Initialize group modal
+        function initGroupModal() {
+            // Set default color selection (blue)
+            const colorSelection = document.querySelector('#addGroupModal .flex.space-x-2');
+            if (colorSelection) {
+                const firstButton = colorSelection.querySelector('button');
+                if (firstButton) {
+                    firstButton.classList.remove('border-transparent');
+                    firstButton.classList.add('border-blue-700');
+                }
+            }
+        }
+
+        // Render devices table
+        function renderDevicesTable() {
+            const tbody = document.getElementById('devicesTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            devices.forEach(device => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition-colors';
+                row.id = `device-${device.id}`;
+                row.dataset.deviceId = device.id;
+                
+                // Status color
+                let statusColor = 'bg-green-500';
+                let statusText = 'text-green-800';
+                if (device.status === 'Offline') {
+                    statusColor = 'bg-red-500';
+                    statusText = 'text-red-800';
+                } else if (device.status === 'Warning') {
+                    statusColor = 'bg-yellow-500';
+                    statusText = 'text-yellow-800';
+                }
+                
+                // Type badge color
+                let typeColor = 'bg-blue-100 text-blue-800';
+                if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
+                if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
+                
+                row.innerHTML = `
+                    <td class="p-4">
+                        <div class="font-medium text-slate-900">${device.name}</div>
+                        <div class="text-xs text-slate-500 mt-1">Firmware: ${device.firmware}</div>
+                    </td>
+                    <td class="p-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}">
+                            ${device.type}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-mono text-sm">${device.address}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="flex items-center">
+                            <span class="w-2 h-2 rounded-full ${statusColor} mr-2"></span>
+                            <span class="text-sm text-slate-700">${device.status}</span>
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <div class="text-sm">${device.lastPoll}</div>
+                    </td>
+                    <td class="p-4 text-right">
+                        <div class="action-dropdown flex justify-end">
+                            <button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="toggleDropdown('${device.id}')">
+                                Edit ▾
+                            </button>
+                            <div class="action-dropdown-content" id="dropdown-${device.id}">
+                                <a href="#" onclick="editDevice('${device.id}')">Edit Device</a>
+                                <a href="#" onclick="showDeviceDetails('${device.id}')">View Details</a>
+                                <a href="#" onclick="disableDevice('${device.id}')">Disable Device</a>
+                                <a href="#" onclick="deleteDevice('${device.id}')" class="text-red-600">Delete Device</a>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // Render groups
+        function renderGroups() {
+            const container = document.getElementById('groupsContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            groups.forEach(group => {
+                const groupElement = document.createElement('div');
+                groupElement.className = 'border border-slate-200 rounded-lg p-4';
+                groupElement.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-medium text-slate-900">${group.name}</h4>
+                        <span class="w-3 h-3 rounded-full bg-${group.color}-500"></span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">${group.deviceCount} devices</div>
+                    <button class="text-xs text-primary hover:text-primaryHover" onclick="assignDevicesToGroup(${group.id})">
+                        Assign Devices →
+                    </button>
+                `;
+                container.appendChild(groupElement);
+            });
+        }
+
+        // Show device details
+        function showDeviceDetails(deviceId) {
+            const device = devices.find(d => d.id === deviceId);
+            if (!device) return;
+            
+            selectedDeviceId = deviceId;
+            
+            // Update UI
+            document.getElementById('selectedDeviceTitle').textContent = 'Device Details';
+            document.getElementById('selectedDeviceName').textContent = `Selected: ${device.name}`;
+            document.getElementById('deviceStatus').textContent = device.details.status;
+            document.getElementById('lastResponse').textContent = device.details.lastResponse;
+            document.getElementById('retries').textContent = device.details.retries;
+            document.getElementById('signalStrength').textContent = device.details.signalStrength;
+            document.getElementById('firmwareVersion').textContent = device.details.firmwareVersion;
+            
+            // Show the details section
+            document.getElementById('section-details').style.display = 'block';
+            
+            // Scroll to details
+            document.getElementById('section-details').scrollIntoView({ behavior: 'smooth' });
+            
+            // Close any open dropdowns
+            closeAllDropdowns();
+        }
+
+        // Toggle dropdown
+        function toggleDropdown(deviceId) {
+            const dropdown = document.getElementById(`dropdown-${deviceId}`);
+            const isVisible = dropdown.classList.contains('show');
+            
+            // Close all other dropdowns
+            closeAllDropdowns();
+            
+            // Toggle current dropdown
+            if (!isVisible) {
+                dropdown.classList.add('show');
+                
+                // Close dropdown when clicking outside
+                setTimeout(() => {
+                    const closeHandler = (e) => {
+                        if (!dropdown.contains(e.target) && !e.target.classList.contains('dropdown-toggle')) {
+                            dropdown.classList.remove('show');
+                            document.removeEventListener('click', closeHandler);
+                        }
+                    };
+                    document.addEventListener('click', closeHandler);
+                }, 0);
+            }
+        }
+
+        // Close all dropdowns
+        function closeAllDropdowns() {
+            document.querySelectorAll('.action-dropdown-content').forEach(dropdown => {
+                dropdown.classList.remove('show');
+            });
+        }
+
+        // Edit device
+        function editDevice(deviceId) {
+            const device = devices.find(d => d.id === deviceId);
+            if (!device) return;
+            
+            // Show add device panel with device data
+            document.getElementById('addDevicePanel').classList.add('active');
+            document.getElementById('deviceNameInput').value = device.name;
+            document.getElementById('deviceGroupSelect').value = device.group;
+            
+            // Set protocol based on device type
+            let protocol = 'modbus-rtu';
+            if (device.type === 'CAN') protocol = 'canbus';
+            if (device.type === 'Wireless') protocol = 'wireless';
+            
+            document.querySelector(`input[name="device-type"][value="${protocol}"]`).checked = true;
+            
+            // Trigger protocol change
+            document.querySelector(`input[name="device-type"][value="${protocol}"]`).dispatchEvent(new Event('change'));
+            
+            closeAllDropdowns();
+        }
+
+        // Disable device
+        function disableDevice(deviceId) {
+            const device = devices.find(d => d.id === deviceId);
+            if (!device) return;
+            
+            if (confirm(`Disable ${device.name}?`)) {
+                device.status = device.status === 'Disabled' ? 'Online' : 'Disabled';
+                renderDevicesTable();
+                alert(`Device ${device.name} ${device.status === 'Disabled' ? 'disabled' : 'enabled'} successfully.`);
+            }
+            closeAllDropdowns();
+        }
+
+        // Delete device
+        function deleteDevice(deviceId) {
+            const device = devices.find(d => d.id === deviceId);
+            if (!device) return;
+            
+            if (confirm(`Are you sure you want to delete ${device.name}? This action cannot be undone.`)) {
+                devices = devices.filter(d => d.id !== deviceId);
+                renderDevicesTable();
+                
+                // Hide details if deleted device was selected
+                if (selectedDeviceId === deviceId) {
+                    document.getElementById('section-details').style.display = 'none';
+                    selectedDeviceId = null;
+                }
+                
+                alert(`Device ${device.name} deleted successfully.`);
+            }
+            closeAllDropdowns();
+        }
+
+        // Assign devices to group
+        function assignDevicesToGroup(groupId) {
+            const group = groups.find(g => g.id === groupId);
+            if (!group) return;
+            
+            alert(`Assign devices to ${group.name} group. In a real application, this would open a device selection dialog.`);
+        }
+
+        // Add new group
+        function addNewGroup() {
+            // Reset form
+            document.getElementById('groupNameInput').value = '';
+            document.getElementById('groupDescription').value = '';
+            
+            // Reset color selection
+            const colorSelection = document.querySelector('#addGroupModal .flex.space-x-2');
+            if (colorSelection) {
+                colorSelection.querySelectorAll('button').forEach(btn => {
+                    btn.classList.remove('border-blue-700');
+                    btn.classList.add('border-transparent');
+                });
+                // Set blue as default
+                const firstButton = colorSelection.querySelector('button[data-color="blue"]');
+                if (firstButton) {
+                    firstButton.classList.remove('border-transparent');
+                    firstButton.classList.add('border-blue-700');
+                }
+            }
+            
+            // Show modal
+            document.getElementById('addGroupModal').classList.add('active');
+            selectedColor = 'blue';
+        }
+
+        // Save new group
+        function saveNewGroup() {
+            const nameInput = document.getElementById('groupNameInput');
+            const descriptionInput = document.getElementById('groupDescription');
+            
+            if (!nameInput.value.trim()) {
+                alert('Please enter a group name.');
+                return;
+            }
+            
+            // Get the selected color
+            const selectedColorBtn = document.querySelector('#addGroupModal .flex.space-x-2 button.border-blue-700');
+            const color = selectedColorBtn ? selectedColorBtn.dataset.color : 'blue';
+            
+            const newGroup = {
+                id: groups.length + 1,
+                name: nameInput.value,
+                deviceCount: 0,
+                color: color
+            };
+            
+            groups.push(newGroup);
+            renderGroups();
+            
+            // Update group filter
+            const groupFilter = document.getElementById('groupFilter');
+            const option = document.createElement('option');
+            option.value = newGroup.name;
+            option.textContent = newGroup.name;
+            groupFilter.appendChild(option);
+            
+            // Update device group select
+            const deviceGroupSelect = document.getElementById('deviceGroupSelect');
+            const option2 = document.createElement('option');
+            option2.value = newGroup.name;
+            option2.textContent = newGroup.name;
+            deviceGroupSelect.appendChild(option2);
+            
+            // Reset form and close modal
+            nameInput.value = '';
+            descriptionInput.value = '';
+            document.getElementById('addGroupModal').classList.remove('active');
+            
+            alert(`Group "${newGroup.name}" created successfully.`);
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Add device panel
+            document.getElementById('addDeviceBtn').addEventListener('click', function() {
+                document.getElementById('addDevicePanel').classList.add('active');
+                // Reset form
+                document.getElementById('deviceNameInput').value = '';
+                document.getElementById('deviceGroupSelect').value = 'None';
+                document.querySelector('input[name="device-type"][value="modbus-rtu"]').checked = true;
+                document.querySelector('input[name="device-type"][value="modbus-rtu"]').dispatchEvent(new Event('change'));
+            });
+
+            document.getElementById('closeAddDevicePanel').addEventListener('click', function() {
+                document.getElementById('addDevicePanel').classList.remove('active');
+            });
+
+            document.getElementById('cancelAddDevice').addEventListener('click', function() {
+                document.getElementById('addDevicePanel').classList.remove('active');
+            });
+
+            // Protocol selection
+            document.querySelectorAll('input[name="device-type"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    // Hide all protocol configs
+                    document.querySelectorAll('.protocol-config').forEach(config => {
+                        config.classList.remove('active');
+                    });
+                    
+                    // Show selected protocol config
+                    const configId = this.value + '-config';
+                    const configElement = document.getElementById(configId);
+                    if (configElement) {
+                        configElement.classList.add('active');
+                    }
+                });
+            });
+
+            // Save device
+            document.getElementById('saveDeviceBtn').addEventListener('click', function() {
+                const deviceName = document.getElementById('deviceNameInput').value.trim();
+                const deviceGroup = document.getElementById('deviceGroupSelect').value;
+                const deviceType = document.querySelector('input[name="device-type"]:checked').value;
+                
+                if (!deviceName) {
+                    alert('Please enter a device name.');
+                    return;
+                }
+                
+                // Create new device
+                const typeMap = {
+                    'modbus-rtu': 'Modbus',
+                    'modbus-tcp': 'Modbus TCP',
+                    'canbus': 'CAN',
+                    'wireless': 'Wireless',
+                    'acs': 'ACS Sensor',
+                    'custom': 'Custom'
+                };
+                
+                const newDevice = {
+                    id: `device-${Date.now()}`,
+                    name: deviceName,
+                    type: typeMap[deviceType] || 'Custom',
+                    address: deviceType === 'modbus-rtu' ? document.getElementById('modbusAddress').value : 
+                             deviceType === 'canbus' ? document.getElementById('canId').value : 
+                             deviceType === 'wireless' ? document.getElementById('rfAddress').value : 'N/A',
+                    status: 'Online',
+                    lastPoll: 'Just now',
+                    firmware: '1.0.0',
+                    group: deviceGroup,
+                    details: {
+                        status: 'Online',
+                        lastResponse: 'Just now',
+                        retries: 0,
+                        signalStrength: 'N/A',
+                        firmwareVersion: '1.0.0'
+                    }
+                };
+                
+                devices.push(newDevice);
+                renderDevicesTable();
+                
+                // Close panel
+                document.getElementById('addDevicePanel').classList.remove('active');
+                
+                alert(`Device "${deviceName}" added successfully.`);
+            });
+
+            // Add group modal
+            document.getElementById('addGroupBtn').addEventListener('click', addNewGroup);
+            
+            document.getElementById('closeGroupModal').addEventListener('click', function() {
+                document.getElementById('addGroupModal').classList.remove('active');
+            });
+            
+            document.getElementById('cancelGroupBtn').addEventListener('click', function() {
+                document.getElementById('addGroupModal').classList.remove('active');
+            });
+            
+            document.getElementById('saveGroupBtn').addEventListener('click', saveNewGroup);
+            
+            // Color selection
+            const colorSelection = document.querySelector('#addGroupModal .flex.space-x-2');
+            if (colorSelection) {
+                colorSelection.addEventListener('click', function(e) {
+                    if (e.target.dataset.color) {
+                        selectedColor = e.target.dataset.color;
+                        
+                        // Reset all buttons
+                        this.querySelectorAll('button').forEach(btn => {
+                            btn.classList.remove('border-blue-700');
+                            btn.classList.add('border-transparent');
+                        });
+                        
+                        // Highlight selected
+                        e.target.classList.remove('border-transparent');
+                        e.target.classList.add('border-blue-700');
+                    }
+                });
+            }
+
+            // Device actions in details section
+            document.getElementById('pingDeviceBtn').addEventListener('click', function() {
+                if (!selectedDeviceId) return;
+                const device = devices.find(d => d.id === selectedDeviceId);
+                if (!device) return;
+                
+                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Pinging...';
+                this.disabled = true;
+                
+                setTimeout(() => {
+                    this.innerHTML = 'Ping Device';
+                    this.disabled = false;
+                    alert(`Ping response from ${device.name}: OK (2ms)`);
+                }, 1000);
+            });
+            
+            document.getElementById('viewPacketsBtn').addEventListener('click', function() {
+                if (!selectedDeviceId) return;
+                const device = devices.find(d => d.id === selectedDeviceId);
+                if (!device) return;
+                
+                alert(`Showing last 10 packets for ${device.name}. In a real application, this would open a packet viewer.`);
+            });
+            
+            document.getElementById('disableDeviceBtn').addEventListener('click', function() {
+                if (!selectedDeviceId) return;
+                disableDevice(selectedDeviceId);
+            });
+            
+            document.getElementById('deleteDeviceBtn').addEventListener('click', function() {
+                if (!selectedDeviceId) return;
+                deleteDevice(selectedDeviceId);
+            });
+            
+            document.getElementById('duplicateDeviceBtn').addEventListener('click', function() {
+                if (!selectedDeviceId) return;
+                const device = devices.find(d => d.id === selectedDeviceId);
+                if (!device) return;
+                
+                const duplicatedDevice = {
+                    ...device,
+                    id: `device-${Date.now()}`,
+                    name: `${device.name} (Copy)`,
+                    status: 'Online',
+                    lastPoll: 'Just now'
+                };
+                
+                devices.push(duplicatedDevice);
+                renderDevicesTable();
+                alert(`Device "${device.name}" duplicated successfully.`);
+            });
+
+            // Filters
+            document.getElementById('searchInput').addEventListener('input', function(e) {
+                const searchTerm = e.target.value.toLowerCase();
+                const filteredDevices = deviceData.filter(device => 
+                    device.name.toLowerCase().includes(searchTerm) ||
+                    device.type.toLowerCase().includes(searchTerm) ||
+                    device.address.toLowerCase().includes(searchTerm)
+                );
+                updateTable(filteredDevices);
+            });
+            
+            document.getElementById('deviceTypeFilter').addEventListener('change', function(e) {
+                filterDevices();
+            });
+            
+            document.getElementById('statusFilter').addEventListener('change', function(e) {
+                filterDevices();
+            });
+            
+            document.getElementById('groupFilter').addEventListener('change', function(e) {
+                filterDevices();
+            });
+
+            // Other buttons
+            document.getElementById('scanNetworksBtn').addEventListener('click', function() {
+                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Scanning...';
+                this.disabled = true;
+                
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fa-solid fa-wifi mr-2"></i> Scan Networks';
+                    this.disabled = false;
+                    alert('Network scan completed! Found 3 new devices.');
+                }, 2000);
+            });
+            
+            document.getElementById('refreshBtn').addEventListener('click', function() {
+                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...';
+                this.disabled = true;
+                
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fa-solid fa-sync mr-2 text-slate-400"></i> Refresh';
+                    this.disabled = false;
+                    alert('Device list refreshed successfully!');
+                }, 1000);
+            });
+            
+            document.getElementById('exportBtn').addEventListener('click', function() {
+                const dataStr = JSON.stringify(devices, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = 'devices-export.json';
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+                
+                alert('Device list exported successfully as JSON.');
+            });
+            
+            document.getElementById('importBtn').addEventListener('click', function() {
+                // In a real app, this would open a file picker
+                alert('Import device template. In a real application, this would open a file upload dialog.');
+            });
+            
+            document.getElementById('linkModbusBtn').addEventListener('click', function() {
+                alert('Opening Modbus Mapping page...');
+            });
+            
+            document.getElementById('scanRfBtn').addEventListener('click', function() {
+                this.innerHTML = 'Scanning...';
+                this.disabled = true;
+                
+                setTimeout(() => {
+                    this.innerHTML = 'Scan';
+                    this.disabled = false;
+                    document.getElementById('rfAddress').value = 'RF:0x' + Math.floor(Math.random() * 256).toString(16).toUpperCase();
+                    document.getElementById('signalStrengthDisplay').textContent = `-${60 + Math.floor(Math.random() * 20)} dBm`;
+                }, 1500);
+            });
+            
+            document.getElementById('startPairingBtn').addEventListener('click', function() {
+                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Pairing...';
+                this.disabled = true;
+                
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fa-solid fa-link mr-2"></i> Start Pairing';
+                    this.disabled = false;
+                    alert('Wireless device paired successfully!');
+                }, 2000);
+            });
+
+            // Gateway select
+            document.getElementById('gateway-select').addEventListener('change', function() {
+                if (confirm('Switch to another gateway? Unsaved changes will be lost.')) {
+                    window.location.reload();
+                } else {
+                    this.value = 'Univa-GW-01';
+                }
+            });
+
+            // Save buttons
+            document.getElementById('header-save-btn').addEventListener('click', saveConfiguration);
+            document.getElementById('footer-save-btn').addEventListener('click', saveConfiguration);
+            
+            // Cancel/Back button
+            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
+                if (confirm('Go back? Unsaved changes will be lost.')) {
+                    window.history.back();
+                }
+            });
+        }
+
+        // Filter devices
+        function filterDevices() {
+            const typeFilter = document.getElementById('deviceTypeFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            const groupFilter = document.getElementById('groupFilter').value;
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            let filteredDevices = [...deviceData];
+            
+            if (searchTerm) {
+                filteredDevices = filteredDevices.filter(device => 
+                    device.name.toLowerCase().includes(searchTerm) ||
+                    device.type.toLowerCase().includes(searchTerm) ||
+                    device.address.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (typeFilter !== 'All Device Types') {
+                filteredDevices = filteredDevices.filter(device => {
+                    if (typeFilter === 'Modbus RTU' || typeFilter === 'Modbus TCP') {
+                        return device.type === 'Modbus';
+                    }
+                    return device.type === typeFilter;
+                });
+            }
+            
+            if (statusFilter !== 'All Status') {
+                filteredDevices = filteredDevices.filter(device => device.status === statusFilter);
+            }
+            
+            if (groupFilter !== 'All Groups') {
+                filteredDevices = filteredDevices.filter(device => device.group === groupFilter);
+            }
+            
+            updateTable(filteredDevices);
+        }
+
+        // Update table with filtered devices
+        function updateTable(filteredDevices) {
+            devices = filteredDevices;
+            renderDevicesTable();
+        }
+
+        // Save configuration
+        function saveConfiguration() {
+            const saveBtn = document.getElementById('header-save-btn');
+            const footerSaveBtn = document.getElementById('footer-save-btn');
+            
+            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            footerSaveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            saveBtn.disabled = true;
+            footerSaveBtn.disabled = true;
+            
+            setTimeout(() => {
+                saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Save';
+                footerSaveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Save Changes';
+                saveBtn.disabled = false;
+                footerSaveBtn.disabled = false;
+                
+                alert('Device configuration saved successfully!');
+            }, 1500);
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load sidebar first
+            loadSidebar();
+            
+            // Initialize the app after a short delay to ensure sidebar is loaded
+            setTimeout(() => {
+                initApp();
+            }, 100);
+        });
+    </script>
+</body>
+</html>
