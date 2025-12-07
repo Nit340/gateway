@@ -1,0 +1,2098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Retention, Logging & Diagnostics - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        .toggle-checkbox:checked { right: 0; border-color: #2563EB; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
+        .radio-checkbox:checked { background-color: #2563EB; border-color: #2563EB; }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1001;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.success { background: #10B981; }
+        .toast.error { background: #EF4444; }
+        .toast.warning { background: #F59E0B; }
+        .toast.info { background: #2563EB; }
+        
+        /* Range Slider Customization */
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            background: #E2E8F0;
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #2563EB;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Log Level Indicators */
+        .log-level-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        
+        .log-level.error { background-color: #EF4444; }
+        .log-level.warn { background-color: #F59E0B; }
+        .log-level.info { background-color: #3B82F6; }
+        .log-level.debug { background-color: #8B5CF6; }
+        .log-level.trace { background-color: #10B981; }
+        
+        /* Modal Animations */
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Modal Custom Styles */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
+        }
+        
+        .modal-backdrop.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 500px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s ease;
+        }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #E2E8F0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1E293B;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #64748B;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            color: #475569;
+            background-color: #F1F5F9;
+        }
+        
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #F8FAFC;
+        }
+        
+        .modal-button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #E2E8F0;
+            background: white;
+            color: #475569;
+        }
+        
+        .modal-button:hover {
+            background: #F8FAFC;
+        }
+        
+        .modal-button.primary {
+            background: #2563EB;
+            color: white;
+            border-color: #2563EB;
+        }
+        
+        .modal-button.primary:hover {
+            background: #1D4ED8;
+        }
+        
+        .modal-button.danger {
+            background: #EF4444;
+            color: white;
+            border-color: #EF4444;
+        }
+        
+        .modal-button.danger:hover {
+            background: #DC2626;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Modal Container -->
+    <div id="modal-container" class="modal-backdrop"></div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">Data Retention & Diagnostics</span>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showHelpModal()">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="header-save-btn" onclick="saveAllSettingsWithConfirmation()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-slate-900">Data Retention, Logging & Diagnostics</h1>
+                    <p class="text-slate-500 text-sm mt-1">Configure local storage policies, system logging levels, and diagnostic capture rules for the Univa IoT Gateway.</p>
+                    <div class="mt-4 flex gap-2">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <i class="fa-solid fa-check-circle"></i> Storage Healthy
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <i class="fa-solid fa-database"></i> 500 MB / 1 GB Used
+                        </span>
+                    </div>
+                </div>
+
+                <div class="space-y-8">
+                    <!-- SECTION A: Data Retention Policy -->
+                    <section id="section-retention" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center">
+                                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                    <i class="fa-solid fa-hard-drive mr-2 text-primary"></i> 
+                                    <span class="mr-2">Data Retention Policy</span>
+                                    <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                                </h2>
+                                <button class="text-primary hover:text-primaryHover font-medium text-sm px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors ml-4" onclick="showStorageAnalytics()">
+                                    <i class="fa-solid fa-chart-pie mr-1"></i> Analytics
+                                </button>
+                            </div>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Storage Configuration & Policies
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <!-- Local Storage Configuration -->
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Local Telemetry Storage</h3>
+                                
+                                <div class="space-y-6">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Enable Local Retention</label>
+                                            <p class="text-xs text-slate-500">Store data locally before cloud sync</p>
+                                        </div>
+                                        <div class="relative inline-block w-10 align-middle select-none">
+                                            <input type="checkbox" id="localRetention" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                            <label for="localRetention" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="flex justify-between mb-2">
+                                            <label class="text-sm font-medium text-slate-700">Retention Duration</label>
+                                            <span class="text-sm font-medium text-slate-900" id="retentionValue">30 Days</span>
+                                        </div>
+                                        <input type="range" id="retentionSlider" min="1" max="90" value="30" class="w-full" oninput="updateRetentionValue(this.value)">
+                                        <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                            <span>1 Day</span>
+                                            <span>90 Days</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div class="flex justify-between mb-2">
+                                            <label class="text-sm font-medium text-slate-700">Max Local Storage</label>
+                                            <span class="text-sm font-medium text-slate-900" id="storageValue">2.5 GB</span>
+                                        </div>
+                                        <input type="range" id="storageSlider" min="0.5" max="8" step="0.5" value="2.5" class="w-full" oninput="updateStorageValue(this.value)">
+                                        <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                            <span>0.5 GB</span>
+                                            <span>8 GB</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Overwrite Policy</label>
+                                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                                <option>Overwrite Oldest</option>
+                                                <option>Block Writes</option>
+                                                <option>Offload to Cloud</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Min Free Space</label>
+                                            <div class="flex items-center">
+                                                <input type="number" value="10" min="1" max="50" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                                <span class="ml-2 text-sm text-slate-700">%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Cloud & Archive Configuration -->
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Cloud & Archive Storage</h3>
+                                
+                                <div class="space-y-6">
+                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                        <div class="flex items-center gap-3 mb-3">
+                                            <i class="fa-brands fa-aws text-[#FF9900] text-xl"></i>
+                                            <div>
+                                                <div class="text-sm font-medium text-slate-800">AWS S3 Export</div>
+                                                <div class="text-xs text-slate-500">Daily sync enabled</div>
+                                            </div>
+                                            <i class="fa-solid fa-circle-check text-green-500 ml-auto"></i>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-600 mb-1">Hot Data (Cloud)</label>
+                                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                                    <option>30 Days</option>
+                                                    <option selected>90 Days</option>
+                                                    <option>180 Days</option>
+                                                    <option>365 Days</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-600 mb-1">Cold Storage</label>
+                                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                                    <option>1 Year</option>
+                                                    <option selected>3 Years</option>
+                                                    <option>5 Years</option>
+                                                    <option>7 Years</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Archive Format</label>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <label class="flex items-center justify-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="archiveFormat" value="parquet" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                                <span class="ml-2 text-sm text-slate-700">Parquet</span>
+                                            </label>
+                                            <label class="flex items-center justify-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="archiveFormat" value="json" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                                <span class="ml-2 text-sm text-slate-700">JSON</span>
+                                            </label>
+                                            <label class="flex items-center justify-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="archiveFormat" value="csv" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                                <span class="ml-2 text-sm text-slate-700">CSV</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Retention Mode</label>
+                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                            <option selected>Balanced Mode</option>
+                                            <option>Performance Mode</option>
+                                            <option>Archive-Focused Mode</option>
+                                            <option>Custom</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION B: System Logging Levels -->
+                    <section id="section-logging" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-list-check mr-2 text-blue-500"></i> 
+                                <span class="mr-2">System Logging Levels</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION B</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Subsystem Log Configuration
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                    <tr>
+                                        <th class="px-6 py-3">Subsystem</th>
+                                        <th class="px-6 py-3">Status</th>
+                                        <th class="px-6 py-3">Log Level</th>
+                                        <th class="px-6 py-3">Storage Size</th>
+                                        <th class="px-6 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="loggingTableBody" class="divide-y divide-slate-100">
+                                    <!-- Logging entries will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-6">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="rotateLogs" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Rotate Logs Automatically</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="compressLogs" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Compress (GZIP)</span>
+                                    </label>
+                                </div>
+                                <button class="text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors" onclick="showAdvancedLoggingSettings()">
+                                    Advanced Log Settings <i class="fa-solid fa-arrow-right ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION C: Diagnostics & Network Capture -->
+                    <section id="section-diagnostics" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-stethoscope mr-2 text-emerald-500"></i> 
+                                <span class="mr-2">Diagnostics & Network Capture</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION C</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                System Health Monitoring
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Diagnostics Capture -->
+                            <div class="bg-white border border-slate-200 rounded-lg p-5">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-sm font-semibold text-slate-900">Diagnostics Capture</h3>
+                                    <div class="relative inline-block w-10 align-middle select-none">
+                                        <input type="checkbox" id="diagnosticsEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                        <label for="diagnosticsEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Capture Mode</label>
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <label class="flex items-center justify-center p-2 border border-slate-300 rounded cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="captureMode" value="passive" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                                <span class="ml-2 text-sm text-slate-700">Passive</span>
+                                            </label>
+                                            <label class="flex items-center justify-center p-2 border border-primary rounded cursor-pointer bg-blue-50">
+                                                <input type="radio" name="captureMode" value="active" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                                <span class="ml-2 text-sm text-slate-700">Active</span>
+                                            </label>
+                                            <label class="flex items-center justify-center p-2 border border-slate-300 rounded cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="captureMode" value="triggered" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                                <span class="ml-2 text-sm text-slate-700">Triggered</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Capture Interval</label>
+                                        <div class="flex items-center">
+                                            <input type="number" id="captureInterval" value="60" min="5" max="1440" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                            <span class="ml-2 text-sm text-slate-700">minutes</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Include in Capture</label>
+                                        <div class="space-y-2">
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="captureSystem" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">System Metrics</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="captureNetwork" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Network Statistics</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="captureModbus" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Modbus Transactions</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="captureACS" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">ACS Events</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Network Packet Capture -->
+                            <div class="bg-white border border-slate-200 rounded-lg p-5">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-sm font-semibold text-slate-900">Network Packet Capture</h3>
+                                    <div class="relative inline-block w-10 align-middle select-none">
+                                        <input type="checkbox" id="packetCapture" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300"/>
+                                        <label for="packetCapture" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Max Capture Size</label>
+                                        <div class="flex items-center">
+                                            <input type="number" id="maxCaptureSize" value="100" min="10" max="1000" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                            <span class="ml-2 text-sm text-slate-700">MB</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Protocol Filters</label>
+                                        <div class="space-y-2">
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="filterHTTP" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">HTTP/HTTPS</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="filterMQTT" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">MQTT</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="filterModbus" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Modbus TCP</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="filterSSH" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">SSH</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Trigger Condition</label>
+                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                            <option>On Error Only</option>
+                                            <option selected>On High Latency</option>
+                                            <option>On Connection Loss</option>
+                                            <option>Always (Debug)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION D: Log Export & Management -->
+                    <section id="section-export" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-file-export mr-2 text-orange-500"></i> 
+                                <span class="mr-2">Log Export & Management</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION D</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Export Configuration
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Export Schedule</label>
+                                <div class="space-y-3">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="exportSchedule" value="daily" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                        <span class="ml-2 text-sm text-slate-700">Daily at 02:00 AM</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="exportSchedule" value="weekly" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Weekly on Sunday</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="exportSchedule" value="monthly" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Monthly on 1st</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="exportSchedule" value="custom" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Custom Schedule</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Export Format</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                        <input type="checkbox" id="formatJSON" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">JSON</span>
+                                    </label>
+                                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                        <input type="checkbox" id="formatCSV" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">CSV</span>
+                                    </label>
+                                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                        <input type="checkbox" id="formatPCAP" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">PCAP</span>
+                                    </label>
+                                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                                        <input type="checkbox" id="formatSQLite" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">SQLite</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Export Destinations</label>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <i class="fa-brands fa-aws text-[#FF9900] text-lg"></i>
+                                            <div class="text-sm font-medium text-slate-800">AWS S3</div>
+                                        </div>
+                                        <p class="text-xs text-slate-500">s3://logs-univa-gw-01/</p>
+                                    </div>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <i class="fa-solid fa-server text-slate-500 text-lg"></i>
+                                            <div class="text-sm font-medium text-slate-800">SFTP Server</div>
+                                        </div>
+                                        <p class="text-xs text-slate-500">sftp://archive.company.com</p>
+                                    </div>
+                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <i class="fa-solid fa-usb text-slate-500 text-lg"></i>
+                                            <div class="text-sm font-medium text-slate-800">Local USB</div>
+                                        </div>
+                                        <p class="text-xs text-slate-500">On-demand export</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Actions -->
+        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runDiagnostics()">
+                        <i class="fa-solid fa-stethoscope mr-2 text-slate-400"></i> Run Diagnostics
+                    </button>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="exportLogsNow()">
+                        <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export Logs Now
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="clearAllLogs()">
+                        <i class="fa-solid fa-trash mr-2"></i> Clear All Logs
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center" onclick="purgeOldData()">
+                        <i class="fa-solid fa-broom mr-2"></i> Purge Old Data
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn" onclick="saveAllSettingsWithConfirmation()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Retention Settings
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div> <!-- End of main content container -->
+
+    <script>
+        // ==================== APPLICATION STATE ====================
+        let appState = {
+            loggingConfig: [],
+            unsavedChanges: false,
+            storageUsage: {
+                used: 500, // MB
+                total: 1024, // MB
+                retentionDays: 30,
+                maxStorageGB: 2.5
+            }
+        };
+
+        // ==================== MODAL SYSTEM ====================
+        class ModalSystem {
+            constructor() {
+                this.modalContainer = null;
+                this.init();
+            }
+
+            init() {
+                this.modalContainer = document.getElementById('modal-container');
+            }
+
+            show(options) {
+                const {
+                    title = 'Modal',
+                    content = '',
+                    size = 'md', // sm, md, lg, xl
+                    showCloseButton = true,
+                    buttons = [],
+                    onClose = null,
+                    type = 'info' // info, warning, danger, success
+                } = options;
+
+                // Remove existing modal
+                this.modalContainer.innerHTML = '';
+
+                // Create modal
+                const modal = document.createElement('div');
+                modal.className = 'modal-content';
+                modal.style.width = this.getSize(size);
+
+                // Modal header
+                const modalHeader = document.createElement('div');
+                modalHeader.className = 'modal-header';
+
+                const titleElement = document.createElement('h3');
+                titleElement.className = 'modal-title';
+                
+                // Add icon based on type
+                const icons = {
+                    info: 'fa-circle-info',
+                    warning: 'fa-triangle-exclamation',
+                    danger: 'fa-circle-exclamation',
+                    success: 'fa-circle-check'
+                };
+                
+                if (icons[type]) {
+                    const icon = document.createElement('i');
+                    icon.className = `fa-solid ${icons[type]}`;
+                    icon.style.color = this.getTypeColor(type);
+                    titleElement.appendChild(icon);
+                }
+                
+                const titleText = document.createElement('span');
+                titleText.textContent = title;
+                titleElement.appendChild(titleText);
+
+                modalHeader.appendChild(titleElement);
+
+                if (showCloseButton) {
+                    const closeButton = document.createElement('button');
+                    closeButton.className = 'modal-close';
+                    closeButton.innerHTML = '<i class="fa-solid fa-times"></i>';
+                    closeButton.addEventListener('click', () => {
+                        this.hide();
+                        if (onClose) onClose();
+                    });
+                    modalHeader.appendChild(closeButton);
+                }
+
+                modal.appendChild(modalHeader);
+
+                // Modal body
+                const modalBody = document.createElement('div');
+                modalBody.className = 'modal-body';
+                
+                if (typeof content === 'string') {
+                    modalBody.innerHTML = content;
+                } else {
+                    modalBody.appendChild(content);
+                }
+                
+                modal.appendChild(modalBody);
+
+                // Modal footer (if buttons provided)
+                if (buttons.length > 0) {
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer';
+
+                    buttons.forEach(button => {
+                        const btn = document.createElement('button');
+                        btn.className = 'modal-button';
+                        if (button.primary) btn.classList.add('primary');
+                        if (button.danger) btn.classList.add('danger');
+                        btn.textContent = button.text;
+
+                        btn.addEventListener('click', () => {
+                            if (button.onClick) button.onClick();
+                            if (button.closeOnClick !== false) this.hide();
+                        });
+
+                        modalFooter.appendChild(btn);
+                    });
+
+                    modal.appendChild(modalFooter);
+                }
+
+                this.modalContainer.appendChild(modal);
+                this.modalContainer.classList.add('active');
+
+                // Add escape key listener
+                const escapeHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        this.hide();
+                        if (onClose) onClose();
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                };
+                document.addEventListener('keydown', escapeHandler);
+
+                // Store reference for cleanup
+                modal._escapeHandler = escapeHandler;
+            }
+
+            hide() {
+                this.modalContainer.classList.remove('active');
+                const modal = this.modalContainer.querySelector('.modal-content');
+                if (modal && modal._escapeHandler) {
+                    document.removeEventListener('keydown', modal._escapeHandler);
+                }
+            }
+
+            getSize(size) {
+                const sizes = {
+                    sm: '400px',
+                    md: '500px',
+                    lg: '600px',
+                    xl: '800px'
+                };
+                return sizes[size] || sizes.md;
+            }
+
+            getTypeColor(type) {
+                const colors = {
+                    info: '#2563EB',
+                    warning: '#F59E0B',
+                    danger: '#EF4444',
+                    success: '#10B981'
+                };
+                return colors[type] || colors.info;
+            }
+        }
+
+        // ==================== CONFIRMATION DIALOG ====================
+        function showConfirm(options) {
+            const modal = new ModalSystem();
+            
+            const {
+                title = 'Confirm Action',
+                message = 'Are you sure you want to proceed?',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                type = 'warning',
+                onConfirm = null,
+                onCancel = null
+            } = options;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                color: #475569;
+                line-height: 1.5;
+            `;
+            content.innerHTML = `<p>${message}</p>`;
+
+            modal.show({
+                title,
+                content,
+                type,
+                buttons: [
+                    {
+                        text: cancelText,
+                        onClick: () => {
+                            if (onCancel) onCancel();
+                        }
+                    },
+                    {
+                        text: confirmText,
+                        primary: true,
+                        onClick: () => {
+                            if (onConfirm) onConfirm();
+                        }
+                    }
+                ],
+                onClose: onCancel
+            });
+        }
+
+        // ==================== ALERT DIALOG ====================
+        function showAlert(options) {
+            const modal = new ModalSystem();
+            
+            const {
+                title = 'Alert',
+                message = '',
+                type = 'info',
+                buttonText = 'OK',
+                onClose = null
+            } = options;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                color: #475569;
+                line-height: 1.5;
+            `;
+            content.innerHTML = `<p>${message}</p>`;
+
+            modal.show({
+                title,
+                content,
+                type,
+                buttons: [{
+                    text: buttonText,
+                    primary: true,
+                    onClick: () => {
+                        if (onClose) onClose();
+                    }
+                }],
+                onClose
+            });
+        }
+
+        // ==================== LOG VIEWER MODAL ====================
+        function showLogViewer(config) {
+            const modal = new ModalSystem();
+            
+            // Create log viewer content
+            const content = document.createElement('div');
+            content.style.cssText = `
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 12px;
+                background: #1E293B;
+                color: #CBD5E1;
+                border-radius: 6px;
+                padding: 16px;
+                max-height: 400px;
+                overflow-y: auto;
+                line-height: 1.4;
+            `;
+            
+            // Generate sample log entries
+            const logLevels = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
+            const logMessages = [
+                'Connection established to device 0x1234',
+                'Received 256 bytes of telemetry data',
+                'Sensor calibration completed successfully',
+                'Buffer overflow detected in queue #3',
+                'Network latency exceeded threshold: 150ms',
+                'Device heartbeat received',
+                'Data validation failed for payload #891',
+                'Cloud sync completed: 1.2MB transferred',
+                'Memory usage at 78% - monitoring',
+                'Backup schedule triggered'
+            ];
+            
+            let logContent = '';
+            for (let i = 0; i < 20; i++) {
+                const timestamp = new Date(Date.now() - i * 60000).toISOString().replace('T', ' ').substring(0, 19);
+                const level = logLevels[Math.floor(Math.random() * logLevels.length)];
+                const message = logMessages[Math.floor(Math.random() * logMessages.length)];
+                
+                let levelColor = '#94A3B8';
+                if (level === 'ERROR') levelColor = '#F87171';
+                if (level === 'WARN') levelColor = '#FBBF24';
+                if (level === 'INFO') levelColor = '#60A5FA';
+                if (level === 'DEBUG') levelColor = '#A78BFA';
+                
+                logContent += `<div style="margin-bottom: 4px;">
+                    <span style="color: #64748B">${timestamp}</span>
+                    <span style="color: ${levelColor}; margin: 0 12px; font-weight: 500;">${level.padEnd(5)}</span>
+                    <span>${message}</span>
+                </div>`;
+            }
+            
+            content.innerHTML = logContent;
+            
+            modal.show({
+                title: `Log Stream: ${config.subsystem}`,
+                content,
+                size: 'xl',
+                buttons: [{
+                    text: 'Download Logs',
+                    onClick: () => {
+                        showToast('Downloading log file...', 'info');
+                        modal.hide();
+                    }
+                }, {
+                    text: 'Clear Logs',
+                    danger: true,
+                    onClick: () => {
+                        showConfirm({
+                            title: 'Clear Logs',
+                            message: `Clear all logs for ${config.subsystem}?`,
+                            onConfirm: () => {
+                                showToast(`Cleared logs for ${config.subsystem}`, 'success');
+                                modal.hide();
+                            }
+                        });
+                    }
+                }, {
+                    text: 'Close',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== ADVANCED LOGGING SETTINGS MODAL ====================
+        function showAdvancedLoggingSettings() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            // Log rotation settings
+            const rotationSection = document.createElement('div');
+            rotationSection.innerHTML = `
+                <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Log Rotation</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #64748B; margin-bottom: 4px;">Max File Size</label>
+                        <div style="display: flex; align-items: center;">
+                            <input type="number" value="10" min="1" max="100" 
+                                   style="width: 80px; padding: 6px 8px; border: 1px solid #E2E8F0; border-radius: 6px;">
+                            <span style="margin-left: 8px; font-size: 12px; color: #475569;">MB</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #64748B; margin-bottom: 4px;">Keep Files</label>
+                        <div style="display: flex; align-items: center;">
+                            <input type="number" value="7" min="1" max="30" 
+                                   style="width: 80px; padding: 6px 8px; border: 1px solid #E2E8F0; border-radius: 6px;">
+                            <span style="margin-left: 8px; font-size: 12px; color: #475569;">days</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Log format settings
+            const formatSection = document.createElement('div');
+            formatSection.innerHTML = `
+                <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Log Format</h4>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label style="display: flex; align-items: center;">
+                        <input type="checkbox" checked style="margin-right: 8px;">
+                        <span style="font-size: 14px; color: #475569;">Include timestamp</span>
+                    </label>
+                    <label style="display: flex; align-items: center;">
+                        <input type="checkbox" checked style="margin-right: 8px;">
+                        <span style="font-size: 14px; color: #475569;">Include log level</span>
+                    </label>
+                    <label style="display: flex; align-items: center;">
+                        <input type="checkbox" style="margin-right: 8px;">
+                        <span style="font-size: 14px; color: #475569;">Include thread ID</span>
+                    </label>
+                    <label style="display: flex; align-items: center;">
+                        <input type="checkbox" checked style="margin-right: 8px;">
+                        <span style="font-size: 14px; color: #475569;">Include source file/line</span>
+                    </label>
+                </div>
+            `;
+            
+            // Log filtering
+            const filterSection = document.createElement('div');
+            filterSection.innerHTML = `
+                <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Log Filtering</h4>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 14px; color: #475569;">Enable regex filtering</span>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300">
+                            <label class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #64748B; margin-bottom: 4px;">Filter pattern</label>
+                        <input type="text" placeholder="e.g., ERROR|WARN" 
+                               style="width: 100%; padding: 6px 8px; border: 1px solid #E2E8F0; border-radius: 6px; font-family: monospace;">
+                    </div>
+                </div>
+            `;
+            
+            content.appendChild(rotationSection);
+            content.appendChild(formatSection);
+            content.appendChild(filterSection);
+            
+            modal.show({
+                title: 'Advanced Log Settings',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Apply Settings',
+                    primary: true,
+                    onClick: () => {
+                        showToast('Advanced log settings applied', 'success');
+                        modal.hide();
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== STORAGE ANALYTICS MODAL ====================
+        function showStorageAnalytics() {
+            const modal = new ModalSystem();
+            
+            // Create analytics content
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            `;
+            
+            // Storage overview
+            const overview = document.createElement('div');
+            overview.innerHTML = `
+                <div style="background: #F8FAFC; border-radius: 8px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <h4 style="font-weight: 600; color: #1E293B;">Storage Overview</h4>
+                        <span style="font-size: 12px; color: #64748B;">Updated just now</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div style="flex: 1;">
+                            <div style="height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
+                                <div style="width: 65%; height: 100%; background: linear-gradient(90deg, #3B82F6, #8B5CF6);"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                                <span style="font-size: 12px; color: #64748B;">65% used</span>
+                                <span style="font-size: 12px; color: #64748B;">500MB / 1GB</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Storage by type
+            const storageByType = document.createElement('div');
+            storageByType.innerHTML = `
+                <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 12px;">Storage by Type</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="background: #F0F9FF; border: 1px solid #E0F2FE; border-radius: 6px; padding: 12px;">
+                        <div style="font-size: 12px; color: #0369A1;">Telemetry Data</div>
+                        <div style="font-weight: 600; color: #1E293B; margin: 4px 0;">320 MB</div>
+                        <div style="font-size: 11px; color: #64748B;">64% of total</div>
+                    </div>
+                    <div style="background: #FEF2F2; border: 1px solid #FEE2E2; border-radius: 6px; padding: 12px;">
+                        <div style="font-size: 12px; color: #DC2626;">System Logs</div>
+                        <div style="font-weight: 600; color: #1E293B; margin: 4px 0;">125 MB</div>
+                        <div style="font-size: 11px; color: #64748B;">25% of total</div>
+                    </div>
+                    <div style="background: #FFFBEB; border: 1px solid #FEF3C7; border-radius: 6px; padding: 12px;">
+                        <div style="font-size: 12px; color: #D97706;">Diagnostics</div>
+                        <div style="font-weight: 600; color: #1E293B; margin: 4px 0;">40 MB</div>
+                        <div style="font-size: 11px; color: #64748B;">8% of total</div>
+                    </div>
+                    <div style="background: #ECFDF5; border: 1px solid #D1FAE5; border-radius: 6px; padding: 12px;">
+                        <div style="font-size: 12px; color: #059669;">Configuration</div>
+                        <div style="font-weight: 600; color: #1E293B; margin: 4px 0;">15 MB</div>
+                        <div style="font-size: 11px; color: #64748B;">3% of total</div>
+                    </div>
+                </div>
+            `;
+            
+            // Retention forecast
+            const forecast = document.createElement('div');
+            forecast.innerHTML = `
+                <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 12px;">Retention Forecast</h4>
+                <div style="background: #F8FAFC; border-radius: 8px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 12px; color: #64748B;">Current retention</span>
+                        <span style="font-weight: 600; color: #1E293B;">30 days</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span style="font-size: 12px; color: #64748B;">Projected full date</span>
+                        <span style="font-weight: 600; color: #1E293B;">2024-04-15</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748B; background: #F1F5F9; padding: 8px; border-radius: 4px;">
+                        <i class="fa-solid fa-lightbulb" style="margin-right: 4px;"></i>
+                        Based on current usage trends, storage will be full in approximately 18 days.
+                    </div>
+                </div>
+            `;
+            
+            content.appendChild(overview);
+            content.appendChild(storageByType);
+            content.appendChild(forecast);
+            
+            modal.show({
+                title: 'Storage Analytics',
+                content,
+                size: 'lg',
+                buttons: [{
+                    text: 'Run Cleanup',
+                    onClick: () => {
+                        purgeOldData();
+                        modal.hide();
+                    }
+                }, {
+                    text: 'Export Report',
+                    onClick: () => {
+                        showToast('Storage report exported successfully', 'success');
+                    }
+                }, {
+                    text: 'Close',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== HELP MODAL ====================
+        function showHelpModal() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                line-height: 1.6;
+            `;
+            
+            content.innerHTML = `
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Data Retention Policy</h4>
+                    <p style="color: #475569; font-size: 14px;">
+                        Configure how long telemetry data is stored locally before being archived or deleted.
+                        The gateway can store data for up to 90 days locally, with automatic cloud sync options.
+                    </p>
+                </div>
+                
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">System Logging Levels</h4>
+                    <p style="color: #475569; font-size: 14px;">
+                        Control the verbosity of system logs for each subsystem. Higher log levels (DEBUG, TRACE)
+                        provide more detailed information but use more storage space.
+                    </p>
+                    <div style="background: #F8FAFC; border-radius: 6px; padding: 12px; margin-top: 8px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="log-level-indicator error" style="margin-right: 8px;"></span>
+                            <span style="font-weight: 500; color: #DC2626;">ERROR</span>
+                            <span style="color: #64748B; margin-left: 8px;">Critical failures only</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="log-level-indicator warn" style="margin-right: 8px;"></span>
+                            <span style="font-weight: 500; color: #D97706;">WARN</span>
+                            <span style="color: #64748B; margin-left: 8px;">Potential issues</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="log-level-indicator info" style="margin-right: 8px;"></span>
+                            <span style="font-weight: 500; color: #2563EB;">INFO</span>
+                            <span style="color: #64748B; margin-left: 8px;">Normal operation messages</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="log-level-indicator debug" style="margin-right: 8px;"></span>
+                            <span style="font-weight: 500; color: #7C3AED;">DEBUG</span>
+                            <span style="color: #64748B; margin-left: 8px;">Detailed debugging information</span>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <span class="log-level-indicator trace" style="margin-right: 8px;"></span>
+                            <span style="font-weight: 500; color: #059669;">TRACE</span>
+                            <span style="color: #64748B; margin-left: 8px;">Extremely verbose tracing</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Best Practices</h4>
+                    <ul style="color: #475569; font-size: 14px; padding-left: 20px;">
+                        <li>Keep critical subsystems at WARN level for production</li>
+                        <li>Set DEBUG/Trace only for troubleshooting</li>
+                        <li>Monitor storage usage regularly</li>
+                        <li>Enable log rotation to prevent storage exhaustion</li>
+                        <li>Schedule regular cloud backups</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 6px; padding: 12px;">
+                    <div style="display: flex; align-items: start; gap: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color: #2563EB; margin-top: 2px;"></i>
+                        <div>
+                            <div style="font-weight: 600; color: #1E40AF;">Need more help?</div>
+                            <div style="font-size: 12px; color: #475569; margin-top: 2px;">
+                                Contact support at support@univa.com or visit our documentation portal.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Data Retention & Logging Help',
+                content,
+                size: 'lg',
+                buttons: [{
+                    text: 'Open Documentation',
+                    primary: true,
+                    onClick: () => {
+                        window.open('https://docs.univa.com/data-retention', '_blank');
+                        modal.hide();
+                    }
+                }, {
+                    text: 'Close',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== SIDEBAR FUNCTIONS ====================
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) throw new Error(`Failed to load sidebar: ${response.status}`);
+                document.getElementById('sidebar-container').innerHTML = await response.text();
+                updateActivePage();
+                initializeSidebar();
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                createFallbackSidebar();
+            }
+        }
+
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-network-wired mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Automation & Event Engine</div>
+                            <a href="automation-rules.html" class="nav-item">
+                                <i class="fa-solid fa-robot"></i> Automation Rules
+                            </a>
+                            <a href="notification-alerts.html" class="nav-item">
+                                <i class="fa-solid fa-bell"></i> Notification & Alerts
+                                <span class="nav-item-count">5</span>
+                            </a>
+                            <a href="event-logging.html" class="nav-item">
+                                <i class="fa-solid fa-clipboard-list"></i> Event Logging
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device Management
+                            </a>
+                            <a href="protocol-mapping.html" class="nav-item">
+                                <i class="fa-solid fa-exchange-alt"></i> Protocol Mapping
+                            </a>
+                            <a href="data-retention.html" class="nav-item active">
+                                <i class="fa-solid fa-database"></i> Data Retention & Logs
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4 class="text-sm font-medium text-white">Admin User</h4>
+                                <p class="text-xs text-slate-400">System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        function updateActivePage() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            const retentionLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Data Retention') || 
+                item.textContent.includes('Retention')
+            );
+            if (retentionLink) retentionLink.classList.add('active');
+        }
+
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (!sidebar || !sidebarToggle) return;
+            
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                const icon = this.querySelector('i');
+                icon.className = sidebar.classList.contains('active') ? 'fa-solid fa-times' : 'fa-solid fa-bars';
+            });
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSidebar();
+            initializeAppWithModals();
+            setupEventListeners();
+            loadInitialData();
+        });
+
+        // ==================== TOAST NOTIFICATIONS ====================
+        function showToast(message, type = 'info', duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // ==================== DATA MANAGEMENT ====================
+        function loadInitialData() {
+            // Mock data for logging configuration
+            appState.loggingConfig = [
+                {
+                    id: 1,
+                    subsystem: 'System Core',
+                    icon: 'fa-microchip',
+                    status: 'active',
+                    logLevel: 'warn',
+                    storageSize: '150 MB',
+                    statusColor: 'text-green-600'
+                },
+                {
+                    id: 2,
+                    subsystem: 'Modbus Engine',
+                    icon: 'fa-industry',
+                    status: 'active',
+                    logLevel: 'debug',
+                    storageSize: '250 MB',
+                    statusColor: 'text-green-600',
+                    warning: 'High Volume'
+                },
+                {
+                    id: 3,
+                    subsystem: 'Wireless Radio',
+                    icon: 'fa-wifi',
+                    status: 'active',
+                    logLevel: 'info',
+                    storageSize: '75 MB',
+                    statusColor: 'text-green-600'
+                },
+                {
+                    id: 4,
+                    subsystem: 'ACS (Anti-Collision)',
+                    icon: 'fa-triangle-exclamation',
+                    status: 'standby',
+                    logLevel: 'warn',
+                    storageSize: '25 MB',
+                    statusColor: 'text-slate-400'
+                }
+            ];
+            
+            renderLoggingTable();
+            updateStorageDisplay();
+        }
+
+        function renderLoggingTable() {
+            const tbody = document.getElementById('loggingTableBody');
+            tbody.innerHTML = '';
+            
+            appState.loggingConfig.forEach(config => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition';
+                
+                const logLevels = {
+                    'error': { label: 'ERROR', color: 'error', bgColor: 'bg-red-100', textColor: 'text-red-800' },
+                    'warn': { label: 'WARN', color: 'warn', bgColor: 'bg-yellow-100', textColor: 'text-yellow-800' },
+                    'info': { label: 'INFO', color: 'info', bgColor: 'bg-blue-100', textColor: 'text-blue-800' },
+                    'debug': { label: 'DEBUG', color: 'debug', bgColor: 'bg-purple-100', textColor: 'text-purple-800' },
+                    'trace': { label: 'TRACE', color: 'trace', bgColor: 'bg-green-100', textColor: 'text-green-800' }
+                };
+                
+                const level = logLevels[config.logLevel] || logLevels.info;
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-slate-900">
+                        <i class="fa-solid ${config.icon} w-5 text-slate-400 mr-2"></i>
+                        ${config.subsystem}
+                    </td>
+                    <td class="px-6 py-4 ${config.statusColor}">
+                        <i class="fa-solid fa-circle text-[8px] mr-1"></i>
+                        ${config.status.charAt(0).toUpperCase() + config.status.slice(1)}
+                    </td>
+                    <td class="px-6 py-4">
+                        <select class="text-xs rounded-lg border-slate-300 border px-3 py-1.5 ${config.warning ? 'bg-yellow-50 border-yellow-200' : ''}" onchange="updateLogLevel(${config.id}, this.value)">
+                            <option value="error" ${config.logLevel === 'error' ? 'selected' : ''}>ERROR</option>
+                            <option value="warn" ${config.logLevel === 'warn' ? 'selected' : ''}>WARN</option>
+                            <option value="info" ${config.logLevel === 'info' ? 'selected' : ''}>INFO</option>
+                            <option value="debug" ${config.logLevel === 'debug' ? 'selected' : ''}>DEBUG</option>
+                            <option value="trace" ${config.logLevel === 'trace' ? 'selected' : ''}>TRACE</option>
+                        </select>
+                        ${config.warning ? '<span class="text-[10px] text-yellow-600 ml-1 font-medium">High Volume</span>' : ''}
+                    </td>
+                    <td class="px-6 py-4 text-slate-600">${config.storageSize}</td>
+                    <td class="px-6 py-4 text-right">
+                        <button class="text-primary hover:text-primaryHover font-medium text-sm" onclick="viewLogStream(${config.id})">
+                            View Stream
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // ==================== UTILITY FUNCTIONS ====================
+        function updateRetentionValue(days) {
+            document.getElementById('retentionValue').textContent = `${days} Days`;
+            appState.storageUsage.retentionDays = parseInt(days);
+            markUnsavedChanges();
+        }
+
+        function updateStorageValue(gb) {
+            document.getElementById('storageValue').textContent = `${gb} GB`;
+            appState.storageUsage.maxStorageGB = parseFloat(gb);
+            markUnsavedChanges();
+        }
+
+        function updateStorageDisplay() {
+            const percentage = (appState.storageUsage.used / appState.storageUsage.total * 100).toFixed(1);
+            document.getElementById('page-title').textContent = `Data Retention & Diagnostics (${percentage}% used)`;
+        }
+
+        function updateLogLevel(configId, level) {
+            const config = appState.loggingConfig.find(c => c.id === configId);
+            if (config) {
+                config.logLevel = level;
+                showToast(`Log level updated for ${config.subsystem}`, 'success');
+                markUnsavedChanges();
+            }
+        }
+
+        function viewLogStream(configId) {
+            const config = appState.loggingConfig.find(c => c.id === configId);
+            if (config) {
+                showLogViewer(config);
+            }
+        }
+
+        // ==================== ACTION FUNCTIONS ====================
+        function runDiagnostics() {
+            showToast('Running system diagnostics...', 'info');
+            
+            setTimeout(() => {
+                showToast('Diagnostics completed successfully', 'success');
+            }, 2000);
+        }
+
+        function exportLogsNow() {
+            showConfirm({
+                title: 'Export Logs',
+                message: 'Export all logs now? This may take several minutes.',
+                onConfirm: () => {
+                    showToast('Starting log export...', 'info');
+                    
+                    setTimeout(() => {
+                        showToast('Log export completed successfully', 'success');
+                    }, 3000);
+                }
+            });
+        }
+
+        function clearAllLogs() {
+            showConfirm({
+                title: 'Clear All Logs',
+                message: 'Clear all log files? This action cannot be undone.',
+                type: 'danger',
+                onConfirm: () => {
+                    showToast('Clearing all logs...', 'warning');
+                    
+                    setTimeout(() => {
+                        showToast('All logs cleared successfully', 'success');
+                        appState.storageUsage.used = 0;
+                        updateStorageDisplay();
+                        markUnsavedChanges();
+                    }, 2000);
+                }
+            });
+        }
+
+        function purgeOldData() {
+            showConfirm({
+                title: 'Purge Old Data',
+                message: 'Purge data older than retention policy? This will permanently delete old data.',
+                type: 'danger',
+                onConfirm: () => {
+                    showToast('Purging old data...', 'warning');
+                    
+                    setTimeout(() => {
+                        showToast('Old data purged successfully', 'success');
+                        markUnsavedChanges();
+                    }, 2000);
+                }
+            });
+        }
+
+        // ==================== SETTINGS MANAGEMENT ====================
+        function saveAllSettings() {
+            // Collect all settings
+            const settings = {
+                retention: {
+                    enabled: document.getElementById('localRetention').checked,
+                    days: appState.storageUsage.retentionDays,
+                    maxStorage: appState.storageUsage.maxStorageGB,
+                    overwritePolicy: document.querySelector('#section-retention select').value,
+                    minFreeSpace: document.querySelector('#section-retention input[type="number"]').value
+                },
+                logging: appState.loggingConfig.map(config => ({
+                    subsystem: config.subsystem,
+                    level: config.logLevel
+                })),
+                diagnostics: {
+                    enabled: document.getElementById('diagnosticsEnabled').checked,
+                    captureMode: document.querySelector('input[name="captureMode"]:checked').value,
+                    interval: document.getElementById('captureInterval').value,
+                    includes: {
+                        system: document.getElementById('captureSystem').checked,
+                        network: document.getElementById('captureNetwork').checked,
+                        modbus: document.getElementById('captureModbus').checked,
+                        acs: document.getElementById('captureACS').checked
+                    }
+                },
+                packetCapture: {
+                    enabled: document.getElementById('packetCapture').checked,
+                    maxSize: document.getElementById('maxCaptureSize').value,
+                    filters: {
+                        http: document.getElementById('filterHTTP').checked,
+                        mqtt: document.getElementById('filterMQTT').checked,
+                        modbus: document.getElementById('filterModbus').checked,
+                        ssh: document.getElementById('filterSSH').checked
+                    }
+                },
+                export: {
+                    schedule: document.querySelector('input[name="exportSchedule"]:checked').value,
+                    formats: {
+                        json: document.getElementById('formatJSON').checked,
+                        csv: document.getElementById('formatCSV').checked,
+                        pcap: document.getElementById('formatPCAP').checked,
+                        sqlite: document.getElementById('formatSQLite').checked
+                    }
+                }
+            };
+            
+            // Show saving indicator
+            const saveBtn = document.getElementById('header-save-btn');
+            const footerSaveBtn = document.getElementById('footer-save-btn');
+            const originalText = saveBtn.innerHTML;
+            const originalFooterText = footerSaveBtn.innerHTML;
+            
+            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            footerSaveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            saveBtn.disabled = true;
+            footerSaveBtn.disabled = true;
+            
+            // Simulate API call
+            setTimeout(() => {
+                saveBtn.innerHTML = originalText;
+                footerSaveBtn.innerHTML = originalFooterText;
+                saveBtn.disabled = false;
+                footerSaveBtn.disabled = false;
+                
+                appState.unsavedChanges = false;
+                showToast('All retention settings saved successfully', 'success');
+                
+                // Update save buttons
+                saveBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+                footerSaveBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+            }, 1500);
+        }
+
+        function saveAllSettingsWithConfirmation() {
+            if (appState.unsavedChanges) {
+                showConfirm({
+                    title: 'Save Changes',
+                    message: 'Save all data retention and logging settings?',
+                    onConfirm: () => {
+                        saveAllSettings();
+                    }
+                });
+            } else {
+                showAlert({
+                    title: 'No Changes',
+                    message: 'No settings have been modified.',
+                    type: 'info'
+                });
+            }
+        }
+
+        function markUnsavedChanges() {
+            appState.unsavedChanges = true;
+            
+            // Update save buttons
+            const saveBtn = document.getElementById('header-save-btn');
+            const footerSaveBtn = document.getElementById('footer-save-btn');
+            
+            if (saveBtn && !saveBtn.disabled) {
+                saveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+                footerSaveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+            }
+        }
+
+        // ==================== INITIALIZATION WITH MODALS ====================
+        function initializeAppWithModals() {
+            // Initialize toggle switches
+            document.querySelectorAll('.toggle-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', markUnsavedChanges);
+            });
+            
+            // Initialize all input listeners
+            document.querySelectorAll('input, select, textarea').forEach(element => {
+                element.addEventListener('change', markUnsavedChanges);
+            });
+            
+            // Initialize modal system
+            window.modalSystem = new ModalSystem();
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        function setupEventListeners() {
+            // Cancel buttons
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    showConfirm({
+                        title: 'Discard Changes',
+                        message: 'Discard all unsaved retention settings?',
+                        type: 'warning',
+                        onConfirm: () => {
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    showConfirm({
+                        title: 'Discard Changes',
+                        message: 'Discard all unsaved retention settings?',
+                        type: 'warning',
+                        onConfirm: () => {
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            // Gateway select
+            const gatewaySelect = document.getElementById('gateway-select');
+            if (gatewaySelect) {
+                gatewaySelect.addEventListener('change', function() {
+                    if (appState.unsavedChanges) {
+                        showConfirm({
+                            title: 'Switch Gateway',
+                            message: 'Switch to another gateway? Unsaved retention settings will be lost.',
+                            type: 'warning',
+                            onConfirm: () => {
+                                window.location.reload();
+                            },
+                            onCancel: () => {
+                                this.value = 'Univa-GW-01';
+                            }
+                        });
+                    } else {
+                        window.location.reload();
+                    }
+                });
+            }
+            
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+            
+            // Initial responsive setup
+            setTimeout(() => {
+                if (window.innerWidth <= 1024) {
+                    document.getElementById('sidebar')?.classList.add('active');
+                }
+            }, 100);
+        }
+
+        // ==================== EXPORT FUNCTIONS FOR GLOBAL USE ====================
+        window.showConfirm = showConfirm;
+        window.showAlert = showAlert;
+        window.showLogViewer = showLogViewer;
+        window.showAdvancedLoggingSettings = showAdvancedLoggingSettings;
+        window.showStorageAnalytics = showStorageAnalytics;
+        window.showHelpModal = showHelpModal;
+    </script>
+</body>
+</html>

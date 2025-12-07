@@ -1,0 +1,2735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security & Access Control - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        .toggle-checkbox:checked { right: 0; border-color: #2563EB; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
+        .radio-checkbox:checked { background-color: #2563EB; border-color: #2563EB; }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-dot.online { background-color: #10B981; }
+        .status-dot.offline { background-color: #EF4444; }
+        .status-dot.away { background-color: #F59E0B; }
+        
+        .api-token-permissions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1001;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.success { background: #10B981; }
+        .toast.error { background: #EF4444; }
+        .toast.warning { background: #F59E0B; }
+        .toast.info { background: #2563EB; }
+        
+        /* Password Strength Indicator */
+        .password-strength {
+            height: 4px;
+            border-radius: 2px;
+            margin-top: 4px;
+            transition: all 0.3s;
+        }
+        
+        .password-strength.weak { background: #EF4444; width: 25%; }
+        .password-strength.fair { background: #F59E0B; width: 50%; }
+        .password-strength.good { background: #3B82F6; width: 75%; }
+        .password-strength.strong { background: #10B981; width: 100%; }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid #E2E8F0;
+            border-top: 3px solid #2563EB;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* API Key Generator */
+        .api-key-display {
+            background: #F8FAFC;
+            border: 1px dashed #CBD5E1;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            margin: 12px 0;
+        }
+        
+        /* Security Scan Animation */
+        .scan-progress {
+            height: 4px;
+            background: linear-gradient(90deg, #2563EB 0%, #10B981 50%, #2563EB 100%);
+            background-size: 200% 100%;
+            animation: scan 2s linear infinite;
+            border-radius: 2px;
+        }
+        
+        @keyframes scan {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Certificate Status */
+        .cert-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        
+        .cert-status.valid { background: #10B981; }
+        .cert-status.expiring { background: #F59E0B; }
+        .cert-status.expired { background: #EF4444; }
+        
+        /* Audit Log Highlight */
+        .audit-row {
+            transition: background-color 0.2s;
+        }
+        
+        .audit-row:hover {
+            background-color: #F8FAFC !important;
+        }
+        
+        /* Firewall Rule Editor */
+        .firewall-rule-editor {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Modals -->
+    <div id="addUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-semibold text-lg text-slate-800">Add New User</h3>
+                <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('addUserModal')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm" onsubmit="return addNewUser(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
+                            <input type="text" id="userFullName" required class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="John Doe">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Username *</label>
+                            <input type="text" id="userUsername" required class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="johndoe">
+                            <p class="text-xs text-slate-500 mt-1">Lowercase letters and numbers only</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Email *</label>
+                            <input type="email" id="userEmail" required class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="john@example.com">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Role *</label>
+                            <select id="userRole" required class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="">Select Role</option>
+                                <option value="admin">Administrator</option>
+                                <option value="engineer">Engineer</option>
+                                <option value="technician">Technician</option>
+                                <option value="operator">Operator</option>
+                                <option value="viewer">Viewer</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Password *</label>
+                            <input type="password" id="userPassword" required class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter password">
+                            <div class="flex items-center justify-between mt-1">
+                                <div id="passwordStrength" class="password-strength"></div>
+                                <span id="passwordStrengthText" class="text-xs text-slate-500 ml-2">Strength</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Confirm Password *</label>
+                            <input type="password" id="userConfirmPassword" required class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Confirm password">
+                            <p id="passwordMatchError" class="text-xs text-red-500 mt-1 hidden">Passwords do not match</p>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="userEnable2FA" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                            <label for="userEnable2FA" class="ml-2 text-sm text-slate-700">Enable Two-Factor Authentication</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="text-slate-500 hover:text-slate-700 font-medium text-sm px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors" onclick="closeModal('addUserModal')">
+                    Cancel
+                </button>
+                <button type="submit" form="addUserForm" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-2 rounded-lg transition-colors">
+                    Create User
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-semibold text-lg text-slate-800">Edit User</h3>
+                <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('editUserModal')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="editUserFormContent">
+                    <!-- Dynamic content will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors" onclick="deleteUser()">
+                    Delete User
+                </button>
+                <button type="button" class="text-slate-500 hover:text-slate-700 font-medium text-sm px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors" onclick="closeModal('editUserModal')">
+                    Cancel
+                </button>
+                <button type="button" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-2 rounded-lg transition-colors" onclick="saveUserChanges()">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="generateApiKeyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-semibold text-lg text-slate-800">Generate API Key</h3>
+                <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('generateApiKeyModal')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Key Name *</label>
+                        <input type="text" id="apiKeyName" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., Mobile App Integration">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Permissions</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" class="api-permission h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" value="read">
+                                <span class="ml-2 text-sm text-slate-700">Read Access</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="api-permission h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" value="write">
+                                <span class="ml-2 text-sm text-slate-700">Write Access</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="api-permission h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" value="admin">
+                                <span class="ml-2 text-sm text-slate-700">Admin Access</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Expiration</label>
+                        <select id="apiKeyExpiry" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                            <option value="never">Never Expires</option>
+                            <option value="30">30 Days</option>
+                            <option value="90">90 Days</option>
+                            <option value="365">1 Year</option>
+                            <option value="custom">Custom Date</option>
+                        </select>
+                    </div>
+                    <div id="customExpiryDate" class="hidden">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Custom Expiry Date</label>
+                        <input type="date" id="apiKeyCustomDate" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="text-slate-500 hover:text-slate-700 font-medium text-sm px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors" onclick="closeModal('generateApiKeyModal')">
+                    Cancel
+                </button>
+                <button type="button" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-2 rounded-lg transition-colors" onclick="generateApiKey()">
+                    Generate Key
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="apiKeyResultModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-semibold text-lg text-slate-800">API Key Generated</h3>
+                <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('apiKeyResultModal')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <i class="fa-solid fa-key text-3xl text-yellow-500 mb-3"></i>
+                    <p class="text-sm text-slate-600 mb-4">Your API key has been generated. Copy it now as it won't be shown again.</p>
+                </div>
+                <div class="api-key-display" id="generatedApiKey">Loading...</div>
+                <div class="flex justify-center space-x-2 mt-4">
+                    <button onclick="copyApiKey()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition">
+                        <i class="fa-solid fa-copy mr-1"></i> Copy Key
+                    </button>
+                    <button onclick="downloadApiKey()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition">
+                        <i class="fa-solid fa-download mr-1"></i> Download
+                    </button>
+                </div>
+                <div class="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded-lg">
+                    <p class="text-xs text-yellow-800">
+                        <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                        Store this key securely. You won't be able to see it again.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-2 rounded-lg transition-colors" onclick="closeModal('apiKeyResultModal')">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="firewallRuleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="font-semibold text-lg text-slate-800">Add Firewall Rule</h3>
+                <button class="text-slate-400 hover:text-slate-600" onclick="closeModal('firewallRuleModal')">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Rule Name</label>
+                        <input type="text" id="ruleName" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" placeholder="e.g., Allow SSH from Internal">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Protocol</label>
+                        <select id="ruleProtocol" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                            <option value="tcp">TCP</option>
+                            <option value="udp">UDP</option>
+                            <option value="icmp">ICMP</option>
+                            <option value="any">Any</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Port / Port Range</label>
+                        <input type="text" id="rulePort" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" placeholder="22 or 80-90">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Source IP / Network</label>
+                        <input type="text" id="ruleSource" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" placeholder="192.168.1.0/24 or 0.0.0.0/0 for any">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Action</label>
+                        <select id="ruleAction" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                            <option value="allow">Allow</option>
+                            <option value="deny">Deny</option>
+                            <option value="reject">Reject</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="text-slate-500 hover:text-slate-700 font-medium text-sm px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors" onclick="closeModal('firewallRuleModal')">
+                    Cancel
+                </button>
+                <button type="button" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-2 rounded-lg transition-colors" onclick="addFirewallRule()">
+                    Add Rule
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">Security & Access Control</span>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showHelp()">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="header-save-btn" onclick="saveAllSettings()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-slate-900">Security, Access Control & Credential Management</h1>
+                    <p class="text-slate-500 text-sm mt-1">Configure users, roles, API keys, certificates, firewalls, and audit trails for the Univa IoT Gateway.</p>
+                    <div class="mt-4 flex gap-2">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" id="securityStatus">
+                            <i class="fa-solid fa-shield-halved"></i> System Secure
+                        </span>
+                    </div>
+                </div>
+
+                <div class="space-y-8">
+                    <!-- SECTION A: Identity & Access Management -->
+                    <section id="section-iam" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-users-gear mr-2 text-primary"></i> 
+                                <span class="mr-2">Identity & Access Management</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Users, Roles & Permissions
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- User Management -->
+                            <div class="lg:col-span-2 bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                                    <h3 class="font-semibold text-slate-800 text-sm">User Management</h3>
+                                    <button class="text-xs bg-primary text-white px-3 py-1.5 rounded hover:bg-primaryHover transition" onclick="showAddUserModal()">
+                                        <i class="fa-solid fa-plus mr-1"></i> Add User
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                            <tr>
+                                                <th class="px-6 py-3">User</th>
+                                                <th class="px-6 py-3">Role</th>
+                                                <th class="px-6 py-3">Status</th>
+                                                <th class="px-6 py-3">Last Login</th>
+                                                <th class="px-6 py-3">2FA</th>
+                                                <th class="px-6 py-3 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="userTableBody" class="divide-y divide-slate-100">
+                                            <!-- Users will be populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Role Management -->
+                            <div class="lg:col-span-1 bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                                    <h3 class="font-semibold text-slate-800 text-sm">Roles</h3>
+                                    <button class="text-xs text-primary hover:text-primaryHover font-medium" onclick="showCustomRoleModal()">
+                                         + Custom Role
+                                    </button>
+                                </div>
+                                <div id="rolesList" class="divide-y divide-slate-100">
+                                    <!-- Roles will be populated dynamically -->
+                                </div>
+                                <div class="p-4 border-t border-slate-200 bg-slate-50 text-center">
+                                    <p class="text-xs text-slate-500">Roles define access to CraneIQ, Devices, and System settings.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION B: Authentication Policies -->
+                    <section id="section-authentication" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-lock mr-2 text-blue-500"></i> 
+                                <span class="mr-2">Authentication Policies</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION B</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Password & Session Security
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Password Min Length</label>
+                                <div class="flex items-center">
+                                    <input type="number" id="passwordMinLength" value="8" min="6" max="32" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <span class="ml-2 text-sm text-slate-700">characters</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Password Expiry (Days)</label>
+                                <div class="flex items-center">
+                                    <input type="number" id="passwordExpiry" value="90" min="1" max="365" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                                    <span class="ml-2 text-sm text-slate-700">days</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Security Requirements</label>
+                                <div class="space-y-3">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="requireSpecialChars" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Require special characters</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="requireNumbers" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Require numbers</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="requireUppercase" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Require uppercase letters</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="preventReuse" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Password history (prevent reuse)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Account Protection</label>
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Account Lockout After:</span>
+                                        <div class="flex items-center">
+                                            <input type="number" id="lockoutAttempts" value="5" min="1" max="10" class="w-20 rounded-lg border-slate-300 border px-3 py-1 text-sm">
+                                            <span class="ml-1 text-sm text-slate-600">attempts</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Lockout Duration:</span>
+                                        <div class="flex items-center">
+                                            <input type="number" id="lockoutDuration" value="15" min="1" max="60" class="w-20 rounded-lg border-slate-300 border px-3 py-1 text-sm">
+                                            <span class="ml-1 text-sm text-slate-600">minutes</span>
+                                        </div>
+                                    </div>
+                                    <label class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Captcha on Login</span>
+                                        <div class="relative inline-block w-10 align-middle select-none">
+                                            <input type="checkbox" id="captchaToggle" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300"/>
+                                            <label for="captchaToggle" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Session Settings</label>
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Session Timeout:</span>
+                                        <div class="flex items-center">
+                                            <input type="number" id="sessionTimeout" value="15" min="1" max="480" class="w-20 rounded-lg border-slate-300 border px-3 py-1 text-sm">
+                                            <span class="ml-1 text-sm text-slate-600">minutes</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Max Concurrent Sessions:</span>
+                                        <div class="flex items-center">
+                                            <input type="number" id="maxSessions" value="3" min="1" max="10" class="w-20 rounded-lg border-slate-300 border px-3 py-1 text-sm">
+                                            <span class="ml-1 text-sm text-slate-600">sessions</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Two-Factor Authentication</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="twoFactorMode" value="optional" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                        <span class="ml-2 text-sm text-slate-700">Optional (Admin only)</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="twoFactorMode" value="required" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Required for all users</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="twoFactorMode" value="disabled" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Disabled</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION C: API Keys & Tokens -->
+                    <section id="section-api" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-key mr-2 text-yellow-500"></i> 
+                                <span class="mr-2">API Keys & Tokens</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION C</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                External Integration Security
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- API Keys -->
+                            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                                    <h3 class="font-semibold text-slate-800 text-sm">API Keys</h3>
+                                    <button class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded transition" onclick="showApiKeyModal()">
+                                        + Generate New Key
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                            <tr>
+                                                <th class="px-4 py-2">Name</th>
+                                                <th class="px-4 py-2">Scope</th>
+                                                <th class="px-4 py-2">Expires</th>
+                                                <th class="px-4 py-2"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="apiKeysTableBody" class="divide-y divide-slate-100">
+                                            <!-- API Keys will be populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Token Settings -->
+                            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                                    <h3 class="font-semibold text-slate-800 text-sm">Token Settings</h3>
+                                </div>
+                                <div class="p-4 space-y-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Token Expiry</label>
+                                        <div class="flex items-center">
+                                            <input type="number" id="tokenExpiry" value="30" min="1" max="365" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                            <span class="ml-2 text-sm text-slate-700">days</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Token Permissions</label>
+                                        <div class="api-token-permissions">
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="permReadData" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Read Device Data</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="permWriteConfig" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Write Config</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="permOtaAccess" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">OTA Access</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="permTerminalAccess" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Terminal Access</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="permAlertManagement" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">Alert Management</span>
+                                            </label>
+                                            <label class="flex items-center">
+                                                <input type="checkbox" id="permUserManagement" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                                <span class="ml-2 text-sm text-slate-700">User Management</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Webhook Signing</label>
+                                        <div class="flex items-center">
+                                            <input type="text" id="webhookSecret" value="whsec_abc123def456" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50 font-mono">
+                                            <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition" onclick="regenerateWebhookSecret()">
+                                                Regenerate
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-1">Secret for signing outbound webhook payloads</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION D: SSH Access Control -->
+                    <section id="section-ssh" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-terminal mr-2 text-green-500"></i> 
+                                <span class="mr-2">SSH Access Control</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION D</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Remote Shell Access
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-2">
+                                <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-medium text-slate-700">Enable SSH Access</span>
+                                    <div class="relative inline-block w-10 align-middle select-none">
+                                        <input type="checkbox" id="sshEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                        <label for="sshEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">SSH Port</label>
+                                <input type="number" id="sshPort" value="22" min="1" max="65535" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm font-mono">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Login Method</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="sshMethod" value="password" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Password Only</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="sshMethod" value="key" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                        <span class="ml-2 text-sm text-slate-700">Public Key Only</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="sshMethod" value="both" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">Both</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Upload Public Key</label>
+                                <div class="flex items-center">
+                                    <input type="text" id="sshKeyFile" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50" placeholder="Select public key file...">
+                                    <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded transition" onclick="simulateFileUpload('sshKeyFile')">
+                                        <i class="fa-solid fa-upload mr-1"></i> Browse
+                                    </button>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1">Upload SSH public key for key-based authentication</p>
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <div class="flex items-center justify-between mb-4">
+                                    <span class="text-sm font-medium text-slate-700">Restricted Shell</span>
+                                    <div class="relative inline-block w-10 align-middle select-none">
+                                        <input type="checkbox" id="restrictedShell" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                        <label for="restrictedShell" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Allowed Commands</label>
+                                <div class="flex flex-wrap gap-2" id="allowedCommands">
+                                    <!-- Commands will be populated dynamically -->
+                                </div>
+                                <div class="mt-2">
+                                    <input type="text" id="newCommand" class="w-48 rounded-lg border-slate-300 border px-3 py-1 text-sm" placeholder="Add new command...">
+                                    <button class="text-xs text-primary hover:text-primaryHover ml-2 px-3 py-1 rounded" onclick="addAllowedCommand()">
+                                        <i class="fa-solid fa-plus mr-1"></i> Add Command
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Session Timeout</label>
+                                <div class="flex items-center">
+                                    <input type="number" id="sshTimeout" value="30" min="1" max="480" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                    <span class="ml-2 text-sm text-slate-700">minutes</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Max Sessions</label>
+                                <div class="flex items-center">
+                                    <input type="number" id="maxSshSessions" value="3" min="1" max="10" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                    <span class="ml-2 text-sm text-slate-700">per user</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION E: Firewall & Network Security -->
+                    <section id="section-firewall" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-shield-virus mr-2 text-red-500"></i> 
+                                <span class="mr-2">Firewall & Network Security</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION E</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Network Access Controls
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- Firewall Rules -->
+                            <div class="lg:col-span-2 bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                                    <h3 class="font-semibold text-slate-800 text-sm">Firewall Rules</h3>
+                                    <div class="flex items-center">
+                                        <span class="text-xs text-slate-500 mr-2">Enabled</span>
+                                        <div class="relative inline-block w-10 align-middle select-none">
+                                            <input type="checkbox" id="firewallEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                            <label for="firewallEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                        </div>
+                                        <button class="ml-2 text-xs text-primary hover:text-primaryHover font-medium" onclick="showFirewallRuleModal()">
+                                            <i class="fa-solid fa-plus mr-1"></i> Add Rule
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs text-left">
+                                        <thead class="bg-slate-50 text-slate-500">
+                                            <tr>
+                                                <th class="px-4 py-2">Rule</th>
+                                                <th class="px-4 py-2">Port</th>
+                                                <th class="px-4 py-2">Protocol</th>
+                                                <th class="px-4 py-2">Source</th>
+                                                <th class="px-4 py-2 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="firewallRulesTableBody" class="divide-y divide-slate-100">
+                                            <!-- Firewall rules will be populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Network Controls -->
+                            <div class="lg:col-span-1 space-y-6">
+                                <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                                        <h3 class="font-semibold text-slate-800 text-sm">IP Whitelist</h3>
+                                    </div>
+                                    <div class="p-4 space-y-2" id="ipWhitelist">
+                                        <!-- IP addresses will be populated dynamically -->
+                                    </div>
+                                    <div class="p-4 border-t border-slate-200">
+                                        <div class="flex items-center">
+                                            <input type="text" id="newIpAddress" class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm font-mono" placeholder="e.g., 192.168.1.0/24">
+                                            <button class="ml-2 text-xs text-primary hover:text-primaryHover px-3 py-2" onclick="addIpAddress()">
+                                                <i class="fa-solid fa-plus mr-1"></i> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                                        <h3 class="font-semibold text-slate-800 text-sm">Blocked Ports</h3>
+                                    </div>
+                                    <div class="p-4">
+                                        <div class="flex flex-wrap gap-2" id="blockedPorts">
+                                            <!-- Blocked ports will be populated dynamically -->
+                                        </div>
+                                        <div class="mt-2 flex items-center">
+                                            <input type="number" id="newBlockedPort" class="w-32 rounded-lg border-slate-300 border px-3 py-1 text-sm" placeholder="Port number" min="1" max="65535">
+                                            <button class="ml-2 text-xs text-primary hover:text-primaryHover px-3 py-1" onclick="addBlockedPort()">
+                                                <i class="fa-solid fa-plus mr-1"></i> Add
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                    <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                                        <h3 class="font-semibold text-slate-800 text-sm">Security Settings</h3>
+                                    </div>
+                                    <div class="p-4 space-y-4">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-slate-900">Rate Limiting</p>
+                                                <div class="flex items-center mt-1">
+                                                    <input type="number" id="rateLimitValue" value="20" min="1" max="1000" class="w-20 rounded-lg border-slate-300 border px-2 py-1 text-sm">
+                                                    <span class="ml-1 text-xs text-slate-600">req/sec</span>
+                                                </div>
+                                            </div>
+                                            <div class="relative inline-block w-10 align-middle select-none">
+                                                <input type="checkbox" id="rateLimitToggle" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                                <label for="rateLimitToggle" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-slate-900">DoS Protection</p>
+                                                <p class="text-xs text-slate-500">Basic flood detection</p>
+                                            </div>
+                                            <div class="relative inline-block w-10 align-middle select-none">
+                                                <input type="checkbox" id="dosProtection" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                                                <label for="dosProtection" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-slate-900">VPN Tunnel</p>
+                                                <p class="text-xs text-slate-500">Secure remote access</p>
+                                            </div>
+                                            <div class="relative inline-block w-10 align-middle select-none">
+                                                <input type="checkbox" id="vpnEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300"/>
+                                                <label for="vpnEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION F: Certificate Management -->
+                    <section id="section-certificates" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-file-contract mr-2 text-orange-500"></i> 
+                                <span class="mr-2">Certificate Management</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION F</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                TLS/SSL Certificates
+                            </div>
+                        </div>
+
+                        <div class="space-y-8">
+                            <!-- HTTPS Certificate -->
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4">HTTPS Certificate (Dashboard)</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Certificate File</label>
+                                        <div class="flex items-center">
+                                            <input type="text" id="httpsCertFile" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50" placeholder="Select certificate file...">
+                                            <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition" onclick="simulateFileUpload('httpsCertFile')">
+                                                Upload
+                                            </button>
+                                        </div>
+                                        <div class="mt-2 text-xs text-slate-500" id="httpsCertStatus">
+                                            <span class="cert-status valid"></span> Valid until: 2028-01-01
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Private Key</label>
+                                        <div class="flex items-center">
+                                            <input type="text" id="httpsKeyFile" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50" placeholder="Select private key...">
+                                            <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition" onclick="simulateFileUpload('httpsKeyFile')">
+                                                Upload
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- MQTT TLS -->
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900 mb-4">MQTT TLS Certificate</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">CA Certificate</label>
+                                        <div class="flex items-center">
+                                            <input type="text" id="mqttCaFile" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50" placeholder="Select CA cert...">
+                                            <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition" onclick="simulateFileUpload('mqttCaFile')">
+                                                Upload
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Client Certificate</label>
+                                        <div class="flex items-center">
+                                            <input type="text" id="mqttCertFile" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50" placeholder="Select client cert...">
+                                            <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition" onclick="simulateFileUpload('mqttCertFile')">
+                                                Upload
+                                            </button>
+                                        </div>
+                                        <div class="mt-2 text-xs text-slate-500" id="mqttCertStatus">
+                                            <span class="cert-status expiring"></span> Expiring in: 14 days
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Client Key</label>
+                                        <div class="flex items-center">
+                                            <input type="text" id="mqttKeyFile" readonly class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm bg-slate-50" placeholder="Select client key...">
+                                            <button class="ml-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded transition" onclick="simulateFileUpload('mqttKeyFile')">
+                                                Upload
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Certificate Settings -->
+                            <div class="border-t border-slate-200 pt-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-4">
+                                            <span class="text-sm font-medium text-slate-700">Auto-Renew Certificates</span>
+                                            <div class="relative inline-block w-10 align-middle select-none">
+                                                <input type="checkbox" id="autoRenewCerts" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300"/>
+                                                <label for="autoRenewCerts" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-slate-500">Automatically renew certificates using Let's Encrypt</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Generate Self-Signed Certificate</label>
+                                        <button class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded transition" onclick="generateSelfSignedCert()">
+                                            <i class="fa-solid fa-certificate mr-1"></i> Generate Now
+                                        </button>
+                                        <p class="text-xs text-slate-500 mt-1">For testing and development only</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- SECTION G: Security Audit Log -->
+                    <section id="section-audit" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-clipboard-list mr-2 text-indigo-500"></i> 
+                                <span class="mr-2">Security Audit Log</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION G</span>
+                            </h2>
+                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Security Events & User Activity
+                            </div>
+                        </div>
+
+                        <div class="mb-6 flex flex-wrap gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Time Range</label>
+                                <select id="auditTimeRange" class="w-40 rounded-lg border-slate-300 border px-3 py-2 text-sm" onchange="filterAuditLog()">
+                                    <option value="24">Last 24 hours</option>
+                                    <option value="168">Last 7 days</option>
+                                    <option value="720">Last 30 days</option>
+                                    <option value="custom">Custom range</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Event Type</label>
+                                <select id="auditEventType" class="w-40 rounded-lg border-slate-300 border px-3 py-2 text-sm" onchange="filterAuditLog()">
+                                    <option value="all">All Events</option>
+                                    <option value="login">Login Events</option>
+                                    <option value="ssh">SSH Sessions</option>
+                                    <option value="user">User Changes</option>
+                                    <option value="api">API Usage</option>
+                                    <option value="cert">Certificate Events</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                                <select id="auditUsername" class="w-40 rounded-lg border-slate-300 border px-3 py-2 text-sm" onchange="filterAuditLog()">
+                                    <option value="all">All Users</option>
+                                    <option value="admin">admin</option>
+                                    <option value="ops01">ops01</option>
+                                    <option value="tech01">tech01</option>
+                                    <option value="unknown">Unknown</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                                <input type="text" id="auditIpAddress" placeholder="Filter by IP" class="w-40 rounded-lg border-slate-300 border px-3 py-2 text-sm" onkeyup="filterAuditLog()">
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                    <tr>
+                                        <th class="px-6 py-3">Timestamp</th>
+                                        <th class="px-6 py-3">User</th>
+                                        <th class="px-6 py-3">Event</th>
+                                        <th class="px-6 py-3">Resource</th>
+                                        <th class="px-6 py-3">IP Address</th>
+                                        <th class="px-6 py-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auditLogTableBody" class="divide-y divide-slate-100">
+                                    <!-- Audit log will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 flex justify-between items-center">
+                            <p class="text-xs text-slate-500" id="auditLogCount">Loading events...</p>
+                            <div class="flex gap-2">
+                                <button class="text-xs text-primary hover:text-primaryHover font-medium px-3 py-1.5 border border-slate-300 rounded hover:bg-slate-50" onclick="exportAuditLog()">
+                                    <i class="fa-solid fa-file-export mr-1"></i> Export CSV
+                                </button>
+                                <button class="text-xs bg-primary text-white font-medium px-3 py-1.5 rounded hover:bg-primaryHover" onclick="refreshAuditLog()">
+                                    <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Actions -->
+        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runSecurityScan()">
+                        <i class="fa-solid fa-shield mr-2 text-slate-400"></i> Run Security Scan
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="resetToDefaults()">
+                        <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center" onclick="lockSystem()">
+                        <i class="fa-solid fa-power-off mr-2"></i> Lock System
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn" onclick="saveAllSettings()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Security Settings
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div> <!-- End of main content container -->
+
+    <script>
+        // ==================== APPLICATION STATE ====================
+        let appState = {
+            users: [],
+            apiKeys: [],
+            firewallRules: [],
+            auditLogs: [],
+            ipWhitelist: [],
+            blockedPorts: [],
+            allowedCommands: [],
+            certificates: {},
+            unsavedChanges: false,
+            currentEditingUser: null,
+            currentGeneratedApiKey: null
+        };
+
+        // ==================== SIDEBAR FUNCTIONS ====================
+        // Fetch and insert sidebar from sidebar.html
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                
+                // Insert the entire HTML content
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Update the active page to Security & Access Control
+                updateActivePage();
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Fallback: create a basic sidebar if fetch fails
+                createFallbackSidebar();
+            }
+        }
+
+        // Create fallback sidebar if fetch fails
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="security-access.html" class="nav-item active">
+                                <i class="fa-solid fa-shield-halved"></i> Security & Access
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device management
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Update active page in sidebar
+        function updateActivePage() {
+            // Remove active class from all nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to Security & Access
+            const securityLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Security') || 
+                item.textContent.includes('Security & Access')
+            );
+            
+            if (securityLink) {
+                securityLink.classList.add('active');
+            }
+        }
+
+        // Initialize sidebar functionality
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            // Toggle sidebar
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.className = 'fa-solid fa-times';
+                } else {
+                    icon.className = 'fa-solid fa-bars';
+                }
+            });
+            
+            // Handle mobile menu
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            // Update on resize
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        // Close sidebar when clicking outside on mobile
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load sidebar first
+            loadSidebar();
+            
+            initializeApp();
+            setupEventListeners();
+            loadInitialData();
+        });
+
+        // ==================== MODAL FUNCTIONS ====================
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        function showAddUserModal() {
+            showModal('addUserModal');
+        }
+
+        function showApiKeyModal() {
+            showModal('generateApiKeyModal');
+        }
+
+        function showFirewallRuleModal() {
+            showModal('firewallRuleModal');
+        }
+
+        // ==================== TOAST NOTIFICATIONS ====================
+        function showToast(message, type = 'info', duration = 3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, duration);
+        }
+
+        // ==================== USER MANAGEMENT ====================
+        function loadUsers() {
+            // Mock data - in real app, this would come from API
+            appState.users = [
+                {
+                    id: 1,
+                    username: 'admin',
+                    fullName: 'System Admin',
+                    email: 'admin@innospace.com',
+                    role: 'admin',
+                    status: 'online',
+                    lastLogin: new Date().toISOString(),
+                    twoFactorEnabled: true,
+                    avatarColor: 'indigo'
+                },
+                {
+                    id: 2,
+                    username: 'ops01',
+                    fullName: 'Ops User',
+                    email: 'ops@innospace.com',
+                    role: 'operator',
+                    status: 'online',
+                    lastLogin: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+                    twoFactorEnabled: false,
+                    avatarColor: 'orange'
+                },
+                {
+                    id: 3,
+                    username: 'tech01',
+                    fullName: 'Technician User',
+                    email: 'tech@innospace.com',
+                    role: 'technician',
+                    status: 'online',
+                    lastLogin: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+                    twoFactorEnabled: true,
+                    avatarColor: 'blue'
+                }
+            ];
+            
+            renderUsersTable();
+        }
+
+        function renderUsersTable() {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = '';
+            
+            appState.users.forEach(user => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition cursor-pointer';
+                row.onclick = () => editUser(user.id);
+                
+                const lastLogin = new Date(user.lastLogin);
+                const now = new Date();
+                const diffDays = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+                let lastLoginText = 'Today';
+                
+                if (diffDays === 1) lastLoginText = 'Yesterday';
+                else if (diffDays > 1) lastLoginText = `${diffDays} days ago`;
+                
+                row.innerHTML = `
+                    <td class="px-6 py-3 font-medium text-slate-900">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-${user.avatarColor}-100 flex items-center justify-center text-${user.avatarColor}-600 font-bold text-xs">
+                                ${user.fullName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </div>
+                            <div>
+                                <div class="font-semibold">${user.username}</div>
+                                <div class="text-xs text-slate-500">${user.fullName}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-3">
+                        <span class="bg-${getRoleColor(user.role)}-100 text-${getRoleColor(user.role)}-800 text-xs px-2 py-0.5 rounded-full font-medium">
+                            ${capitalizeFirstLetter(user.role)}
+                        </span>
+                    </td>
+                    <td class="px-6 py-3">
+                        <span class="status-dot ${user.status}"></span>
+                    </td>
+                    <td class="px-6 py-3 text-slate-500">${lastLoginText}</td>
+                    <td class="px-6 py-3 ${user.twoFactorEnabled ? 'text-green-600' : 'text-red-400'}">
+                        <i class="fa-solid fa-${user.twoFactorEnabled ? 'check' : 'times'}-circle"></i>
+                    </td>
+                    <td class="px-6 py-3 text-right">
+                        <button class="text-slate-400 hover:text-primary" onclick="event.stopPropagation(); editUser(${user.id})">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function addNewUser(event) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const username = form.userUsername.value.trim();
+            const email = form.userEmail.value.trim();
+            const password = form.userPassword.value;
+            const confirmPassword = form.userConfirmPassword.value;
+            
+            // Validation
+            if (password !== confirmPassword) {
+                showToast('Passwords do not match', 'error');
+                return false;
+            }
+            
+            if (password.length < 8) {
+                showToast('Password must be at least 8 characters', 'error');
+                return false;
+            }
+            
+            // Create new user
+            const newUser = {
+                id: appState.users.length + 1,
+                username: username,
+                fullName: form.userFullName.value,
+                email: email,
+                role: form.userRole.value,
+                status: 'online',
+                lastLogin: new Date().toISOString(),
+                twoFactorEnabled: form.userEnable2FA.checked,
+                avatarColor: 'blue' // Default color
+            };
+            
+            appState.users.push(newUser);
+            renderUsersTable();
+            closeModal('addUserModal');
+            showToast('User created successfully', 'success');
+            markUnsavedChanges();
+            
+            // Reset form
+            form.reset();
+            return false;
+        }
+
+        function editUser(userId) {
+            const user = appState.users.find(u => u.id === userId);
+            if (!user) return;
+            
+            appState.currentEditingUser = user;
+            
+            const content = document.getElementById('editUserFormContent');
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                        <input type="text" id="editUsername" value="${user.username}" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                        <input type="text" id="editFullName" value="${user.fullName}" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                        <input type="email" id="editEmail" value="${user.email}" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                        <select id="editRole" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrator</option>
+                            <option value="engineer" ${user.role === 'engineer' ? 'selected' : ''}>Engineer</option>
+                            <option value="technician" ${user.role === 'technician' ? 'selected' : ''}>Technician</option>
+                            <option value="operator" ${user.role === 'operator' ? 'selected' : ''}>Operator</option>
+                            <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Two-Factor Authentication</label>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="editTwoFactor" ${user.twoFactorEnabled ? 'checked' : ''} class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                            <label for="editTwoFactor" class="ml-2 text-sm text-slate-700">Enabled</label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Reset Password (Optional)</label>
+                        <input type="password" id="editPassword" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" placeholder="Leave blank to keep current">
+                    </div>
+                </div>
+            `;
+            
+            showModal('editUserModal');
+        }
+
+        function saveUserChanges() {
+            if (!appState.currentEditingUser) return;
+            
+            const user = appState.currentEditingUser;
+            const newPassword = document.getElementById('editPassword').value;
+            
+            // Update user data
+            user.fullName = document.getElementById('editFullName').value;
+            user.email = document.getElementById('editEmail').value;
+            user.role = document.getElementById('editRole').value;
+            user.twoFactorEnabled = document.getElementById('editTwoFactor').checked;
+            
+            if (newPassword) {
+                // In real app, hash the password here
+                showToast('Password updated', 'success');
+            }
+            
+            renderUsersTable();
+            closeModal('editUserModal');
+            showToast('User updated successfully', 'success');
+            markUnsavedChanges();
+        }
+
+        function deleteUser() {
+            if (!appState.currentEditingUser || appState.currentEditingUser.username === 'admin') {
+                showToast('Cannot delete admin user', 'error');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to delete user "${appState.currentEditingUser.username}"? This action cannot be undone.`)) {
+                appState.users = appState.users.filter(u => u.id !== appState.currentEditingUser.id);
+                renderUsersTable();
+                closeModal('editUserModal');
+                showToast('User deleted successfully', 'success');
+                markUnsavedChanges();
+            }
+        }
+
+        // ==================== API KEY MANAGEMENT ====================
+        function loadApiKeys() {
+            // Mock data
+            appState.apiKeys = [
+                {
+                    id: 1,
+                    name: 'CI Pipeline',
+                    key: 'AK-001',
+                    scope: ['telemetry:write'],
+                    expires: '2026-06-01'
+                },
+                {
+                    id: 2,
+                    name: 'Mobile App',
+                    key: 'AK-002',
+                    scope: ['telemetry:read'],
+                    expires: null // Never expires
+                },
+                {
+                    id: 3,
+                    name: 'CraneIQ Integration',
+                    key: 'AK-003',
+                    scope: ['device:read', 'alerts:read'],
+                    expires: '2025-12-01'
+                }
+            ];
+            
+            renderApiKeysTable();
+        }
+
+        function renderApiKeysTable() {
+            const tbody = document.getElementById('apiKeysTableBody');
+            tbody.innerHTML = '';
+            
+            appState.apiKeys.forEach(key => {
+                const row = document.createElement('tr');
+                
+                const expiresText = key.expires ? 
+                    new Date(key.expires).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 
+                    '<span class="text-green-600">Never</span>';
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-medium">
+                        ${key.name} 
+                        <span class="text-xs text-slate-400 block font-normal">${key.key}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        ${key.scope.map(scope => 
+                            `<span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded mr-1">${scope}</span>`
+                        ).join('')}
+                    </td>
+                    <td class="px-4 py-3 ${key.expires ? 'text-slate-600' : 'text-green-600'}">
+                        ${expiresText}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <button class="text-red-500 hover:text-red-700 text-xs font-medium" onclick="revokeApiKey(${key.id})">
+                            Revoke
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function generateApiKey() {
+            const name = document.getElementById('apiKeyName').value.trim();
+            const expiry = document.getElementById('apiKeyExpiry').value;
+            const customDate = document.getElementById('apiKeyCustomDate').value;
+            
+            if (!name) {
+                showToast('Please enter a key name', 'error');
+                return;
+            }
+            
+            // Generate random API key
+            const key = 'sk_' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+            
+            // Create new API key object
+            const newKey = {
+                id: appState.apiKeys.length + 1,
+                name: name,
+                key: key,
+                scope: ['read'], // Default scope
+                expires: expiry === 'never' ? null : 
+                         expiry === 'custom' ? customDate :
+                         new Date(Date.now() + parseInt(expiry) * 24 * 60 * 60 * 1000).toISOString()
+            };
+            
+            appState.apiKeys.push(newKey);
+            appState.currentGeneratedApiKey = key;
+            
+            // Show result modal
+            document.getElementById('generatedApiKey').textContent = key;
+            closeModal('generateApiKeyModal');
+            showModal('apiKeyResultModal');
+            
+            // Reset form
+            document.getElementById('apiKeyName').value = '';
+            document.getElementById('apiKeyExpiry').value = 'never';
+            
+            markUnsavedChanges();
+        }
+
+        function revokeApiKey(keyId) {
+            if (confirm('Are you sure you want to revoke this API key? This action cannot be undone.')) {
+                appState.apiKeys = appState.apiKeys.filter(k => k.id !== keyId);
+                renderApiKeysTable();
+                showToast('API key revoked', 'success');
+                markUnsavedChanges();
+            }
+        }
+
+        function copyApiKey() {
+            const key = appState.currentGeneratedApiKey;
+            if (!key) return;
+            
+            navigator.clipboard.writeText(key).then(() => {
+                showToast('API key copied to clipboard', 'success');
+            });
+        }
+
+        // ==================== FIREWALL MANAGEMENT ====================
+        function loadFirewallRules() {
+            // Mock data
+            appState.firewallRules = [
+                { id: 1, name: 'SSH Management', port: '22', protocol: 'TCP', source: '192.168.1.0/24', action: 'allow' },
+                { id: 2, name: 'HTTP Dashboard', port: '80', protocol: 'TCP', source: 'Any', action: 'allow' },
+                { id: 3, name: 'HTTPS Dashboard', port: '443', protocol: 'TCP', source: 'Any', action: 'allow' },
+                { id: 4, name: 'MQTT Broker', port: '1883', protocol: 'TCP', source: 'Any', action: 'deny' }
+            ];
+            
+            appState.ipWhitelist = ['192.168.0.0/24', '10.0.0.5'];
+            appState.blockedPorts = [23, 21, 8000];
+            appState.allowedCommands = ['cat', 'ls', 'ifconfig', 'ping', 'tail', 'grep', 'df', 'ps'];
+            
+            renderFirewallRules();
+            renderIpWhitelist();
+            renderBlockedPorts();
+            renderAllowedCommands();
+        }
+
+        function renderFirewallRules() {
+            const tbody = document.getElementById('firewallRulesTableBody');
+            tbody.innerHTML = '';
+            
+            appState.firewallRules.forEach(rule => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-2 font-medium">${rule.name}</td>
+                    <td class="px-4 py-2 font-mono">${rule.port}</td>
+                    <td class="px-4 py-2">${rule.protocol}</td>
+                    <td class="px-4 py-2 text-slate-600">${rule.source}</td>
+                    <td class="px-4 py-2 text-right">
+                        <span class="bg-${rule.action === 'allow' ? 'green' : 'red'}-100 text-${rule.action === 'allow' ? 'green' : 'red'}-800 text-xs px-2 py-0.5 rounded-full">
+                            ${capitalizeFirstLetter(rule.action)}
+                        </span>
+                        <button class="ml-2 text-slate-400 hover:text-red-500 text-xs" onclick="removeFirewallRule(${rule.id})">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function addFirewallRule() {
+            const name = document.getElementById('ruleName').value.trim();
+            const port = document.getElementById('rulePort').value.trim();
+            const protocol = document.getElementById('ruleProtocol').value;
+            const source = document.getElementById('ruleSource').value.trim();
+            const action = document.getElementById('ruleAction').value;
+            
+            if (!name || !port || !source) {
+                showToast('Please fill all required fields', 'error');
+                return;
+            }
+            
+            const newRule = {
+                id: appState.firewallRules.length + 1,
+                name: name,
+                port: port,
+                protocol: protocol,
+                source: source,
+                action: action
+            };
+            
+            appState.firewallRules.push(newRule);
+            renderFirewallRules();
+            closeModal('firewallRuleModal');
+            showToast('Firewall rule added', 'success');
+            markUnsavedChanges();
+            
+            // Reset form
+            document.getElementById('ruleName').value = '';
+            document.getElementById('rulePort').value = '';
+            document.getElementById('ruleSource').value = '';
+        }
+
+        function removeFirewallRule(ruleId) {
+            if (confirm('Are you sure you want to remove this firewall rule?')) {
+                appState.firewallRules = appState.firewallRules.filter(r => r.id !== ruleId);
+                renderFirewallRules();
+                showToast('Firewall rule removed', 'success');
+                markUnsavedChanges();
+            }
+        }
+
+        // ==================== IP WHITELIST ====================
+        function renderIpWhitelist() {
+            const container = document.getElementById('ipWhitelist');
+            container.innerHTML = '';
+            
+            appState.ipWhitelist.forEach((ip, index) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center';
+                div.innerHTML = `
+                    <input type="text" value="${ip}" class="flex-1 rounded-lg border-slate-300 border px-3 py-2 text-sm font-mono">
+                    <button class="ml-2 text-red-500 hover:text-red-700" onclick="removeIpAddress(${index})">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function addIpAddress() {
+            const input = document.getElementById('newIpAddress');
+            const ip = input.value.trim();
+            
+            if (!ip) {
+                showToast('Please enter an IP address', 'error');
+                return;
+            }
+            
+            // Basic IP validation
+            if (!isValidIpOrNetwork(ip)) {
+                showToast('Please enter a valid IP address or network', 'error');
+                return;
+            }
+            
+            if (appState.ipWhitelist.includes(ip)) {
+                showToast('IP address already in whitelist', 'warning');
+                return;
+            }
+            
+            appState.ipWhitelist.push(ip);
+            renderIpWhitelist();
+            input.value = '';
+            showToast('IP address added to whitelist', 'success');
+            markUnsavedChanges();
+        }
+
+        function removeIpAddress(index) {
+            appState.ipWhitelist.splice(index, 1);
+            renderIpWhitelist();
+            showToast('IP address removed from whitelist', 'success');
+            markUnsavedChanges();
+        }
+
+        // ==================== BLOCKED PORTS ====================
+        function renderBlockedPorts() {
+            const container = document.getElementById('blockedPorts');
+            container.innerHTML = '';
+            
+            appState.blockedPorts.forEach((port, index) => {
+                const span = document.createElement('span');
+                span.className = 'bg-red-100 text-red-800 text-xs px-3 py-1 rounded-full font-mono flex items-center';
+                span.innerHTML = `
+                    ${port}
+                    <button class="ml-1 text-red-500 hover:text-red-700" onclick="removeBlockedPort(${index})">
+                        <i class="fa-solid fa-times text-xs"></i>
+                    </button>
+                `;
+                container.appendChild(span);
+            });
+        }
+
+        function addBlockedPort() {
+            const input = document.getElementById('newBlockedPort');
+            const port = parseInt(input.value);
+            
+            if (!port || port < 1 || port > 65535) {
+                showToast('Please enter a valid port number (1-65535)', 'error');
+                return;
+            }
+            
+            if (appState.blockedPorts.includes(port)) {
+                showToast('Port already blocked', 'warning');
+                return;
+            }
+            
+            appState.blockedPorts.push(port);
+            renderBlockedPorts();
+            input.value = '';
+            showToast(`Port ${port} added to blocked list`, 'success');
+            markUnsavedChanges();
+        }
+
+        function removeBlockedPort(index) {
+            appState.blockedPorts.splice(index, 1);
+            renderBlockedPorts();
+            showToast('Port removed from blocked list', 'success');
+            markUnsavedChanges();
+        }
+
+        // ==================== SSH ALLOWED COMMANDS ====================
+        function renderAllowedCommands() {
+            const container = document.getElementById('allowedCommands');
+            container.innerHTML = '';
+            
+            appState.allowedCommands.forEach((cmd, index) => {
+                const span = document.createElement('span');
+                span.className = 'bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full font-mono flex items-center';
+                span.innerHTML = `
+                    ${cmd}
+                    <button class="ml-1 text-blue-500 hover:text-blue-700" onclick="removeAllowedCommand(${index})">
+                        <i class="fa-solid fa-times text-xs"></i>
+                    </button>
+                `;
+                container.appendChild(span);
+            });
+        }
+
+        function addAllowedCommand() {
+            const input = document.getElementById('newCommand');
+            const cmd = input.value.trim();
+            
+            if (!cmd) {
+                showToast('Please enter a command', 'error');
+                return;
+            }
+            
+            if (appState.allowedCommands.includes(cmd)) {
+                showToast('Command already in allowed list', 'warning');
+                return;
+            }
+            
+            appState.allowedCommands.push(cmd);
+            renderAllowedCommands();
+            input.value = '';
+            showToast(`Command "${cmd}" added`, 'success');
+            markUnsavedChanges();
+        }
+
+        function removeAllowedCommand(index) {
+            appState.allowedCommands.splice(index, 1);
+            renderAllowedCommands();
+            showToast('Command removed', 'success');
+            markUnsavedChanges();
+        }
+
+        // ==================== AUDIT LOG ====================
+        function loadAuditLogs() {
+            // Mock data
+            appState.auditLogs = [
+                { timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), user: 'admin', event: 'Login', resource: '/api/auth/login', ip: '192.168.1.100', status: 'success' },
+                { timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), user: 'ops01', event: 'User Modified', resource: '/api/users/tech01', ip: '10.0.0.15', status: 'warning' },
+                { timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'unknown', event: 'Failed Login', resource: '/api/auth/login', ip: '203.0.113.5', status: 'failed' },
+                { timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), user: 'admin', event: 'SSH Session Start', resource: 'ssh://192.168.1.50:22', ip: '192.168.1.50', status: 'success' },
+                { timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), user: 'API Key', event: 'API Call', resource: '/api/devices/status', ip: '172.217.160.78', status: 'api' },
+                { timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'admin', event: 'Certificate Upload', resource: '/api/certificates/mqtt', ip: '192.168.1.100', status: 'success' },
+                { timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), user: 'unknown', event: 'Port Scan Detected', resource: 'Firewall Rule 5', ip: '45.33.32.156', status: 'blocked' }
+            ];
+            
+            filterAuditLog();
+        }
+
+        function filterAuditLog() {
+            const timeRange = document.getElementById('auditTimeRange').value;
+            const eventType = document.getElementById('auditEventType').value;
+            const username = document.getElementById('auditUsername').value;
+            const ipFilter = document.getElementById('auditIpAddress').value.toLowerCase();
+            
+            const now = new Date();
+            let filteredLogs = [...appState.auditLogs];
+            
+            // Filter by time range
+            if (timeRange !== 'custom') {
+                const hours = parseInt(timeRange);
+                const cutoffTime = new Date(now.getTime() - hours * 60 * 60 * 1000);
+                filteredLogs = filteredLogs.filter(log => log.timestamp >= cutoffTime);
+            }
+            
+            // Filter by event type
+            if (eventType !== 'all') {
+                filteredLogs = filteredLogs.filter(log => {
+                    if (eventType === 'login') return log.event.toLowerCase().includes('login');
+                    if (eventType === 'ssh') return log.event.toLowerCase().includes('ssh');
+                    if (eventType === 'user') return log.event.toLowerCase().includes('user');
+                    if (eventType === 'api') return log.event.toLowerCase().includes('api') || log.user === 'API Key';
+                    if (eventType === 'cert') return log.event.toLowerCase().includes('certificate');
+                    return true;
+                });
+            }
+            
+            // Filter by username
+            if (username !== 'all') {
+                filteredLogs = filteredLogs.filter(log => log.user.toLowerCase() === username.toLowerCase());
+            }
+            
+            // Filter by IP
+            if (ipFilter) {
+                filteredLogs = filteredLogs.filter(log => log.ip.includes(ipFilter));
+            }
+            
+            renderAuditLog(filteredLogs);
+        }
+
+        function renderAuditLog(logs) {
+            const tbody = document.getElementById('auditLogTableBody');
+            tbody.innerHTML = '';
+            
+            logs.forEach(log => {
+                const row = document.createElement('tr');
+                row.className = 'audit-row hover:bg-slate-50';
+                
+                const timeStr = log.timestamp.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                const statusClass = {
+                    'success': 'bg-green-100 text-green-800',
+                    'warning': 'bg-yellow-100 text-yellow-800',
+                    'failed': 'bg-red-100 text-red-800',
+                    'blocked': 'bg-red-100 text-red-800',
+                    'api': 'bg-blue-100 text-blue-800'
+                }[log.status] || 'bg-slate-100 text-slate-800';
+                
+                row.innerHTML = `
+                    <td class="px-6 py-3 font-mono text-xs text-slate-600">${timeStr}</td>
+                    <td class="px-6 py-3 font-medium">${log.user}</td>
+                    <td class="px-6 py-3">${log.event}</td>
+                    <td class="px-6 py-3 text-slate-500">${log.resource}</td>
+                    <td class="px-6 py-3 font-mono text-xs">${log.ip}</td>
+                    <td class="px-6 py-3">
+                        <span class="${statusClass} text-xs px-2 py-0.5 rounded-full">
+                            ${capitalizeFirstLetter(log.status)}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            document.getElementById('auditLogCount').textContent = `Showing ${logs.length} of ${appState.auditLogs.length} events`;
+        }
+
+        function refreshAuditLog() {
+            // In real app, this would fetch new logs from API
+            showToast('Audit log refreshed', 'success');
+            filterAuditLog();
+        }
+
+        function exportAuditLog() {
+            const logs = appState.auditLogs.map(log => ({
+                timestamp: log.timestamp.toISOString(),
+                user: log.user,
+                event: log.event,
+                resource: log.resource,
+                ip: log.ip,
+                status: log.status
+            }));
+            
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "Timestamp,User,Event,Resource,IP Address,Status\n"
+                + logs.map(log => 
+                    `"${log.timestamp}","${log.user}","${log.event}","${log.resource}","${log.ip}","${log.status}"`
+                ).join("\n");
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `audit-log-${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Audit log exported successfully', 'success');
+        }
+
+        // ==================== SECURITY SCAN ====================
+        function runSecurityScan() {
+            showToast('Starting security scan...', 'info');
+            
+            // Simulate scan progress
+            setTimeout(() => {
+                const issues = Math.floor(Math.random() * 5);
+                if (issues === 0) {
+                    showToast('Security scan completed: No issues found', 'success');
+                    document.getElementById('securityStatus').innerHTML = `
+                        <i class="fa-solid fa-shield-halved"></i> System Secure
+                    `;
+                } else {
+                    showToast(`Security scan completed: Found ${issues} issues`, 'warning');
+                    document.getElementById('securityStatus').innerHTML = `
+                        <i class="fa-solid fa-triangle-exclamation"></i> ${issues} Issues Found
+                    `;
+                    document.getElementById('securityStatus').className = 
+                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800';
+                }
+            }, 2000);
+        }
+
+        // ==================== SAVE & LOAD FUNCTIONS ====================
+        function saveAllSettings() {
+            // Collect all settings
+            const settings = {
+                authentication: {
+                    passwordMinLength: document.getElementById('passwordMinLength').value,
+                    passwordExpiry: document.getElementById('passwordExpiry').value,
+                    requireSpecialChars: document.getElementById('requireSpecialChars').checked,
+                    requireNumbers: document.getElementById('requireNumbers').checked,
+                    requireUppercase: document.getElementById('requireUppercase').checked,
+                    preventReuse: document.getElementById('preventReuse').checked,
+                    lockoutAttempts: document.getElementById('lockoutAttempts').value,
+                    lockoutDuration: document.getElementById('lockoutDuration').value,
+                    captchaEnabled: document.getElementById('captchaToggle').checked,
+                    sessionTimeout: document.getElementById('sessionTimeout').value,
+                    maxSessions: document.getElementById('maxSessions').value,
+                    twoFactorMode: document.querySelector('input[name="twoFactorMode"]:checked').value
+                },
+                api: {
+                    tokenExpiry: document.getElementById('tokenExpiry').value,
+                    permissions: {
+                        readData: document.getElementById('permReadData').checked,
+                        writeConfig: document.getElementById('permWriteConfig').checked,
+                        otaAccess: document.getElementById('permOtaAccess').checked,
+                        terminalAccess: document.getElementById('permTerminalAccess').checked,
+                        alertManagement: document.getElementById('permAlertManagement').checked,
+                        userManagement: document.getElementById('permUserManagement').checked
+                    },
+                    webhookSecret: document.getElementById('webhookSecret').value
+                },
+                ssh: {
+                    enabled: document.getElementById('sshEnabled').checked,
+                    port: document.getElementById('sshPort').value,
+                    method: document.querySelector('input[name="sshMethod"]:checked').value,
+                    restrictedShell: document.getElementById('restrictedShell').checked,
+                    timeout: document.getElementById('sshTimeout').value,
+                    maxSessions: document.getElementById('maxSshSessions').value
+                },
+                firewall: {
+                    enabled: document.getElementById('firewallEnabled').checked,
+                    rateLimiting: {
+                        enabled: document.getElementById('rateLimitToggle').checked,
+                        value: document.getElementById('rateLimitValue').value
+                    },
+                    dosProtection: document.getElementById('dosProtection').checked,
+                    vpnEnabled: document.getElementById('vpnEnabled').checked
+                },
+                certificates: {
+                    autoRenew: document.getElementById('autoRenewCerts').checked
+                },
+                users: appState.users,
+                apiKeys: appState.apiKeys,
+                firewallRules: appState.firewallRules,
+                ipWhitelist: appState.ipWhitelist,
+                blockedPorts: appState.blockedPorts,
+                allowedCommands: appState.allowedCommands
+            };
+            
+            // Show saving indicator
+            const saveBtn = document.getElementById('header-save-btn');
+            const footerSaveBtn = document.getElementById('footer-save-btn');
+            const originalText = saveBtn.innerHTML;
+            const originalFooterText = footerSaveBtn.innerHTML;
+            
+            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            footerSaveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            saveBtn.disabled = true;
+            footerSaveBtn.disabled = true;
+            
+            // Simulate API call
+            setTimeout(() => {
+                saveBtn.innerHTML = originalText;
+                footerSaveBtn.innerHTML = originalFooterText;
+                saveBtn.disabled = false;
+                footerSaveBtn.disabled = false;
+                
+                appState.unsavedChanges = false;
+                showToast('All security settings saved successfully', 'success');
+                
+                // Add audit log entry
+                const auditEntry = {
+                    timestamp: new Date(),
+                    user: 'admin',
+                    event: 'Configuration Saved',
+                    resource: '/api/security/settings',
+                    ip: '192.168.1.100',
+                    status: 'success'
+                };
+                appState.auditLogs.unshift(auditEntry);
+                filterAuditLog();
+            }, 1500);
+        }
+
+        function resetToDefaults() {
+            if (confirm('Are you sure you want to reset all security settings to defaults? This cannot be undone.')) {
+                // Reset all settings to defaults
+                document.getElementById('passwordMinLength').value = 8;
+                document.getElementById('passwordExpiry').value = 90;
+                document.getElementById('requireSpecialChars').checked = true;
+                document.getElementById('requireNumbers').checked = true;
+                document.getElementById('requireUppercase').checked = true;
+                document.getElementById('preventReuse').checked = false;
+                document.getElementById('lockoutAttempts').value = 5;
+                document.getElementById('lockoutDuration').value = 15;
+                document.getElementById('captchaToggle').checked = false;
+                document.getElementById('sessionTimeout').value = 15;
+                document.getElementById('maxSessions').value = 3;
+                document.querySelector('input[name="twoFactorMode"][value="optional"]').checked = true;
+                
+                // Reload initial data
+                loadUsers();
+                loadApiKeys();
+                loadFirewallRules();
+                loadAuditLogs();
+                
+                showToast('All settings reset to defaults', 'success');
+                markUnsavedChanges();
+            }
+        }
+
+        function lockSystem() {
+            if (confirm('Lock the system? All users will be logged out immediately.')) {
+                showToast('System locked. All users logged out.', 'warning');
+                // In real app, this would call an API to lock the system
+            }
+        }
+
+        // ==================== UTILITY FUNCTIONS ====================
+        function initializeApp() {
+            // Initialize toggle switches
+            document.querySelectorAll('.toggle-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', markUnsavedChanges);
+            });
+            
+            // Initialize all input listeners
+            document.querySelectorAll('input, select, textarea').forEach(element => {
+                element.addEventListener('change', markUnsavedChanges);
+            });
+            
+            // Handle API key expiry selection
+            document.getElementById('apiKeyExpiry').addEventListener('change', function() {
+                const customDateDiv = document.getElementById('customExpiryDate');
+                customDateDiv.classList.toggle('hidden', this.value !== 'custom');
+            });
+            
+            // Handle password strength checker
+            const passwordInput = document.getElementById('userPassword');
+            if (passwordInput) {
+                passwordInput.addEventListener('input', checkPasswordStrength);
+            }
+            
+            // Handle password confirmation
+            const confirmPassword = document.getElementById('userConfirmPassword');
+            if (confirmPassword) {
+                confirmPassword.addEventListener('input', checkPasswordMatch);
+            }
+        }
+
+        function loadInitialData() {
+            loadUsers();
+            loadApiKeys();
+            loadFirewallRules();
+            loadAuditLogs();
+            
+            // Load initial roles
+            renderRoles();
+        }
+
+        function renderRoles() {
+            const rolesList = document.getElementById('rolesList');
+            const roles = [
+                { name: 'Admin', description: 'Full system access. Cannot be deleted.', users: 1, locked: true },
+                { name: 'Engineer', description: 'Technical config & diagnostics.', users: 3, locked: true },
+                { name: 'Technician', description: 'Device maintenance & sensor management.', users: 2, locked: false },
+                { name: 'Operator', description: 'Basic monitoring and operations.', users: 1, locked: false },
+                { name: 'Viewer', description: 'Read-only access to dashboards.', users: 0, locked: false }
+            ];
+            
+            rolesList.innerHTML = roles.map(role => `
+                <div class="p-4 hover:bg-slate-50 cursor-pointer group">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-medium text-slate-900 text-sm">${role.name}</span>
+                        <i class="fa-solid fa-${role.locked ? 'lock' : 'pencil'} text-slate-300 text-xs group-hover:text-primary"></i>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-2">${role.description}</p>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${role.users} User${role.users !== 1 ? 's' : ''}</span>
+                        <span class="text-primary opacity-0 group-hover:opacity-100 transition">Edit Permissions ></span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function markUnsavedChanges() {
+            appState.unsavedChanges = true;
+            
+            // Update save buttons
+            const saveBtn = document.getElementById('header-save-btn');
+            const footerSaveBtn = document.getElementById('footer-save-btn');
+            
+            if (saveBtn && !saveBtn.disabled) {
+                saveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+                footerSaveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+            }
+        }
+
+        function checkPasswordStrength() {
+            const password = document.getElementById('userPassword').value;
+            const strengthBar = document.getElementById('passwordStrength');
+            const strengthText = document.getElementById('passwordStrengthText');
+            
+            let strength = 0;
+            let text = 'Weak';
+            let className = 'weak';
+            
+            if (password.length >= 8) strength++;
+            if (/[A-Z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^A-Za-z0-9]/.test(password)) strength++;
+            
+            if (strength === 1) {
+                text = 'Weak';
+                className = 'weak';
+            } else if (strength === 2) {
+                text = 'Fair';
+                className = 'fair';
+            } else if (strength === 3) {
+                text = 'Good';
+                className = 'good';
+            } else if (strength >= 4) {
+                text = 'Strong';
+                className = 'strong';
+            }
+            
+            strengthBar.className = `password-strength ${className}`;
+            strengthText.textContent = text;
+            strengthText.className = `text-xs ${getStrengthColor(strength)} ml-2`;
+        }
+
+        function checkPasswordMatch() {
+            const password = document.getElementById('userPassword').value;
+            const confirm = document.getElementById('userConfirmPassword').value;
+            const error = document.getElementById('passwordMatchError');
+            
+            if (confirm && password !== confirm) {
+                error.classList.remove('hidden');
+            } else {
+                error.classList.add('hidden');
+            }
+        }
+
+        function simulateFileUpload(inputId) {
+            const input = document.getElementById(inputId);
+            const filename = `uploaded_${inputId}_${Date.now()}.pem`;
+            input.value = filename;
+            showToast(`File "${filename}" uploaded`, 'success');
+            markUnsavedChanges();
+        }
+
+        function regenerateWebhookSecret() {
+            const secret = 'whsec_' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+            
+            document.getElementById('webhookSecret').value = secret;
+            showToast('Webhook secret regenerated', 'success');
+            markUnsavedChanges();
+        }
+
+        function generateSelfSignedCert() {
+            showToast('Generating self-signed certificate...', 'info');
+            
+            setTimeout(() => {
+                showToast('Self-signed certificate generated successfully', 'success');
+                markUnsavedChanges();
+            }, 1000);
+        }
+
+        function showHelp() {
+            showToast('Opening security documentation...', 'info');
+            // In real app, this would open help documentation
+        }
+
+        function showCustomRoleModal() {
+            showToast('Custom role feature coming soon', 'info');
+        }
+
+        function getRoleColor(role) {
+            const colors = {
+                'admin': 'purple',
+                'engineer': 'blue',
+                'technician': 'blue',
+                'operator': 'slate',
+                'viewer': 'gray'
+            };
+            return colors[role] || 'slate';
+        }
+
+        function getStrengthColor(strength) {
+            const colors = {
+                1: 'text-red-500',
+                2: 'text-yellow-500',
+                3: 'text-blue-500',
+                4: 'text-green-500'
+            };
+            return colors[strength] || 'text-slate-500';
+        }
+
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+
+        function isValidIpOrNetwork(ip) {
+            // Basic validation - in real app, use proper IP validation
+            const ipPattern = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+            return ipPattern.test(ip);
+        }
+
+        function setupEventListeners() {
+            // Cancel buttons
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    if (confirm('Discard all unsaved security changes?')) {
+                        window.location.reload();
+                    }
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    if (confirm('Discard all unsaved security changes?')) {
+                        window.location.reload();
+                    }
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            // Gateway select
+            const gatewaySelect = document.getElementById('gateway-select');
+            if (gatewaySelect) {
+                gatewaySelect.addEventListener('change', function() {
+                    if (appState.unsavedChanges) {
+                        if (confirm('Switch to another gateway? Unsaved security changes will be lost.')) {
+                            window.location.reload();
+                        } else {
+                            this.value = 'Univa-GW-01';
+                        }
+                    } else {
+                        window.location.reload();
+                    }
+                });
+            }
+            
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+            
+            // Initial responsive setup
+            setTimeout(() => {
+                handleResponsive();
+            }, 100);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,2048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rules Engine & Alerts - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.1.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        .step-active { @apply border-primary text-primary font-semibold; }
+        .step-completed { @apply border-success text-success; }
+        .step-inactive { @apply border-slate-200 text-slate-400; }
+        .tab-active { @apply border-b-2 border-primary text-primary font-medium; }
+        .tab-inactive { @apply text-slate-500 hover:text-slate-700; }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #CBD5E1;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2563EB;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        /* Card styles */
+        .card {
+            @apply bg-white rounded-xl border border-border shadow-sm;
+        }
+        
+        .card-header {
+            @apply px-6 py-4 border-b border-border bg-slate-50;
+        }
+        
+        /* Badge styles */
+        .badge-success {
+            @apply px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold uppercase tracking-wider;
+        }
+        
+        .badge-warning {
+            @apply px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold uppercase tracking-wider;
+        }
+        
+        .badge-disabled {
+            @apply px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider;
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 999;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            min-width: 300px;
+            max-width: 400px;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast-success {
+            border-left: 4px solid #10B981;
+        }
+        
+        .toast-error {
+            border-left: 4px solid #EF4444;
+        }
+        
+        .toast-warning {
+            border-left: 4px solid #F59E0B;
+        }
+        
+        .toast-info {
+            border-left: 4px solid #2563EB;
+        }
+        
+        /* Confirmation Dialog */
+        .confirmation-dialog {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        /* Rule Card Animation */
+        .rule-card {
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .rule-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .rule-card.selected {
+            border-color: #2563EB;
+            background-color: #EFF6FF;
+        }
+        
+        /* Loading Spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #E2E8F0;
+            border-top-color: #2563EB;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Wizard Step Animation */
+        .wizard-step {
+            transition: all 0.3s ease;
+        }
+        
+        .wizard-step.active {
+            opacity: 1;
+        }
+        
+        .wizard-step:not(.active) {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Modal Overlay (hidden by default) -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div id="modal-content" class="modal-content">
+            <!-- Modal content will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Confirmation Dialog Overlay -->
+    <div id="confirmation-overlay" class="modal-overlay">
+        <div id="confirmation-dialog" class="confirmation-dialog">
+            <!-- Confirmation content will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 text-slate-900 font-bold text-xl tracking-tight">
+                        <i class="fa-solid fa-network-wired text-primary"></i>
+                        <span>Univa Gateway</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-300 mx-2"></div>
+                    <nav class="flex items-center gap-2 text-sm text-slate-500">
+                        <span class="hover:text-slate-900 cursor-pointer">Configuration</span>
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                        <span class="text-slate-900 font-medium">Rules Engine & Alerts</span>
+                    </nav>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <!-- Gateway Select -->
+                    <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">Gateway</span>
+                        <select class="bg-transparent text-sm font-medium text-slate-700 outline-none cursor-pointer" id="gateway-select">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <button class="px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors" onclick="resetForm()">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+                        </button>
+                        <button class="px-4 py-1.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-md shadow-sm transition-colors" onclick="saveChanges()">
+                            <i class="fa-solid fa-floppy-disk mr-1"></i> Save Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-[1600px] mx-auto p-6 space-y-6">
+            
+            <!-- Page Title & Actions -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">Rules Engine & Notifications</h1>
+                    <p class="text-slate-500 text-sm mt-1">Configure automated logic, alerts, and escalation policies for your gateway.</p>
+                </div>
+                <button class="inline-flex items-center px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition shadow-sm" onclick="createNewRule()">
+                    <i class="fa-solid fa-plus mr-2"></i> Create New Rule
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left Column: Rules List -->
+                <div id="rules-list-section" class="lg:col-span-4 space-y-4">
+                    <div class="card h-[800px] flex flex-col">
+                        <div class="card-header flex justify-between items-center">
+                            <h3 class="font-semibold text-slate-800">Active Rules</h3>
+                            <div class="flex space-x-2">
+                                <button class="text-slate-400 hover:text-primary transition p-1.5 rounded hover:bg-slate-100" onclick="showFilterModal()">
+                                    <i class="fa-solid fa-filter"></i>
+                                </button>
+                                <button class="text-slate-400 hover:text-primary transition p-1.5 rounded hover:bg-slate-100" onclick="toggleSortOrder()">
+                                    <i class="fa-solid fa-sort" id="sort-icon"></i>
+                                </button>
+                                <button class="text-slate-400 hover:text-primary transition p-1.5 rounded hover:bg-slate-100" onclick="refreshRules()">
+                                    <i class="fa-solid fa-sync-alt" id="refresh-icon"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-y-auto flex-1 p-2 space-y-2" id="rules-list">
+                            <!-- Rule cards will be dynamically loaded -->
+                        </div>
+                        
+                        <div class="p-4 border-t border-border bg-white">
+                            <button class="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-500 text-sm hover:border-primary hover:text-primary hover:bg-blue-50 transition flex items-center justify-center gap-2" onclick="showImportModal()">
+                                <i class="fa-solid fa-download"></i> Import Rules
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Rule Editor Wizard -->
+                <div id="rule-editor-section" class="lg:col-span-8">
+                    <div class="card h-full flex flex-col">
+                        
+                        <!-- Wizard Header -->
+                        <div class="p-6 border-b border-border">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-xl font-bold text-slate-900" id="rule-editor-title">Edit Rule: Overtemp-Motor</h2>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs font-semibold uppercase text-slate-400 tracking-wider">Rule Status</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="rule-status-toggle" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Progress Steps -->
+                            <div class="flex items-center justify-between relative">
+                                <div class="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-slate-100 -z-10"></div>
+                                
+                                <button class="flex items-center gap-2 bg-white pr-4 z-10" onclick="goToStep(1)">
+                                    <div id="step-1-indicator" class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold shadow-sm ring-4 ring-white">1</div>
+                                    <span class="text-sm font-semibold text-slate-900">Trigger</span>
+                                </button>
+                                
+                                <button class="flex items-center gap-2 bg-white px-4 z-10" onclick="goToStep(2)">
+                                    <div id="step-2-indicator" class="w-8 h-8 rounded-full bg-white border-2 border-border text-slate-500 flex items-center justify-center text-sm font-semibold shadow-sm ring-4 ring-white">2</div>
+                                    <span class="text-sm font-medium text-slate-500">Conditions</span>
+                                </button>
+                                
+                                <button class="flex items-center gap-2 bg-white pl-4 z-10" onclick="goToStep(3)">
+                                    <div id="step-3-indicator" class="w-8 h-8 rounded-full bg-white border-2 border-border text-slate-500 flex items-center justify-center text-sm font-semibold shadow-sm ring-4 ring-white">3</div>
+                                    <span class="text-sm font-medium text-slate-500">Actions</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Wizard Content -->
+                        <div class="flex-1 overflow-y-auto p-6 space-y-8" id="wizard-content">
+                            <!-- Content will be loaded dynamically based on step -->
+                        </div>
+
+                        <!-- Wizard Footer -->
+                        <div class="p-6 border-t border-border bg-slate-50">
+                            <div class="flex justify-between items-center">
+                                <div class="text-sm text-slate-500">
+                                    <span class="font-medium text-slate-700">Rule ID:</span> <span id="rule-id-display">RULE-2025-001</span>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors" onclick="testRule()">
+                                        Test Rule
+                                    </button>
+                                    <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors" onclick="saveRule()">
+                                        Save Rule
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ========== GLOBAL STATE ==========
+        let currentStep = 1;
+        let selectedRule = null;
+        let rules = [];
+        let sortOrder = 'asc';
+        let currentRuleData = {
+            id: 'RULE-2025-001',
+            name: 'Overtemp-Motor',
+            enabled: true,
+            triggerType: 'tag',
+            device: 'Motor_Drive_01',
+            tag: 'temperature_celsius',
+            condition: '>',
+            value: 80,
+            duration: 30,
+            recipientGroup: 'Operations Team',
+            priority: 'Medium',
+            message: '[ALERT] Over temperature detected on Motor_Drive_01\nCurrent Temperature: {value}°C\nThreshold: 80°C\nTime: {timestamp}\nLocation: Zone A - Crane 12',
+            escalation: 5,
+            escalationAction: 'Repeat Alert'
+        };
+
+        // ========== SIDEBAR FUNCTIONS ==========
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) throw new Error(`Failed to load sidebar: ${response.status}`);
+                document.getElementById('sidebar-container').innerHTML = await response.text();
+                updateActivePage();
+                initializeSidebar();
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                createFallbackSidebar();
+            }
+        }
+
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device management
+                            </a>
+                            <a href="rules-engine.html" class="nav-item active">
+                                <i class="fa-solid fa-robot"></i> Rules Engine & Alerts
+                                <span class="nav-item-count" id="rules-count">4</span>
+                            </a>
+                            <a href="protocol-mapping.html" class="nav-item">
+                                <i class="fa-solid fa-exchange-alt"></i> Protocol Mapping
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        function updateActivePage() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            const rulesLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Rules Engine') || 
+                item.textContent.includes('Automation Rules')
+            );
+            if (rulesLink) rulesLink.classList.add('active');
+        }
+
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            if (!sidebar || !sidebarToggle) return;
+            
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                const icon = this.querySelector('i');
+                icon.className = sidebar.classList.contains('active') ? 'fa-solid fa-times' : 'fa-solid fa-bars';
+            });
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
+        // ========== MODAL FUNCTIONS ==========
+        function showModal(title, content, buttons = []) {
+            const modalOverlay = document.getElementById('modal-overlay');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalContent.innerHTML = `
+                <div class="modal-header">
+                    <h3 class="text-lg font-semibold text-slate-800">${title}</h3>
+                    <button class="text-slate-400 hover:text-slate-600" onclick="closeModal()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    ${content}
+                </div>
+                ${buttons.length > 0 ? `
+                <div class="modal-footer">
+                    ${buttons.map(btn => `
+                        <button 
+                            onclick="${btn.onclick}"
+                            class="${btn.className}"
+                            ${btn.disabled ? 'disabled' : ''}
+                        >
+                            ${btn.text}
+                        </button>
+                    `).join('')}
+                </div>` : ''}
+            `;
+            
+            modalOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        function showConfirmation(title, message, onConfirm, onCancel = null) {
+            const overlay = document.getElementById('confirmation-overlay');
+            const dialog = document.getElementById('confirmation-dialog');
+            
+            dialog.innerHTML = `
+                <div class="mb-4">
+                    <i class="fa-solid fa-triangle-exclamation text-3xl text-yellow-500 mb-3"></i>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-2">${title}</h3>
+                    <p class="text-slate-600">${message}</p>
+                </div>
+                <div class="flex justify-center gap-3">
+                    <button onclick="closeConfirmation()" class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="confirmAction()" class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors">
+                        Confirm
+                    </button>
+                </div>
+            `;
+            
+            window.confirmAction = function() {
+                if (onConfirm) onConfirm();
+                closeConfirmation();
+            };
+            
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeConfirmation() {
+            document.getElementById('confirmation-overlay').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        // ========== TOAST FUNCTIONS ==========
+        function showToast(message, type = 'info', duration = 5000) {
+            const container = document.getElementById('toast-container');
+            const toastId = 'toast-' + Date.now();
+            const icon = {
+                success: 'fa-circle-check',
+                error: 'fa-circle-exclamation',
+                warning: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            }[type];
+            
+            const toast = document.createElement('div');
+            toast.id = toastId;
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${icon} text-${type === 'success' ? 'green' : type === 'error' ? 'red' : type === 'warning' ? 'yellow' : 'blue'}-500 text-lg"></i>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-800">${message}</p>
+                </div>
+                <button onclick="closeToast('${toastId}')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    closeToast(toastId);
+                }, duration);
+            }
+        }
+
+        function closeToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }
+        }
+
+        // ========== RULES FUNCTIONS ==========
+        function loadRules() {
+            // Simulate loading rules from API
+            rules = [
+                {
+                    id: 'RULE-2025-001',
+                    name: 'Overtemp-Motor',
+                    enabled: true,
+                    type: 'tag',
+                    lastTriggered: '12m ago',
+                    description: 'Tag Value Trigger'
+                },
+                {
+                    id: 'RULE-2025-002',
+                    name: 'Device Offline',
+                    enabled: true,
+                    type: 'device',
+                    lastTriggered: '1h ago',
+                    description: 'Device Event'
+                },
+                {
+                    id: 'RULE-2025-003',
+                    name: 'Shift-Start Alert',
+                    enabled: false,
+                    type: 'schedule',
+                    lastTriggered: 'Never',
+                    description: 'Schedule'
+                },
+                {
+                    id: 'RULE-2025-004',
+                    name: 'Pump Vibration High',
+                    enabled: true,
+                    type: 'tag',
+                    lastTriggered: '2d ago',
+                    description: 'Tag Value Trigger'
+                }
+            ];
+            
+            renderRulesList();
+        }
+
+        function renderRulesList() {
+            const container = document.getElementById('rules-list');
+            if (!container) return;
+            
+            const sortedRules = [...rules].sort((a, b) => {
+                if (sortOrder === 'asc') {
+                    return a.name.localeCompare(b.name);
+                } else {
+                    return b.name.localeCompare(a.name);
+                }
+            });
+            
+            container.innerHTML = sortedRules.map(rule => `
+                <div class="rule-card p-3 rounded-lg border ${rule.id === selectedRule?.id ? 'border-primary bg-blue-50' : 'border-border bg-white'} cursor-pointer transition-all hover:shadow-md group" onclick="selectRule('${rule.id}')">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="font-semibold text-slate-800 text-sm">${rule.name}</span>
+                        <span class="${rule.enabled ? 'badge-success' : 'badge-disabled'}">
+                            ${rule.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-2 flex items-center gap-2">
+                        <i class="fa-solid ${rule.type === 'tag' ? 'fa-tag text-primary' : rule.type === 'device' ? 'fa-plug text-warning' : 'fa-calendar text-secondary'}"></i> 
+                        ${rule.description}
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-slate-400">
+                            <i class="fa-regular fa-clock mr-1"></i> Triggered ${rule.lastTriggered}
+                        </span>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-slate-400 hover:text-primary" onclick="event.stopPropagation(); toggleRuleStatus('${rule.id}')">
+                                <i class="fa-solid fa-power-off text-xs"></i>
+                            </button>
+                            <button class="text-slate-400 hover:text-danger" onclick="event.stopPropagation(); deleteRule('${rule.id}')">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Update rules count in sidebar
+            const rulesCount = document.getElementById('rules-count');
+            if (rulesCount) {
+                rulesCount.textContent = rules.filter(r => r.enabled).length;
+            }
+        }
+
+        function selectRule(ruleId) {
+            selectedRule = rules.find(r => r.id === ruleId);
+            if (selectedRule) {
+                loadRuleData(selectedRule.id);
+                updateRuleEditorTitle(selectedRule.name);
+                highlightSelectedRule(ruleId);
+            }
+        }
+
+        function highlightSelectedRule(ruleId) {
+            document.querySelectorAll('.rule-card').forEach(card => {
+                card.classList.remove('border-primary', 'bg-blue-50');
+                card.classList.add('border-border', 'bg-white');
+            });
+            
+            const selectedCard = document.querySelector(`[onclick*="${ruleId}"]`);
+            if (selectedCard) {
+                selectedCard.classList.add('border-primary', 'bg-blue-50');
+                selectedCard.classList.remove('border-border', 'bg-white');
+            }
+        }
+
+        function loadRuleData(ruleId) {
+            // Simulate loading rule data
+            // In real app, this would fetch from API
+            if (ruleId === 'RULE-2025-001') {
+                currentRuleData = {
+                    id: 'RULE-2025-001',
+                    name: 'Overtemp-Motor',
+                    enabled: true,
+                    triggerType: 'tag',
+                    device: 'Motor_Drive_01',
+                    tag: 'temperature_celsius',
+                    condition: '>',
+                    value: 80,
+                    duration: 30,
+                    recipientGroup: 'Operations Team',
+                    priority: 'Medium',
+                    message: '[ALERT] Over temperature detected on Motor_Drive_01\nCurrent Temperature: {value}°C\nThreshold: 80°C\nTime: {timestamp}\nLocation: Zone A - Crane 12',
+                    escalation: 5,
+                    escalationAction: 'Repeat Alert'
+                };
+            }
+            
+            updateWizardStep(currentStep);
+            document.getElementById('rule-status-toggle').checked = currentRuleData.enabled;
+            document.getElementById('rule-id-display').textContent = currentRuleData.id;
+        }
+
+        function toggleRuleStatus(ruleId) {
+            const rule = rules.find(r => r.id === ruleId);
+            if (rule) {
+                rule.enabled = !rule.enabled;
+                renderRulesList();
+                showToast(`Rule ${rule.name} ${rule.enabled ? 'enabled' : 'disabled'}`, 'success');
+            }
+        }
+
+        function deleteRule(ruleId) {
+            showConfirmation(
+                'Delete Rule',
+                'Are you sure you want to delete this rule? This action cannot be undone.',
+                () => {
+                    const ruleIndex = rules.findIndex(r => r.id === ruleId);
+                    if (ruleIndex > -1) {
+                        const ruleName = rules[ruleIndex].name;
+                        rules.splice(ruleIndex, 1);
+                        renderRulesList();
+                        showToast(`Rule "${ruleName}" deleted successfully`, 'success');
+                        
+                        if (selectedRule && selectedRule.id === ruleId) {
+                            selectedRule = null;
+                            resetRuleEditor();
+                        }
+                    }
+                }
+            );
+        }
+
+        function refreshRules() {
+            const icon = document.getElementById('refresh-icon');
+            icon.classList.add('fa-spin');
+            
+            // Simulate API call
+            setTimeout(() => {
+                loadRules();
+                icon.classList.remove('fa-spin');
+                showToast('Rules list refreshed', 'success');
+            }, 1000);
+        }
+
+        function toggleSortOrder() {
+            const icon = document.getElementById('sort-icon');
+            sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            icon.className = sortOrder === 'asc' ? 'fa-solid fa-sort-alpha-down' : 'fa-solid fa-sort-alpha-up';
+            renderRulesList();
+            showToast(`Sorted ${sortOrder === 'asc' ? 'ascending' : 'descending'}`, 'info');
+        }
+
+        // ========== WIZARD FUNCTIONS ==========
+        function goToStep(step) {
+            if (step < 1 || step > 3) return;
+            
+            currentStep = step;
+            updateStepIndicators();
+            updateWizardStep(step);
+        }
+
+        function updateStepIndicators() {
+            for (let i = 1; i <= 3; i++) {
+                const indicator = document.getElementById(`step-${i}-indicator`);
+                if (i < currentStep) {
+                    indicator.className = 'w-8 h-8 rounded-full bg-success text-white flex items-center justify-center text-sm font-bold shadow-sm ring-4 ring-white';
+                    indicator.innerHTML = '<i class="fa-solid fa-check text-xs"></i>';
+                } else if (i === currentStep) {
+                    indicator.className = 'w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold shadow-sm ring-4 ring-white';
+                    indicator.textContent = i;
+                } else {
+                    indicator.className = 'w-8 h-8 rounded-full bg-white border-2 border-border text-slate-500 flex items-center justify-center text-sm font-semibold shadow-sm ring-4 ring-white';
+                    indicator.textContent = i;
+                }
+            }
+        }
+
+        function updateWizardStep(step) {
+            const content = document.getElementById('wizard-content');
+            
+            switch(step) {
+                case 1:
+                    content.innerHTML = getTriggerStepHTML();
+                    break;
+                case 2:
+                    content.innerHTML = getConditionsStepHTML();
+                    break;
+                case 3:
+                    content.innerHTML = getActionsStepHTML();
+                    break;
+            }
+            
+            // Update form values
+            setTimeout(() => {
+                updateFormValues();
+            }, 10);
+        }
+
+        function getTriggerStepHTML() {
+            return `
+                <section id="trigger-config" class="wizard-step active">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-bolt text-warning"></i> Trigger Configuration
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <label class="cursor-pointer relative">
+                            <input type="radio" name="triggerType" value="tag" class="peer sr-only" ${currentRuleData.triggerType === 'tag' ? 'checked' : ''}>
+                            <div class="p-4 rounded-lg border-2 border-blue-100 bg-blue-50 peer-checked:border-primary peer-checked:bg-blue-50/50 hover:bg-slate-50 transition-all text-center h-full flex flex-col items-center justify-center gap-2">
+                                <i class="fa-solid fa-tags text-2xl text-primary"></i>
+                                <span class="font-medium text-slate-900">Tag Value</span>
+                                <span class="text-xs text-slate-500">Thresholds & Limits</span>
+                            </div>
+                            <div class="absolute top-2 right-2 text-primary opacity-0 peer-checked:opacity-100 transition-opacity">
+                                <i class="fa-solid fa-circle-check"></i>
+                            </div>
+                        </label>
+                        
+                        <label class="cursor-pointer relative">
+                            <input type="radio" name="triggerType" value="device" class="peer sr-only" ${currentRuleData.triggerType === 'device' ? 'checked' : ''}>
+                            <div class="p-4 rounded-lg border-2 border-border bg-white peer-checked:border-primary peer-checked:bg-blue-50 hover:bg-slate-50 transition-all text-center h-full flex flex-col items-center justify-center gap-2">
+                                <i class="fa-solid fa-plug text-2xl text-slate-400 peer-checked:text-primary"></i>
+                                <span class="font-medium text-slate-900">Device Event</span>
+                                <span class="text-xs text-slate-500">Status Changes</span>
+                            </div>
+                        </label>
+
+                        <label class="cursor-pointer relative">
+                            <input type="radio" name="triggerType" value="schedule" class="peer sr-only" ${currentRuleData.triggerType === 'schedule' ? 'checked' : ''}>
+                            <div class="p-4 rounded-lg border-2 border-border bg-white peer-checked:border-primary peer-checked:bg-blue-50 hover:bg-slate-50 transition-all text-center h-full flex flex-col items-center justify-center gap-2">
+                                <i class="fa-regular fa-calendar-days text-2xl text-slate-400 peer-checked:text-primary"></i>
+                                <span class="font-medium text-slate-900">Schedule</span>
+                                <span class="text-xs text-slate-500">Time Based</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Tag Value Fields -->
+                    <div class="bg-slate-50 rounded-lg border border-border p-5 space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Device</label>
+                                <select id="device-select" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
+                                    <option value="Motor_Drive_01">Motor_Drive_01</option>
+                                    <option value="Pump_Station_A">Pump_Station_A</option>
+                                    <option value="Compressor_Unit_03">Compressor_Unit_03</option>
+                                    <option value="Generator_Set_02">Generator_Set_02</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Tag</label>
+                                <select id="tag-select" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
+                                    <option value="temperature_celsius">temperature_celsius</option>
+                                    <option value="rpm_speed">rpm_speed</option>
+                                    <option value="vibration_level">vibration_level</option>
+                                    <option value="current_amperes">current_amperes</option>
+                                    <option value="pressure_bar">pressure_bar</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-end gap-3 p-3 bg-white rounded border border-border">
+                            <div class="flex-1 min-w-[150px]">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Condition</label>
+                                <div class="flex items-center gap-2">
+                                    <div id="tag-display" class="px-3 py-2 bg-slate-100 rounded text-sm text-slate-600 font-mono">temperature_celsius</div>
+                                    <select id="condition-select" class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-2 bg-white border">
+                                        <option value=">">&gt;</option>
+                                        <option value="<">&lt;</option>
+                                        <option value=">=">&gt;=</option>
+                                        <option value="<=">&lt;=</option>
+                                        <option value="==">==</option>
+                                        <option value="!=">!=</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="w-32">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Value</label>
+                                <div class="relative">
+                                    <input type="number" id="value-input" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border pr-8">
+                                    <span id="unit-display" class="absolute right-3 top-2 text-slate-400 text-sm">°C</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Duration / Hysteresis</label>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm text-slate-600">Hold for</span>
+                                    <input type="number" id="duration-input" class="w-20 rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1.5 px-2 border">
+                                    <span class="text-sm text-slate-600">seconds</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-2 justify-center">
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" id="scaled-value-checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-600">Use scaled value</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" id="rising-edge-checkbox" checked class="rounded border-slate-300 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-600">Trigger only on rising edge</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Preview Box -->
+                    <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-3">
+                        <i class="fa-regular fa-lightbulb text-yellow-600 mt-0.5"></i>
+                        <div>
+                            <p class="text-sm text-yellow-800 font-medium">Logic Preview</p>
+                            <p id="logic-preview" class="text-sm text-yellow-700 mt-1">
+                                Loading...
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-end">
+                        <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors" onclick="goToStep(2)">
+                            Next: Conditions <i class="fa-solid fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </section>
+            `;
+        }
+
+        function getConditionsStepHTML() {
+            return `
+                <section id="conditions-config" class="wizard-step active">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-code-branch text-secondary"></i> Additional Logic (Optional)
+                        </h3>
+                        <button class="text-sm text-primary hover:underline" onclick="addCondition()">+ Add Condition</button>
+                    </div>
+                    
+                    <div id="conditions-container" class="space-y-4">
+                        <div class="bg-slate-50 rounded-lg border border-dashed border-slate-300 p-4 text-center">
+                            <span class="text-slate-500 text-sm">No additional conditions set. Rule triggers solely on base configuration.</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-between">
+                        <button class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors" onclick="goToStep(1)">
+                            <i class="fa-solid fa-arrow-left mr-2"></i> Back
+                        </button>
+                        <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors" onclick="goToStep(3)">
+                            Next: Actions <i class="fa-solid fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </section>
+            `;
+        }
+
+        function getActionsStepHTML() {
+            return `
+                <section id="actions-config" class="wizard-step active">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane text-success"></i> Actions & Escalations
+                    </h3>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-6" id="action-types">
+                        <!-- Action types will be populated dynamically -->
+                    </div>
+
+                    <!-- Action Configuration -->
+                    <div class="bg-slate-50 rounded-lg border border-border p-5 space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Recipient Group</label>
+                                <select id="recipient-select" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
+                                    <option value="Operations Team">Operations Team</option>
+                                    <option value="Maintenance Team">Maintenance Team</option>
+                                    <option value="Supervisors">Supervisors</option>
+                                    <option value="All Users">All Users</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                                <select id="priority-select" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                    <option value="Critical">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Message Template</label>
+                            <div class="relative">
+                                <textarea id="message-textarea" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border h-24" placeholder="Alert message..."></textarea>
+                            </div>
+                            <div class="text-xs text-slate-500 mt-1 flex gap-3 flex-wrap">
+                                <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('value')">{value}</code> Current value</span>
+                                <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('timestamp')">{timestamp}</code> Time</span>
+                                <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('device')">{device}</code> Device name</span>
+                                <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('location')">{location}</code> Location</span>
+                            </div>
+                        </div>
+
+                        <!-- Escalation Settings -->
+                        <div class="pt-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Escalation Policy</label>
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-3">
+                                    <input type="number" id="escalation-input" class="w-20 rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1.5 px-2 border">
+                                    <span class="text-sm text-slate-600">minutes without acknowledgement →</span>
+                                    <select id="escalation-select" class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1.5 px-2 border">
+                                        <option value="Notify Supervisor">Notify Supervisor</option>
+                                        <option value="Repeat Alert">Repeat Alert</option>
+                                        <option value="Sound Siren">Sound Siren</option>
+                                        <option value="Shutdown Device">Shutdown Device</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-between">
+                        <button class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors" onclick="goToStep(2)">
+                            <i class="fa-solid fa-arrow-left mr-2"></i> Back
+                        </button>
+                        <div class="flex gap-3">
+                            <button class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors" onclick="testRule()">
+                                Test Rule
+                            </button>
+                            <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors" onclick="saveRule()">
+                                Save Rule
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            `;
+        }
+
+        function updateFormValues() {
+            // Update form fields with current rule data
+            const triggerTypeRadio = document.querySelector(`input[name="triggerType"][value="${currentRuleData.triggerType}"]`);
+            if (triggerTypeRadio) triggerTypeRadio.checked = true;
+            
+            const deviceSelect = document.getElementById('device-select');
+            if (deviceSelect) deviceSelect.value = currentRuleData.device;
+            
+            const tagSelect = document.getElementById('tag-select');
+            if (tagSelect) {
+                tagSelect.value = currentRuleData.tag;
+                updateTagDisplay();
+            }
+            
+            const conditionSelect = document.getElementById('condition-select');
+            if (conditionSelect) conditionSelect.value = currentRuleData.condition;
+            
+            const valueInput = document.getElementById('value-input');
+            if (valueInput) valueInput.value = currentRuleData.value;
+            
+            const durationInput = document.getElementById('duration-input');
+            if (durationInput) durationInput.value = currentRuleData.duration;
+            
+            const recipientSelect = document.getElementById('recipient-select');
+            if (recipientSelect) recipientSelect.value = currentRuleData.recipientGroup;
+            
+            const prioritySelect = document.getElementById('priority-select');
+            if (prioritySelect) prioritySelect.value = currentRuleData.priority;
+            
+            const messageTextarea = document.getElementById('message-textarea');
+            if (messageTextarea) messageTextarea.value = currentRuleData.message;
+            
+            const escalationInput = document.getElementById('escalation-input');
+            if (escalationInput) escalationInput.value = currentRuleData.escalation;
+            
+            const escalationSelect = document.getElementById('escalation-select');
+            if (escalationSelect) escalationSelect.value = currentRuleData.escalationAction;
+            
+            // Update logic preview
+            updateLogicPreview();
+        }
+
+        function updateTagDisplay() {
+            const tagSelect = document.getElementById('tag-select');
+            const tagDisplay = document.getElementById('tag-display');
+            const unitDisplay = document.getElementById('unit-display');
+            
+            if (tagSelect && tagDisplay && unitDisplay) {
+                const selectedTag = tagSelect.value;
+                tagDisplay.textContent = selectedTag;
+                
+                // Set unit based on tag
+                const units = {
+                    'temperature_celsius': '°C',
+                    'rpm_speed': 'RPM',
+                    'vibration_level': 'mm/s',
+                    'current_amperes': 'A',
+                    'pressure_bar': 'bar'
+                };
+                
+                unitDisplay.textContent = units[selectedTag] || '';
+            }
+        }
+
+        function updateLogicPreview() {
+            const preview = document.getElementById('logic-preview');
+            if (preview) {
+                const device = currentRuleData.device;
+                const tag = currentRuleData.tag;
+                const condition = currentRuleData.condition;
+                const value = currentRuleData.value;
+                const duration = currentRuleData.duration;
+                
+                preview.innerHTML = `
+                    Trigger fires when <strong class="font-bold">${device}.${tag} ${condition} ${value}</strong> 
+                    for at least <strong class="font-bold">${duration} seconds</strong>.
+                `;
+            }
+        }
+
+        function insertTemplate(template) {
+            const textarea = document.getElementById('message-textarea');
+            if (textarea) {
+                const cursorPos = textarea.selectionStart;
+                const text = textarea.value;
+                const templateText = `{${template}}`;
+                
+                textarea.value = text.substring(0, cursorPos) + templateText + text.substring(cursorPos);
+                textarea.focus();
+                textarea.setSelectionRange(cursorPos + templateText.length, cursorPos + templateText.length);
+            }
+        }
+
+        // ========== BUTTON ACTION FUNCTIONS ==========
+        function createNewRule() {
+            showModal(
+                'Create New Rule',
+                `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Rule Name</label>
+                        <input type="text" id="new-rule-name" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" placeholder="Enter rule name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Rule Type</label>
+                        <select id="new-rule-type" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border">
+                            <option value="tag">Tag Value Trigger</option>
+                            <option value="device">Device Event</option>
+                            <option value="schedule">Scheduled Event</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Template</label>
+                        <select id="new-rule-template" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border">
+                            <option value="">Start from scratch</option>
+                            <option value="overtemp">Over Temperature</option>
+                            <option value="device-offline">Device Offline</option>
+                            <option value="vibration">High Vibration</option>
+                            <option value="pressure">Pressure Alert</option>
+                        </select>
+                    </div>
+                </div>
+                `,
+                [
+                    {
+                        text: 'Cancel',
+                        className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors',
+                        onclick: 'closeModal()'
+                    },
+                    {
+                        text: 'Create Rule',
+                        className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors',
+                        onclick: 'createRuleFromModal()'
+                    }
+                ]
+            );
+        }
+
+        function createRuleFromModal() {
+            const name = document.getElementById('new-rule-name').value;
+            if (!name) {
+                showToast('Please enter a rule name', 'error');
+                return;
+            }
+            
+            const type = document.getElementById('new-rule-type').value;
+            const template = document.getElementById('new-rule-template').value;
+            
+            // Create new rule
+            const newRule = {
+                id: 'RULE-' + new Date().getTime(),
+                name: name,
+                enabled: true,
+                type: type,
+                lastTriggered: 'Never',
+                description: type === 'tag' ? 'Tag Value Trigger' : type === 'device' ? 'Device Event' : 'Scheduled Event'
+            };
+            
+            rules.push(newRule);
+            renderRulesList();
+            selectRule(newRule.id);
+            closeModal();
+            
+            // Reset rule editor with default values
+            resetRuleEditor();
+            currentRuleData.name = name;
+            updateRuleEditorTitle(name);
+            
+            showToast(`Rule "${name}" created successfully`, 'success');
+        }
+
+        function resetRuleEditor() {
+            currentRuleData = {
+                id: 'RULE-' + new Date().getTime(),
+                name: 'New Rule',
+                enabled: true,
+                triggerType: 'tag',
+                device: 'Motor_Drive_01',
+                tag: 'temperature_celsius',
+                condition: '>',
+                value: 80,
+                duration: 30,
+                recipientGroup: 'Operations Team',
+                priority: 'Medium',
+                message: '[ALERT] Alert detected on {device}\nCurrent Value: {value}\nThreshold: 80\nTime: {timestamp}\nLocation: {location}',
+                escalation: 5,
+                escalationAction: 'Repeat Alert'
+            };
+            
+            updateWizardStep(1);
+            document.getElementById('rule-status-toggle').checked = true;
+            document.getElementById('rule-id-display').textContent = currentRuleData.id;
+        }
+
+        function updateRuleEditorTitle(name) {
+            const title = document.getElementById('rule-editor-title');
+            if (title) {
+                title.textContent = name ? `Edit Rule: ${name}` : 'Create New Rule';
+            }
+        }
+
+        function resetForm() {
+            showConfirmation(
+                'Reset Form',
+                'Are you sure you want to reset all changes? Unsaved changes will be lost.',
+                () => {
+                    if (selectedRule) {
+                        loadRuleData(selectedRule.id);
+                    } else {
+                        resetRuleEditor();
+                    }
+                    showToast('Form reset successfully', 'success');
+                }
+            );
+        }
+
+        function saveChanges() {
+            // Collect form data
+            const ruleStatus = document.getElementById('rule-status-toggle').checked;
+            const triggerType = document.querySelector('input[name="triggerType"]:checked')?.value;
+            const device = document.getElementById('device-select')?.value;
+            const tag = document.getElementById('tag-select')?.value;
+            const condition = document.getElementById('condition-select')?.value;
+            const value = document.getElementById('value-input')?.value;
+            const duration = document.getElementById('duration-input')?.value;
+            const recipientGroup = document.getElementById('recipient-select')?.value;
+            const priority = document.getElementById('priority-select')?.value;
+            const message = document.getElementById('message-textarea')?.value;
+            const escalation = document.getElementById('escalation-input')?.value;
+            const escalationAction = document.getElementById('escalation-select')?.value;
+            
+            // Update current rule data
+            currentRuleData.enabled = ruleStatus;
+            currentRuleData.triggerType = triggerType || 'tag';
+            currentRuleData.device = device || 'Motor_Drive_01';
+            currentRuleData.tag = tag || 'temperature_celsius';
+            currentRuleData.condition = condition || '>';
+            currentRuleData.value = parseFloat(value) || 80;
+            currentRuleData.duration = parseInt(duration) || 30;
+            currentRuleData.recipientGroup = recipientGroup || 'Operations Team';
+            currentRuleData.priority = priority || 'Medium';
+            currentRuleData.message = message || '';
+            currentRuleData.escalation = parseInt(escalation) || 5;
+            currentRuleData.escalationAction = escalationAction || 'Repeat Alert';
+            
+            // Update selected rule in list
+            if (selectedRule) {
+                const rule = rules.find(r => r.id === selectedRule.id);
+                if (rule) {
+                    rule.name = currentRuleData.name;
+                    rule.enabled = currentRuleData.enabled;
+                    renderRulesList();
+                }
+            }
+            
+            showToast('Changes saved successfully', 'success');
+        }
+
+        function saveRule() {
+            saveChanges();
+            showToast('Rule saved successfully', 'success');
+        }
+
+        function testRule() {
+            showModal(
+                'Test Rule',
+                `
+                <div class="space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 class="font-medium text-blue-800 mb-2">Rule Simulation</h4>
+                        <p class="text-sm text-blue-700">
+                            This will simulate the rule trigger and show what would happen without actually sending notifications.
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Test Value</label>
+                        <input type="number" id="test-value" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" value="${currentRuleData.value + 10}">
+                        <p class="text-xs text-slate-500 mt-1">Enter a value to test against the rule condition</p>
+                    </div>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <p class="text-sm text-yellow-700">
+                            <strong>Current Rule:</strong> ${currentRuleData.device}.${currentRuleData.tag} ${currentRuleData.condition} ${currentRuleData.value}
+                        </p>
+                    </div>
+                </div>
+                `,
+                [
+                    {
+                        text: 'Cancel',
+                        className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors',
+                        onclick: 'closeModal()'
+                    },
+                    {
+                        text: 'Run Test',
+                        className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors',
+                        onclick: 'runRuleTest()'
+                    }
+                ]
+            );
+        }
+
+        function runRuleTest() {
+            const testValue = parseFloat(document.getElementById('test-value').value);
+            const ruleValue = parseFloat(currentRuleData.value);
+            const condition = currentRuleData.condition;
+            
+            let result = false;
+            
+            switch(condition) {
+                case '>': result = testValue > ruleValue; break;
+                case '<': result = testValue < ruleValue; break;
+                case '>=': result = testValue >= ruleValue; break;
+                case '<=': result = testValue <= ruleValue; break;
+                case '==': result = testValue == ruleValue; break;
+                case '!=': result = testValue != ruleValue; break;
+            }
+            
+            closeModal();
+            
+            if (result) {
+                showToast(`Rule triggered! Test value ${testValue} ${condition} ${ruleValue}`, 'success');
+            } else {
+                showToast(`Rule not triggered. Test value ${testValue} does not satisfy condition ${condition} ${ruleValue}`, 'warning');
+            }
+        }
+
+        function showFilterModal() {
+            showModal(
+                'Filter Rules',
+                `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Status</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">Enabled</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                <span class="ml-2 text-sm text-slate-600">Disabled</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Rule Type</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">Tag Value</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">Device Event</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">Schedule</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Last Triggered</label>
+                        <select class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border">
+                            <option>Any time</option>
+                            <option>Last 24 hours</option>
+                            <option>Last 7 days</option>
+                            <option>Last 30 days</option>
+                            <option>Never</option>
+                        </select>
+                    </div>
+                </div>
+                `,
+                [
+                    {
+                        text: 'Clear',
+                        className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors',
+                        onclick: 'clearFilters()'
+                    },
+                    {
+                        text: 'Apply Filters',
+                        className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors',
+                        onclick: 'applyFilters()'
+                    }
+                ]
+            );
+        }
+
+        function applyFilters() {
+            closeModal();
+            showToast('Filters applied successfully', 'success');
+        }
+
+        function clearFilters() {
+            closeModal();
+            showToast('Filters cleared', 'info');
+        }
+
+        function showImportModal() {
+            showModal(
+                'Import Rules',
+                `
+                <div class="space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 class="font-medium text-blue-800 mb-2">Import Rules</h4>
+                        <p class="text-sm text-blue-700">
+                            Import rules from a JSON file or paste JSON content below.
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Select File</label>
+                        <input type="file" id="import-file" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" accept=".json">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Or Paste JSON</label>
+                        <textarea id="import-json" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border h-32 font-mono text-sm" placeholder='[
+  {
+    "name": "New Rule",
+    "type": "tag",
+    "enabled": true,
+    "condition": ">",
+    "value": 100
+  }
+]'></textarea>
+                    </div>
+                    
+                    <div class="flex items-center text-sm text-slate-500">
+                        <i class="fa-solid fa-circle-info mr-2"></i>
+                        <span>Existing rules with the same name will be overwritten.</span>
+                    </div>
+                </div>
+                `,
+                [
+                    {
+                        text: 'Cancel',
+                        className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors',
+                        onclick: 'closeModal()'
+                    },
+                    {
+                        text: 'Download Template',
+                        className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors',
+                        onclick: 'downloadTemplate()'
+                    },
+                    {
+                        text: 'Import Rules',
+                        className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors',
+                        onclick: 'importRules()'
+                    }
+                ]
+            );
+        }
+
+        function downloadTemplate() {
+            const template = {
+                rules: [
+                    {
+                        name: "Over Temperature Alert",
+                        type: "tag",
+                        enabled: true,
+                        device: "Motor_Drive_01",
+                        tag: "temperature_celsius",
+                        condition: ">",
+                        value: 80,
+                        duration: 30,
+                        actions: [
+                            {
+                                type: "email",
+                                recipients: ["operations@example.com"],
+                                message: "Over temperature detected: {value}°C"
+                            }
+                        ]
+                    }
+                ]
+            };
+            
+            const dataStr = JSON.stringify(template, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = 'rule-template.json';
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            showToast('Template downloaded successfully', 'success');
+        }
+
+        function importRules() {
+            const jsonInput = document.getElementById('import-json').value;
+            
+            if (!jsonInput) {
+                showToast('Please paste JSON or select a file', 'error');
+                return;
+            }
+            
+            try {
+                const importedData = JSON.parse(jsonInput);
+                // In a real app, you would process and add these rules
+                showToast(`Successfully imported ${importedData.rules ? importedData.rules.length : 0} rules`, 'success');
+                closeModal();
+            } catch (error) {
+                showToast('Invalid JSON format', 'error');
+            }
+        }
+
+        function addCondition() {
+            const container = document.getElementById('conditions-container');
+            if (container) {
+                container.innerHTML = `
+                    <div class="bg-slate-50 rounded-lg border border-border p-4 space-y-4">
+                        <div class="flex justify-between items-center">
+                            <h4 class="text-sm font-semibold text-slate-800">Additional Condition 1</h4>
+                            <button class="text-slate-400 hover:text-danger" onclick="removeCondition(this)">
+                                <i class="fa-solid fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Condition Type</label>
+                                <select class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
+                                    <option>AND</option>
+                                    <option>OR</option>
+                                    <option>NOT</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Operator</label>
+                                <select class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
+                                    <option>All of the following</option>
+                                    <option>Any of the following</option>
+                                    <option>None of the following</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="border-t border-border pt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-slate-700">Conditions</span>
+                                <button class="text-xs text-primary hover:underline" onclick="addSubCondition(this)">
+                                    + Add Condition
+                                </button>
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2 p-2 bg-white rounded border border-border">
+                                    <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1 px-2 border w-32">
+                                        <option>Device Status</option>
+                                        <option>Tag Value</option>
+                                        <option>Time Range</option>
+                                    </select>
+                                    <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1 px-2 border w-24">
+                                        <option>==</option>
+                                        <option>!=</option>
+                                    </select>
+                                    <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1 px-2 border flex-1">
+                                        <option>Online</option>
+                                        <option>Offline</option>
+                                        <option>Error</option>
+                                    </select>
+                                    <button class="text-slate-400 hover:text-danger" onclick="removeSubCondition(this)">
+                                        <i class="fa-solid fa-times text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function removeCondition(button) {
+            const conditionDiv = button.closest('.bg-slate-50');
+            if (conditionDiv) {
+                conditionDiv.remove();
+            }
+        }
+
+        function addSubCondition(button) {
+            const container = button.closest('.border-t').querySelector('.space-y-2');
+            if (container) {
+                const newCondition = document.createElement('div');
+                newCondition.className = 'flex items-center gap-2 p-2 bg-white rounded border border-border';
+                newCondition.innerHTML = `
+                    <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1 px-2 border w-32">
+                        <option>Device Status</option>
+                        <option>Tag Value</option>
+                        <option>Time Range</option>
+                    </select>
+                    <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1 px-2 border w-24">
+                        <option>==</option>
+                        <option>!=</option>
+                        <option>></option>
+                        <option><</option>
+                    </select>
+                    <input type="text" class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1 px-2 border flex-1" placeholder="Value">
+                    <button class="text-slate-400 hover:text-danger" onclick="removeSubCondition(this)">
+                        <i class="fa-solid fa-times text-xs"></i>
+                    </button>
+                `;
+                container.appendChild(newCondition);
+            }
+        }
+
+        function removeSubCondition(button) {
+            const conditionDiv = button.closest('.flex.items-center');
+            if (conditionDiv) {
+                conditionDiv.remove();
+            }
+        }
+
+        // ========== INITIALIZATION ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSidebar();
+            loadRules();
+            
+            // Initialize wizard
+            goToStep(1);
+            
+            // Initialize gateway select
+            const gatewaySelect = document.getElementById('gateway-select');
+            if (gatewaySelect) {
+                gatewaySelect.addEventListener('change', function() {
+                    showConfirmation(
+                        'Switch Gateway',
+                        'Switch to another gateway? Unsaved changes will be lost.',
+                        () => {
+                            location.reload();
+                        }
+                    );
+                });
+            }
+            
+            // Initialize rule status toggle
+            const ruleStatusToggle = document.getElementById('rule-status-toggle');
+            if (ruleStatusToggle) {
+                ruleStatusToggle.addEventListener('change', function() {
+                    currentRuleData.enabled = this.checked;
+                    showToast(`Rule ${this.checked ? 'enabled' : 'disabled'}`, 'info');
+                });
+            }
+            
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+            
+            // Initial responsive setup
+            setTimeout(handleResponsive, 100);
+            
+            // Select first rule by default
+            setTimeout(() => {
+                if (rules.length > 0 && !selectedRule) {
+                    selectRule(rules[0].id);
+                }
+            }, 500);
+        });
+
+        // Handle keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+S to save
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveChanges();
+            }
+            
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                closeModal();
+                closeConfirmation();
+            }
+            
+            // Arrow keys for wizard navigation
+            if (!e.ctrlKey && !e.altKey) {
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    if (currentStep < 3) goToStep(currentStep + 1);
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    if (currentStep > 1) goToStep(currentStep - 1);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

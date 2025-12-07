@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnostics & Live Terminal - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-3.1.1.min.js"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* Terminal Scrollbar */
+        .terminal-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .terminal-scroll::-webkit-scrollbar-thumb { background: #475569; }
+        
+        /* Modal System */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
+        }
+        
+        .modal-backdrop.active {
+            display: flex;
+        }
+        
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 500px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s ease;
+        }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #E2E8F0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1E293B;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #64748B;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            color: #475569;
+            background-color: #F1F5F9;
+        }
+        
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #F8FAFC;
+        }
+        
+        .modal-button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #E2E8F0;
+            background: white;
+            color: #475569;
+        }
+        
+        .modal-button:hover {
+            background: #F8FAFC;
+        }
+        
+        .modal-button.primary {
+            background: #2563EB;
+            color: white;
+            border-color: #2563EB;
+        }
+        
+        .modal-button.primary:hover {
+            background: #1D4ED8;
+        }
+        
+        .modal-button.danger {
+            background: #EF4444;
+            color: white;
+            border-color: #EF4444;
+        }
+        
+        .modal-button.danger:hover {
+            background: #DC2626;
+        }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #CBD5E1;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2563EB;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .toast.success { background: #10B981; }
+        .toast.error { background: #EF4444; }
+        .toast.warning { background: #F59E0B; }
+        .toast.info { background: #2563EB; }
+        
+        /* Custom toggle for checkboxes */
+        .toggle-checkbox {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .toggle-checkbox + .toggle-label {
+            display: block;
+            width: 40px;
+            height: 20px;
+            background: #CBD5E1;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .toggle-checkbox + .toggle-label:after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .toggle-checkbox:checked + .toggle-label {
+            background: #2563EB;
+        }
+        
+        .toggle-checkbox:checked + .toggle-label:after {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+
+    <!-- Modal Container -->
+    <div id="modal-container" class="modal-backdrop"></div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- HEADER -->
+    <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex items-center justify-between">
+                <!-- Left: Logo & Title -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium">Diagnostics & Terminal</span>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showDiagnosticsHelp()">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="save-btn" onclick="saveSettings()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- SECTION 1: SYSTEM LOG VIEWER -->
+        <section id="section-logs" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-list-ul mr-2 text-primary"></i> 
+                    <span class="mr-2">System Log Viewer</span>
+                    <span class="text-xs font-normal text-slate-500">Live Stream</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Real-time Monitoring
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- Sidebar Filters -->
+                <div class="lg:col-span-1">
+                    <div class="bg-slate-50 border border-border rounded-lg p-4">
+                        <h3 class="text-sm font-semibold text-slate-900 mb-3 border-b pb-2">Log Filters</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-2">Search</label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"></i>
+                                    <input type="text" placeholder="Filter logs..." class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-2">Log Level</label>
+                                <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                    <option>All Levels</option>
+                                    <option>ERROR</option>
+                                    <option>WARN</option>
+                                    <option>INFO</option>
+                                    <option>DEBUG</option>
+                                    <option>TRACE</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-2">Categories</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">System Core</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Network</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Modbus Engine</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">ACS (Anti-Collision)</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">MQTT/Cloud</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between pt-4 border-t border-border">
+                                <label class="flex items-center">
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="liveStream" checked>
+                                        <span class="toggle-slider"></span>
+                                    </div>
+                                    <span class="ml-2 text-sm text-slate-700">Live Stream</span>
+                                </label>
+                                <button class="text-primary hover:text-primaryHover text-sm font-medium flex items-center" onclick="downloadLogs()">
+                                    <i class="fa-solid fa-download mr-1"></i> Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Console -->
+                <div class="lg:col-span-3">
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden h-full">
+                        <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-emerald-400"></i>
+                                <span class="text-sm font-medium text-slate-200">System Log Console</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">Auto-scroll: ON</span>
+                                <button class="text-xs text-slate-300 hover:text-white px-2 py-1" onclick="clearLogConsole()">
+                                    <i class="fa-solid fa-trash mr-1"></i> Clear
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="log-console" class="font-mono text-xs leading-5 text-slate-300 p-4 h-96 overflow-y-auto terminal-scroll">
+                            <!-- Logs will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: LIVE TERMINAL -->
+        <section id="section-terminal" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-terminal mr-2 text-emerald-500"></i> 
+                    <span class="mr-2">Live Terminal</span>
+                    <span class="text-xs font-normal text-slate-500">SSH Session</span>
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
+                        <i class="fa-solid fa-triangle-exclamation mr-1"></i>Admin Access
+                    </span>
+                    <span class="text-xs text-slate-500">Session expires in 28:14</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- Terminal Controls -->
+                <div class="lg:col-span-1">
+                    <div class="bg-slate-50 border border-border rounded-lg p-4">
+                        <h3 class="text-sm font-semibold text-slate-900 mb-3 border-b pb-2">Terminal Settings</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-2">Connection Type</label>
+                                <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                    <option selected>SSH</option>
+                                    <option>Serial</option>
+                                    <option>Telnet</option>
+                                    <option>WebSocket</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-2">Command History</label>
+                                <div class="space-y-2 max-h-40 overflow-y-auto">
+                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('uname -a')">
+                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>uname -a
+                                    </button>
+                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('top -b -n 1 | head -n 5')">
+                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>top -b -n 1 | head -n 5
+                                    </button>
+                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('rf-test-tool --scan')">
+                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>rf-test-tool --scan
+                                    </button>
+                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('df -h')">
+                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>df -h
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="pt-4 border-t border-border">
+                                <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="connectTerminal()">
+                                    <i class="fa-solid fa-plug mr-2"></i> Connect Terminal
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Terminal Console -->
+                <div class="lg:col-span-3">
+                    <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden h-full">
+                        <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-emerald-400"></i>
+                                <span class="text-sm font-medium text-slate-200">root@univa-gw:~</span>
+                            </div>
+                            <button class="text-xs text-slate-300 hover:text-white px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded" onclick="disconnectTerminal()">
+                                Disconnect
+                            </button>
+                        </div>
+                        
+                        <div id="terminal-output" class="font-mono text-sm text-slate-300 p-4 h-96 overflow-y-auto terminal-scroll">
+                            <div class="mb-4">
+                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">uname -a</span><br>
+                                Linux univa-gw 5.10.0-21-arm64 #1 SMP Debian 5.10.162-1 (2023-01-21) aarch64 GNU/Linux
+                            </div>
+                            <div class="mb-4">
+                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">top -b -n 1 | head -n 5</span><br>
+                                top - 09:45:02 up 2 days, 14:12,  1 user,  load average: 0.45, 0.32, 0.28<br>
+                                Tasks: 112 total,   1 running, 111 sleeping,   0 stopped,   0 zombie<br>
+                                %Cpu(s):  4.2 us,  1.8 sy,  0.0 ni, 93.8 id,  0.1 wa,  0.0 hi,  0.1 si,  0.0 st<br>
+                                MiB Mem :   3920.0 total,   1452.2 free,    824.5 used,   1643.3 buff/cache<br>
+                                MiB Swap:      0.0 total,      0.0 free,      0.0 used.   2850.1 avail Mem
+                            </div>
+                            <div class="mb-4">
+                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">rf-test-tool --scan</span><br>
+                                Scanning 433MHz band...<br>
+                                [+] Channel 1 (433.100): RSSI -92 dBm (Clear)<br>
+                                [+] Channel 2 (433.200): RSSI -88 dBm (Clear)<br>
+                                [!] Channel 3 (433.300): RSSI -45 dBm (BUSY)<br>
+                                Scan complete.
+                            </div>
+                            <div id="terminal-cursor">
+                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="animate-pulse bg-slate-500 w-2 h-4 inline-block align-middle ml-1"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="px-4 py-2 bg-slate-800 border-t border-slate-700">
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="terminal-input" placeholder="Enter command..." class="flex-1 bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500" onkeypress="handleTerminalInput(event)">
+                                <button class="text-sm text-slate-300 hover:text-white px-4 py-2 bg-primary hover:bg-primaryHover rounded" onclick="sendCommand()">
+                                    Send
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: SYSTEM RESOURCE MONITOR -->
+        <section id="section-resources" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-chart-line mr-2 text-warning"></i> 
+                    <span class="mr-2">System Resource Monitor</span>
+                    <span class="text-xs font-normal text-slate-500">Real-time Metrics</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Live Updates
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- CPU/RAM Chart -->
+                <div class="bg-slate-50 border border-border rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-800 text-sm">CPU & Memory Usage</h3>
+                        <div class="flex gap-2 text-xs">
+                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span>CPU</span>
+                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success"></span>RAM</span>
+                        </div>
+                    </div>
+                    <div id="chart-cpu" class="h-[200px] w-full"></div>
+                </div>
+
+                <!-- RF Signal Chart -->
+                <div class="bg-slate-50 border border-border rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-800 text-sm">RF Signal Quality (RSSI)</h3>
+                        <span class="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">Good (-65dBm)</span>
+                    </div>
+                    <div id="chart-rf" class="h-[200px] w-full"></div>
+                </div>
+
+                <!-- Network Throughput -->
+                <div class="bg-slate-50 border border-border rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-800 text-sm">Network I/O (KB/s)</h3>
+                        <span class="text-xs text-slate-500">eth0</span>
+                    </div>
+                    <div id="chart-net" class="h-[200px] w-full"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: DIAGNOSTIC TOOLS -->
+        <section id="section-tools" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-screwdriver-wrench mr-2 text-danger"></i> 
+                    <span class="mr-2">Diagnostic Tools</span>
+                    <span class="text-xs font-normal text-slate-500">Advanced Utilities</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Packet Capture & Analysis
+                </div>
+            </div>
+
+            <div class="border-b border-border">
+                <div class="flex space-x-8">
+                    <button id="tab-packet" class="pb-4 border-b-2 border-primary text-primary font-medium text-sm flex items-center">
+                        <i class="fa-solid fa-network-wired mr-2"></i> Packet Capture
+                    </button>
+                    <button id="tab-serial" class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center transition-colors">
+                        <i class="fa-solid fa-microchip mr-2"></i> Serial Monitor
+                    </button>
+                    <button id="tab-rf" class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center transition-colors">
+                        <i class="fa-solid fa-tower-broadcast mr-2"></i> RF Scanner
+                    </button>
+                </div>
+            </div>
+
+            <!-- Packet Capture Content -->
+            <div id="content-packet" class="pt-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Capture Interface</label>
+                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                <option>eth0 (WAN)</option>
+                                <option>wlan0 (WiFi)</option>
+                                <option>can0 (CAN Bus)</option>
+                                <option>rf0 (Radio)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Capture Duration</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">10s</button>
+                                <button class="text-sm border border-primary bg-primary/5 text-primary rounded-lg py-2 font-medium">30s</button>
+                                <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">Custom</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Protocol Filters</label>
+                            <div class="space-y-3">
+                                <label class="flex items-center">
+                                    <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">Modbus TCP (Port 502)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">MQTT (Port 1883/8883)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">HTTP/HTTPS</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">SSH (Port 22)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Capture Settings</label>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-700">Promiscuous Mode</span>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="promiscuous" checked>
+                                        <span class="toggle-slider"></span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-700">Store to File</span>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="store-file">
+                                        <span class="toggle-slider"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="w-full mt-6 bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="startPacketCapture()">
+                            <i class="fa-solid fa-play mr-2"></i> Start Capture
+                        </button>
+                        <button class="w-full mt-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="showCaptureSettings()">
+                            <i class="fa-solid fa-cog mr-2"></i> Advanced Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Serial Monitor Content (Hidden) -->
+            <div id="content-serial" class="pt-6 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Serial Port</label>
+                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                <option>/dev/ttyUSB0</option>
+                                <option>/dev/ttyUSB1</option>
+                                <option>/dev/ttyACM0</option>
+                                <option>/dev/ttyS0</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Baud Rate</label>
+                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                <option>9600</option>
+                                <option>19200</option>
+                                <option>38400</option>
+                                <option selected>115200</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Data Bits</label>
+                                <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                    <option>7</option>
+                                    <option selected>8</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Parity</label>
+                                <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                    <option selected>None</option>
+                                    <option>Odd</option>
+                                    <option>Even</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Flow Control</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
+                                    <span class="ml-2 text-sm text-slate-700">RTS/CTS</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
+                                    <span class="ml-2 text-sm text-slate-700">XON/XOFF</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-slate-700">Serial Console</span>
+                                <button class="text-xs text-primary hover:text-primaryHover" onclick="clearSerialConsole()">Clear</button>
+                            </div>
+                            <div id="serial-console" class="bg-slate-900 text-slate-300 font-mono text-xs p-2 rounded h-32 overflow-y-auto">
+                                <div>> Serial port opened at 115200 baud</div>
+                                <div>> Ready for data transmission</div>
+                                <div>> Monitoring Modbus RTU traffic...</div>
+                            </div>
+                        </div>
+                        
+                        <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="connectSerial()">
+                            <i class="fa-solid fa-plug mr-2"></i> Connect Serial
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RF Scanner Content (Hidden) -->
+            <div id="content-rf" class="pt-6 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Frequency Range</label>
+                            <div class="flex items-center">
+                                <input type="number" value="433" min="300" max="500" class="w-20 text-sm border border-border rounded-lg px-3 py-2">
+                                <span class="mx-2 text-slate-500">-</span>
+                                <input type="number" value="434" min="300" max="500" class="w-20 text-sm border border-border rounded-lg px-3 py-2">
+                                <span class="ml-2 text-sm text-slate-700">MHz</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Step Size</label>
+                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                <option>0.1 MHz</option>
+                                <option selected>0.2 MHz</option>
+                                <option>0.5 MHz</option>
+                                <option>1.0 MHz</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Scan Sensitivity</label>
+                            <div class="flex items-center">
+                                <input type="range" id="sensitivity" min="-120" max="-30" value="-80" class="flex-1" oninput="updateSensitivityValue(this.value)">
+                                <span class="ml-4 text-sm font-medium text-slate-900 w-20 text-right" id="sensitivityValue">-80 dBm</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                <span>-120 dBm</span>
+                                <span>-30 dBm</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Output Format</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="flex items-center justify-center p-2 border border-border rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="radio" name="rfFormat" value="csv" class="h-4 w-4 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">CSV</span>
+                                </label>
+                                <label class="flex items-center justify-center p-2 border border-primary rounded cursor-pointer bg-blue-50">
+                                    <input type="radio" name="rfFormat" value="json" checked class="h-4 w-4 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">JSON</span>
+                                </label>
+                                <label class="flex items-center justify-center p-2 border border-border rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="radio" name="rfFormat" value="text" class="h-4 w-4 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">Text</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-slate-700">Scan Results</span>
+                                <button class="text-xs text-primary hover:text-primaryHover" onclick="exportRFScan()">Export</button>
+                            </div>
+                            <div id="rf-results" class="space-y-1">
+                                <div class="text-xs text-slate-600">433.1 MHz: -92 dBm (Clear)</div>
+                                <div class="text-xs text-slate-600">433.3 MHz: -45 dBm (BUSY)</div>
+                                <div class="text-xs text-slate-600">433.5 MHz: -85 dBm (Clear)</div>
+                                <div class="text-xs text-slate-600">433.7 MHz: -82 dBm (Clear)</div>
+                            </div>
+                        </div>
+                        
+                        <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="startRFScan()">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Start RF Scan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runQuickDiagnostics()">
+                    <i class="fa-solid fa-stethoscope mr-2 text-slate-400"></i> Quick Diagnostics
+                </button>
+                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="exportAllData()">
+                    <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export All
+                </button>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="clearAllLogs()">
+                    <i class="fa-solid fa-trash mr-2"></i> Clear Data
+                </button>
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                    Cancel
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" onclick="saveSettings()">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Diagnostics Settings
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ==================== APPLICATION STATE ====================
+        let appState = {
+            terminalConnected: true,
+            liveLogsEnabled: true,
+            charts: {},
+            unsavedChanges: false,
+            serialConnected: false,
+            rfScanning: false,
+            packetCaptureActive: false
+        };
+
+        // ==================== MODAL SYSTEM ====================
+        class ModalSystem {
+            constructor() {
+                this.modalContainer = null;
+                this.init();
+            }
+
+            init() {
+                this.modalContainer = document.getElementById('modal-container');
+            }
+
+            show(options) {
+                const {
+                    title = 'Modal',
+                    content = '',
+                    size = 'md',
+                    showCloseButton = true,
+                    buttons = [],
+                    onClose = null,
+                    type = 'info'
+                } = options;
+
+                this.modalContainer.innerHTML = '';
+
+                const modal = document.createElement('div');
+                modal.className = 'modal-content';
+                modal.style.width = this.getSize(size);
+
+                // Modal header
+                const modalHeader = document.createElement('div');
+                modalHeader.className = 'modal-header';
+
+                const titleElement = document.createElement('h3');
+                titleElement.className = 'modal-title';
+                
+                const icons = {
+                    info: 'fa-circle-info',
+                    warning: 'fa-triangle-exclamation',
+                    danger: 'fa-circle-exclamation',
+                    success: 'fa-circle-check'
+                };
+                
+                if (icons[type]) {
+                    const icon = document.createElement('i');
+                    icon.className = `fa-solid ${icons[type]}`;
+                    icon.style.color = this.getTypeColor(type);
+                    titleElement.appendChild(icon);
+                }
+                
+                const titleText = document.createElement('span');
+                titleText.textContent = title;
+                titleElement.appendChild(titleText);
+
+                modalHeader.appendChild(titleElement);
+
+                if (showCloseButton) {
+                    const closeButton = document.createElement('button');
+                    closeButton.className = 'modal-close';
+                    closeButton.innerHTML = '<i class="fa-solid fa-times"></i>';
+                    closeButton.addEventListener('click', () => {
+                        this.hide();
+                        if (onClose) onClose();
+                    });
+                    modalHeader.appendChild(closeButton);
+                }
+
+                modal.appendChild(modalHeader);
+
+                // Modal body
+                const modalBody = document.createElement('div');
+                modalBody.className = 'modal-body';
+                
+                if (typeof content === 'string') {
+                    modalBody.innerHTML = content;
+                } else {
+                    modalBody.appendChild(content);
+                }
+                
+                modal.appendChild(modalBody);
+
+                // Modal footer
+                if (buttons.length > 0) {
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer';
+
+                    buttons.forEach(button => {
+                        const btn = document.createElement('button');
+                        btn.className = 'modal-button';
+                        if (button.primary) btn.classList.add('primary');
+                        if (button.danger) btn.classList.add('danger');
+                        btn.textContent = button.text;
+
+                        btn.addEventListener('click', () => {
+                            if (button.onClick) button.onClick();
+                            if (button.closeOnClick !== false) this.hide();
+                        });
+
+                        modalFooter.appendChild(btn);
+                    });
+
+                    modal.appendChild(modalFooter);
+                }
+
+                this.modalContainer.appendChild(modal);
+                this.modalContainer.classList.add('active');
+
+                const escapeHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        this.hide();
+                        if (onClose) onClose();
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                };
+                document.addEventListener('keydown', escapeHandler);
+
+                modal._escapeHandler = escapeHandler;
+            }
+
+            hide() {
+                this.modalContainer.classList.remove('active');
+                const modal = this.modalContainer.querySelector('.modal-content');
+                if (modal && modal._escapeHandler) {
+                    document.removeEventListener('keydown', modal._escapeHandler);
+                }
+            }
+
+            getSize(size) {
+                const sizes = {
+                    sm: '400px',
+                    md: '500px',
+                    lg: '600px',
+                    xl: '800px'
+                };
+                return sizes[size] || sizes.md;
+            }
+
+            getTypeColor(type) {
+                const colors = {
+                    info: '#2563EB',
+                    warning: '#F59E0B',
+                    danger: '#EF4444',
+                    success: '#10B981'
+                };
+                return colors[type] || colors.info;
+            }
+        }
+
+        // ==================== TOAST SYSTEM ====================
+        class ToastSystem {
+            constructor() {
+                this.container = null;
+                this.init();
+            }
+
+            init() {
+                this.container = document.getElementById('toast-container');
+            }
+
+            show(message, type = 'info', duration = 3000) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                toast.style.transform = 'translateX(120%)';
+
+                this.container.appendChild(toast);
+
+                // Animate in
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(0)';
+                }, 10);
+
+                // Remove after duration
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(120%)';
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 300);
+                }, duration);
+
+                return toast;
+            }
+        }
+
+        // ==================== DIALOG FUNCTIONS ====================
+        function showConfirm(options) {
+            const modal = new ModalSystem();
+            
+            const {
+                title = 'Confirm Action',
+                message = 'Are you sure you want to proceed?',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                type = 'warning',
+                onConfirm = null,
+                onCancel = null
+            } = options;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                color: #475569;
+                line-height: 1.5;
+            `;
+            content.innerHTML = `<p>${message}</p>`;
+
+            modal.show({
+                title,
+                content,
+                type,
+                buttons: [
+                    {
+                        text: cancelText,
+                        onClick: () => {
+                            if (onCancel) onCancel();
+                        }
+                    },
+                    {
+                        text: confirmText,
+                        primary: true,
+                        onClick: () => {
+                            if (onConfirm) onConfirm();
+                        }
+                    }
+                ],
+                onClose: onCancel
+            });
+        }
+
+        function showAlert(options) {
+            const modal = new ModalSystem();
+            
+            const {
+                title = 'Alert',
+                message = '',
+                type = 'info',
+                buttonText = 'OK',
+                onClose = null
+            } = options;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                color: #475569;
+                line-height: 1.5;
+            `;
+            content.innerHTML = `<p>${message}</p>`;
+
+            modal.show({
+                title,
+                content,
+                type,
+                buttons: [{
+                    text: buttonText,
+                    primary: true,
+                    onClick: () => {
+                        if (onClose) onClose();
+                    }
+                }],
+                onClose
+            });
+        }
+
+        // ==================== CAPTURE SETTINGS MODAL ====================
+        function showCaptureSettings() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            content.innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Capture Duration</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button class="text-sm border border-slate-300 rounded-lg py-2 hover:bg-slate-50" onclick="setCaptureDuration(10)">10s</button>
+                        <button class="text-sm border border-primary bg-primary/10 text-primary rounded-lg py-2 font-medium" onclick="setCaptureDuration(30)">30s</button>
+                        <button class="text-sm border border-slate-300 rounded-lg py-2 hover:bg-slate-50" onclick="setCaptureDuration(60)">60s</button>
+                        <div>
+                            <input type="number" id="customDuration" min="1" max="300" value="30" class="w-full text-sm border-slate-300 rounded-lg px-3 py-2" placeholder="Custom">
+                            <span class="text-xs text-slate-500 mt-1 block text-center">seconds</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Buffer Size</label>
+                    <div class="flex items-center">
+                        <input type="range" id="bufferSize" min="1" max="100" value="50" class="flex-1" oninput="updateBufferValue(this.value)">
+                        <span class="ml-4 text-sm font-medium text-slate-900 w-16 text-right" id="bufferValue">50 MB</span>
+                    </div>
+                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                        <span>1 MB</span>
+                        <span>100 MB</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Packet Filter</label>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-700">IP Filtering</span>
+                            <div class="relative inline-block w-10 align-middle select-none">
+                                <input type="checkbox" id="ipFilter" class="toggle-checkbox">
+                                <label for="ipFilter" class="toggle-label"></label>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-700">Port Filtering</span>
+                            <div class="relative inline-block w-10 align-middle select-none">
+                                <input type="checkbox" id="portFilter" checked class="toggle-checkbox">
+                                <label for="portFilter" class="toggle-label"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Output Format</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <label class="flex items-center justify-center p-2 border border-slate-300 rounded cursor-pointer hover:bg-slate-50">
+                            <input type="radio" name="captureFormat" value="pcap" checked class="h-4 w-4 text-primary focus:ring-primary">
+                            <span class="ml-2 text-sm text-slate-700">PCAP</span>
+                        </label>
+                        <label class="flex items-center justify-center p-2 border border-slate-300 rounded cursor-pointer hover:bg-slate-50">
+                            <input type="radio" name="captureFormat" value="json" class="h-4 w-4 text-primary focus:ring-primary">
+                            <span class="ml-2 text-sm text-slate-700">JSON</span>
+                        </label>
+                        <label class="flex items-center justify-center p-2 border border-slate-300 rounded cursor-pointer hover:bg-slate-50">
+                            <input type="radio" name="captureFormat" value="text" class="h-4 w-4 text-primary focus:ring-primary">
+                            <span class="ml-2 text-sm text-slate-700">Text</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Packet Capture Settings',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Save Settings',
+                    primary: true,
+                    onClick: () => {
+                        const toast = new ToastSystem();
+                        toast.show('Capture settings saved', 'success');
+                        modal.hide();
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== HELPER FUNCTIONS ====================
+        function setCaptureDuration(seconds) {
+            const customDuration = document.getElementById('customDuration');
+            if (customDuration) {
+                customDuration.value = seconds;
+            }
+            const toast = new ToastSystem();
+            toast.show(`Capture duration set to ${seconds} seconds`, 'info');
+        }
+
+        function updateBufferValue(value) {
+            const bufferValue = document.getElementById('bufferValue');
+            if (bufferValue) {
+                bufferValue.textContent = `${value} MB`;
+            }
+        }
+
+        function updateSensitivityValue(value) {
+            const sensitivityValue = document.getElementById('sensitivityValue');
+            if (sensitivityValue) {
+                sensitivityValue.textContent = `${value} dBm`;
+            }
+        }
+
+        function clearSerialConsole() {
+            const console = document.getElementById('serial-console');
+            if (console) {
+                console.innerHTML = '<div>> Console cleared</div>';
+                const toast = new ToastSystem();
+                toast.show('Serial console cleared', 'info');
+            }
+        }
+
+        function exportRFScan() {
+            const toast = new ToastSystem();
+            toast.show('RF scan data exported successfully', 'success');
+        }
+
+        // ==================== LOG FUNCTIONS ====================
+        function downloadLogs() {
+            showConfirm({
+                title: 'Download Logs',
+                message: 'Download all system logs as a compressed archive?',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('Downloading logs...', 'info');
+                    
+                    setTimeout(() => {
+                        toast.show('Logs downloaded successfully', 'success');
+                    }, 1500);
+                }
+            });
+        }
+
+        function clearAllLogs() {
+            showConfirm({
+                title: 'Clear All Logs',
+                message: 'Clear all system logs and diagnostic data? This cannot be undone.',
+                type: 'danger',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('All logs cleared', 'success');
+                    
+                    // Clear log console
+                    const logConsole = document.getElementById('log-console');
+                    if (logConsole) {
+                        logConsole.innerHTML = '<div class="text-slate-400">[Logs cleared]</div>';
+                    }
+                }
+            });
+        }
+
+        function clearLogConsole() {
+            const logConsole = document.getElementById('log-console');
+            if (logConsole) {
+                logConsole.innerHTML = '<div class="text-slate-400">[Logs cleared]</div>';
+                const toast = new ToastSystem();
+                toast.show('Log console cleared', 'info');
+            }
+        }
+
+        // ==================== TERMINAL FUNCTIONS ====================
+        function executeCommand(command) {
+            const terminalInput = document.getElementById('terminal-input');
+            if (terminalInput) {
+                terminalInput.value = command;
+                sendCommand();
+            }
+        }
+
+        function sendCommand() {
+            const terminalInput = document.getElementById('terminal-input');
+            const command = terminalInput ? terminalInput.value.trim() : '';
+            if (!command) return;
+
+            const terminalOutput = document.getElementById('terminal-output');
+            const cursor = document.getElementById('terminal-cursor');
+            
+            if (!terminalOutput || !cursor) return;
+            
+            // Add command to output
+            const commandElement = document.createElement('div');
+            commandElement.className = 'mb-2';
+            commandElement.innerHTML = `
+                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">${command}</span>
+            `;
+            
+            cursor.parentNode.insertBefore(commandElement, cursor);
+            
+            // Simulate command execution
+            const response = getCommandResponse(command);
+            setTimeout(() => {
+                const responseElement = document.createElement('div');
+                responseElement.className = 'mb-4 text-slate-300 text-sm';
+                responseElement.innerHTML = response;
+                cursor.parentNode.insertBefore(responseElement, cursor);
+                
+                // Scroll to bottom
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            }, 500);
+            
+            if (terminalInput) {
+                terminalInput.value = '';
+            }
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function getCommandResponse(command) {
+            const responses = {
+                'help': 'Available commands: status, scan, test, clear, reboot',
+                'status': 'System Status:<br>CPU: 34.2%<br>Memory: 68.5%<br>Network: Connected<br>RF: Active<br>Modbus: Running',
+                'scan': 'Scanning network...<br>Found 12 devices<br>3 Modbus devices<br>2 RF endpoints',
+                'test': 'Running diagnostics...<br>All systems operational<br>No errors detected',
+                'clear': 'Terminal cleared',
+                'reboot': 'System reboot initiated<br>Disconnecting in 5 seconds...',
+                'uname -a': 'Linux univa-gw 5.10.0-21-arm64 #1 SMP Debian 5.10.162-1 (2023-01-21) aarch64 GNU/Linux',
+                'df -h': 'Filesystem      Size  Used Avail Use% Mounted on<br>/dev/root        29G   12G   16G  44% /<br>/dev/mmcblk0p1  253M   52M  201M  21% /boot',
+                'top -b -n 1 | head -n 5': 'top - 09:45:02 up 2 days, 14:12,  1 user,  load average: 0.45, 0.32, 0.28<br>Tasks: 112 total,   1 running, 111 sleeping,   0 stopped,   0 zombie<br>%Cpu(s):  4.2 us,  1.8 sy,  0.0 ni, 93.8 id,  0.1 wa,  0.0 hi,  0.1 si,  0.0 st<br>MiB Mem :   3920.0 total,   1452.2 free,    824.5 used,   1643.3 buff/cache<br>MiB Swap:      0.0 total,      0.0 free,      0.0 used.   2850.1 avail Mem',
+                'rf-test-tool --scan': 'Scanning 433MHz band...<br>[+] Channel 1 (433.100): RSSI -92 dBm (Clear)<br>[+] Channel 2 (433.200): RSSI -88 dBm (Clear)<br>[!] Channel 3 (433.300): RSSI -45 dBm (BUSY)<br>Scan complete.'
+            };
+            
+            return responses[command] || `Command not found: ${command}<br>Type 'help' for available commands`;
+        }
+
+        function handleTerminalInput(event) {
+            if (event.key === 'Enter') {
+                sendCommand();
+            }
+        }
+
+        function connectTerminal() {
+            if (!appState.terminalConnected) {
+                appState.terminalConnected = true;
+                const toast = new ToastSystem();
+                toast.show('Terminal connected successfully', 'success');
+            } else {
+                const toast = new ToastSystem();
+                toast.show('Terminal is already connected', 'info');
+            }
+        }
+
+        function disconnectTerminal() {
+            showConfirm({
+                title: 'Disconnect Terminal',
+                message: 'Are you sure you want to disconnect the terminal session?',
+                onConfirm: () => {
+                    appState.terminalConnected = false;
+                    const toast = new ToastSystem();
+                    toast.show('Terminal disconnected', 'info');
+                }
+            });
+        }
+
+        // ==================== SERIAL FUNCTIONS ====================
+        function connectSerial() {
+            if (!appState.serialConnected) {
+                appState.serialConnected = true;
+                const toast = new ToastSystem();
+                toast.show('Serial port connected', 'success');
+                
+                // Add sample serial data
+                setTimeout(() => {
+                    const console = document.getElementById('serial-console');
+                    if (console) {
+                        const newEntry = document.createElement('div');
+                        newEntry.textContent = '> Received: 01 03 00 00 00 02 C4 0B';
+                        console.appendChild(newEntry);
+                        console.scrollTop = console.scrollHeight;
+                    }
+                }, 1000);
+            } else {
+                const toast = new ToastSystem();
+                toast.show('Serial port already connected', 'info');
+            }
+        }
+
+        // ==================== RF SCAN FUNCTIONS ====================
+        function startRFScan() {
+            if (!appState.rfScanning) {
+                appState.rfScanning = true;
+                const toast = new ToastSystem();
+                toast.show('RF scan started...', 'info');
+                
+                // Simulate scan results
+                setTimeout(() => {
+                    appState.rfScanning = false;
+                    const results = document.getElementById('rf-results');
+                    if (results) {
+                        results.innerHTML = `
+                            <div class="text-xs text-slate-600">433.1 MHz: -92 dBm (Clear)</div>
+                            <div class="text-xs text-slate-600">433.2 MHz: -88 dBm (Clear)</div>
+                            <div class="text-xs text-slate-600 font-medium">433.3 MHz: -45 dBm (BUSY)</div>
+                            <div class="text-xs text-slate-600">433.4 MHz: -78 dBm (Clear)</div>
+                            <div class="text-xs text-slate-600">433.5 MHz: -85 dBm (Clear)</div>
+                        `;
+                    }
+                    toast.show('RF scan completed', 'success');
+                }, 3000);
+            } else {
+                const toast = new ToastSystem();
+                toast.show('RF scan already in progress', 'warning');
+            }
+        }
+
+        // ==================== DIAGNOSTIC TOOLS FUNCTIONS ====================
+        function startPacketCapture() {
+            if (!appState.packetCaptureActive) {
+                appState.packetCaptureActive = true;
+                const toast = new ToastSystem();
+                toast.show('Packet capture started...', 'info');
+                
+                // Simulate capture progress
+                setTimeout(() => {
+                    appState.packetCaptureActive = false;
+                    toast.show('Packet capture completed. 1.2MB captured.', 'success');
+                }, 3000);
+            } else {
+                const toast = new ToastSystem();
+                toast.show('Packet capture already active', 'warning');
+            }
+        }
+
+        // ==================== TAB FUNCTIONS ====================
+        function setupTabs() {
+            const tabs = {
+                'tab-packet': 'content-packet',
+                'tab-serial': 'content-serial',
+                'tab-rf': 'content-rf'
+            };
+
+            Object.keys(tabs).forEach(tabId => {
+                const tab = document.getElementById(tabId);
+                if (tab) {
+                    tab.addEventListener('click', function() {
+                        // Reset all tabs
+                        Object.keys(tabs).forEach(t => {
+                            document.getElementById(t).classList.remove('border-primary', 'text-primary');
+                            document.getElementById(t).classList.add('border-transparent', 'text-slate-500');
+                            document.getElementById(tabs[t]).classList.add('hidden');
+                        });
+
+                        // Activate clicked tab
+                        this.classList.remove('border-transparent', 'text-slate-500');
+                        this.classList.add('border-primary', 'text-primary');
+                        document.getElementById(tabs[tabId]).classList.remove('hidden');
+                    });
+                }
+            });
+        }
+
+        // ==================== ACTION FUNCTIONS ====================
+        function runQuickDiagnostics() {
+            const toast = new ToastSystem();
+            toast.show('Running quick diagnostics...', 'info');
+            
+            setTimeout(() => {
+                toast.show('Diagnostics completed - All systems OK', 'success');
+            }, 2000);
+        }
+
+        function exportAllData() {
+            showConfirm({
+                title: 'Export All Data',
+                message: 'Export all diagnostics data including logs and metrics?',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('Data export started...', 'info');
+                    setTimeout(() => {
+                        toast.show('All data exported successfully', 'success');
+                    }, 3000);
+                }
+            });
+        }
+
+        function rebootSystem() {
+            showConfirm({
+                title: 'Reboot System',
+                message: 'Reboot the Univa Gateway? All active connections will be lost.',
+                type: 'warning',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('System reboot initiated...', 'warning');
+                    
+                    setTimeout(() => {
+                        toast.show('System rebooting in 5 seconds...', 'warning');
+                    }, 1000);
+                }
+            });
+        }
+
+        function resetToDefaults() {
+            showConfirm({
+                title: 'Reset to Defaults',
+                message: 'Reset all diagnostics settings to factory defaults?',
+                type: 'danger',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('Settings reset to defaults', 'success');
+                    
+                    // Reload page after reset
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+            });
+        }
+
+        // ==================== HELP FUNCTIONS ====================
+        function showDiagnosticsHelp() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                line-height: 1.6;
+            `;
+            
+            content.innerHTML = `
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Diagnostics Dashboard</h4>
+                    <p style="color: #475569; font-size: 14px;">
+                        This dashboard provides real-time monitoring and diagnostics for the Univa Gateway.
+                        Monitor system logs, execute commands, capture network traffic, and analyze RF signals.
+                    </p>
+                </div>
+                
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Quick Reference</h4>
+                    <div style="background: #F8FAFC; border-radius: 6px; padding: 12px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <i class="fa-solid fa-list-ul text-primary mr-2" style="width: 20px;"></i>
+                            <span style="font-weight: 500; color: #1E293B;">Log Viewer:</span>
+                            <span style="color: #64748B; margin-left: 8px;">Real-time system logs with filtering</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <i class="fa-solid fa-terminal text-emerald-500 mr-2" style="width: 20px;"></i>
+                            <span style="font-weight: 500; color: #1E293B;">Terminal:</span>
+                            <span style="color: #64748B; margin-left: 8px;">SSH access for command execution</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <i class="fa-solid fa-chart-line text-warning mr-2" style="width: 20px;"></i>
+                            <span style="font-weight: 500; color: #1E293B;">Monitoring:</span>
+                            <span style="color: #64748B; margin-left: 8px;">CPU, memory, network, and RF metrics</span>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <i class="fa-solid fa-screwdriver-wrench text-danger mr-2" style="width: 20px;"></i>
+                            <span style="font-weight: 500; color: #1E293B;">Tools:</span>
+                            <span style="color: #64748B; margin-left: 8px;">Packet capture, serial monitor, RF scanner</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Troubleshooting</h4>
+                    <ul style="color: #475569; font-size: 14px; padding-left: 20px;">
+                        <li><strong>Logs not updating:</strong> Check live stream toggle</li>
+                        <li><strong>Terminal not responding:</strong> Verify SSH connection</li>
+                        <li><strong>Charts not loading:</strong> Refresh the page</li>
+                        <li><strong>Capture not starting:</strong> Check interface permissions</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 6px; padding: 12px;">
+                    <div style="display: flex; align-items: start; gap: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color: #2563EB; margin-top: 2px;"></i>
+                        <div>
+                            <div style="font-weight: 600; color: #1E40AF;">Need Assistance?</div>
+                            <div style="font-size: 12px; color: #475569; margin-top: 2px;">
+                                Contact support at support@univa.com or call +1 (555) 123-4567.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Diagnostics Help',
+                content,
+                size: 'lg',
+                buttons: [{
+                    text: 'Close',
+                    primary: true,
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== SETTINGS MANAGEMENT ====================
+        function saveSettings() {
+            showConfirm({
+                title: 'Save Settings',
+                message: 'Save all diagnostics configuration settings?',
+                onConfirm: () => {
+                    const saveBtn = document.getElementById('save-btn');
+                    const originalText = saveBtn.innerHTML;
+                    
+                    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+                    saveBtn.disabled = true;
+                    
+                    setTimeout(() => {
+                        saveBtn.innerHTML = originalText;
+                        saveBtn.disabled = false;
+                        appState.unsavedChanges = false;
+                        const toast = new ToastSystem();
+                        toast.show('Diagnostics settings saved successfully', 'success');
+                    }, 1500);
+                }
+            });
+        }
+
+        function markUnsavedChanges() {
+            appState.unsavedChanges = true;
+            const saveBtn = document.getElementById('save-btn');
+            if (saveBtn && !saveBtn.disabled) {
+                saveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+            }
+        }
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize systems
+            window.modalSystem = new ModalSystem();
+            window.toastSystem = new ToastSystem();
+            
+            // Setup tabs
+            setupTabs();
+            
+            // Initialize event listeners
+            setupEventListeners();
+            
+            // Load initial data
+            loadInitialData();
+            
+            // Initialize charts
+            initializeCharts();
+            
+            // Start log stream
+            startLogStream();
+        });
+
+        function setupEventListeners() {
+            // Cancel buttons
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    showConfirm({
+                        title: 'Discard Changes',
+                        message: 'Discard all unsaved diagnostics settings?',
+                        type: 'warning',
+                        onConfirm: () => {
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    showConfirm({
+                        title: 'Discard Changes',
+                        message: 'Discard all unsaved diagnostics settings?',
+                        type: 'warning',
+                        onConfirm: () => {
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            // Gateway select
+            const gatewaySelect = document.getElementById('gateway-select');
+            if (gatewaySelect) {
+                gatewaySelect.addEventListener('change', function() {
+                    if (appState.unsavedChanges) {
+                        showConfirm({
+                            title: 'Switch Gateway',
+                            message: 'Switch to another gateway? Unsaved settings will be lost.',
+                            type: 'warning',
+                            onConfirm: () => {
+                                window.location.reload();
+                            },
+                            onCancel: () => {
+                                this.value = 'Univa-GW-01';
+                            }
+                        });
+                    } else {
+                        window.location.reload();
+                    }
+                });
+            }
+            
+            // Input change listeners
+            document.querySelectorAll('input, select, textarea').forEach(element => {
+                element.addEventListener('change', markUnsavedChanges);
+            });
+            
+            // Live stream toggle
+            const liveStreamToggle = document.getElementById('liveStream');
+            if (liveStreamToggle) {
+                liveStreamToggle.addEventListener('change', function() {
+                    appState.liveLogsEnabled = this.checked;
+                    const toast = new ToastSystem();
+                    toast.show(`Live stream ${this.checked ? 'enabled' : 'disabled'}`, 'info');
+                });
+            }
+        }
+
+        function loadInitialData() {
+            // Initialize sample logs
+            const sampleLogs = [
+                { time: '09:44:10', level: 'INFO', category: 'System', message: 'Boot sequence completed successfully.' },
+                { time: '09:44:11', level: 'INFO', category: 'NetManager', message: 'eth0 link up, IP 192.168.1.105' },
+                { time: '09:44:12', level: 'INFO', category: 'ModbusEngine', message: 'Polling device ID 3, address 40001' },
+                { time: '09:44:13', level: 'WARN', category: 'ACS', message: 'Distance sensor unstable - retrying...' },
+                { time: '09:44:14', level: 'ERROR', category: 'CraneIQ', message: 'Brake slip detected on Hoist Motor' },
+                { time: '09:44:14', level: 'INFO', category: 'RuleEngine', message: 'Triggering rule "BrakeAlert"' },
+                { time: '09:44:15', level: 'INFO', category: 'MQTT', message: 'Publishing payload to topic \'univa/gw01/alerts\'' },
+                { time: '09:44:15', level: 'INFO', category: 'ModbusEngine', message: 'Write Register 40010 Value 1 OK' },
+                { time: '09:44:16', level: 'WARN', category: 'RF_Radio', message: 'High noise floor on channel 434.100 MHz (-85dBm)' },
+                { time: '09:44:17', level: 'INFO', category: 'ACS', message: 'Sensor stabilized. Distance: 12.4m' }
+            ];
+
+            const logConsole = document.getElementById('log-console');
+            if (logConsole) {
+                sampleLogs.forEach(log => {
+                    const logElement = document.createElement('div');
+                    logElement.className = 'mb-1';
+                    logElement.innerHTML = `
+                        <span class="text-emerald-500">[${log.time}]</span>
+                        <span class="${getLogLevelColor(log.level)} ml-2">${log.level.padEnd(5)}</span>
+                        <span class="text-slate-400 ml-2">${log.category}:</span>
+                        <span class="text-slate-300 ml-1">${log.message}</span>
+                    `;
+                    logConsole.appendChild(logElement);
+                });
+            }
+        }
+
+        function getLogLevelColor(level) {
+            switch(level) {
+                case 'ERROR': return 'text-danger';
+                case 'WARN': return 'text-warning';
+                case 'INFO': return 'text-primary';
+                case 'DEBUG': return 'text-slate-500';
+                default: return 'text-slate-300';
+            }
+        }
+
+        function initializeCharts() {
+            // CPU/Memory Chart
+            const cpuTrace = {
+                x: Array.from({length: 60}, (_, i) => i),
+                y: Array.from({length: 60}, () => Math.random() * 20 + 30),
+                mode: 'lines',
+                name: 'CPU',
+                line: {color: '#2563EB', width: 2}
+            };
+
+            const memTrace = {
+                x: Array.from({length: 60}, (_, i) => i),
+                y: Array.from({length: 60}, () => Math.random() * 15 + 45),
+                mode: 'lines',
+                name: 'RAM',
+                line: {color: '#10B981', width: 2}
+            };
+
+            appState.charts.cpu = Plotly.newPlot('chart-cpu', [cpuTrace, memTrace], {
+                margin: {t: 10, r: 10, b: 30, l: 40},
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {showgrid: true, gridcolor: '#E2E8F0', zeroline: false, showticklabels: false},
+                yaxis: {showgrid: true, gridcolor: '#E2E8F0', zeroline: false, range: [0, 100], ticksuffix: '%'}
+            });
+
+            // RF Signal Chart
+            const rfTrace = {
+                x: ['433.1', '433.2', '433.3', '433.4', '433.5', '433.6', '433.7', '433.8', '433.9'],
+                y: [-92, -88, -45, -78, -85, -90, -82, -87, -91],
+                type: 'bar',
+                marker: {color: '#10B981'}
+            };
+
+            appState.charts.rf = Plotly.newPlot('chart-rf', [rfTrace], {
+                margin: {t: 10, r: 10, b: 40, l: 40},
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {showgrid: true, gridcolor: '#E2E8F0', zeroline: false},
+                yaxis: {showgrid: true, gridcolor: '#E2E8F0', zeroline: false, title: 'dBm'}
+            });
+
+            // Network Chart
+            const netInTrace = {
+                x: Array.from({length: 30}, (_, i) => i),
+                y: Array.from({length: 30}, () => Math.random() * 800 + 200),
+                mode: 'lines',
+                name: 'In',
+                line: {color: '#2563EB', width: 2}
+            };
+
+            const netOutTrace = {
+                x: Array.from({length: 30}, (_, i) => i),
+                y: Array.from({length: 30}, () => Math.random() * 400 + 100),
+                mode: 'lines',
+                name: 'Out',
+                line: {color: '#10B981', width: 2}
+            };
+
+            appState.charts.net = Plotly.newPlot('chart-net', [netInTrace, netOutTrace], {
+                margin: {t: 10, r: 10, b: 30, l: 40},
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {showgrid: true, gridcolor: '#E2E8F0', zeroline: false, showticklabels: false},
+                yaxis: {showgrid: true, gridcolor: '#E2E8F0', zeroline: false, title: 'KB/s'}
+            });
+
+            // Start chart updates
+            updateCharts();
+        }
+
+        function updateCharts() {
+            setInterval(() => {
+                // Update CPU chart
+                Plotly.extendTraces('chart-cpu', {
+                    y: [[Math.random() * 20 + 30], [Math.random() * 15 + 45]]
+                }, [0, 1]);
+
+                // Update network chart
+                Plotly.extendTraces('chart-net', {
+                    y: [[Math.random() * 800 + 200], [Math.random() * 400 + 100]]
+                }, [0, 1]);
+
+                // Shift data if too long
+                Plotly.relayout('chart-cpu', {
+                    'xaxis.range': [0, 60]
+                });
+
+                Plotly.relayout('chart-net', {
+                    'xaxis.range': [0, 30]
+                });
+            }, 1000);
+        }
+
+        function startLogStream() {
+            if (!appState.liveLogsEnabled) return;
+
+            const logConsole = document.getElementById('log-console');
+            if (!logConsole) return;
+
+            const logLevels = ['INFO', 'WARN', 'ERROR', 'DEBUG'];
+            const categories = ['System', 'Network', 'ModbusEngine', 'ACS', 'MQTT', 'CraneIQ', 'RF_Radio'];
+            const messages = [
+                'Heartbeat received from device #3',
+                'Data packet processed successfully',
+                'Connection established with cloud endpoint',
+                'Sensor calibration in progress',
+                'Telemetry data uploaded to cloud',
+                'Buffer cache cleared',
+                'Device status updated',
+                'Network latency within threshold',
+                'Memory usage optimal',
+                'Backup scheduled completed'
+            ];
+
+            setInterval(() => {
+                if (!appState.liveLogsEnabled) return;
+
+                const now = new Date();
+                const time = now.toTimeString().split(' ')[0];
+                const level = logLevels[Math.floor(Math.random() * logLevels.length)];
+                const category = categories[Math.floor(Math.random() * categories.length)];
+                const message = messages[Math.floor(Math.random() * messages.length)];
+
+                const logElement = document.createElement('div');
+                logElement.className = 'mb-1';
+                logElement.innerHTML = `
+                    <span class="text-emerald-500">[${time}]</span>
+                    <span class="${getLogLevelColor(level)} ml-2">${level.padEnd(5)}</span>
+                    <span class="text-slate-400 ml-2">${category}:</span>
+                    <span class="text-slate-300 ml-1">${message}</span>
+                `;
+                
+                logConsole.appendChild(logElement);
+                logConsole.scrollTop = logConsole.scrollHeight;
+            }, 2000);
+        }
+
+        // ==================== GLOBAL EXPORTS ====================
+        window.showConfirm = showConfirm;
+        window.showAlert = showAlert;
+        window.showCaptureSettings = showCaptureSettings;
+        window.downloadLogs = downloadLogs;
+        window.clearAllLogs = clearAllLogs;
+        window.clearLogConsole = clearLogConsole;
+        window.executeCommand = executeCommand;
+        window.sendCommand = sendCommand;
+        window.handleTerminalInput = handleTerminalInput;
+        window.connectTerminal = connectTerminal;
+        window.disconnectTerminal = disconnectTerminal;
+        window.clearSerialConsole = clearSerialConsole;
+        window.connectSerial = connectSerial;
+        window.startRFScan = startRFScan;
+        window.exportRFScan = exportRFScan;
+        window.startPacketCapture = startPacketCapture;
+        window.runQuickDiagnostics = runQuickDiagnostics;
+        window.exportAllData = exportAllData;
+        window.rebootSystem = rebootSystem;
+        window.resetToDefaults = resetToDefaults;
+        window.showDiagnosticsHelp = showDiagnosticsHelp;
+        window.saveSettings = saveSettings;
+        window.setCaptureDuration = setCaptureDuration;
+        window.updateBufferValue = updateBufferValue;
+        window.updateSensitivityValue = updateSensitivityValue;
+    </script>
+</body>
+</html>

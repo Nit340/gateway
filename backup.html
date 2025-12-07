@@ -1,0 +1,2370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Backup, Restore & Configuration Snapshots</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        /* File upload styling */
+        .file-upload-area {
+            border: 2px dashed #CBD5E1;
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .file-upload-area:hover {
+            border-color: #2563EB;
+            background-color: #EFF6FF;
+        }
+        
+        .file-upload-area.dragover {
+            border-color: #2563EB;
+            background-color: #EFF6FF;
+        }
+        
+        /* Validation styling */
+        .validation-pass {
+            color: #10B981;
+        }
+        
+        .validation-fail {
+            color: #EF4444;
+        }
+        
+        /* Progress bar */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: #E2E8F0;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #2563EB;
+            transition: width 0.3s ease;
+        }
+        
+        /* Dropdown styles */
+        .dropdown-container {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .dropdown-content {
+            position: absolute;
+            background-color: white;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.1);
+            z-index: 100;
+            border-radius: 0.5rem;
+            border: 1px solid #E2E8F0;
+            display: none;
+        }
+        
+        .dropdown-content.show {
+            display: block;
+        }
+        
+        .dropdown-item {
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            display: block;
+            color: #475569;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .dropdown-item:hover {
+            background-color: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            align-items: center;
+            gap: 12px;
+            max-width: 400px;
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-left: 4px solid #10B981;
+        }
+        
+        .toast.error {
+            border-left: 4px solid #EF4444;
+        }
+        
+        .toast.warning {
+            border-left: 4px solid #F59E0B;
+        }
+        
+        .toast.info {
+            border-left: 4px solid #2563EB;
+        }
+        
+        /* Toggle switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #CBD5E1;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2563EB;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid #E2E8F0;
+            border-top: 3px solid #2563EB;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Accordion - FIXED VERSION */
+        .accordion-header {
+            cursor: pointer;
+            padding: 16px;
+            background-color: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .accordion-header:hover {
+            background-color: #F1F5F9;
+        }
+        
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, border-color 0.3s ease-out;
+            border: 1px solid transparent;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .accordion-content.show {
+            max-height: 1000px;
+            border-color: #E2E8F0;
+            overflow: visible;
+        }
+        
+        /* Sidebar Styles (matching the general config) */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        /* Hidden utility */
+        .hidden {
+            display: none !important;
+        }
+        
+        .flex {
+            display: flex;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 text-slate-900 font-bold text-xl tracking-tight">
+                        <i class="fa-solid fa-network-wired text-primary"></i>
+                        <span>Univa Gateway</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-300 mx-2"></div>
+                    <nav class="flex items-center gap-2 text-sm text-slate-500">
+                        <span class="hover:text-slate-900 cursor-pointer">Configuration</span>
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                        <span class="text-slate-900 font-medium">Backup, Restore & Snapshots</span>
+                    </nav>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <!-- User Dropdown -->
+                    <div class="dropdown-container">
+                        <button class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors" id="user-dropdown-btn">
+                            <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <span class="text-sm font-medium text-slate-700">Admin</span>
+                            <i class="fa-solid fa-chevron-down text-xs text-slate-500"></i>
+                        </button>
+                        <div class="dropdown-content" id="user-dropdown">
+                            <div class="dropdown-item" onclick="showToast('Profile clicked', 'info')">
+                                <i class="fa-solid fa-user mr-2"></i> Profile
+                            </div>
+                            <div class="dropdown-item" onclick="showToast('Settings clicked', 'info')">
+                                <i class="fa-solid fa-gear mr-2"></i> Settings
+                            </div>
+                            <div class="dropdown-item" onclick="showToast('Notifications clicked', 'info')">
+                                <i class="fa-solid fa-bell mr-2"></i> Notifications
+                            </div>
+                            <div class="h-px bg-slate-200 my-1"></div>
+                            <div class="dropdown-item text-red-600 hover:text-red-700" onclick="logout()">
+                                <i class="fa-solid fa-right-from-bracket mr-2"></i> Logout
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">Gateway</span>
+                        <select class="bg-transparent text-sm font-medium text-slate-700 outline-none cursor-pointer" id="gateway-select">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors" onclick="resetForm()">Reset</button>
+                        <button class="px-4 py-1.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-md shadow-sm transition-colors" onclick="saveChanges()">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Toast Container -->
+        <div id="toast-container"></div>
+
+        <main class="max-w-[1600px] mx-auto p-6 space-y-6">
+            
+            <!-- Page Title & Actions -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">System Backup & Recovery</h1>
+                    <p class="text-slate-500 text-sm mt-1">Safeguard, export, and recover all configuration data. Ensures business continuity, disaster recovery, and migration between devices.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="showModal('dr-modal')" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        Disaster Recovery
+                    </button>
+                    <button onclick="showModal('create-snapshot-modal')" class="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-camera"></i>
+                        Take Snapshot
+                    </button>
+                    <button onclick="showModal('create-backup-modal')" class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primaryHover transition-colors flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-plus"></i>
+                        Create Backup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Overview Section -->
+            <section id="backup-overview" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Status Card -->
+                <div class="bg-white p-5 rounded-xl border border-border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-shield-halved text-6xl text-success"></i>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 text-xs font-semibold uppercase tracking-wider">System Status</span>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="flex h-3 w-3 rounded-full bg-success"></span>
+                            <h3 class="text-2xl font-bold text-slate-900">Healthy</h3>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-2">
+                        Last check: <span class="font-medium text-slate-700">Today, 10:45 AM</span>
+                    </div>
+                </div>
+
+                <!-- Last Backup Card -->
+                <div class="bg-white p-5 rounded-xl border border-border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-clock-rotate-left text-6xl text-primary"></i>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 text-xs font-semibold uppercase tracking-wider">Last Backup</span>
+                        <h3 class="text-2xl font-bold text-slate-900 mt-1">12 Jun, 02:00</h3>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs mt-2">
+                        <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Success</span>
+                        <span class="text-slate-500">220 MB • Local</span>
+                    </div>
+                </div>
+
+                <!-- Storage Card -->
+                <div class="bg-white p-5 rounded-xl border border-border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-hard-drive text-6xl text-slate-600"></i>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 text-xs font-semibold uppercase tracking-wider">Backup Storage</span>
+                        <div class="flex items-end gap-1 mt-1">
+                            <h3 class="text-2xl font-bold text-slate-900">1.4 GB</h3>
+                            <span class="text-sm text-slate-500 mb-1">/ 10 GB</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-1.5 mt-3">
+                        <div class="bg-primary h-1.5 rounded-full" style="width: 14%"></div>
+                    </div>
+                </div>
+
+                <!-- Snapshots Card -->
+                <div class="bg-white p-5 rounded-xl border border-border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-camera text-6xl text-purple-500"></i>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 text-xs font-semibold uppercase tracking-wider">Snapshots</span>
+                        <h3 class="text-2xl font-bold text-slate-900 mt-1">3 Active</h3>
+                    </div>
+                    <div class="flex items-center justify-between mt-2">
+                        <span class="text-xs text-slate-500">Latest: Today, 11:05 AM</span>
+                        <button onclick="showModal('create-snapshot-modal')" class="text-xs text-primary font-medium hover:underline">Take New</button>
+                    </div>
+                </div>
+            </section>
+
+            <div class="grid grid-cols-1 gap-6">
+                
+                <!-- Section 1: Backup List -->
+                <section id="backup-list" class="space-y-6">
+                    
+                    <!-- Backups Table Card -->
+                    <div class="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div class="px-6 py-4 border-b border-border flex items-center justify-between bg-slate-50">
+                            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-box-archive text-slate-400"></i>
+                                Backup Files
+                            </h3>
+                            <div class="flex gap-2">
+                                <div class="relative">
+                                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                    <input type="text" placeholder="Search backups..." class="pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" id="search-backups">
+                                </div>
+                                <div class="dropdown-container">
+                                    <button class="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors" id="filter-dropdown-btn">
+                                        <i class="fa-solid fa-filter"></i>
+                                    </button>
+                                    <div class="dropdown-content" id="filter-dropdown">
+                                        <div class="p-3">
+                                            <h4 class="text-xs font-semibold text-slate-700 mb-2">Filter By Type</h4>
+                                            <div class="space-y-2">
+                                                <label class="flex items-center">
+                                                    <input type="checkbox" class="h-3 w-3 text-primary border-slate-300 rounded" checked>
+                                                    <span class="ml-2 text-xs text-slate-600">Full System</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="checkbox" class="h-3 w-3 text-primary border-slate-300 rounded" checked>
+                                                    <span class="ml-2 text-xs text-slate-600">Config Only</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="checkbox" class="h-3 w-3 text-primary border-slate-300 rounded" checked>
+                                                    <span class="ml-2 text-xs text-slate-600">Pre-OTA</span>
+                                                </label>
+                                            </div>
+                                            <div class="h-px bg-slate-200 my-3"></div>
+                                            <h4 class="text-xs font-semibold text-slate-700 mb-2">Filter By Date</h4>
+                                            <div class="space-y-2">
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="date-filter" class="h-3 w-3 text-primary border-slate-300" checked>
+                                                    <span class="ml-2 text-xs text-slate-600">All dates</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="date-filter" class="h-3 w-3 text-primary border-slate-300">
+                                                    <span class="ml-2 text-xs text-slate-600">Last 7 days</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="radio" name="date-filter" class="h-3 w-3 text-primary border-slate-300">
+                                                    <span class="ml-2 text-xs text-slate-600">Last 30 days</span>
+                                                </label>
+                                            </div>
+                                            <button class="w-full mt-3 text-xs font-medium text-primary hover:text-primaryHover" onclick="clearFilters()">
+                                                Clear All Filters
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onclick="showModal('storage-management-modal')" class="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded transition-colors" title="Storage Management">
+                                    <i class="fa-solid fa-database"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
+                                    <tr>
+                                        <th class="px-6 py-3">Backup Name</th>
+                                        <th class="px-6 py-3">Created At</th>
+                                        <th class="px-6 py-3">Type</th>
+                                        <th class="px-6 py-3">Size</th>
+                                        <th class="px-6 py-3">Checksum</th>
+                                        <th class="px-6 py-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100" id="backup-table-body">
+                                    <!-- Table rows will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="px-6 py-3 border-t border-border bg-slate-50 text-xs text-slate-500">
+                            <div class="flex items-center justify-between">
+                                <div id="table-summary">Loading backup files...</div>
+                                <button onclick="showModal('import-backup-modal')" class="text-primary hover:text-primaryHover font-medium">
+                                    <i class="fa-solid fa-file-import mr-1"></i> Import Backup File
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Scheduled Backups (Accordion) -->
+                    <div class="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div class="accordion-header" onclick="toggleAccordion('scheduled-backups')">
+                            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-clock text-slate-400"></i>
+                                Scheduled Backups
+                            </h3>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-500">Status:</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="schedule-toggle" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="text-xs font-medium text-success" id="schedule-status">Enabled</span>
+                                <i class="fa-solid fa-chevron-down text-slate-400 transition-transform" id="accordion-icon"></i>
+                            </div>
+                        </div>
+                        <div class="accordion-content" id="scheduled-backups-content">
+                            <div class="p-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Frequency</label>
+                                        <select class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" id="frequency-select">
+                                            <option value="daily">Daily</option>
+                                            <option value="weekly">Weekly</option>
+                                            <option value="monthly">Monthly</option>
+                                            <option value="custom">Custom Interval</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Time</label>
+                                        <input type="time" value="02:00" class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" id="schedule-time">
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Retention Count</label>
+                                        <div class="flex items-center gap-2">
+                                            <input type="number" value="5" min="1" max="100" class="w-24 border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" id="retention-count">
+                                            <span class="text-sm text-slate-600">backups to keep</span>
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-1">Oldest backups will be auto-deleted</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Backup Type</label>
+                                        <select class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" id="schedule-type">
+                                            <option value="full">Full System</option>
+                                            <option value="config">Configuration Only</option>
+                                            <option value="alternate">Alternate (Full/Config)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Destination</label>
+                                        <div class="space-y-3" id="destination-options">
+                                            <label class="flex items-center gap-2">
+                                                <input type="radio" name="destination" class="h-4 w-4 text-primary border-slate-300 focus:ring-primary" checked value="local">
+                                                <span class="text-sm text-slate-700">Local Storage</span>
+                                            </label>
+                                            <label class="flex items-center gap-2">
+                                                <input type="radio" name="destination" class="h-4 w-4 text-primary border-slate-300 focus:ring-primary" value="aws">
+                                                <span class="text-sm text-slate-700">AWS S3 Bucket</span>
+                                                <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Connected</span>
+                                            </label>
+                                            <label class="flex items-center gap-2">
+                                                <input type="radio" name="destination" class="h-4 w-4 text-primary border-slate-300 focus:ring-primary" value="sftp">
+                                                <span class="text-sm text-slate-700">SFTP Server</span>
+                                                <span class="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded">Configure</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="md:col-span-2">
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox" id="auto-purge" class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary" checked>
+                                            <label for="auto-purge" class="text-sm text-slate-700">Enable auto-purge of old backups</label>
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-2">
+                                            <input type="checkbox" id="encrypt-backups" class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary" checked>
+                                            <label for="encrypt-backups" class="text-sm text-slate-700">Encrypt all scheduled backups (AES-256)</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="md:col-span-2">
+                                        <div class="flex items-center justify-between pt-4 border-t border-border">
+                                            <div class="text-sm text-slate-600">
+                                                Next backup: <span class="font-medium text-slate-900" id="next-backup-preview">Tomorrow, 02:00 AM</span>
+                                            </div>
+                                            <button onclick="saveSchedule()" class="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primaryHover transition-colors">
+                                                Save Schedule
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ========== ALL MODALS ========== -->
+        
+        <!-- Create Backup Modal -->
+        <div id="create-backup-modal" class="modal-overlay hidden"></div>
+        <div id="create-backup-modal-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[500px] max-w-full">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-file-zipper text-primary"></i>
+                        Create New Backup
+                    </h3>
+                    <button onclick="hideModal('create-backup-modal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Backup Name</label>
+                            <input type="text" id="backup-name" value="ManualBackup_20250312" class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary">
+                            <p class="text-xs text-slate-500 mt-1">Auto-generated or custom name</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Backup Type</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                                    <input type="radio" name="backup-type" class="h-4 w-4 text-primary mb-2 focus:ring-primary" checked value="full">
+                                    <i class="fa-solid fa-server text-blue-500 text-xl mb-2"></i>
+                                    <span class="text-sm text-slate-700">Full System</span>
+                                    <span class="text-xs text-slate-500 mt-1">Includes everything</span>
+                                </label>
+                                <label class="flex flex-col items-center justify-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                                    <input type="radio" name="backup-type" class="h-4 w-4 text-primary mb-2 focus:ring-primary" value="config">
+                                    <i class="fa-solid fa-gears text-purple-500 text-xl mb-2"></i>
+                                    <span class="text-sm text-slate-700">Config Only</span>
+                                    <span class="text-xs text-slate-500 mt-1">Settings only, no data</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Storage Destination</label>
+                            <select class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" id="backup-destination">
+                                <option value="local">Local Storage (Primary)</option>
+                                <option value="aws">AWS S3 Bucket</option>
+                                <option value="usb">USB Drive (if connected)</option>
+                                <option value="sftp">SFTP Server</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="flex items-center gap-2 text-sm text-slate-700">
+                                <input type="checkbox" id="encrypt-backup" checked class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary">
+                                <span>Encrypt backup with AES-256</span>
+                            </label>
+                        </div>
+                        
+                        <div class="bg-slate-50 p-4 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-sm font-medium text-slate-700">Estimated Size</div>
+                                    <div class="text-xs text-slate-500">Based on current configuration</div>
+                                </div>
+                                <div class="text-lg font-semibold text-slate-900" id="estimated-size">~220 MB</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="px-6 py-4 border-t border-border bg-slate-50 rounded-b-xl flex justify-end gap-3">
+                    <button onclick="hideModal('create-backup-modal')" class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300">
+                        Cancel
+                    </button>
+                    <button onclick="startBackupCreation()" class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm">
+                        <i class="fa-solid fa-play mr-2"></i> Start Backup
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Snapshot Modal -->
+        <div id="create-snapshot-modal" class="modal-overlay hidden"></div>
+        <div id="create-snapshot-modal-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[400px] max-w-full">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-camera text-primary"></i>
+                        Take Configuration Snapshot
+                    </h3>
+                    <button onclick="hideModal('create-snapshot-modal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Snapshot Name</label>
+                            <input type="text" id="snapshot-name" placeholder="e.g., Pre_ACS_Update" class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+                            <textarea id="snapshot-description" rows="2" placeholder="Describe what changes you're about to make..." class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Tags</label>
+                            <div class="flex flex-wrap gap-2" id="snapshot-tags">
+                                <span class="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded cursor-pointer" onclick="removeTag(this)">ACS</span>
+                                <span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 text-xs rounded cursor-pointer" onclick="removeTag(this)">Zoning</span>
+                                <button onclick="addTag()" class="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded hover:bg-slate-200">
+                                    <i class="fa-solid fa-plus mr-1"></i> Add
+                                </button>
+                            </div>
+                            <div id="tag-input-container" class="hidden mt-2">
+                                <div class="flex gap-2">
+                                    <input type="text" id="new-tag-input" class="flex-1 text-xs border-slate-300 rounded px-2 py-1" placeholder="Enter tag name">
+                                    <button onclick="addNewTag()" class="text-xs px-2 py-1 bg-primary text-white rounded">Add</button>
+                                    <button onclick="hideTagInput()" class="text-xs px-2 py-1 bg-slate-200 text-slate-600 rounded">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="px-6 py-4 border-t border-border bg-slate-50 rounded-b-xl flex justify-end gap-3">
+                    <button onclick="hideModal('create-snapshot-modal')" class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300">
+                        Cancel
+                    </button>
+                    <button onclick="takeSnapshot()" class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm">
+                        Take Snapshot
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disaster Recovery Modal -->
+        <div id="dr-modal" class="modal-overlay hidden"></div>
+        <div id="dr-modal-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[600px] max-w-full">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
+                        Disaster Recovery
+                    </h3>
+                    <button onclick="hideModal('dr-modal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6">
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                        <div class="flex items-start gap-3">
+                            <i class="fa-solid fa-circle-exclamation text-red-500 mt-0.5"></i>
+                            <div>
+                                <h4 class="font-semibold text-red-700 text-sm">Warning: Critical Operation</h4>
+                                <p class="text-red-600 text-sm mt-1">This will restore the system to a previous state and may cause data loss. Ensure you have a current backup before proceeding.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Select Recovery Point</label>
+                            <select class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary" id="recovery-point-select">
+                                <option value="latest">DailyBackup_20250612 (Latest)</option>
+                                <option value="config">ConfigOnly_20250610</option>
+                                <option value="ota">OTA_SafePoint_20250609</option>
+                                <option value="weekly">WeeklyFull_20250605</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Recovery Type</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="radio" name="recovery-type" class="h-4 w-4 text-primary border-slate-300 focus:ring-primary" checked value="full">
+                                    <span class="ml-2 text-sm text-slate-700">Full System Restore</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="recovery-type" class="h-4 w-4 text-primary border-slate-300 focus:ring-primary" value="config">
+                                    <span class="ml-2 text-sm text-slate-700">Configuration Only</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="recovery-type" class="h-4 w-4 text-primary border-slate-300 focus:ring-primary" value="module">
+                                    <span class="ml-2 text-sm text-slate-700">Rollback Specific Module</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="module-select-container" class="hidden">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Select Module</label>
+                            <select class="w-full border-slate-300 rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary">
+                                <option>Zoning Module</option>
+                                <option>ACS Settings</option>
+                                <option>Device Management</option>
+                                <option>Network Configuration</option>
+                            </select>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="confirm-dr" class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary">
+                            <label for="confirm-dr" class="text-sm text-slate-700">I understand this will restart the gateway and may take several minutes</label>
+                        </div>
+                        
+                        <div class="bg-slate-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-medium text-slate-700 mb-2">Recovery Preview</h4>
+                            <div class="text-xs text-slate-600 space-y-1">
+                                <div id="recovery-preview">Full system restore from latest backup. Gateway will restart.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="px-6 py-4 border-t border-border bg-slate-50 rounded-b-xl flex justify-end gap-3">
+                    <button onclick="hideModal('dr-modal')" class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300">
+                        Cancel
+                    </button>
+                    <button onclick="initiateRecovery()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm">
+                        <i class="fa-solid fa-play mr-2"></i> Initiate Recovery
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Backup Modal -->
+        <div id="import-backup-modal" class="modal-overlay hidden"></div>
+        <div id="import-backup-modal-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[500px] max-w-full">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-file-import text-primary"></i>
+                        Import Backup File
+                    </h3>
+                    <button onclick="hideModal('import-backup-modal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-4">
+                        <div class="file-upload-area" id="import-file-upload-area">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-3"></i>
+                            <p class="text-sm text-slate-700 font-medium">Select backup file to import</p>
+                            <p class="text-xs text-slate-500 mt-1">Click to browse or drag & drop</p>
+                            <p class="text-xs text-slate-400 mt-2">Maximum file size: 5 GB</p>
+                        </div>
+                        <input type="file" id="import-backup-file" class="hidden" accept=".backup,.zip,.tar.gz">
+                        
+                        <div id="import-validation" class="hidden">
+                            <h4 class="text-sm font-medium text-slate-700 mb-2">Validation Results</h4>
+                            <div class="space-y-2 text-sm" id="import-validation-results">
+                                <!-- Validation results will be populated here -->
+                            </div>
+                            
+                            <div class="mt-4 hidden" id="backup-info">
+                                <h5 class="text-sm font-medium text-slate-700 mb-2">Backup Information</h5>
+                                <div class="text-xs space-y-1" id="backup-info-details">
+                                    <!-- Backup info will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="import-auto-restore" class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary">
+                            <label for="import-auto-restore" class="text-sm text-slate-700">Restore immediately after import</label>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="import-create-backup" class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary" checked>
+                            <label for="import-create-backup" class="text-sm text-slate-700">Create backup of current system before restore</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="px-6 py-4 border-t border-border bg-slate-50 rounded-b-xl flex justify-end gap-3">
+                    <button onclick="hideModal('import-backup-modal')" class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300">
+                        Cancel
+                    </button>
+                    <button onclick="startImportProcess()" class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm" id="import-button" disabled>
+                        Validate & Import
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Modal -->
+        <div id="progress-modal" class="modal-overlay hidden"></div>
+        <div id="progress-modal-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[400px] max-w-full">
+                <div class="px-6 py-4 border-b border-border">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-spinner fa-spin text-primary"></i>
+                        <span id="progress-title">Processing...</span>
+                    </h3>
+                </div>
+                
+                <div class="p-6">
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm text-slate-600 mb-1">
+                            <span id="progress-status">Initializing...</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-slate-600" id="progress-details">
+                        Please wait while the operation completes.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirm Dialog -->
+        <div id="confirm-dialog" class="modal-overlay hidden"></div>
+        <div id="confirm-dialog-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[400px] max-w-full">
+                <div class="p-6">
+                    <div class="flex items-start gap-3 mb-4">
+                        <i class="fa-solid fa-circle-question text-2xl text-amber-500 mt-0.5"></i>
+                        <div>
+                            <h3 class="font-bold text-lg text-slate-900" id="confirm-title">Confirm Action</h3>
+                            <p class="text-slate-600 text-sm mt-1" id="confirm-message">Are you sure you want to proceed?</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3">
+                        <button onclick="confirmDialog(false)" class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300">
+                            Cancel
+                        </button>
+                        <button onclick="confirmDialog(true)" class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm" id="confirm-action-button">
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storage Management Modal -->
+        <div id="storage-management-modal" class="modal-overlay hidden"></div>
+        <div id="storage-management-modal-container" class="modal-container hidden">
+            <div class="bg-white rounded-xl shadow-xl w-[600px] max-w-full">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <h3 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-database text-primary"></i>
+                        Storage Management
+                    </h3>
+                    <button onclick="hideModal('storage-management-modal')" class="text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6">
+                    <div class="space-y-6">
+                        <div>
+                            <h4 class="text-sm font-medium text-slate-700 mb-3">Storage Locations</h4>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-3 border border-border rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-solid fa-hard-drive text-blue-500"></i>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-900">Local Storage</div>
+                                            <div class="text-xs text-slate-500">1.4 GB used of 10 GB</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">Primary</span>
+                                </div>
+                                
+                                <div class="flex items-center justify-between p-3 border border-border rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-brands fa-aws text-orange-500"></i>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-900">AWS S3 Bucket</div>
+                                            <div class="text-xs text-slate-500">320 MB • Last sync: Today 02:15</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">Synced</span>
+                                </div>
+                                
+                                <div class="flex items-center justify-between p-3 border border-border rounded-lg">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-solid fa-server text-purple-500"></i>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-900">SFTP Server</div>
+                                            <div class="text-xs text-slate-500">Not configured</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded-full">Offline</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-sm font-medium text-slate-700 mb-3">Storage Actions</h4>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button class="p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors flex flex-col items-center" onclick="showToast('Cloud sync initiated', 'info')">
+                                    <i class="fa-solid fa-cloud-arrow-up text-blue-500 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-slate-700">Sync to Cloud</span>
+                                </button>
+                                <button class="p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors flex flex-col items-center" onclick="purgeOldBackups()">
+                                    <i class="fa-solid fa-trash text-red-500 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-slate-700">Purge Old</span>
+                                </button>
+                                <button class="p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors flex flex-col items-center" onclick="generateReport()">
+                                    <i class="fa-solid fa-chart-bar text-green-500 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-slate-700">Usage Report</span>
+                                </button>
+                                <button class="p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors flex flex-col items-center" onclick="showToast('Storage configuration opened', 'info')">
+                                    <i class="fa-solid fa-gear text-slate-500 text-xl mb-2"></i>
+                                    <span class="text-xs font-medium text-slate-700">Configure</span>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-border">
+                            <div class="flex items-center justify-between">
+                                <div class="text-sm text-slate-600">
+                                    Total backup files: <span class="font-medium text-slate-900">12 files (2.1 GB)</span>
+                                </div>
+                                <button onclick="showModal('import-backup-modal')" class="text-sm font-medium text-primary hover:text-primaryHover">
+                                    <i class="fa-solid fa-plus mr-1"></i> Add Storage
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> <!-- End of main content container -->
+
+    <!-- ========== JAVASCRIPT ========== -->
+    <script>
+        // ========== GLOBAL VARIABLES ==========
+        let currentBackupData = [];
+        let currentSnapshots = [];
+        let pendingConfirmAction = null;
+        let progressInterval = null;
+        let currentProgress = 0;
+        let currentContextBackup = null;
+
+        // ========== SIDEBAR LOADING ==========
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                
+                // Insert the entire HTML content
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Update the active page to Backup & Recovery
+                updateActivePage();
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Fallback: create a basic sidebar if fetch fails
+                createFallbackSidebar();
+            }
+        }
+
+        // Create fallback sidebar if fetch fails
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-network-wired mr-2"></i> Univa Gateway
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device Management
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">System</div>
+                            <a href="backup-recovery.html" class="nav-item active">
+                                <i class="fa-solid fa-box-archive"></i> Backup & Recovery
+                                <span class="nav-item-count">12</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Update active page in sidebar
+        function updateActivePage() {
+            // Remove active class from all nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to Backup & Recovery
+            const backupLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Backup & Recovery') || 
+                item.textContent.includes('Backup & Recovery')
+            );
+            
+            if (backupLink) {
+                backupLink.classList.add('active');
+            }
+        }
+
+        // Initialize sidebar functionality
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            // Toggle sidebar
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.className = 'fa-solid fa-times';
+                } else {
+                    icon.className = 'fa-solid fa-bars';
+                }
+            });
+            
+            // Handle mobile menu
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            // Update on resize
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        // Close sidebar when clicking outside on mobile
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
+        // ========== INITIALIZATION ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing Backup & Recovery System...');
+            
+            // Load sidebar first
+            loadSidebar();
+            
+            // Initialize page components
+            initializePage();
+            loadBackupData();
+            setupEventListeners();
+        });
+
+        function initializePage() {
+            console.log('Setting up page components...');
+            
+            // Initialize accordion - FIXED: Remove manual height setting
+            document.getElementById('scheduled-backups-content').classList.add('show');
+            
+            // Initialize dropdowns
+            setupDropdowns();
+            
+            // Initialize file upload
+            setupFileUpload();
+            
+            // Initialize recovery type toggle
+            setupRecoveryTypeToggle();
+            
+            console.log('Page initialization complete');
+        }
+
+        function setupEventListeners() {
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown-container')) {
+                    closeAllDropdowns();
+                }
+            });
+
+            // Handle Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeAllDropdowns();
+                    closeAllModals();
+                }
+            });
+
+            // Search functionality
+            const searchInput = document.getElementById('search-backups');
+            if (searchInput) {
+                searchInput.addEventListener('input', searchBackups);
+            }
+
+            // Schedule toggle
+            const scheduleToggle = document.getElementById('schedule-toggle');
+            if (scheduleToggle) {
+                scheduleToggle.addEventListener('change', toggleSchedule);
+            }
+
+            // File input handlers
+            const importFileInput = document.getElementById('import-backup-file');
+            
+            if (importFileInput) {
+                importFileInput.addEventListener('change', handleImportFileSelect);
+            }
+
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+        }
+
+        // ========== DROPDOWN FUNCTIONS ==========
+        function setupDropdowns() {
+            const userDropdownBtn = document.getElementById('user-dropdown-btn');
+            const filterDropdownBtn = document.getElementById('filter-dropdown-btn');
+            
+            if (userDropdownBtn) {
+                userDropdownBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleDropdown('user-dropdown', this);
+                });
+            }
+            
+            if (filterDropdownBtn) {
+                filterDropdownBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    toggleDropdown('filter-dropdown', this);
+                });
+            }
+        }
+
+        function toggleDropdown(dropdownId, button) {
+            const dropdown = document.getElementById(dropdownId);
+            const isVisible = dropdown.classList.contains('show');
+            
+            // Close all dropdowns first
+            closeAllDropdowns();
+            
+            // Toggle the clicked dropdown
+            if (!isVisible) {
+                dropdown.classList.add('show');
+                positionDropdown(dropdown, button);
+            }
+        }
+
+        function closeAllDropdowns() {
+            document.querySelectorAll('.dropdown-content').forEach(dropdown => {
+                dropdown.classList.remove('show');
+            });
+        }
+
+        function positionDropdown(dropdown, button) {
+            const rect = button.getBoundingClientRect();
+            dropdown.style.top = (rect.bottom + window.scrollY) + 'px';
+            dropdown.style.left = (rect.left + window.scrollX) + 'px';
+        }
+
+        // ========== MODAL FUNCTIONS ==========
+        function showModal(modalId) {
+            console.log('Showing modal:', modalId);
+            const overlay = document.getElementById(modalId);
+            const container = document.getElementById(modalId + '-container');
+            
+            if (overlay && container) {
+                overlay.classList.remove('hidden');
+                container.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                
+                // Add click handler to overlay
+                overlay.onclick = function(e) {
+                    if (e.target === overlay) {
+                        hideModal(modalId);
+                    }
+                };
+                
+                // Add escape key handler
+                const escapeHandler = function(e) {
+                    if (e.key === 'Escape') {
+                        hideModal(modalId);
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                };
+                document.addEventListener('keydown', escapeHandler);
+            }
+        }
+
+        function hideModal(modalId) {
+            console.log('Hiding modal:', modalId);
+            const overlay = document.getElementById(modalId);
+            const container = document.getElementById(modalId + '-container');
+            
+            if (overlay && container) {
+                overlay.classList.add('hidden');
+                container.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+            }
+        }
+
+        function closeAllModals() {
+            const modals = ['create-backup-modal', 'create-snapshot-modal', 'dr-modal', 
+                          'import-backup-modal', 'progress-modal', 'confirm-dialog',
+                          'storage-management-modal'];
+            
+            modals.forEach(modalId => {
+                hideModal(modalId);
+            });
+        }
+
+        // ========== TOAST NOTIFICATION FUNCTIONS ==========
+        function showToast(message, type = 'info') {
+            console.log('Showing toast:', message, type);
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            const iconMap = {
+                'success': 'fa-circle-check',
+                'error': 'fa-circle-exclamation',
+                'warning': 'fa-triangle-exclamation',
+                'info': 'fa-circle-info'
+            };
+            
+            const toast = document.createElement('div');
+            toast.id = toastId;
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${iconMap[type] || 'fa-circle-info'} text-${type === 'info' ? 'blue' : type}-500"></i>
+                <div class="flex-1">
+                    <div class="font-medium text-sm text-slate-900">${message}</div>
+                </div>
+                <button onclick="dismissToast('${toastId}')" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            // Show toast with animation
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                dismissToast(toastId);
+            }, 5000);
+            
+            return toastId;
+        }
+
+        function dismissToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }
+        }
+
+        // ========== PROGRESS MODAL FUNCTIONS ==========
+        function showProgressModal(title, message) {
+            console.log('Showing progress modal:', title);
+            document.getElementById('progress-title').textContent = title;
+            document.getElementById('progress-details').textContent = message;
+            document.getElementById('progress-percent').textContent = '0%';
+            document.getElementById('progress-fill').style.width = '0%';
+            currentProgress = 0;
+            
+            showModal('progress-modal');
+        }
+
+        function hideProgressModal() {
+            console.log('Hiding progress modal');
+            hideModal('progress-modal');
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }
+
+        function updateProgress(percent, status, details) {
+            currentProgress = percent;
+            document.getElementById('progress-percent').textContent = percent + '%';
+            document.getElementById('progress-fill').style.width = percent + '%';
+            
+            if (status) {
+                document.getElementById('progress-status').textContent = status;
+            }
+            
+            if (details) {
+                document.getElementById('progress-details').textContent = details;
+            }
+        }
+
+        function simulateProgress(operation, duration = 3000) {
+            console.log('Simulating progress for:', operation);
+            showProgressModal(operation, 'Starting ' + operation + '...');
+            
+            let progress = 0;
+            const steps = 20;
+            const stepDuration = duration / steps;
+            
+            const progressMessages = {
+                'backup': ['Preparing system', 'Collecting configuration', 'Compressing files', 'Encrypting data', 'Saving backup'],
+                'restore': ['Validating backup', 'Preparing restore', 'Applying configuration', 'Restarting services', 'Verifying restore'],
+                'import': ['Reading file', 'Validating format', 'Checking compatibility', 'Extracting data', 'Importing configuration']
+            };
+            
+            const messages = progressMessages[operation] || ['Processing...', 'Please wait...'];
+            
+            progressInterval = setInterval(() => {
+                progress += 5;
+                const statusIndex = Math.floor(progress / (100 / messages.length));
+                const status = statusIndex < messages.length ? messages[statusIndex] : 'Completing...';
+                
+                updateProgress(
+                    progress,
+                    status,
+                    `Step ${Math.floor(progress/20) + 1} of 5`
+                );
+                
+                if (progress >= 100) {
+                    clearInterval(progressInterval);
+                    setTimeout(() => {
+                        hideProgressModal();
+                        showToast(operation + ' completed successfully!', 'success');
+                    }, 500);
+                }
+            }, stepDuration);
+        }
+
+        // ========== CONFIRM DIALOG FUNCTIONS ==========
+        function showConfirmDialog(title, message, confirmText, confirmAction) {
+            console.log('Showing confirm dialog:', title);
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            document.getElementById('confirm-action-button').textContent = confirmText;
+            pendingConfirmAction = confirmAction;
+            
+            showModal('confirm-dialog');
+        }
+
+        function confirmDialog(confirmed) {
+            console.log('Confirm dialog result:', confirmed);
+            hideModal('confirm-dialog');
+            
+            if (confirmed && pendingConfirmAction) {
+                pendingConfirmAction();
+            }
+            
+            pendingConfirmAction = null;
+        }
+
+        // ========== ACCORDION FUNCTIONS - FIXED VERSION ==========
+        function toggleAccordion(sectionId) {
+            const content = document.getElementById(sectionId + '-content');
+            const icon = document.getElementById('accordion-icon');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                content.classList.add('show');
+                icon.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        // ========== FILE UPLOAD FUNCTIONS ==========
+        function setupFileUpload() {
+            console.log('Setting up file upload...');
+            
+            const importFileInput = document.getElementById('import-backup-file');
+            const uploadArea = document.getElementById('import-file-upload-area');
+            
+            if (uploadArea && importFileInput) {
+                // Click to browse
+                uploadArea.addEventListener('click', () => {
+                    importFileInput.click();
+                });
+                
+                // Drag and drop
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+                
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        importFileInput.files = files;
+                        handleImportFileSelect({ target: importFileInput });
+                    }
+                });
+            }
+        }
+
+        function handleImportFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                console.log('Import file selected:', file.name);
+                validateFile(file, 'import');
+            }
+        }
+
+        function validateFile(file, type) {
+            console.log('Validating file:', file.name, type);
+            
+            const validExtensions = ['.backup', '.zip', '.tar.gz'];
+            const fileName = file.name.toLowerCase();
+            const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+            
+            if (!isValid) {
+                showToast('Invalid file type. Please upload .backup, .zip, or .tar.gz files.', 'error');
+                return;
+            }
+            
+            if (file.size > 5 * 1024 * 1024 * 1024) { // 5GB
+                showToast('File size exceeds 5GB limit.', 'error');
+                return;
+            }
+            
+            if (type === 'import') {
+                showImportValidation(file);
+            }
+        }
+
+        function showImportValidation(file) {
+            const validationDiv = document.getElementById('import-validation');
+            const resultsDiv = document.getElementById('import-validation-results');
+            const importButton = document.getElementById('import-button');
+            
+            resultsDiv.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin text-blue-500"></i>
+                    <span>Checking signature...</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin text-blue-500"></i>
+                    <span>Checking version...</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin text-blue-500"></i>
+                    <span>Verifying checksum...</span>
+                </div>
+            `;
+            
+            validationDiv.classList.remove('hidden');
+            importButton.disabled = true;
+            
+            // Simulate validation
+            setTimeout(() => {
+                resultsDiv.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-check-circle validation-pass"></i>
+                        <span>Signature valid</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-check-circle validation-pass"></i>
+                        <span>Version compatible</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-check-circle validation-pass"></i>
+                        <span>Checksum verified</span>
+                    </div>
+                `;
+                
+                // Show backup info
+                const infoDiv = document.getElementById('backup-info');
+                const detailsDiv = document.getElementById('backup-info-details');
+                
+                const fileSize = formatFileSize(file.size);
+                const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                
+                detailsDiv.innerHTML = `
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Backup Name:</span>
+                        <span class="font-medium text-slate-700">${fileNameWithoutExt}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Created:</span>
+                        <span class="font-medium text-slate-700">${new Date().toLocaleDateString()}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Type:</span>
+                        <span class="font-medium text-slate-700">Full System</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-500">Size:</span>
+                        <span class="font-medium text-slate-700">${fileSize}</span>
+                    </div>
+                `;
+                
+                infoDiv.classList.remove('hidden');
+                importButton.disabled = false;
+                
+                showToast('File validated successfully!', 'success');
+            }, 1500);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+            else return (bytes / 1073741824).toFixed(1) + ' GB';
+        }
+
+        // ========== BACKUP DATA FUNCTIONS ==========
+        function loadBackupData() {
+            console.log('Loading backup data...');
+            
+            // Simulated backup data
+            currentBackupData = [
+                {
+                    id: 1,
+                    name: 'DailyBackup_20250612',
+                    type: 'Full System',
+                    date: '2025-06-12 02:00',
+                    size: '220 MB',
+                    checksum: 'a1b2c3d4',
+                    location: 'Local',
+                    encrypted: true,
+                    description: 'Full System • Encrypted • Local'
+                },
+                {
+                    id: 2,
+                    name: 'ConfigOnly_20250610',
+                    type: 'Config Only',
+                    date: '2025-06-10 14:13',
+                    size: '32 MB',
+                    checksum: 'e5f6g7h8',
+                    location: 'Cloud S3',
+                    encrypted: true,
+                    description: 'Config Only • Cloud S3'
+                },
+                {
+                    id: 3,
+                    name: 'OTA_SafePoint',
+                    type: 'Pre-OTA',
+                    date: '2025-06-09 11:02',
+                    size: '1.2 GB',
+                    checksum: 'i9j0k1l2',
+                    location: 'USB',
+                    encrypted: false,
+                    description: 'System Image • USB'
+                }
+            ];
+            
+            renderBackupTable();
+        }
+
+        function renderBackupTable() {
+            console.log('Rendering backup table...');
+            const tbody = document.getElementById('backup-table-body');
+            tbody.innerHTML = '';
+            
+            currentBackupData.forEach(backup => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition-colors group';
+                row.dataset.backupId = backup.id;
+                
+                const iconInfo = getBackupIconInfo(backup.type);
+                const badgeClass = getTypeBadgeClass(backup.type);
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded ${iconInfo.color} flex items-center justify-center text-xs">
+                                <i class="fa-solid ${iconInfo.icon}"></i>
+                            </div>
+                            <div>
+                                <div class="font-medium text-slate-900">${backup.name}</div>
+                                <div class="text-xs text-slate-500">${backup.description}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-slate-600">${backup.date}</td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badgeClass}">
+                            ${backup.type}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-slate-600">${backup.size}</td>
+                    <td class="px-6 py-4 font-mono text-xs text-slate-500">${backup.checksum}</td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="showRestorePreview('${backup.name}')" class="p-1.5 text-slate-500 hover:text-success hover:bg-green-50 rounded" title="Restore Preview">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            <button onclick="downloadBackup('${backup.name}')" class="p-1.5 text-slate-500 hover:text-primary hover:bg-blue-50 rounded" title="Download">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                            <button onclick="showRestoreConfirm('${backup.name}')" class="p-1.5 text-slate-500 hover:text-success hover:bg-green-50 rounded" title="Restore">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                            <button onclick="showDeleteConfirm('${backup.name}')" class="p-1.5 text-slate-500 hover:text-danger hover:bg-red-50 rounded" title="Delete">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            updateTableSummary();
+        }
+
+        function getBackupIconInfo(type) {
+            switch(type) {
+                case 'Full System': return { icon: 'fa-file-zipper', color: 'bg-blue-50 text-blue-600' };
+                case 'Config Only': return { icon: 'fa-gears', color: 'bg-purple-50 text-purple-600' };
+                case 'Pre-OTA': return { icon: 'fa-microchip', color: 'bg-amber-50 text-amber-600' };
+                default: return { icon: 'fa-file', color: 'bg-slate-50 text-slate-600' };
+            }
+        }
+
+        function getTypeBadgeClass(type) {
+            switch(type) {
+                case 'Full System': return 'bg-green-100 text-green-800';
+                case 'Config Only': return 'bg-slate-100 text-slate-800';
+                case 'Pre-OTA': return 'bg-amber-100 text-amber-800';
+                default: return 'bg-slate-100 text-slate-800';
+            }
+        }
+
+        function searchBackups() {
+            const searchTerm = document.getElementById('search-backups').value.toLowerCase();
+            const rows = document.querySelectorAll('#backup-table-body tr');
+            let visibleCount = 0;
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const isVisible = text.includes(searchTerm);
+                row.style.display = isVisible ? '' : 'none';
+                if (isVisible) visibleCount++;
+            });
+            
+            updateTableSummary(visibleCount);
+        }
+
+        function applyFilters() {
+            // Simple filter implementation
+            searchBackups();
+        }
+
+        function clearFilters() {
+            const checkboxes = document.querySelectorAll('#filter-dropdown input[type="checkbox"]');
+            const radios = document.querySelectorAll('#filter-dropdown input[type="radio"]');
+            
+            checkboxes.forEach(cb => cb.checked = true);
+            radios.forEach((radio, index) => radio.checked = index === 0);
+            
+            document.getElementById('search-backups').value = '';
+            searchBackups();
+        }
+
+        function updateTableSummary(visibleCount = null) {
+            const totalRows = currentBackupData.length;
+            const visible = visibleCount !== null ? visibleCount : totalRows;
+            const summary = document.getElementById('table-summary');
+            
+            if (visible === totalRows) {
+                summary.textContent = `Showing ${totalRows} backup files`;
+            } else {
+                summary.textContent = `Showing ${visible} of ${totalRows} backup files`;
+            }
+        }
+
+        // ========== BACKUP OPERATION FUNCTIONS ==========
+        function startBackupCreation() {
+            const backupName = document.getElementById('backup-name').value || 'ManualBackup_' + new Date().toISOString().split('T')[0];
+            const backupType = document.querySelector('input[name="backup-type"]:checked').value;
+            
+            showConfirmDialog(
+                'Create Backup',
+                `Create ${backupType} backup "${backupName}"?`,
+                'Start Backup',
+                () => {
+                    hideModal('create-backup-modal');
+                    simulateProgress('backup');
+                    
+                    // Add new backup to table
+                    const newBackup = {
+                        id: currentBackupData.length + 1,
+                        name: backupName,
+                        type: backupType === 'full' ? 'Full System' : 'Config Only',
+                        date: new Date().toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        }),
+                        size: backupType === 'full' ? '220 MB' : '32 MB',
+                        checksum: Math.random().toString(36).substring(2, 10),
+                        location: 'Local',
+                        encrypted: true,
+                        description: `${backupType === 'full' ? 'Full System' : 'Config Only'} • Encrypted • Local`
+                    };
+                    
+                    currentBackupData.unshift(newBackup);
+                    renderBackupTable();
+                    showToast(`Backup "${backupName}" created successfully!`, 'success');
+                }
+            );
+        }
+
+        function showRestorePreview(backupName) {
+            console.log('Showing restore preview for:', backupName);
+            const backup = currentBackupData.find(b => b.name === backupName);
+            if (backup) {
+                // For now, just show a toast
+                showToast(`Previewing restore from ${backupName}`, 'info');
+            }
+        }
+
+        function showRestoreConfirm(backupName) {
+            showConfirmDialog(
+                'Restore Backup',
+                `Restore system from backup "${backupName}"?\n\nThe gateway will restart after restore.`,
+                'Restore',
+                () => {
+                    simulateProgress('restore');
+                    showToast(`Restoring from ${backupName}...`, 'info');
+                }
+            );
+        }
+
+        function showDeleteConfirm(backupName) {
+            showConfirmDialog(
+                'Delete Backup',
+                `Delete backup "${backupName}"?\n\nThis action cannot be undone.`,
+                'Delete',
+                () => {
+                    currentBackupData = currentBackupData.filter(b => b.name !== backupName);
+                    renderBackupTable();
+                    showToast(`Backup "${backupName}" deleted successfully`, 'success');
+                }
+            );
+        }
+
+        function downloadBackup(backupName) {
+            showToast(`Downloading backup: ${backupName}`, 'info');
+            // Simulate download delay
+            setTimeout(() => {
+                showToast('Backup downloaded successfully', 'success');
+            }, 1000);
+        }
+
+        // ========== TAG MANAGEMENT FUNCTIONS ==========
+        function addTag() {
+            document.getElementById('tag-input-container').classList.remove('hidden');
+        }
+
+        function hideTagInput() {
+            document.getElementById('tag-input-container').classList.add('hidden');
+            document.getElementById('new-tag-input').value = '';
+        }
+
+        function addNewTag() {
+            const input = document.getElementById('new-tag-input');
+            const tagName = input.value.trim();
+            
+            if (tagName) {
+                const tagsContainer = document.getElementById('snapshot-tags');
+                const newTag = document.createElement('span');
+                newTag.className = 'inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded cursor-pointer';
+                newTag.textContent = tagName;
+                newTag.onclick = function() { removeTag(this); };
+                
+                // Insert before the "Add" button
+                const addButton = tagsContainer.querySelector('button');
+                tagsContainer.insertBefore(newTag, addButton);
+                
+                input.value = '';
+            }
+            
+            hideTagInput();
+        }
+
+        function removeTag(element) {
+            element.remove();
+        }
+
+        // ========== SCHEDULE FUNCTIONS ==========
+        function toggleSchedule() {
+            const toggle = document.getElementById('schedule-toggle');
+            const status = document.getElementById('schedule-status');
+            
+            if (toggle.checked) {
+                status.textContent = 'Enabled';
+                status.className = 'text-xs font-medium text-success';
+                showToast('Scheduled backups enabled', 'success');
+            } else {
+                status.textContent = 'Disabled';
+                status.className = 'text-xs font-medium text-slate-500';
+                showToast('Scheduled backups disabled', 'warning');
+            }
+        }
+
+        function saveSchedule() {
+            showToast('Backup schedule saved successfully', 'success');
+        }
+
+        // ========== IMPORT FUNCTIONS ==========
+        function startImportProcess() {
+            const autoRestore = document.getElementById('import-auto-restore').checked;
+            const createBackup = document.getElementById('import-create-backup').checked;
+            
+            hideModal('import-backup-modal');
+            simulateProgress('import');
+            
+            if (createBackup) {
+                setTimeout(() => {
+                    showToast('System backup created before import', 'info');
+                }, 1000);
+            }
+            
+            if (autoRestore) {
+                setTimeout(() => {
+                    showToast('Auto-restore initiated', 'info');
+                }, 3000);
+            }
+        }
+
+        // ========== DISASTER RECOVERY FUNCTIONS ==========
+        function setupRecoveryTypeToggle() {
+            const recoveryTypes = document.querySelectorAll('input[name="recovery-type"]');
+            const moduleContainer = document.getElementById('module-select-container');
+            
+            recoveryTypes.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'module') {
+                        moduleContainer.classList.remove('hidden');
+                    } else {
+                        moduleContainer.classList.add('hidden');
+                    }
+                });
+            });
+        }
+
+        function initiateRecovery() {
+            if (!document.getElementById('confirm-dr').checked) {
+                showToast('Please confirm you understand the risks before proceeding.', 'error');
+                return;
+            }
+            
+            showConfirmDialog(
+                'Initiate Disaster Recovery',
+                'This will restore the system and may cause data loss. Are you sure you want to proceed?',
+                'Initiate Recovery',
+                () => {
+                    hideModal('dr-modal');
+                    simulateProgress('restore', 5000);
+                }
+            );
+        }
+
+        // ========== QUICK ACTION FUNCTIONS ==========
+        function exportConfig() {
+            showToast('Exporting configuration...', 'info');
+            setTimeout(() => {
+                showToast('Configuration exported successfully', 'success');
+            }, 1000);
+        }
+
+        function cloudSync() {
+            showToast('Syncing with cloud...', 'info');
+            setTimeout(() => {
+                showToast('Cloud sync completed', 'success');
+            }, 1500);
+        }
+
+        function purgeOldBackups() {
+            showConfirmDialog(
+                'Purge Old Backups',
+                'Delete all backups older than 30 days? This action cannot be undone.',
+                'Purge',
+                () => {
+                    showToast('Purging old backups...', 'info');
+                    setTimeout(() => {
+                        // Simulate deletion
+                        const oldCount = currentBackupData.length;
+                        currentBackupData = currentBackupData.slice(0, 2); // Keep 2 backups
+                        renderBackupTable();
+                        showToast(`${oldCount - 2} old backups purged`, 'success');
+                    }, 1500);
+                }
+            );
+        }
+
+        function generateReport() {
+            showToast('Generating backup report...', 'info');
+            setTimeout(() => {
+                const report = {
+                    totalBackups: currentBackupData.length,
+                    totalSize: currentBackupData.reduce((sum, b) => {
+                        const size = parseFloat(b.size);
+                        return sum + (b.size.includes('GB') ? size * 1024 : size);
+                    }, 0) + ' MB',
+                    oldestBackup: currentBackupData[currentBackupData.length - 1]?.name || 'None',
+                    newestBackup: currentBackupData[0]?.name || 'None'
+                };
+                
+                alert(`Backup Report:\n\n` +
+                      `Total Backups: ${report.totalBackups}\n` +
+                      `Total Size: ${report.totalSize}\n` +
+                      `Oldest Backup: ${report.oldestBackup}\n` +
+                      `Newest Backup: ${report.newestBackup}`);
+                
+                showToast('Report generated successfully', 'success');
+            }, 2000);
+        }
+
+        // ========== UTILITY FUNCTIONS ==========
+        function handleGatewayChange() {
+            const select = document.getElementById('gateway-select');
+            showToast(`Switched to gateway: ${select.value}`, 'info');
+        }
+
+        function resetForm() {
+            showConfirmDialog(
+                'Reset Form',
+                'Reset all form fields to their default values?',
+                'Reset',
+                () => {
+                    // Reset form fields
+                    document.getElementById('search-backups').value = '';
+                    document.getElementById('schedule-toggle').checked = true;
+                    document.getElementById('frequency-select').value = 'daily';
+                    document.getElementById('schedule-time').value = '02:00';
+                    document.getElementById('retention-count').value = '5';
+                    document.getElementById('schedule-type').value = 'full';
+                    
+                    // Reset radio buttons
+                    document.querySelector('input[name="destination"][value="local"]').checked = true;
+                    document.getElementById('auto-purge').checked = true;
+                    document.getElementById('encrypt-backups').checked = true;
+                    
+                    // Reset filters
+                    clearFilters();
+                    
+                    showToast('Form reset to defaults', 'success');
+                }
+            );
+        }
+
+        function saveChanges() {
+            showToast('Changes saved successfully', 'success');
+        }
+
+        function logout() {
+            showConfirmDialog(
+                'Logout',
+                'Are you sure you want to logout?',
+                'Logout',
+                () => {
+                    showToast('Logging out...', 'info');
+                    setTimeout(() => {
+                        // In a real app, this would redirect to login page
+                        alert('You have been logged out. Redirecting to login page...');
+                        window.location.reload(); // Simulate logout
+                    }, 1000);
+                }
+            );
+        }
+
+        // Initialize gateway select change handler
+        const gatewaySelect = document.getElementById('gateway-select');
+        if (gatewaySelect) {
+            gatewaySelect.addEventListener('change', handleGatewayChange);
+        }
+
+        // Initial responsive setup
+        setTimeout(() => {
+            handleResponsive();
+        }, 100);
+
+        console.log('Backup & Recovery System initialized successfully!');
+    </script>
+</body>
+</html>
