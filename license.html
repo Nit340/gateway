@@ -1,0 +1,2597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Licensing & Subscriptions - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
+        /* License Badges */
+        .license-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .license-badge.free { background: #F1F5F9; color: #64748B; border: 1px solid #E2E8F0; }
+        .license-badge.standard { background: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
+        .license-badge.pro { background: #E0E7FF; color: #3730A3; border: 1px solid #C7D2FE; }
+        .license-badge.enterprise { background: #F3E8FF; color: #6B21A8; border: 1px solid #E9D5FF; }
+        .license-badge.trial { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+        
+        /* Feature Status */
+        .feature-status {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .feature-active { background: #D1FAE5; color: #065F46; }
+        .feature-inactive { background: #FEE2E2; color: #991B1B; }
+        .feature-trial { background: #FEF3C7; color: #92400E; }
+        
+        /* Modal System */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(2px);
+        }
+        
+        .modal-backdrop.active {
+            display: flex;
+        }
+        
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            width: 500px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow: hidden;
+            animation: modalFadeIn 0.3s ease;
+        }
+        
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #E2E8F0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1E293B;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #64748B;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            color: #475569;
+            background-color: #F1F5F9;
+        }
+        
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #F8FAFC;
+        }
+        
+        .modal-button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #E2E8F0;
+            background: white;
+            color: #475569;
+        }
+        
+        .modal-button:hover {
+            background: #F8FAFC;
+        }
+        
+        .modal-button.primary {
+            background: #2563EB;
+            color: white;
+            border-color: #2563EB;
+        }
+        
+        .modal-button.primary:hover {
+            background: #1D4ED8;
+        }
+        
+        .modal-button.danger {
+            background: #EF4444;
+            color: white;
+            border-color: #EF4444;
+        }
+        
+        .modal-button.danger:hover {
+            background: #DC2626;
+        }
+        
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .toast {
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .toast.success { background: #10B981; }
+        .toast.error { background: #EF4444; }
+        .toast.warning { background: #F59E0B; }
+        .toast.info { background: #2563EB; }
+        
+        /* Progress Bar */
+        .progress-bar {
+            height: 8px;
+            background: #E2E8F0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-fill.success { background: #10B981; }
+        .progress-fill.warning { background: #F59E0B; }
+        .progress-fill.danger { background: #EF4444; }
+        .progress-fill.info { background: #2563EB; }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #CBD5E1;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #2563EB;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
+
+    <!-- Modal Container -->
+    <div id="modal-container" class="modal-backdrop"></div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- HEADER -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="h-16 flex items-center justify-between">
+                    <!-- Left: Logo & Title -->
+                    <div class="flex items-center space-x-4">
+                        <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                            <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                            <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                            <span class="text-slate-900 font-medium">Licensing & Subscriptions</span>
+                        </div>
+                    </div>
+
+                    <!-- Right: Controls -->
+                    <div class="flex items-center space-x-4">
+                        <div class="relative hidden sm:block">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                            </div>
+                            <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                                <option>Univa-GW-01</option>
+                                <option>Univa-GW-02</option>
+                                <option>Univa-GW-03</option>
+                            </select>
+                        </div>
+                        <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                        <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showHelp()">
+                            <i class="fa-solid fa-circle-question mr-2"></i> Help
+                        </button>
+                        <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
+                            Cancel
+                        </button>
+                        <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="save-btn" onclick="saveSettings()">
+                            <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+            <!-- SECTION 1: LICENSE OVERVIEW -->
+            <section id="section-overview" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-id-card mr-2 text-primary"></i> 
+                        <span class="mr-2">License Overview</span>
+                        <span class="text-xs font-normal text-slate-500">Current Entitlements</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        Active License Status
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- License Details -->
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="text-xs text-slate-500 mb-1">License Type</div>
+                                <div class="flex items-center gap-2">
+                                    <span class="license-badge pro">Pro License</span>
+                                    <span class="text-xs text-success bg-success/20 px-2 py-0.5 rounded-full">
+                                        <i class="fa-solid fa-check mr-1"></i> Active
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="text-xs text-slate-500 mb-1">Subscription Status</div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-semibold text-slate-800">Active</span>
+                                    <div class="ml-auto text-xs text-slate-500">
+                                        <i class="fa-regular fa-clock mr-1"></i> Auto-renewal ON
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <div class="text-xs text-slate-500 mb-1">License Expiry</div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-calendar-check text-success"></i>
+                                    <span class="text-sm font-semibold text-slate-800">12 Aug 2026</span>
+                                </div>
+                                <div class="text-xs text-slate-500">
+                                    615 days remaining
+                                </div>
+                            </div>
+                            <div class="progress-bar mt-2">
+                                <div class="progress-fill success" style="width: 85%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="text-xs text-slate-500 mb-1">Activation Date</div>
+                                <div class="text-sm font-medium text-slate-800">15 Mar 2024</div>
+                            </div>
+                            
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="text-xs text-slate-500 mb-1">Gateway ID</div>
+                                <div class="text-sm font-medium text-slate-800 font-mono">GW-3920A9</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- License Actions -->
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-blue-900 mb-2 flex items-center">
+                                <i class="fa-solid fa-sync-alt mr-2"></i> License Actions
+                            </h3>
+                            <div class="space-y-3">
+                                <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="syncWithCloud()">
+                                    <i class="fa-solid fa-cloud-arrow-down mr-2"></i> Sync with Cloud
+                                </button>
+                                
+                                <button class="w-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="showRenewalOptions()">
+                                    <i class="fa-solid fa-calendar-plus mr-2"></i> Renew License
+                                </button>
+                                
+                                <button class="w-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="showTransferModal()">
+                                    <i class="fa-solid fa-right-left mr-2"></i> Transfer License
+                                </button>
+                                
+                                <button class="w-full bg-white border border-danger text-danger hover:bg-red-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="deactivateLicense()">
+                                    <i class="fa-solid fa-power-off mr-2"></i> Deactivate
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-sm font-semibold text-amber-900">Last Sync</h3>
+                                <span class="text-xs text-amber-700">5 minutes ago</span>
+                            </div>
+                            <div class="text-xs text-amber-700">
+                                <i class="fa-solid fa-circle-check mr-1"></i> All entitlements synchronized successfully
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: FEATURE ACCESS MATRIX -->
+            <section id="section-features" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-table-cells-large mr-2 text-success"></i> 
+                        <span class="mr-2">Feature Access Matrix</span>
+                        <span class="text-xs font-normal text-slate-500">Module Entitlements</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        12 Features • 8 Active
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left">Feature</th>
+                                <th class="px-6 py-3 text-left">Category</th>
+                                <th class="px-6 py-3 text-center">Status</th>
+                                <th class="px-6 py-3 text-left">Source</th>
+                                <th class="px-6 py-3 text-left">Expiry</th>
+                                <th class="px-6 py-3 text-left">Limits</th>
+                                <th class="px-6 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100" id="features-table">
+                            <!-- Features will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-6 p-4 bg-slate-50 border border-border rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div class="text-sm text-slate-700">
+                            <i class="fa-solid fa-circle-info text-primary mr-2"></i>
+                            Features marked with <span class="text-success font-medium">●</span> are included in your Pro license
+                        </div>
+                        <button class="text-primary hover:text-primaryHover text-sm font-medium flex items-center" onclick="showAllFeatures()">
+                            <i class="fa-solid fa-list mr-1"></i> View All Features
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 3: LICENSE KEY MANAGEMENT -->
+            <section id="section-license" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-key mr-2 text-warning"></i> 
+                        <span class="mr-2">License Key Management</span>
+                        <span class="text-xs font-normal text-slate-500">Activation & Validation</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        Online & Offline Modes
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- License Input -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Enter License Key</label>
+                            <div class="relative">
+                                <input type="text" id="license-key" placeholder="XXXX-XXXX-XXXX-XXXX" class="w-full text-sm border border-border rounded-lg px-4 py-3 font-mono focus:ring-2 focus:ring-primary focus:border-primary" maxlength="24">
+                                <button class="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600" onclick="generateDemoKey()">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                </button>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Enter your 24-character license key or paste from clipboard</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <button class="bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="validateLicense()">
+                                <i class="fa-solid fa-check-circle mr-2"></i> Validate & Activate
+                            </button>
+                            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="importLicenseFile()">
+                                <i class="fa-solid fa-file-import mr-2"></i> Import File
+                            </button>
+                        </div>
+                        
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-2">Activation Modes</h3>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="radio" name="activationMode" value="online" checked class="h-4 w-4 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">Online Activation (Recommended)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="activationMode" value="offline" class="h-4 w-4 text-primary focus:ring-primary">
+                                    <span class="ml-2 text-sm text-slate-700">Offline Activation</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- License Information -->
+                    <div class="space-y-4">
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-3">Current License</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-slate-600">License ID</span>
+                                    <span class="text-sm font-medium text-slate-800 font-mono">LIC-PRO-2024-3920A9</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-slate-600">Issued To</span>
+                                    <span class="text-sm font-medium text-slate-800">Innospace Solutions</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-slate-600">Issued On</span>
+                                    <span class="text-sm font-medium text-slate-800">2024-03-15</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-slate-600">Activation Count</span>
+                                    <span class="text-sm font-medium text-slate-800">1 of 3 devices</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                            <div class="flex items-start gap-3">
+                                <i class="fa-solid fa-shield-check text-emerald-600 mt-1"></i>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-emerald-900 mb-1">License Protection</h4>
+                                    <p class="text-xs text-emerald-700">
+                                        Your license is hardware-bound to prevent unauthorized transfers. Contact support for transfer requests.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="exportLicense()">
+                                <i class="fa-solid fa-file-export mr-2"></i> Export
+                            </button>
+                            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="showLicenseHistory()">
+                                <i class="fa-solid fa-history mr-2"></i> History
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 4: CLOUD SUBSCRIPTION LINK -->
+            <section id="section-cloud" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-cloud mr-2 text-blue-500"></i> 
+                        <span class="mr-2">Cloud Subscription Link</span>
+                        <span class="text-xs font-normal text-slate-500">Account Integration</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        Linked to Innospace Cloud
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Cloud Status -->
+                    <div class="lg:col-span-2 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="text-xs text-slate-500 mb-1">Cloud Account</div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-user-circle text-primary"></i>
+                                    <span class="text-sm font-semibold text-slate-800">admin@innospace.com</span>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="text-xs text-slate-500 mb-1">Subscription Tier</div>
+                                <div class="flex items-center gap-2">
+                                    <span class="license-badge enterprise">Enterprise</span>
+                                    <span class="text-xs text-success">Auto-renewal</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-slate-800">Sync Status</span>
+                                <span class="text-xs text-slate-500">Last sync: 5 min ago</span>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-700">Feature Entitlements</span>
+                                    <span class="text-xs text-success bg-success/20 px-2 py-0.5 rounded-full">Synced</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-700">Usage Metrics</span>
+                                    <span class="text-xs text-success bg-success/20 px-2 py-0.5 rounded-full">Synced</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-700">License Updates</span>
+                                    <span class="text-xs text-warning bg-warning/20 px-2 py-0.5 rounded-full">Pending 1</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-3">
+                            <button class="bg-primary hover:bg-primaryHover text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center" onclick="syncNow()">
+                                <i class="fa-solid fa-rotate mr-2"></i> Sync Now
+                            </button>
+                            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center" onclick="showSyncSettings()">
+                                <i class="fa-solid fa-cog mr-2"></i> Sync Settings
+                            </button>
+                            <button class="bg-white border border-danger text-danger hover:bg-red-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center" onclick="unlinkCloud()">
+                                <i class="fa-solid fa-link-slash mr-2"></i> Unlink
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cloud Benefits -->
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-blue-900 mb-2">Cloud Benefits</h3>
+                            <ul class="space-y-2 text-xs text-blue-700">
+                                <li class="flex items-start gap-2">
+                                    <i class="fa-solid fa-check mt-0.5"></i>
+                                    <span>Real-time license updates</span>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <i class="fa-solid fa-check mt-0.5"></i>
+                                    <span>Centralized management</span>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <i class="fa-solid fa-check mt-0.5"></i>
+                                    <span>Automatic renewals</span>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <i class="fa-solid fa-check mt-0.5"></i>
+                                    <span>Usage analytics</span>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <div class="text-xs text-slate-500 mb-2">Sync Schedule</div>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-700">Auto-sync</span>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" id="autoSync" checked>
+                                        <span class="toggle-slider"></span>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-slate-500">
+                                    Every 6 hours • Next: 14:30
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 5: TRIALS & GRACE PERIOD -->
+            <section id="section-trials" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-clock mr-2 text-amber-500"></i> 
+                        <span class="mr-2">Trials & Grace Period</span>
+                        <span class="text-xs font-normal text-slate-500">Evaluation & Extensions</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        2 Active Trials
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Active Trials -->
+                    <div class="lg:col-span-2">
+                        <h3 class="text-sm font-semibold text-slate-900 mb-4">Active Trials</h3>
+                        <div class="space-y-4">
+                            <!-- Trial 1 -->
+                            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-cube text-amber-600"></i>
+                                        <span class="text-sm font-semibold text-amber-900">CraneIQ Pro Trial</span>
+                                    </div>
+                                    <span class="text-xs font-medium text-amber-700">10 days left</span>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="flex justify-between text-xs text-amber-700 mb-1">
+                                        <span>Started: 2024-03-15</span>
+                                        <span>Ends: 2024-04-15</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill warning" style="width: 70%"></div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors" onclick="upgradeTrial('craneiq')">
+                                        Upgrade Now
+                                    </button>
+                                    <button class="flex-1 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors" onclick="extendTrial('craneiq')">
+                                        Extend Trial
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Trial 2 -->
+                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-shield-halved text-purple-600"></i>
+                                        <span class="text-sm font-semibold text-purple-900">Anti-Collision Module</span>
+                                    </div>
+                                    <span class="text-xs font-medium text-purple-700">5 days left</span>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="flex justify-between text-xs text-purple-700 mb-1">
+                                        <span>Started: 2024-03-20</span>
+                                        <span>Ends: 2024-04-10</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: 50%; background: #8B5CF6;"></div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors" onclick="upgradeTrial('acs')">
+                                        Purchase
+                                    </button>
+                                    <button class="flex-1 bg-white border border-purple-300 text-purple-700 hover:bg-purple-50 text-sm font-medium py-2 px-4 rounded-lg transition-colors" onclick="cancelTrial('acs')">
+                                        Cancel Trial
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Available Trials -->
+                    <div class="space-y-4">
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-3">Available Trials</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between p-2 hover:bg-white rounded">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-brain text-indigo-600"></i>
+                                        <span class="text-sm text-slate-700">Rule Engine Pro</span>
+                                    </div>
+                                    <button class="text-xs text-primary hover:text-primaryHover" onclick="startTrial('rule-engine')">
+                                        Start 14-day Trial
+                                    </button>
+                                </div>
+                                <div class="flex items-center justify-between p-2 hover:bg-white rounded">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-chart-line text-emerald-600"></i>
+                                        <span class="text-sm text-slate-700">Advanced Analytics</span>
+                                    </div>
+                                    <button class="text-xs text-primary hover:text-primaryHover" onclick="startTrial('analytics')">
+                                        Start 14-day Trial
+                                    </button>
+                                </div>
+                                <div class="flex items-center justify-between p-2 hover:bg-white rounded">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-database text-cyan-600"></i>
+                                        <span class="text-sm text-slate-700">Data Historian</span>
+                                    </div>
+                                    <button class="text-xs text-primary hover:text-primaryHover" onclick="startTrial('historian')">
+                                        Start 7-day Trial
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-start gap-2">
+                                <i class="fa-solid fa-lightbulb text-blue-600 mt-1"></i>
+                                <div>
+                                    <h4 class="text-sm font-semibold text-blue-900 mb-1">Trial Information</h4>
+                                    <p class="text-xs text-blue-700">
+                                        Trials automatically convert to restricted mode upon expiry. No data loss occurs during transition.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 6: LICENSE CHANGE LOG -->
+            <section id="section-logs" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-history mr-2 text-slate-600"></i> 
+                        <span class="mr-2">License Change Log</span>
+                        <span class="text-xs font-normal text-slate-500">Audit Trail</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        42 Entries
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border border-border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">Recent Activity</h3>
+                        <div class="flex items-center gap-2">
+                            <button class="text-xs text-slate-500 hover:text-slate-700" onclick="filterLogs('all')">All</button>
+                            <button class="text-xs text-slate-500 hover:text-slate-700" onclick="filterLogs('activation')">Activations</button>
+                            <button class="text-xs text-slate-500 hover:text-slate-700" onclick="filterLogs('sync')">Sync Events</button>
+                            <button class="text-xs text-slate-500 hover:text-slate-700" onclick="exportLogs()">
+                                <i class="fa-solid fa-download mr-1"></i> Export
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3 max-h-80 overflow-y-auto" id="license-logs">
+                        <!-- Logs will be populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- FOOTER -->
+        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runLicenseCheck()">
+                        <i class="fa-solid fa-magnifying-glass mr-2 text-slate-400"></i> Validate All Licenses
+                    </button>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="showBackupModal()">
+                        <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Backup License Data
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="resetTrials()">
+                        <i class="fa-solid fa-rotate-left mr-2"></i> Reset Trials
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" onclick="saveSettings()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save License Settings
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div> <!-- End of main content container -->
+
+    <script>
+        // ==================== SIDEBAR LOADING ====================
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                
+                // Insert the entire HTML content
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Update the active page to Licensing & Subscriptions
+                updateActivePage();
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Fallback: create a basic sidebar if fetch fails
+                createFallbackSidebar();
+            }
+        }
+
+        // Create fallback sidebar if fetch fails
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device management
+                            </a>
+                            <a href="licensing-subscriptions.html" class="nav-item active">
+                                <i class="fa-solid fa-key"></i> Licensing & Subscriptions
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Update active page in sidebar
+        function updateActivePage() {
+            // Remove active class from all nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to Licensing & Subscriptions
+            const licensingLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Licensing') || 
+                item.textContent.includes('Licensing & Subscriptions')
+            );
+            
+            if (licensingLink) {
+                licensingLink.classList.add('active');
+            }
+        }
+
+        // Initialize sidebar functionality
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            // Toggle sidebar
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                
+                // Toggle icon
+                const icon = this.querySelector('i');
+                if (sidebar.classList.contains('active')) {
+                    icon.className = 'fa-solid fa-times';
+                } else {
+                    icon.className = 'fa-solid fa-bars';
+                }
+            });
+            
+            // Handle mobile menu
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            // Update on resize
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        // Close sidebar when clicking outside on mobile
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        // ==================== APPLICATION STATE ====================
+        let appState = {
+            licenseData: {
+                type: 'pro',
+                status: 'active',
+                expiry: '2026-08-12',
+                activationDate: '2024-03-15',
+                gatewayId: 'GW-3920A9',
+                cloudLinked: true,
+                autoRenewal: true
+            },
+            features: [
+                { id: 1, name: 'CraneIQ Pro', category: 'Safety', status: 'active', source: 'cloud', expiry: '2026-08-12', limits: 'Full Access', trial: false },
+                { id: 2, name: 'Anti-Collision Module', category: 'Safety', status: 'active', source: 'cloud', expiry: '2026-08-12', limits: 'Full Access', trial: false },
+                { id: 3, name: 'Rule Engine Pro', category: 'Automation', status: 'active', source: 'local', expiry: '2026-08-12', limits: 'Unlimited Rules', trial: false },
+                { id: 4, name: 'Alerts & Event Pack', category: 'Monitoring', status: 'inactive', source: 'none', expiry: '--', limits: 'Basic Only', trial: false },
+                { id: 5, name: 'Logging Pro', category: 'Diagnostics', status: 'active', source: 'cloud', expiry: '2026-08-12', limits: '1 Year Retention', trial: false },
+                { id: 6, name: 'Protocol Expansion', category: 'Connectivity', status: 'active', source: 'local', expiry: '2026-08-12', limits: 'All Protocols', trial: false },
+                { id: 7, name: 'Advanced Analytics', category: 'Analytics', status: 'trial', source: 'trial', expiry: '2024-04-10', limits: 'Limited Access', trial: true },
+                { id: 8, name: 'Data Historian', category: 'Storage', status: 'inactive', source: 'none', expiry: '--', limits: '30 Days', trial: false }
+            ],
+            trials: [
+                { id: 1, name: 'CraneIQ Pro Trial', daysLeft: 10, startDate: '2024-03-15', endDate: '2024-04-15' },
+                { id: 2, name: 'Anti-Collision Module', daysLeft: 5, startDate: '2024-03-20', endDate: '2024-04-10' }
+            ],
+            licenseLogs: [
+                { timestamp: '2024-03-20 14:30:22', type: 'sync', message: 'Synced with cloud - All entitlements updated', user: 'System' },
+                { timestamp: '2024-03-20 09:15:45', type: 'activation', message: 'License key validated and activated', user: 'Admin' },
+                { timestamp: '2024-03-19 16:20:33', type: 'trial', message: 'Started Advanced Analytics trial', user: 'Admin' },
+                { timestamp: '2024-03-18 11:05:12', type: 'sync', message: 'Cloud subscription renewed - Enterprise tier', user: 'System' },
+                { timestamp: '2024-03-15 10:30:00', type: 'activation', message: 'Pro license activated on gateway GW-3920A9', user: 'System' },
+                { timestamp: '2024-03-10 15:45:22', type: 'feature', message: 'Anti-Collision module enabled', user: 'Admin' }
+            ],
+            unsavedChanges: false
+        };
+
+        // ==================== MODAL SYSTEM ====================
+        class ModalSystem {
+            constructor() {
+                this.modalContainer = null;
+                this.init();
+            }
+
+            init() {
+                this.modalContainer = document.getElementById('modal-container');
+            }
+
+            show(options) {
+                const {
+                    title = 'Modal',
+                    content = '',
+                    size = 'md',
+                    showCloseButton = true,
+                    buttons = [],
+                    onClose = null,
+                    type = 'info'
+                } = options;
+
+                this.modalContainer.innerHTML = '';
+
+                const modal = document.createElement('div');
+                modal.className = 'modal-content';
+                modal.style.width = this.getSize(size);
+
+                // Modal header
+                const modalHeader = document.createElement('div');
+                modalHeader.className = 'modal-header';
+
+                const titleElement = document.createElement('h3');
+                titleElement.className = 'modal-title';
+                
+                const icons = {
+                    info: 'fa-circle-info',
+                    warning: 'fa-triangle-exclamation',
+                    danger: 'fa-circle-exclamation',
+                    success: 'fa-circle-check'
+                };
+                
+                if (icons[type]) {
+                    const icon = document.createElement('i');
+                    icon.className = `fa-solid ${icons[type]}`;
+                    icon.style.color = this.getTypeColor(type);
+                    titleElement.appendChild(icon);
+                }
+                
+                const titleText = document.createElement('span');
+                titleText.textContent = title;
+                titleElement.appendChild(titleText);
+
+                modalHeader.appendChild(titleElement);
+
+                if (showCloseButton) {
+                    const closeButton = document.createElement('button');
+                    closeButton.className = 'modal-close';
+                    closeButton.innerHTML = '<i class="fa-solid fa-times"></i>';
+                    closeButton.addEventListener('click', () => {
+                        this.hide();
+                        if (onClose) onClose();
+                    });
+                    modalHeader.appendChild(closeButton);
+                }
+
+                modal.appendChild(modalHeader);
+
+                // Modal body
+                const modalBody = document.createElement('div');
+                modalBody.className = 'modal-body';
+                
+                if (typeof content === 'string') {
+                    modalBody.innerHTML = content;
+                } else {
+                    modalBody.appendChild(content);
+                }
+                
+                modal.appendChild(modalBody);
+
+                // Modal footer
+                if (buttons.length > 0) {
+                    const modalFooter = document.createElement('div');
+                    modalFooter.className = 'modal-footer';
+
+                    buttons.forEach(button => {
+                        const btn = document.createElement('button');
+                        btn.className = 'modal-button';
+                        if (button.primary) btn.classList.add('primary');
+                        if (button.danger) btn.classList.add('danger');
+                        btn.textContent = button.text;
+
+                        btn.addEventListener('click', () => {
+                            if (button.onClick) button.onClick();
+                            if (button.closeOnClick !== false) this.hide();
+                        });
+
+                        modalFooter.appendChild(btn);
+                    });
+
+                    modal.appendChild(modalFooter);
+                }
+
+                this.modalContainer.appendChild(modal);
+                this.modalContainer.classList.add('active');
+
+                const escapeHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        this.hide();
+                        if (onClose) onClose();
+                        document.removeEventListener('keydown', escapeHandler);
+                    }
+                };
+                document.addEventListener('keydown', escapeHandler);
+
+                modal._escapeHandler = escapeHandler;
+            }
+
+            hide() {
+                this.modalContainer.classList.remove('active');
+                const modal = this.modalContainer.querySelector('.modal-content');
+                if (modal && modal._escapeHandler) {
+                    document.removeEventListener('keydown', modal._escapeHandler);
+                }
+            }
+
+            getSize(size) {
+                const sizes = {
+                    sm: '400px',
+                    md: '500px',
+                    lg: '600px',
+                    xl: '800px'
+                };
+                return sizes[size] || sizes.md;
+            }
+
+            getTypeColor(type) {
+                const colors = {
+                    info: '#2563EB',
+                    warning: '#F59E0B',
+                    danger: '#EF4444',
+                    success: '#10B981'
+                };
+                return colors[type] || colors.info;
+            }
+        }
+
+        // ==================== TOAST SYSTEM ====================
+        class ToastSystem {
+            constructor() {
+                this.container = null;
+                this.init();
+            }
+
+            init() {
+                this.container = document.getElementById('toast-container');
+            }
+
+            show(message, type = 'info', duration = 3000) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                toast.style.transform = 'translateX(120%)';
+
+                this.container.appendChild(toast);
+
+                // Animate in
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(0)';
+                }, 10);
+
+                // Remove after duration
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(120%)';
+                    setTimeout(() => {
+                        toast.remove();
+                    }, 300);
+                }, duration);
+
+                return toast;
+            }
+        }
+
+        // ==================== DIALOG FUNCTIONS ====================
+        function showConfirm(options) {
+            const modal = new ModalSystem();
+            
+            const {
+                title = 'Confirm Action',
+                message = 'Are you sure you want to proceed?',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                type = 'warning',
+                onConfirm = null,
+                onCancel = null
+            } = options;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                color: #475569;
+                line-height: 1.5;
+            `;
+            content.innerHTML = `<p>${message}</p>`;
+
+            modal.show({
+                title,
+                content,
+                type,
+                buttons: [
+                    {
+                        text: cancelText,
+                        onClick: () => {
+                            if (onCancel) onCancel();
+                        }
+                    },
+                    {
+                        text: confirmText,
+                        primary: true,
+                        onClick: () => {
+                            if (onConfirm) onConfirm();
+                        }
+                    }
+                ],
+                onClose: onCancel
+            });
+        }
+
+        function showAlert(options) {
+            const modal = new ModalSystem();
+            
+            const {
+                title = 'Alert',
+                message = '',
+                type = 'info',
+                buttonText = 'OK',
+                onClose = null
+            } = options;
+
+            const content = document.createElement('div');
+            content.style.cssText = `
+                color: #475569;
+                line-height: 1.5;
+            `;
+            content.innerHTML = `<p>${message}</p>`;
+
+            modal.show({
+                title,
+                content,
+                type,
+                buttons: [{
+                    text: buttonText,
+                    primary: true,
+                    onClick: () => {
+                        if (onClose) onClose();
+                    }
+                }],
+                onClose
+            });
+        }
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load sidebar first
+            loadSidebar();
+            
+            // Initialize systems
+            window.modalSystem = new ModalSystem();
+            window.toastSystem = new ToastSystem();
+            
+            // Load initial data
+            loadInitialData();
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Render features table
+            renderFeaturesTable();
+            
+            // Render license logs
+            renderLicenseLogs();
+            
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+            
+            // Initial responsive setup
+            setTimeout(() => {
+                handleResponsive();
+            }, 100);
+        });
+
+        function loadInitialData() {
+            // Update license overview
+            updateLicenseOverview();
+        }
+
+        function setupEventListeners() {
+            // Cancel buttons
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    showConfirm({
+                        title: 'Discard Changes',
+                        message: 'Discard all unsaved license settings?',
+                        type: 'warning',
+                        onConfirm: () => {
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
+                if (appState.unsavedChanges) {
+                    showConfirm({
+                        title: 'Discard Changes',
+                        message: 'Discard all unsaved license settings?',
+                        type: 'warning',
+                        onConfirm: () => {
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    window.location.reload();
+                }
+            });
+            
+            // Gateway select
+            const gatewaySelect = document.getElementById('gateway-select');
+            if (gatewaySelect) {
+                gatewaySelect.addEventListener('change', function() {
+                    if (appState.unsavedChanges) {
+                        showConfirm({
+                            title: 'Switch Gateway',
+                            message: 'Switch to another gateway? Unsaved license settings will be lost.',
+                            type: 'warning',
+                            onConfirm: () => {
+                                window.location.reload();
+                            },
+                            onCancel: () => {
+                                this.value = 'Univa-GW-01';
+                            }
+                        });
+                    } else {
+                        window.location.reload();
+                    }
+                });
+            }
+            
+            // Input change listeners
+            document.querySelectorAll('input, select, textarea').forEach(element => {
+                element.addEventListener('change', markUnsavedChanges);
+            });
+            
+            // Auto-sync toggle
+            const autoSync = document.getElementById('autoSync');
+            if (autoSync) {
+                autoSync.addEventListener('change', function() {
+                    const toast = new ToastSystem();
+                    toast.show(`Auto-sync ${this.checked ? 'enabled' : 'disabled'}`, 'info');
+                    markUnsavedChanges();
+                });
+            }
+        }
+
+        // ==================== LICENSE OVERVIEW ====================
+        function updateLicenseOverview() {
+            // This function updates the license overview based on appState
+            // Currently handled by static HTML with dynamic updates
+        }
+
+        // ==================== FEATURES TABLE ====================
+        function renderFeaturesTable() {
+            const tableBody = document.getElementById('features-table');
+            if (!tableBody) return;
+
+            tableBody.innerHTML = '';
+
+            appState.features.forEach(feature => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50';
+                
+                // Status icon
+                let statusIcon = '';
+                let statusClass = '';
+                let statusText = '';
+                
+                if (feature.status === 'active') {
+                    statusIcon = 'fa-check';
+                    statusClass = 'feature-active';
+                    statusText = 'Active';
+                } else if (feature.status === 'trial') {
+                    statusIcon = 'fa-clock';
+                    statusClass = 'feature-trial';
+                    statusText = 'Trial';
+                } else {
+                    statusIcon = 'fa-xmark';
+                    statusClass = 'feature-inactive';
+                    statusText = 'Inactive';
+                }
+                
+                // Source badge
+                let sourceBadge = '';
+                if (feature.source === 'cloud') {
+                    sourceBadge = '<span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Cloud</span>';
+                } else if (feature.source === 'local') {
+                    sourceBadge = '<span class="text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded">Local</span>';
+                } else if (feature.source === 'trial') {
+                    sourceBadge = '<span class="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">Trial</span>';
+                } else {
+                    sourceBadge = '<span class="text-xs bg-slate-100 text-slate-800 px-2 py-1 rounded">--</span>';
+                }
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <div class="${statusClass} mr-3">
+                                <i class="fa-solid ${statusIcon} text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="font-medium text-slate-900">${feature.name}</div>
+                                <div class="text-xs text-slate-500">${feature.description || ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-700">${feature.category}</span>
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="text-xs font-medium px-2 py-1 rounded ${feature.status === 'active' ? 'bg-success/20 text-success' : feature.status === 'trial' ? 'bg-warning/20 text-warning' : 'bg-slate-100 text-slate-600'}">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4">
+                        ${sourceBadge}
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-700">${feature.expiry}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="text-sm text-slate-700">${feature.limits}</span>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <button class="text-primary hover:text-primaryHover text-sm font-medium" onclick="toggleFeature(${feature.id})">
+                            ${feature.status === 'active' ? 'Disable' : 'Enable'}
+                        </button>
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        function toggleFeature(featureId) {
+            const feature = appState.features.find(f => f.id === featureId);
+            if (!feature) return;
+
+            showConfirm({
+                title: feature.status === 'active' ? 'Disable Feature' : 'Enable Feature',
+                message: feature.status === 'active' 
+                    ? `Disable ${feature.name}? This will restrict access to this feature.`
+                    : `Enable ${feature.name}? Ensure you have valid license entitlement.`,
+                onConfirm: () => {
+                    feature.status = feature.status === 'active' ? 'inactive' : 'active';
+                    renderFeaturesTable();
+                    
+                    const toast = new ToastSystem();
+                    toast.show(`${feature.name} ${feature.status === 'active' ? 'enabled' : 'disabled'}`, 'success');
+                    
+                    // Add to logs
+                    addLicenseLog('feature', `${feature.name} ${feature.status === 'active' ? 'enabled' : 'disabled'}`);
+                    
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        function showAllFeatures() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            const featuresList = appState.features.map(feature => {
+                return `
+                    <div class="flex items-center justify-between p-3 border border-border rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <div class="${feature.status === 'active' ? 'feature-active' : feature.status === 'trial' ? 'feature-trial' : 'feature-inactive'}">
+                                <i class="fa-solid ${feature.status === 'active' ? 'fa-check' : feature.status === 'trial' ? 'fa-clock' : 'fa-xmark'} text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-sm font-medium text-slate-900">${feature.name}</div>
+                                <div class="text-xs text-slate-500">${feature.category} • ${feature.source}</div>
+                            </div>
+                        </div>
+                        <span class="text-sm text-slate-700">${feature.expiry}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            content.innerHTML = `
+                <div class="text-sm text-slate-700 mb-4">
+                    Showing all ${appState.features.length} features available for your license tier.
+                </div>
+                ${featuresList}
+            `;
+            
+            modal.show({
+                title: 'All Features',
+                content,
+                size: 'lg',
+                buttons: [{
+                    text: 'Close',
+                    primary: true,
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== LICENSE KEY MANAGEMENT ====================
+        function generateDemoKey() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let key = '';
+            for (let i = 0; i < 24; i++) {
+                if (i > 0 && i % 6 === 0) key += '-';
+                key += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('license-key').value = key;
+        }
+
+        function validateLicense() {
+            const licenseKey = document.getElementById('license-key').value.trim();
+            if (!licenseKey) {
+                const toast = new ToastSystem();
+                toast.show('Please enter a license key', 'warning');
+                return;
+            }
+
+            const toast = new ToastSystem();
+            toast.show('Validating license key...', 'info');
+            
+            // Simulate validation
+            setTimeout(() => {
+                showConfirm({
+                    title: 'License Validated',
+                    message: `License key validated successfully. Activate Pro license with all premium features?`,
+                    type: 'success',
+                    onConfirm: () => {
+                        const toast = new ToastSystem();
+                        toast.show('License activated successfully!', 'success');
+                        
+                        // Update license data
+                        appState.licenseData.type = 'pro';
+                        appState.licenseData.status = 'active';
+                        updateLicenseOverview();
+                        
+                        // Add to logs
+                        addLicenseLog('activation', 'Pro license activated from key');
+                        
+                        markUnsavedChanges();
+                    }
+                });
+            }, 1500);
+        }
+
+        function importLicenseFile() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            content.innerHTML = `
+                <div class="text-sm text-slate-700">
+                    Upload a license file (.lic, .json) to import license configuration.
+                </div>
+                
+                <div class="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                    <i class="fa-solid fa-file-upload text-3xl text-slate-400 mb-3"></i>
+                    <div class="text-sm text-slate-600 mb-2">Drag & drop license file here</div>
+                    <div class="text-xs text-slate-500 mb-4">or</div>
+                    <button class="bg-primary hover:bg-primaryHover text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors">
+                        Browse Files
+                    </button>
+                </div>
+                
+                <div class="bg-slate-50 border border-border rounded-lg p-4">
+                    <h4 class="text-sm font-semibold text-slate-900 mb-2">Supported Formats</h4>
+                    <div class="space-y-1 text-xs text-slate-600">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-file-code text-slate-500"></i>
+                            <span>JSON License File (.json)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-file-lines text-slate-500"></i>
+                            <span>Encrypted License File (.lic)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-file-text text-slate-500"></i>
+                            <span>Plain Text License (.txt)</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Import License File',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Import',
+                    primary: true,
+                    onClick: () => {
+                        const toast = new ToastSystem();
+                        toast.show('License file imported successfully', 'success');
+                        modal.hide();
+                        markUnsavedChanges();
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        function exportLicense() {
+            const toast = new ToastSystem();
+            toast.show('Exporting license configuration...', 'info');
+            
+            setTimeout(() => {
+                toast.show('License exported successfully', 'success');
+                addLicenseLog('export', 'License configuration exported');
+            }, 1000);
+        }
+
+        function showLicenseHistory() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            const history = appState.licenseLogs.filter(log => log.type === 'activation').map(log => {
+                return `
+                    <div class="flex items-start gap-3 p-3 border-b border-border last:border-0">
+                        <i class="fa-solid fa-key text-primary mt-1"></i>
+                        <div class="flex-1">
+                            <div class="text-sm text-slate-900">${log.message}</div>
+                            <div class="text-xs text-slate-500 mt-1">${log.timestamp} • ${log.user}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            content.innerHTML = `
+                <div class="text-sm text-slate-700 mb-2">
+                    Previous license activations on this gateway.
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                    ${history}
+                </div>
+            `;
+            
+            modal.show({
+                title: 'License Activation History',
+                content,
+                size: 'lg',
+                buttons: [{
+                    text: 'Close',
+                    primary: true,
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        // ==================== CLOUD FUNCTIONS ====================
+        function syncWithCloud() {
+            const toast = new ToastSystem();
+            toast.show('Syncing with cloud...', 'info');
+            
+            setTimeout(() => {
+                toast.show('Cloud sync completed successfully', 'success');
+                addLicenseLog('sync', 'Manual cloud sync completed');
+                markUnsavedChanges();
+            }, 2000);
+        }
+
+        function syncNow() {
+            const toast = new ToastSystem();
+            toast.show('Starting immediate sync...', 'info');
+            
+            setTimeout(() => {
+                toast.show('Sync completed. 3 entitlements updated.', 'success');
+                addLicenseLog('sync', 'Immediate sync requested');
+                markUnsavedChanges();
+            }, 1500);
+        }
+
+        function showSyncSettings() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            content.innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Sync Frequency</label>
+                    <select class="w-full text-sm border border-border rounded-lg px-3 py-2">
+                        <option>Every hour</option>
+                        <option selected>Every 6 hours</option>
+                        <option>Every 12 hours</option>
+                        <option>Daily</option>
+                        <option>Weekly</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Sync Data</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">Feature entitlements</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">Usage metrics</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">Gateway diagnostics</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">License updates</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="flex items-start gap-2">
+                        <i class="fa-solid fa-circle-info text-blue-600 mt-1"></i>
+                        <div class="text-xs text-blue-700">
+                            Frequent syncs ensure immediate access to new features but may increase network usage.
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Cloud Sync Settings',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Save Settings',
+                    primary: true,
+                    onClick: () => {
+                        const toast = new ToastSystem();
+                        toast.show('Sync settings saved', 'success');
+                        modal.hide();
+                        markUnsavedChanges();
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        function unlinkCloud() {
+            showConfirm({
+                title: 'Unlink Cloud Account',
+                message: 'Unlink from cloud subscription? Local licenses will remain active but won\'t receive updates.',
+                type: 'warning',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('Cloud account unlinked', 'success');
+                    appState.licenseData.cloudLinked = false;
+                    addLicenseLog('sync', 'Cloud account unlinked');
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        function showRenewalOptions() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            content.innerHTML = `
+                <div class="text-sm text-slate-700">
+                    Your Pro license expires on 12 Aug 2026. Choose renewal option:
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="border border-border rounded-lg p-4 hover:bg-slate-50 cursor-pointer">
+                        <div class="text-sm font-semibold text-slate-900 mb-1">1 Year</div>
+                        <div class="text-lg font-bold text-primary mb-2">$499</div>
+                        <div class="text-xs text-slate-500">Per gateway</div>
+                    </div>
+                    <div class="border border-primary rounded-lg p-4 bg-blue-50 cursor-pointer">
+                        <div class="text-sm font-semibold text-slate-900 mb-1">3 Years</div>
+                        <div class="text-lg font-bold text-primary mb-2">$1,199</div>
+                        <div class="text-xs text-slate-500">Save 20% • $399/year</div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Auto-renewal</label>
+                    <div class="flex items-center">
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="autoRenew" checked>
+                            <span class="toggle-slider"></span>
+                        </div>
+                        <span class="ml-2 text-sm text-slate-700">Enable automatic renewal</span>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Renew License',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Proceed to Payment',
+                    primary: true,
+                    onClick: () => {
+                        const toast = new ToastSystem();
+                        toast.show('Redirecting to payment gateway...', 'info');
+                        modal.hide();
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        function showTransferModal() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            content.innerHTML = `
+                <div class="text-sm text-slate-700">
+                    Transfer this license to another gateway. Current activation: 1 of 3 allowed.
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Target Gateway ID</label>
+                    <input type="text" placeholder="Enter gateway serial number" class="w-full text-sm border border-border rounded-lg px-3 py-2">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Transfer Type</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="radio" name="transferType" value="move" class="h-4 w-4 text-primary focus:ring-primary">
+                            <span class="ml-2 text-sm text-slate-700">Move license (deactivate current)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="transferType" value="copy" checked class="h-4 w-4 text-primary focus:ring-primary">
+                            <span class="ml-2 text-sm text-slate-700">Copy license (both active)</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div class="flex items-start gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-1"></i>
+                        <div class="text-xs text-amber-700">
+                            License transfers may require support intervention for hardware-bound licenses.
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Transfer License',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Initiate Transfer',
+                    primary: true,
+                    onClick: () => {
+                        const toast = new ToastSystem();
+                        toast.show('Transfer request submitted', 'info');
+                        modal.hide();
+                        addLicenseLog('transfer', 'License transfer initiated');
+                        markUnsavedChanges();
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        function deactivateLicense() {
+            showConfirm({
+                title: 'Deactivate License',
+                message: 'Deactivate current license? All premium features will be disabled.',
+                type: 'danger',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('License deactivated', 'success');
+                    
+                    // Downgrade to free
+                    appState.licenseData.type = 'free';
+                    appState.licenseData.status = 'inactive';
+                    appState.features.forEach(f => {
+                        if (f.source !== 'trial') f.status = 'inactive';
+                    });
+                    
+                    updateLicenseOverview();
+                    renderFeaturesTable();
+                    addLicenseLog('deactivation', 'License deactivated');
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        // ==================== TRIAL FUNCTIONS ====================
+        function startTrial(feature) {
+            const featureNames = {
+                'rule-engine': 'Rule Engine Pro',
+                'analytics': 'Advanced Analytics',
+                'historian': 'Data Historian'
+            };
+            
+            showConfirm({
+                title: 'Start Trial',
+                message: `Start 14-day trial for ${featureNames[feature]}?`,
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show(`${featureNames[feature]} trial started`, 'success');
+                    
+                    // Add trial
+                    appState.trials.push({
+                        id: appState.trials.length + 1,
+                        name: featureNames[feature] + ' Trial',
+                        daysLeft: 14,
+                        startDate: new Date().toISOString().split('T')[0],
+                        endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                    });
+                    
+                    addLicenseLog('trial', `${featureNames[feature]} trial started`);
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        function upgradeTrial(trialId) {
+            const trialNames = {
+                'craneiq': 'CraneIQ Pro',
+                'acs': 'Anti-Collision Module'
+            };
+            
+            showConfirm({
+                title: 'Upgrade Trial',
+                message: `Purchase full license for ${trialNames[trialId]}?`,
+                type: 'info',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show(`Redirecting to purchase for ${trialNames[trialId]}...`, 'info');
+                    addLicenseLog('upgrade', `${trialNames[trialId]} upgrade initiated`);
+                }
+            });
+        }
+
+        function extendTrial(trialId) {
+            showConfirm({
+                title: 'Extend Trial',
+                message: 'Extend trial period by 7 days?',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('Trial extended by 7 days', 'success');
+                    addLicenseLog('trial', 'Trial period extended');
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        function cancelTrial(trialId) {
+            showConfirm({
+                title: 'Cancel Trial',
+                message: 'Cancel trial immediately? Feature will be disabled.',
+                type: 'warning',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('Trial cancelled', 'success');
+                    addLicenseLog('trial', 'Trial cancelled early');
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        // ==================== LICENSE LOGS ====================
+        function renderLicenseLogs() {
+            const logsContainer = document.getElementById('license-logs');
+            if (!logsContainer) return;
+
+            logsContainer.innerHTML = appState.licenseLogs.map(log => {
+                let icon = '';
+                let color = '';
+                
+                switch(log.type) {
+                    case 'activation':
+                        icon = 'fa-key';
+                        color = 'text-emerald-600';
+                        break;
+                    case 'sync':
+                        icon = 'fa-cloud-arrow-down';
+                        color = 'text-blue-600';
+                        break;
+                    case 'trial':
+                        icon = 'fa-clock';
+                        color = 'text-amber-600';
+                        break;
+                    case 'feature':
+                        icon = 'fa-toggle-on';
+                        color = 'text-purple-600';
+                        break;
+                    default:
+                        icon = 'fa-info-circle';
+                        color = 'text-slate-600';
+                }
+                
+                return `
+                    <div class="flex items-start gap-3 p-3 border-b border-border last:border-0">
+                        <i class="fa-solid ${icon} ${color} mt-1"></i>
+                        <div class="flex-1">
+                            <div class="text-sm text-slate-900">${log.message}</div>
+                            <div class="text-xs text-slate-500 mt-1">${log.timestamp} • ${log.user}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addLicenseLog(type, message) {
+            const now = new Date();
+            const timestamp = now.toISOString().replace('T', ' ').substring(0, 19);
+            
+            appState.licenseLogs.unshift({
+                timestamp,
+                type,
+                message,
+                user: 'Admin'
+            });
+            
+            // Keep only last 50 logs
+            if (appState.licenseLogs.length > 50) {
+                appState.licenseLogs.pop();
+            }
+            
+            renderLicenseLogs();
+        }
+
+        function filterLogs(type) {
+            // Implement filter logic here
+            const toast = new ToastSystem();
+            toast.show(`Filtering logs by ${type}...`, 'info');
+        }
+
+        function exportLogs() {
+            const toast = new ToastSystem();
+            toast.show('Exporting license logs...', 'info');
+            
+            setTimeout(() => {
+                toast.show('Logs exported successfully', 'success');
+                addLicenseLog('export', 'License logs exported');
+            }, 1000);
+        }
+
+        // ==================== OTHER FUNCTIONS ====================
+        function runLicenseCheck() {
+            const toast = new ToastSystem();
+            toast.show('Validating all licenses...', 'info');
+            
+            setTimeout(() => {
+                toast.show('All licenses validated successfully', 'success');
+                addLicenseLog('validation', 'Complete license validation run');
+            }, 2000);
+        }
+
+        function showBackupModal() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+            `;
+            
+            content.innerHTML = `
+                <div class="text-sm text-slate-700">
+                    Backup all license data including keys, entitlements, and activation records.
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Backup Format</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">
+                            JSON
+                        </button>
+                        <button class="text-sm border border-primary bg-primary/5 text-primary rounded-lg py-2 font-medium">
+                            Encrypted
+                        </button>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Include</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">License keys</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">Feature entitlements</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">Usage statistics</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">Activation logs</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Backup License Data',
+                content,
+                size: 'md',
+                buttons: [{
+                    text: 'Create Backup',
+                    primary: true,
+                    onClick: () => {
+                        const toast = new ToastSystem();
+                        toast.show('Backup created successfully', 'success');
+                        modal.hide();
+                        addLicenseLog('backup', 'License data backup created');
+                    }
+                }, {
+                    text: 'Cancel',
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        function resetTrials() {
+            showConfirm({
+                title: 'Reset All Trials',
+                message: 'Reset all trial periods? This will restart active trials.',
+                type: 'warning',
+                onConfirm: () => {
+                    const toast = new ToastSystem();
+                    toast.show('All trials reset', 'success');
+                    addLicenseLog('trial', 'All trials reset');
+                    markUnsavedChanges();
+                }
+            });
+        }
+
+        function showHelp() {
+            const modal = new ModalSystem();
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                line-height: 1.6;
+            `;
+            
+            content.innerHTML = `
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Licensing & Subscriptions</h4>
+                    <p style="color: #475569; font-size: 14px;">
+                        This page manages all gateway-level feature entitlements, including activation of premium modules,
+                        subscription tracking, license key registration, and enabling/disabling advanced features based on purchased plans.
+                    </p>
+                </div>
+                
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">License Tiers</h4>
+                    <div style="background: #F8FAFC; border-radius: 6px; padding: 12px;">
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="license-badge free" style="margin-right: 8px;">Free</span>
+                            <span style="color: #64748B;">Basic features only</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="license-badge standard" style="margin-right: 8px;">Standard</span>
+                            <span style="color: #64748B;">Essential safety features</span>
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <span class="license-badge pro" style="margin-right: 8px;">Pro</span>
+                            <span style="color: #64748B;">All features + priority support</span>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <span class="license-badge enterprise" style="margin-right: 8px;">Enterprise</span>
+                            <span style="color: #64748B;">Custom features + SLA</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 8px;">Key Features</h4>
+                    <ul style="color: #475569; font-size: 14px; padding-left: 20px;">
+                        <li><strong>Feature Access Matrix:</strong> View all module entitlements</li>
+                        <li><strong>License Key Management:</strong> Online/offline activation</li>
+                        <li><strong>Cloud Integration:</strong> Sync with subscription service</li>
+                        <li><strong>Trial Management:</strong> Start and upgrade trials</li>
+                        <li><strong>Audit Logs:</strong> Complete license activity history</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #EFF6FF; border: 1px solid #DBEAFE; border-radius: 6px; padding: 12px;">
+                    <div style="display: flex; align-items: start; gap: 8px;">
+                        <i class="fa-solid fa-circle-info" style="color: #2563EB; margin-top: 2px;"></i>
+                        <div>
+                            <div style="font-weight: 600; color: #1E40AF;">Need Assistance?</div>
+                            <div style="font-size: 12px; color: #475569; margin-top: 2px;">
+                                Contact licensing support at licenses@univa.com or call +1 (555) 123-4567.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.show({
+                title: 'Licensing Help',
+                content,
+                size: 'lg',
+                buttons: [{
+                    text: 'Close',
+                    primary: true,
+                    onClick: () => modal.hide()
+                }]
+            });
+        }
+
+        function saveSettings() {
+            showConfirm({
+                title: 'Save Settings',
+                message: 'Save all license configuration settings?',
+                onConfirm: () => {
+                    const saveBtn = document.getElementById('save-btn');
+                    const originalText = saveBtn.innerHTML;
+                    
+                    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+                    saveBtn.disabled = true;
+                    
+                    setTimeout(() => {
+                        saveBtn.innerHTML = originalText;
+                        saveBtn.disabled = false;
+                        appState.unsavedChanges = false;
+                        const toast = new ToastSystem();
+                        toast.show('License settings saved successfully', 'success');
+                        addLicenseLog('settings', 'License configuration saved');
+                    }, 1500);
+                }
+            });
+        }
+
+        function markUnsavedChanges() {
+            appState.unsavedChanges = true;
+            const saveBtn = document.getElementById('save-btn');
+            if (saveBtn && !saveBtn.disabled) {
+                saveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
+            }
+        }
+
+        // ==================== GLOBAL EXPORTS ====================
+        window.showConfirm = showConfirm;
+        window.showAlert = showAlert;
+        window.showHelp = showHelp;
+        window.syncWithCloud = syncWithCloud;
+        window.showRenewalOptions = showRenewalOptions;
+        window.showTransferModal = showTransferModal;
+        window.deactivateLicense = deactivateLicense;
+        window.toggleFeature = toggleFeature;
+        window.showAllFeatures = showAllFeatures;
+        window.generateDemoKey = generateDemoKey;
+        window.validateLicense = validateLicense;
+        window.importLicenseFile = importLicenseFile;
+        window.exportLicense = exportLicense;
+        window.showLicenseHistory = showLicenseHistory;
+        window.syncNow = syncNow;
+        window.showSyncSettings = showSyncSettings;
+        window.unlinkCloud = unlinkCloud;
+        window.startTrial = startTrial;
+        window.upgradeTrial = upgradeTrial;
+        window.extendTrial = extendTrial;
+        window.cancelTrial = cancelTrial;
+        window.filterLogs = filterLogs;
+        window.exportLogs = exportLogs;
+        window.runLicenseCheck = runLicenseCheck;
+        window.showBackupModal = showBackupModal;
+        window.resetTrials = resetTrials;
+        window.saveSettings = saveSettings;
+    </script>
+</body>
+</html>

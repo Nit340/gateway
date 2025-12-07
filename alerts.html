@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notifications & Multi-Channel Alerts - Univa Gateway</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                        secondary: '#475569',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        surface: '#F8FAFC',
+                        card: '#FFFFFF',
+                        border: '#E2E8F0',
+                        brand: '#2563EB'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            color: #64748B;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+        }
+        
+        .nav-item:hover {
+            background-color: #F1F5F9;
+            color: #1E293B;
+        }
+        
+        .nav-item.active {
+            background-color: #EFF6FF;
+            color: #2563EB;
+            font-weight: 500;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+        }
+        
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #64748B;
+            letter-spacing: 0.05em;
+            margin: 24px 0 8px 16px;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease-in-out;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.success { background: #10B981; }
+        .toast.error { background: #EF4444; }
+        .toast.warning { background: #F59E0B; }
+        .toast.info { background: #3B82F6; }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-sent { background: #E0F2FE; color: #0369A1; }
+        .status-delivered { background: #DCFCE7; color: #14532D; }
+        .status-failed { background: #FFE4E6; color: #B91C1C; }
+        .status-pending { background: #FEF3C7; color: #92400E; }
+    </style>
+</head>
+<body class="bg-surface min-h-screen">
+    <div class="flex">
+        <!-- Sidebar -->
+        <div class="w-64 bg-white border-r border-border min-h-screen fixed h-full overflow-y-auto">
+            <div class="p-4 border-b border-border">
+                <h2 class="text-xl font-bold text-slate-900">Univa Gateway</h2>
+                <p class="text-sm text-slate-500">v2.1.0</p>
+            </div>
+            
+            <div class="nav-section">
+                <div class="section-title">Automation & Event Engine</div>
+                <a href="alerts-events-logging.html" class="nav-item">
+                    <i class="fa-solid fa-bell"></i> Alerts, Event Classes & Logging
+                </a>
+                <a href="rule-engine.html" class="nav-item">
+                    <i class="fa-solid fa-robot"></i> Rule Engine
+                </a>
+                <a href="notifications.html" class="nav-item active">
+                    <i class="fa-solid fa-paper-plane"></i> Notifications
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="section-title">Configuration</div>
+                <a href="general-config.html" class="nav-item">
+                    <i class="fa-solid fa-sliders"></i> General Configuration
+                </a>
+                <a href="modbus-config.html" class="nav-item">
+                    <i class="fa-solid fa-network-wired"></i> Modbus Configuration
+                </a>
+                <a href="crane-config.html" class="nav-item">
+                    <i class="fa-solid fa-gear"></i> Crane Configuration
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="ml-64 flex-1 p-6">
+            <!-- Header -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">Notifications & Multi-Channel Alerts</h1>
+                    <p class="text-slate-500 text-sm mt-1">Configure multi-channel alert delivery for your gateway.</p>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 mb-6">
+                <nav class="-mb-px flex space-x-8">
+                    <button class="tab-button active border-b-2 border-primary text-primary font-medium py-2 px-1" data-tab="channels">Channels</button>
+                    <button class="tab-button text-slate-500 hover:text-slate-700 py-2 px-1" data-tab="templates">Templates</button>
+                    <button class="tab-button text-slate-500 hover:text-slate-700 py-2 px-1" data-tab="routing">Routing Rules</button>
+                    <button class="tab-button text-slate-500 hover:text-slate-700 py-2 px-1" data-tab="logs">Delivery Logs</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="channels-content">
+                <!-- Notification Channels Section -->
+                <div class="bg-card rounded-lg border border-border p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-slate-900">Notification Channels</h2>
+                        <div class="flex space-x-2">
+                            <button class="inline-flex items-center px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition shadow-sm" onclick="showAddChannel()">
+                                <i class="fa-solid fa-plus mr-2"></i> Add Channel
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Channel Cards -->
+                        <div class="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex items-center gap-3 mb-3">
+                                <i class="fa-solid fa-satellite-dish text-brand-500 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium text-slate-900">MQTT_Alert_Broker</h3>
+                                    <p class="text-sm text-slate-500">MQTT Channel</p>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Status:</span>
+                                    <span class="text-green-600 font-medium">Active</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Throughput:</span>
+                                    <span class="text-slate-900">60 msg/min</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Success Rate:</span>
+                                    <span class="text-slate-900">99.5%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="editChannel('mqtt-primary')">
+                                    Edit
+                                </button>
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="testChannel('mqtt-primary')">
+                                    Test
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex items-center gap-3 mb-3">
+                                <i class="fa-solid fa-envelope text-blue-500 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium text-slate-900">Corp_SMTP_Relay</h3>
+                                    <p class="text-sm text-slate-500">Email SMTP</p>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Status:</span>
+                                    <span class="text-green-600 font-medium">Active</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Throughput:</span>
+                                    <span class="text-slate-900">85 msg/min</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Success Rate:</span>
+                                    <span class="text-slate-900">99.9%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="editChannel('email-primary')">
+                                    Edit
+                                </button>
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="testChannel('email-primary')">
+                                    Test
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex items-center gap-3 mb-3">
+                                <i class="fa-solid fa-comment-sms text-green-500 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium text-slate-900">SMS_Gateway_Pri</h3>
+                                    <p class="text-sm text-slate-500">SMS (Twilio)</p>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Status:</span>
+                                    <span class="text-green-600 font-medium">Active</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Throughput:</span>
+                                    <span class="text-slate-900">45 msg/min</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Success Rate:</span>
+                                    <span class="text-slate-900">98%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="editChannel('sms-primary')">
+                                    Edit
+                                </button>
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="testChannel('sms-primary')">
+                                    Test
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex items-center gap-3 mb-3">
+                                <i class="fa-solid fa-code-branch text-purple-500 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium text-slate-900">QC_Sys_Webhook</h3>
+                                    <p class="text-sm text-slate-500">Webhook (POST)</p>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Status:</span>
+                                    <span class="text-red-600 font-medium">Inactive</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Throughput:</span>
+                                    <span class="text-slate-900">0 msg/min</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Success Rate:</span>
+                                    <span class="text-slate-900">0%</span>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex space-x-2">
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="editChannel('webhook-qc')">
+                                    Edit
+                                </button>
+                                <button class="flex-1 text-center py-2 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200" onclick="testChannel('webhook-qc')">
+                                    Test
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other Tab Contents (Hidden by default) -->
+            <div class="tab-content hidden" id="templates-content">
+                <!-- Templates Section -->
+                <div class="bg-card rounded-lg border border-border p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-slate-900">Notification Templates</h2>
+                        <button class="inline-flex items-center px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition shadow-sm" onclick="showAddTemplate()">
+                            <i class="fa-solid fa-plus mr-2"></i> Add Template
+                        </button>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-border">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Last Modified</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="templates-list" class="bg-white divide-y divide-border">
+                                <!-- Templates will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="routing-content">
+                <!-- Routing Rules Section -->
+                <div class="bg-card rounded-lg border border-border p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-slate-900">Routing Rules</h2>
+                        <button class="inline-flex items-center px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition shadow-sm" onclick="showAddRoutingRule()">
+                            <i class="fa-solid fa-plus mr-2"></i> Add Routing Rule
+                        </button>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-border">
+                            <thead>
+                                <tr class="bg-slate-50">
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Alert Class</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Channels</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Condition</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routing-rules-list" class="bg-white divide-y divide-border">
+                                <!-- Routing rules will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="logs-content">
+                <!-- Delivery Logs Section -->
+                <div class="bg-card rounded-lg border border-border p-6 mb-6">
+                    <h2 class="text-lg font-semibold text-slate-900 mb-4">Notification Delivery Logs</h2>
+                    
+                    <!-- Filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Channel</label>
+                            <select id="log-channel-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
+                                <option value="">All Channels</option>
+                                <option value="mqtt">MQTT</option>
+                                <option value="email">Email</option>
+                                <option value="sms">SMS</option>
+                                <option value="webhook">Webhook</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Alert Class</label>
+                            <select id="log-class-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
+                                <option value="">All Classes</option>
+                                <option value="critical">Critical</option>
+                                <option value="warning">Warning</option>
+                                <option value="info">Info</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+                            <select id="log-status-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
+                                <option value="">All Status</option>
+                                <option value="sent">Sent</option>
+                                <option value="delivered">Delivered</option>
+                                <option value="failed">Failed</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Date Range</label>
+                            <input type="date" id="log-date-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" onchange="filterLogs()">
+                        </div>
+                    </div>
+                    
+                    <!-- Logs Table -->
+                    <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                <tr>
+                                    <th class="px-6 py-3 font-medium">Time</th>
+                                    <th class="px-6 py-3 font-medium">Channel</th>
+                                    <th class="px-6 py-3 font-medium">Alert Name</th>
+                                    <th class="px-6 py-3 font-medium">Class</th>
+                                    <th class="px-6 py-3 font-medium">Status</th>
+                                    <th class="px-6 py-3 font-medium">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="notification-logs" class="bg-white divide-y divide-border">
+                                <!-- Logs will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4 flex justify-between items-center">
+                        <div class="text-sm text-slate-500">
+                            Showing <span id="log-count">0</span> of <span id="log-total">0</span> logs
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="inline-flex items-center px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-300 transition" onclick="refreshLogs()">
+                                <i class="fa-solid fa-sync mr-2"></i> Refresh
+                            </button>
+                            <button class="inline-flex items-center px-4 py-2 bg-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-300 transition" onclick="exportLogs()">
+                                <i class="fa-solid fa-download mr-2"></i> Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-container"></div>
+    <div id="toast-container"></div>
+
+    <script>
+        // Global variables
+        let channels = [
+            {id: 'mqtt-primary', name: 'MQTT_Alert_Broker', type: 'MQTT', status: 'active', deliveryMode: 'Critical Alerts', throughput: 60, successRate: 99.5, icon: 'fa-satellite-dish', color: 'brand'},
+            {id: 'email-primary', name: 'Corp_SMTP_Relay', type: 'Email SMTP', status: 'active', deliveryMode: 'All Alerts', throughput: 85, successRate: 99.9, icon: 'fa-envelope', color: 'blue'},
+            {id: 'sms-primary', name: 'SMS_Gateway_Pri', type: 'SMS (Twilio)', status: 'active', deliveryMode: 'Critical & OTP', throughput: 45, successRate: 98, icon: 'fa-comment-sms', color: 'green'},
+            {id: 'webhook-qc', name: 'QC_Sys_Webhook', type: 'Webhook (POST)', status: 'inactive', deliveryMode: 'Maintenance', throughput: 0, successRate: 0, icon: 'fa-code-branch', color: 'purple'}
+        ];
+        
+        let templates = [
+            {id: 'template-1', name: 'Critical Alert Email', type: 'email', description: 'Template for critical email alerts', content: `Alert: {{alert_name}}
+Severity: {{severity}}
+Value: {{value}} {{unit}}
+Time: {{timestamp}}
+Source: {{source}}
+Location: {{location}}
+Please investigate immediately.`, lastModified: '2024-03-15 14:30'},
+            {id: 'template-2', name: 'SMS Alert', type: 'sms', description: 'Short SMS template', content: `Alert: {{alert_name}}
+Value: {{value}}{{unit}}
+Time: {{timestamp}}
+Location: {{location}}`, lastModified: '2024-03-14 09:15'},
+            {id: 'template-3', name: 'MQTT JSON Payload', type: 'mqtt', description: 'JSON payload for MQTT', content: `{
+"alert": "{{alert_name}}",
+"severity": "{{severity}}",
+"value": "{{value}}",
+"unit": "{{unit}}",
+"timestamp": "{{timestamp}}",
+"gateway_id": "{{gateway_id}}",
+"location": "{{location}}"
+}`, lastModified: '2024-03-13 16:45'}
+        ];
+        
+        let routingRules = [
+            {id: 'rule-1', alertClass: 'Critical', channels: ['mqtt', 'email', 'sms'], condition: 'Always', throttling: '15 sec', escalation: 'After 1 min'},
+            {id: 'rule-2', alertClass: 'Warning', channels: ['mqtt'], condition: 'value > 50', throttling: '30 sec', escalation: 'After 2 min'},
+            {id: 'rule-3', alertClass: 'Info', channels: ['cloud'], condition: 'Always', throttling: '60 sec', escalation: 'None'}
+        ];
+        
+        let notificationLogs = [
+            {id: 'log-1', time: '12:45:01', channel: 'Email', alertName: 'Overload', alertClass: 'Critical', status: 'sent', details: 'Sent to ops-team@example.com'},
+            {id: 'log-2', time: '12:45:02', channel: 'SMS', alertName: 'Overload', alertClass: 'Critical', status: 'failed', details: 'Network error'},
+            {id: 'log-3', time: '12:45:03', channel: 'MQTT', alertName: 'Overload', alertClass: 'Critical', status: 'delivered', details: 'Published to device/alerts'},
+            {id: 'log-4', time: '12:40:15', channel: 'Webhook', alertName: 'High Temperature', alertClass: 'Warning', status: 'pending', details: 'Retry in 5 seconds'},
+            {id: 'log-5', time: '12:35:22', channel: 'Push', alertName: 'Low Battery', alertClass: 'Info', status: 'delivered', details: 'Device acknowledged'}
+        ];
+
+        // DOM ready
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTemplates();
+            loadRoutingRules();
+            loadNotificationLogs();
+            setupTabs();
+        });
+
+        // Tab navigation
+        function setupTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabName = button.dataset.tab;
+                    
+                    // Update active tab button
+                    tabButtons.forEach(btn => btn.classList.remove('active', 'text-primary'));
+                    button.classList.add('active', 'text-primary');
+                    
+                    // Show active content
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.add('hidden');
+                    });
+                    document.getElementById(`${tabName}-content`).classList.remove('hidden');
+                });
+            });
+        }
+
+        // Templates Management
+        function loadTemplates() {
+            const container = document.getElementById('templates-list');
+            if (!container) return;
+            
+            container.innerHTML = templates.map(template => `
+                <tr class="log-row">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">${template.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${template.type}</td>
+                    <td class="px-6 py-4 text-sm text-slate-500">${template.description}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${template.lastModified}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button class="text-slate-400 hover:text-blue-500 px-2" onclick="editTemplate('${template.id}')">
+                            <i class="fa-solid fa-edit"></i>
+                        </button>
+                        <button class="text-slate-400 hover:text-red-500 px-2" onclick="deleteTemplate('${template.id}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddTemplate() {
+            showModal('Add Notification Template', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Template Name</label>
+                        <input type="text" id="template-name" placeholder="Critical Alert Email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Template Type</label>
+                        <select id="template-type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white">
+                            <option>Email</option>
+                            <option>SMS</option>
+                            <option>MQTT</option>
+                            <option>Webhook</option>
+                            <option>Push</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                        <input type="text" id="template-description" placeholder="Template for critical email alerts" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Template Content</label>
+                        <textarea id="template-content" class="w-full h-40 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none">Alert: {{alert_name}}
+Severity: {{severity}}
+Value: {{value}} {{unit}}
+Time: {{timestamp}}
+Source: {{source}}
+Location: {{location}}
+Please investigate immediately.</textarea>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h4 class="text-sm font-medium text-slate-700 mb-3">Available Variables</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{alert_name}}</code>
+                                <span class="text-xs text-slate-500">Alert name</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{alert_class}}</code>
+                                <span class="text-xs text-slate-500">Alert class</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{severity}}</code>
+                                <span class="text-xs text-slate-500">Severity level</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{value}}</code>
+                                <span class="text-xs text-slate-500">Alert value</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{unit}}</code>
+                                <span class="text-xs text-slate-500">Unit of measurement</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{timestamp}}</code>
+                                <span class="text-xs text-slate-500">Time of alert</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{source}}</code>
+                                <span class="text-xs text-slate-500">Alert source</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{location}}</code>
+                                <span class="text-xs text-slate-500">Device location</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `, [
+                {text: 'Cancel', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors', onclick: 'closeModal()'},
+                {text: 'Save Template', className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors', onclick: 'saveTemplate()'}
+            ]);
+        }
+
+        function saveTemplate() {
+            const name = document.getElementById('template-name').value;
+            const type = document.getElementById('template-type').value;
+            const description = document.getElementById('template-description').value;
+            const content = document.getElementById('template-content').value;
+            
+            if (!name) {
+                showToast('Please enter a template name', 'error');
+                return;
+            }
+            
+            const newTemplate = {
+                id: 'template-' + new Date().getTime(),
+                name: name,
+                type: type,
+                description: description,
+                content: content,
+                lastModified: new Date().toISOString().slice(0, 16).replace('T', ' ')
+            };
+            
+            templates.push(newTemplate);
+            loadTemplates();
+            closeModal();
+            showToast(`Template "${name}" created successfully`, 'success');
+        }
+
+        function editTemplate(templateId) {
+            const template = templates.find(t => t.id === templateId);
+            if (!template) return;
+            
+            showModal('Edit Notification Template', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Template Name</label>
+                        <input type="text" id="edit-template-name" value="${template.name}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Template Type</label>
+                        <select id="edit-template-type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white">
+                            <option ${template.type === 'email' ? 'selected' : ''}>Email</option>
+                            <option ${template.type === 'sms' ? 'selected' : ''}>SMS</option>
+                            <option ${template.type === 'mqtt' ? 'selected' : ''}>MQTT</option>
+                            <option ${template.type === 'webhook' ? 'selected' : ''}>Webhook</option>
+                            <option ${template.type === 'push' ? 'selected' : ''}>Push</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Description</label>
+                        <input type="text" id="edit-template-description" value="${template.description}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Template Content</label>
+                        <textarea id="edit-template-content" class="w-full h-40 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none">${template.content}</textarea>
+                    </div>
+                </div>
+            `, [
+                {text: 'Cancel', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors', onclick: 'closeModal()'},
+                {text: 'Save Changes', className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors', onclick: `saveEditedTemplate('${templateId}')`}
+            ]);
+        }
+
+        function saveEditedTemplate(templateId) {
+            const templateIndex = templates.findIndex(t => t.id === templateId);
+            if (templateIndex === -1) return;
+            
+            const name = document.getElementById('edit-template-name').value;
+            const type = document.getElementById('edit-template-type').value;
+            const description = document.getElementById('edit-template-description').value;
+            const content = document.getElementById('edit-template-content').value;
+            
+            if (!name) {
+                showToast('Please enter a template name', 'error');
+                return;
+            }
+            
+            templates[templateIndex].name = name;
+            templates[templateIndex].type = type;
+            templates[templateIndex].description = description;
+            templates[templateIndex].content = content;
+            templates[templateIndex].lastModified = new Date().toISOString().slice(0, 16).replace('T', ' ');
+            
+            loadTemplates();
+            closeModal();
+            showToast('Template updated successfully', 'success');
+        }
+
+        function deleteTemplate(templateId) {
+            const template = templates.find(t => t.id === templateId);
+            if (!template) return;
+            
+            showConfirmation('Delete Template', `Are you sure you want to delete the template "${template.name}"?`, () => {
+                const index = templates.findIndex(t => t.id === templateId);
+                if (index > -1) {
+                    templates.splice(index, 1);
+                }
+                loadTemplates();
+                showToast('Template deleted successfully', 'warning');
+            });
+        }
+
+        // Routing Rules Management
+        function loadRoutingRules() {
+            const container = document.getElementById('routing-rules-list');
+            if (!container) return;
+            
+            container.innerHTML = routingRules.map(rule => `
+                <tr class="log-row">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">${rule.alertClass}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex flex-wrap gap-1">
+                            ${rule.channels.map(channel => `
+                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                    channel === 'mqtt' ? 'bg-brand-100 text-brand-700' :
+                                    channel === 'email' ? 'bg-blue-100 text-blue-700' :
+                                    channel === 'sms' ? 'bg-green-100 text-green-700' :
+                                    channel === 'push' ? 'bg-orange-100 text-orange-700' :
+                                    'bg-slate-100 text-slate-700'
+                                }">${channel.toUpperCase()}</span>
+                            `).join('')}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${rule.condition}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button class="text-slate-400 hover:text-blue-500 px-2" onclick="editRoutingRule('${rule.id}')">
+                            <i class="fa-solid fa-edit"></i>
+                        </button>
+                        <button class="text-slate-400 hover:text-red-500 px-2" onclick="deleteRoutingRule('${rule.id}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showAddRoutingRule() {
+            showModal('Add Routing Rule', `
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Alert Class</label>
+                        <select class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white">
+                            <option>Critical</option>
+                            <option>Warning</option>
+                            <option>Info</option>
+                            <option>Custom</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Apply Channels</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">MQTT</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">Email</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                <span class="ml-2 text-sm text-slate-600">SMS</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                <span class="ml-2 text-sm text-slate-600">Push</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                <span class="ml-2 text-sm text-slate-600">Webhook</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Optional Conditions</label>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm">IF</span>
+                            <input type="text" placeholder="value" class="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none flex-1">
+                            <select class="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                                <option>&gt;</option>
+                                <option>&lt;</option>
+                                <option>=</option>
+                                <option>&gt;=</option>
+                                <option>&lt;=</option>
+                            </select>
+                            <input type="number" placeholder="50" class="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none w-20">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Suppression</label>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm">Min Interval Between Alerts:</span>
+                            <input type="number" placeholder="10" class="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none w-20">
+                            <span class="text-sm">seconds</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Escalation</label>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm">After</span>
+                            <input type="number" placeholder="30" class="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none w-20">
+                            <span class="text-sm">seconds if not acknowledged → send to:</span>
+                            <input type="email" placeholder="second-operator@example.com" class="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none flex-1">
+                        </div>
+                    </div>
+                </div>
+            `, [
+                {text: 'Cancel', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors', onclick: 'closeModal()'},
+                {text: 'Add Rule', className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors', onclick: 'addRoutingRule()'}
+            ]);
+        }
+
+        function addRoutingRule() {
+            const newRule = {
+                id: 'rule-' + Date.now(),
+                alertClass: 'Custom',
+                channels: ['mqtt', 'email'],
+                condition: 'Custom condition',
+                throttling: '15 sec',
+                escalation: 'After 1 min'
+            };
+            
+            routingRules.push(newRule);
+            loadRoutingRules();
+            closeModal();
+            showToast('Routing rule added successfully', 'success');
+        }
+
+        function editRoutingRule(ruleId) {
+            const rule = routingRules.find(r => r.id === ruleId);
+            if (!rule) return;
+            
+            showModal(`Edit Routing Rule for ${rule.alertClass}`, `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Alert Class</label>
+                        <select class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white">
+                            <option ${rule.alertClass === 'Critical' ? 'selected' : ''}>Critical</option>
+                            <option ${rule.alertClass === 'Warning' ? 'selected' : ''}>Warning</option>
+                            <option ${rule.alertClass === 'Info' ? 'selected' : ''}>Info</option>
+                            <option ${rule.alertClass === 'Custom' ? 'selected' : ''}>Custom</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Channels</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" ${rule.channels.includes('mqtt') ? 'checked' : ''}>
+                                <span class="ml-2 text-sm text-slate-600">MQTT</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" ${rule.channels.includes('email') ? 'checked' : ''}>
+                                <span class="ml-2 text-sm text-slate-600">Email</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" ${rule.channels.includes('sms') ? 'checked' : ''}>
+                                <span class="ml-2 text-sm text-slate-600">SMS</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `, [
+                {text: 'Cancel', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors', onclick: 'closeModal()'},
+                {text: 'Save Rule', className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors', onclick: `saveRoutingRuleEdit('${ruleId}')`}
+            ]);
+        }
+
+        function saveRoutingRuleEdit(ruleId) {
+            const rule = routingRules.find(r => r.id === ruleId);
+            if (!rule) return;
+            
+            // In a real app, you would get values from form inputs
+            showToast('Routing rule updated successfully', 'success');
+            closeModal();
+        }
+
+        function deleteRoutingRule(ruleId) {
+            const rule = routingRules.find(r => r.id === ruleId);
+            if (!rule) return;
+            
+            showConfirmation('Delete Routing Rule', `Are you sure you want to delete the routing rule for ${rule.alertClass} alerts?`, () => {
+                const index = routingRules.findIndex(r => r.id === ruleId);
+                if (index > -1) {
+                    routingRules.splice(index, 1);
+                }
+                loadRoutingRules();
+                showToast('Routing rule deleted successfully', 'warning');
+            });
+        }
+
+        // Notification Logs
+        function loadNotificationLogs() {
+            const container = document.getElementById('notification-logs');
+            if (!container) return;
+            
+            container.innerHTML = notificationLogs.map(log => `
+                <tr class="log-row">
+                    <td class="px-6 py-4 font-mono text-sm text-slate-600">${log.time}</td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid ${
+                                log.channel === 'Email' ? 'fa-envelope text-blue-500' :
+                                log.channel === 'SMS' ? 'fa-comment-sms text-green-500' :
+                                log.channel === 'MQTT' ? 'fa-satellite-dish text-brand-500' :
+                                log.channel === 'Webhook' ? 'fa-code-branch text-purple-500' :
+                                'fa-bell text-orange-500'
+                            }"></i>
+                            <span class="text-slate-700">${log.channel}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 font-medium text-slate-900">${log.alertName}</td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                            log.alertClass === 'Critical' ? 'bg-red-100 text-red-700' :
+                            log.alertClass === 'Warning' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                        }">${log.alertClass}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="status-badge status-${log.status}">${log.status.charAt(0).toUpperCase() + log.status.slice(1)}</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-500">${log.details}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('log-count').textContent = notificationLogs.length;
+            document.getElementById('log-total').textContent = '124';
+        }
+
+        function filterLogs() {
+            // In a real app, you would implement filtering logic here
+            showToast('Filtering logs...', 'info');
+        }
+
+        function refreshLogs() {
+            showToast('Refreshing logs...', 'info');
+            setTimeout(() => {
+                const newLog = {
+                    id: 'log-' + Date.now(),
+                    time: new Date().toTimeString().split(' ')[0],
+                    channel: ['MQTT', 'Email', 'SMS', 'Webhook'][Math.floor(Math.random() * 4)],
+                    alertName: ['Overload', 'High Temperature', 'Low Battery', 'Connection Lost'][Math.floor(Math.random() * 4)],
+                    alertClass: ['Critical', 'Warning', 'Info'][Math.floor(Math.random() * 3)],
+                    status: ['sent', 'delivered', 'failed', 'pending'][Math.floor(Math.random() * 4)],
+                    details: 'Simulated log entry'
+                };
+                
+                notificationLogs.unshift(newLog);
+                if (notificationLogs.length > 100) {
+                    notificationLogs.pop();
+                }
+                
+                loadNotificationLogs();
+                showToast('Logs refreshed successfully', 'success');
+            }, 1000);
+        }
+
+        function exportLogs() {
+            showConfirmation('Export Logs', 'Export all notification logs as CSV file?', () => {
+                // In a real app, you would generate and download CSV
+                showToast('Logs exported successfully', 'success');
+            });
+        }
+
+        // Channel Management
+        function showAddChannel() {
+            showModal('Add Notification Channel', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Channel Type</label>
+                        <select id="channel-type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white">
+                            <option value="mqtt">MQTT</option>
+                            <option value="email">Email SMTP</option>
+                            <option value="sms">SMS (Twilio)</option>
+                            <option value="webhook">Webhook (POST)</option>
+                            <option value="push">Push Notification</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Channel Name</label>
+                        <input type="text" id="channel-name" placeholder="My_Channel_Name" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    </div>
+                </div>
+            `, [
+                {text: 'Cancel', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors', onclick: 'closeModal()'},
+                {text: 'Add Channel', className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors', onclick: 'addChannel()'}
+            ]);
+        }
+
+        function addChannel() {
+            const type = document.getElementById('channel-type').value;
+            const name = document.getElementById('channel-name').value;
+            
+            if (!name) {
+                showToast('Please enter a channel name', 'error');
+                return;
+            }
+            
+            const newChannel = {
+                id: type + '-' + new Date().getTime(),
+                name: name,
+                type: type,
+                status: 'inactive',
+                deliveryMode: 'All Alerts',
+                throughput: 0,
+                successRate: 0,
+                icon: getChannelIcon(type),
+                color: getChannelColor(type)
+            };
+            
+            channels.push(newChannel);
+            showToast(`Channel "${name}" added successfully`, 'success');
+            closeModal();
+        }
+
+        function getChannelIcon(type) {
+            const icons = {
+                'mqtt': 'fa-satellite-dish',
+                'email': 'fa-envelope',
+                'sms': 'fa-comment-sms',
+                'webhook': 'fa-code-branch',
+                'push': 'fa-bell'
+            };
+            return icons[type] || 'fa-bell';
+        }
+
+        function getChannelColor(type) {
+            const colors = {
+                'mqtt': 'brand',
+                'email': 'blue',
+                'sms': 'green',
+                'webhook': 'purple',
+                'push': 'orange'
+            };
+            return colors[type] || 'slate';
+        }
+
+        function editChannel(channelId) {
+            const channel = channels.find(c => c.id === channelId);
+            if (!channel) return;
+            
+            let configContent = '';
+            if (channel.type === 'mqtt') {
+                configContent = `
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Broker URL</label>
+                            <input type="text" value="mqtt://broker.com:1883" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Username</label>
+                            <input type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Password</label>
+                            <input type="password" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Alert Topic</label>
+                            <input type="text" value="device/alerts" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">QoS</label>
+                            <select class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white">
+                                <option>0</option>
+                                <option>1</option>
+                                <option>2</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+            } else if (channel.type === 'email') {
+                configContent = `
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">SMTP Server</label>
+                            <input type="text" value="smtp.gmail.com" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Port</label>
+                            <input type="number" value="587" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Username</label>
+                            <input type="text" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Password</label>
+                            <input type="password" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">From Email</label>
+                            <input type="email" value="alerts@gateway.com" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Recipients</label>
+                            <div class="flex flex-wrap gap-2 mb-2">
+                                <span class="inline-flex items-center px-2 py-1 bg-slate-100 rounded text-sm">ops-team@example.com</span>
+                                <span class="inline-flex items-center px-2 py-1 bg-slate-100 rounded text-sm">admin@example.com</span>
+                            </div>
+                            <input type="email" placeholder="Add recipient..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                        </div>
+                    </div>
+                `;
+            } else {
+                configContent = `<p class="text-slate-600">Configuration options for ${channel.type} channel...</p>`;
+            }
+            
+            showModal(`Configure ${channel.name}`, configContent, [
+                {text: 'Cancel', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors', onclick: 'closeModal()'},
+                {text: 'Save Config', className: 'px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors', onclick: 'saveChannelConfig()'}
+            ]);
+        }
+
+        function saveChannelConfig() {
+            showToast('Channel configuration saved successfully', 'success');
+            closeModal();
+        }
+
+        function testChannel(channelId) {
+            const channel = channels.find(c => c.id === channelId);
+            if (!channel) return;
+            
+            showToast(`Sending test to ${channel.name}...`, 'info');
+            setTimeout(() => {
+                showToast(`${channel.type} test sent successfully!`, 'success');
+            }, 1500);
+        }
+
+        // Modal Functions
+        function showModal(title, content, buttons = []) {
+            const modalId = 'modal-' + Date.now();
+            const modalHtml = `
+                <div id="${modalId}" class="modal">
+                    <div class="modal-content">
+                        <div class="p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-slate-900">${title}</h3>
+                                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="mb-6">
+                                ${content}
+                            </div>
+                            <div class="flex justify-end space-x-3">
+                                ${buttons.map(btn => `<button class="${btn.className}" onclick="${btn.onclick}">${btn.text}</button>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal-container').innerHTML = modalHtml;
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('.modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function showConfirmation(title, message, callback) {
+            const modalId = 'confirm-' + Date.now();
+            const modalHtml = `
+                <div id="${modalId}" class="modal">
+                    <div class="modal-content">
+                        <div class="p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold text-slate-900">${title}</h3>
+                                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="mb-6">
+                                <p class="text-slate-600">${message}</p>
+                            </div>
+                            <div class="flex justify-end space-x-3">
+                                <button class="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors" onclick="closeModal()">Cancel</button>
+                                <button class="px-4 py-2 text-sm font-medium text-white bg-danger hover:bg-red-700 rounded-lg shadow-sm transition-colors" onclick="confirmAction(${callback.toString()})">Confirm</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modal-container').innerHTML = modalHtml;
+        }
+
+        function confirmAction(callback) {
+            callback();
+            closeModal();
+        }
+
+        // Toast Functions
+        function showToast(message, type = 'info') {
+            const toastId = 'toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast ${type}">
+                    <div class="flex items-center">
+                        <span>${message}</span>
+                        <button onclick="closeToast('${toastId}')" class="ml-4 text-white hover:text-gray-200">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('toast-container').innerHTML += toastHtml;
+            
+            setTimeout(() => {
+                const toast = document.getElementById(toastId);
+                if (toast) {
+                    toast.classList.add('show');
+                }
+            }, 10);
+            
+            setTimeout(() => {
+                closeToast(toastId);
+            }, 5000);
+        }
+
+        function closeToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }
+        }
+    </script>
+</body>
+</html>

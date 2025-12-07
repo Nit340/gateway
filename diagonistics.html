@@ -43,6 +43,185 @@
         .terminal-scroll::-webkit-scrollbar-track { background: #1e293b; }
         .terminal-scroll::-webkit-scrollbar-thumb { background: #475569; }
         
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+        
+        .nav-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+        
+        .nav-item.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+        
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            left: 260px;
+            top: 20px;
+            z-index: 100;
+            background: white;
+            border: 1px solid #E2E8F0;
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            padding: 10px 8px;
+            cursor: pointer;
+            color: #64748B;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar.collapsed ~ .main-content-with-sidebar {
+            margin-left: 0;
+        }
+        
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 0;
+        }
+        
+        .main-content-with-sidebar {
+            margin-left: 260px;
+            transition: margin-left 0.3s;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                left: 0;
+            }
+            
+            .sidebar.active + .sidebar-toggle {
+                left: 260px;
+            }
+            
+            .main-content-with-sidebar {
+                margin-left: 0;
+            }
+        }
+        
         /* Modal System */
         .modal-backdrop {
             position: fixed;
@@ -282,6 +461,9 @@
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
+    
+    <!-- Sidebar will be inserted here by JavaScript -->
+    <div id="sidebar-container"></div>
 
     <!-- Modal Container -->
     <div id="modal-container" class="modal-backdrop"></div>
@@ -289,605 +471,753 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <!-- HEADER -->
-    <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="h-16 flex items-center justify-between">
-                <!-- Left: Logo & Title -->
-                <div class="flex items-center space-x-4">
-                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
-                        <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
-                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
-                        <span class="text-slate-900 font-medium">Diagnostics & Terminal</span>
-                    </div>
-                </div>
-
-                <!-- Right: Controls -->
-                <div class="flex items-center space-x-4">
-                    <div class="relative hidden sm:block">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+    <!-- Main Content Container -->
+    <div class="main-content-with-sidebar">
+        <!-- HEADER -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="h-16 flex items-center justify-between">
+                    <!-- Left: Logo & Title -->
+                    <div class="flex items-center space-x-4">
+                        <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                            <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                            <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                            <span class="text-slate-900 font-medium">Diagnostics & Terminal</span>
                         </div>
-                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
-                            <option>Univa-GW-01</option>
-                            <option>Univa-GW-02</option>
-                            <option>Univa-GW-03</option>
-                        </select>
                     </div>
-                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
-                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showDiagnosticsHelp()">
-                        <i class="fa-solid fa-circle-question mr-2"></i> Help
-                    </button>
-                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
-                        Cancel
-                    </button>
-                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="save-btn" onclick="saveSettings()">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
-                    </button>
+
+                    <!-- Right: Controls -->
+                    <div class="flex items-center space-x-4">
+                        <div class="relative hidden sm:block">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                            </div>
+                            <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                                <option>Univa-GW-01</option>
+                                <option>Univa-GW-02</option>
+                                <option>Univa-GW-03</option>
+                            </select>
+                        </div>
+                        <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                        <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showDiagnosticsHelp()">
+                            <i class="fa-solid fa-circle-question mr-2"></i> Help
+                        </button>
+                        <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
+                            Cancel
+                        </button>
+                        <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="save-btn" onclick="saveSettings()">
+                            <i class="fa-solid fa-floppy-disk mr-2"></i> Save
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <!-- MAIN CONTENT -->
-    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <!-- MAIN CONTENT -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-        <!-- SECTION 1: SYSTEM LOG VIEWER -->
-        <section id="section-logs" class="bg-white rounded-xl shadow-sm border border-border p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-list-ul mr-2 text-primary"></i> 
-                    <span class="mr-2">System Log Viewer</span>
-                    <span class="text-xs font-normal text-slate-500">Live Stream</span>
-                </h2>
-                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                    Real-time Monitoring
+            <!-- SECTION 1: SYSTEM LOG VIEWER -->
+            <section id="section-logs" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-list-ul mr-2 text-primary"></i> 
+                        <span class="mr-2">System Log Viewer</span>
+                        <span class="text-xs font-normal text-slate-500">Live Stream</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        Real-time Monitoring
+                    </div>
                 </div>
-            </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <!-- Sidebar Filters -->
-                <div class="lg:col-span-1">
-                    <div class="bg-slate-50 border border-border rounded-lg p-4">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-3 border-b pb-2">Log Filters</h3>
-                        
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-2">Search</label>
-                                <div class="relative">
-                                    <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"></i>
-                                    <input type="text" placeholder="Filter logs..." class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <!-- Sidebar Filters -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-3 border-b pb-2">Log Filters</h3>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-2">Search</label>
+                                    <div class="relative">
+                                        <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 text-sm"></i>
+                                        <input type="text" placeholder="Filter logs..." class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-2">Log Level</label>
+                                    <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                        <option>All Levels</option>
+                                        <option>ERROR</option>
+                                        <option>WARN</option>
+                                        <option>INFO</option>
+                                        <option>DEBUG</option>
+                                        <option>TRACE</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-2">Categories</label>
+                                    <div class="space-y-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                            <span class="ml-2 text-sm text-slate-700">System Core</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                            <span class="ml-2 text-sm text-slate-700">Network</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                            <span class="ml-2 text-sm text-slate-700">Modbus Engine</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                            <span class="ml-2 text-sm text-slate-700">ACS (Anti-Collision)</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                            <span class="ml-2 text-sm text-slate-700">MQTT/Cloud</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center justify-between pt-4 border-t border-border">
+                                    <label class="flex items-center">
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="liveStream" checked>
+                                            <span class="toggle-slider"></span>
+                                        </div>
+                                        <span class="ml-2 text-sm text-slate-700">Live Stream</span>
+                                    </label>
+                                    <button class="text-primary hover:text-primaryHover text-sm font-medium flex items-center" onclick="downloadLogs()">
+                                        <i class="fa-solid fa-download mr-1"></i> Export
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Log Console -->
+                    <div class="lg:col-span-3">
+                        <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden h-full">
+                            <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-terminal text-emerald-400"></i>
+                                    <span class="text-sm font-medium text-slate-200">System Log Console</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">Auto-scroll: ON</span>
+                                    <button class="text-xs text-slate-300 hover:text-white px-2 py-1" onclick="clearLogConsole()">
+                                        <i class="fa-solid fa-trash mr-1"></i> Clear
+                                    </button>
                                 </div>
                             </div>
                             
+                            <div id="log-console" class="font-mono text-xs leading-5 text-slate-300 p-4 h-96 overflow-y-auto terminal-scroll">
+                                <!-- Logs will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: LIVE TERMINAL -->
+            <section id="section-terminal" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-terminal mr-2 text-emerald-500"></i> 
+                        <span class="mr-2">Live Terminal</span>
+                        <span class="text-xs font-normal text-slate-500">SSH Session</span>
+                    </h2>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i>Admin Access
+                        </span>
+                        <span class="text-xs text-slate-500">Session expires in 28:14</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <!-- Terminal Controls -->
+                    <div class="lg:col-span-1">
+                        <div class="bg-slate-50 border border-border rounded-lg p-4">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-3 border-b pb-2">Terminal Settings</h3>
+                            
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-2">Connection Type</label>
+                                    <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                        <option selected>SSH</option>
+                                        <option>Serial</option>
+                                        <option>Telnet</option>
+                                        <option>WebSocket</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-2">Command History</label>
+                                    <div class="space-y-2 max-h-40 overflow-y-auto">
+                                        <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('uname -a')">
+                                            <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>uname -a
+                                        </button>
+                                        <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('top -b -n 1 | head -n 5')">
+                                            <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>top -b -n 1 | head -n 5
+                                        </button>
+                                        <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('rf-test-tool --scan')">
+                                            <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>rf-test-tool --scan
+                                        </button>
+                                        <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('df -h')">
+                                            <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>df -h
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-border">
+                                    <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="connectTerminal()">
+                                        <i class="fa-solid fa-plug mr-2"></i> Connect Terminal
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terminal Console -->
+                    <div class="lg:col-span-3">
+                        <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden h-full">
+                            <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-terminal text-emerald-400"></i>
+                                    <span class="text-sm font-medium text-slate-200">root@univa-gw:~</span>
+                                </div>
+                                <button class="text-xs text-slate-300 hover:text-white px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded" onclick="disconnectTerminal()">
+                                    Disconnect
+                                </button>
+                            </div>
+                            
+                            <div id="terminal-output" class="font-mono text-sm text-slate-300 p-4 h-96 overflow-y-auto terminal-scroll">
+                                <div class="mb-4">
+                                    <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">uname -a</span><br>
+                                    Linux univa-gw 5.10.0-21-arm64 #1 SMP Debian 5.10.162-1 (2023-01-21) aarch64 GNU/Linux
+                                </div>
+                                <div class="mb-4">
+                                    <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">top -b -n 1 | head -n 5</span><br>
+                                    top - 09:45:02 up 2 days, 14:12,  1 user,  load average: 0.45, 0.32, 0.28<br>
+                                    Tasks: 112 total,   1 running, 111 sleeping,   0 stopped,   0 zombie<br>
+                                    %Cpu(s):  4.2 us,  1.8 sy,  0.0 ni, 93.8 id,  0.1 wa,  0.0 hi,  0.1 si,  0.0 st<br>
+                                    MiB Mem :   3920.0 total,   1452.2 free,    824.5 used,   1643.3 buff/cache<br>
+                                    MiB Swap:      0.0 total,      0.0 free,      0.0 used.   2850.1 avail Mem
+                                </div>
+                                <div class="mb-4">
+                                    <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">rf-test-tool --scan</span><br>
+                                    Scanning 433MHz band...<br>
+                                    [+] Channel 1 (433.100): RSSI -92 dBm (Clear)<br>
+                                    [+] Channel 2 (433.200): RSSI -88 dBm (Clear)<br>
+                                    [!] Channel 3 (433.300): RSSI -45 dBm (BUSY)<br>
+                                    Scan complete.
+                                </div>
+                                <div id="terminal-cursor">
+                                    <span class="text-emerald-500">root@univa-gw:~$</span> <span class="animate-pulse bg-slate-500 w-2 h-4 inline-block align-middle ml-1"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="px-4 py-2 bg-slate-800 border-t border-slate-700">
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="terminal-input" placeholder="Enter command..." class="flex-1 bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500" onkeypress="handleTerminalInput(event)">
+                                    <button class="text-sm text-slate-300 hover:text-white px-4 py-2 bg-primary hover:bg-primaryHover rounded" onclick="sendCommand()">
+                                        Send
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 3: SYSTEM RESOURCE MONITOR -->
+            <section id="section-resources" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-chart-line mr-2 text-warning"></i> 
+                        <span class="mr-2">System Resource Monitor</span>
+                        <span class="text-xs font-normal text-slate-500">Real-time Metrics</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        Live Updates
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- CPU/RAM Chart -->
+                    <div class="bg-slate-50 border border-border rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-semibold text-slate-800 text-sm">CPU & Memory Usage</h3>
+                            <div class="flex gap-2 text-xs">
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span>CPU</span>
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success"></span>RAM</span>
+                            </div>
+                        </div>
+                        <div id="chart-cpu" class="h-[200px] w-full"></div>
+                    </div>
+
+                    <!-- RF Signal Chart -->
+                    <div class="bg-slate-50 border border-border rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-semibold text-slate-800 text-sm">RF Signal Quality (RSSI)</h3>
+                            <span class="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">Good (-65dBm)</span>
+                        </div>
+                        <div id="chart-rf" class="h-[200px] w-full"></div>
+                    </div>
+
+                    <!-- Network Throughput -->
+                    <div class="bg-slate-50 border border-border rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-semibold text-slate-800 text-sm">Network I/O (KB/s)</h3>
+                            <span class="text-xs text-slate-500">eth0</span>
+                        </div>
+                        <div id="chart-net" class="h-[200px] w-full"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 4: DIAGNOSTIC TOOLS -->
+            <section id="section-tools" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-screwdriver-wrench mr-2 text-danger"></i> 
+                        <span class="mr-2">Diagnostic Tools</span>
+                        <span class="text-xs font-normal text-slate-500">Advanced Utilities</span>
+                    </h2>
+                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        Packet Capture & Analysis
+                    </div>
+                </div>
+
+                <div class="border-b border-border">
+                    <div class="flex space-x-8">
+                        <button id="tab-packet" class="pb-4 border-b-2 border-primary text-primary font-medium text-sm flex items-center">
+                            <i class="fa-solid fa-network-wired mr-2"></i> Packet Capture
+                        </button>
+                        <button id="tab-serial" class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center transition-colors">
+                            <i class="fa-solid fa-microchip mr-2"></i> Serial Monitor
+                        </button>
+                        <button id="tab-rf" class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center transition-colors">
+                            <i class="fa-solid fa-tower-broadcast mr-2"></i> RF Scanner
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Packet Capture Content -->
+                <div id="content-packet" class="pt-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="space-y-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-2">Log Level</label>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Capture Interface</label>
                                 <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                    <option>All Levels</option>
-                                    <option>ERROR</option>
-                                    <option>WARN</option>
-                                    <option>INFO</option>
-                                    <option>DEBUG</option>
-                                    <option>TRACE</option>
+                                    <option>eth0 (WAN)</option>
+                                    <option>wlan0 (WiFi)</option>
+                                    <option>can0 (CAN Bus)</option>
+                                    <option>rf0 (Radio)</option>
                                 </select>
                             </div>
                             
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-2">Categories</label>
-                                <div class="space-y-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Capture Duration</label>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">10s</button>
+                                    <button class="text-sm border border-primary bg-primary/5 text-primary rounded-lg py-2 font-medium">30s</button>
+                                    <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">Custom</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Protocol Filters</label>
+                                <div class="space-y-3">
                                     <label class="flex items-center">
                                         <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">System Core</span>
+                                        <span class="ml-2 text-sm text-slate-700">Modbus TCP (Port 502)</span>
                                     </label>
                                     <label class="flex items-center">
                                         <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">Network</span>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">Modbus Engine</span>
+                                        <span class="ml-2 text-sm text-slate-700">MQTT (Port 1883/8883)</span>
                                     </label>
                                     <label class="flex items-center">
                                         <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">ACS (Anti-Collision)</span>
+                                        <span class="ml-2 text-sm text-slate-700">HTTP/HTTPS</span>
                                     </label>
                                     <label class="flex items-center">
-                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">MQTT/Cloud</span>
+                                        <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">SSH (Port 22)</span>
                                     </label>
                                 </div>
                             </div>
-                            
-                            <div class="flex items-center justify-between pt-4 border-t border-border">
-                                <label class="flex items-center">
-                                    <div class="toggle-switch">
-                                        <input type="checkbox" id="liveStream" checked>
-                                        <span class="toggle-slider"></span>
-                                    </div>
-                                    <span class="ml-2 text-sm text-slate-700">Live Stream</span>
-                                </label>
-                                <button class="text-primary hover:text-primaryHover text-sm font-medium flex items-center" onclick="downloadLogs()">
-                                    <i class="fa-solid fa-download mr-1"></i> Export
-                                </button>
-                            </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Log Console -->
-                <div class="lg:col-span-3">
-                    <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden h-full">
-                        <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-terminal text-emerald-400"></i>
-                                <span class="text-sm font-medium text-slate-200">System Log Console</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs text-slate-400 bg-slate-700 px-2 py-1 rounded">Auto-scroll: ON</span>
-                                <button class="text-xs text-slate-300 hover:text-white px-2 py-1" onclick="clearLogConsole()">
-                                    <i class="fa-solid fa-trash mr-1"></i> Clear
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div id="log-console" class="font-mono text-xs leading-5 text-slate-300 p-4 h-96 overflow-y-auto terminal-scroll">
-                            <!-- Logs will be populated here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- SECTION 2: LIVE TERMINAL -->
-        <section id="section-terminal" class="bg-white rounded-xl shadow-sm border border-border p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-terminal mr-2 text-emerald-500"></i> 
-                    <span class="mr-2">Live Terminal</span>
-                    <span class="text-xs font-normal text-slate-500">SSH Session</span>
-                </h2>
-                <div class="flex items-center gap-3">
-                    <span class="text-xs text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
-                        <i class="fa-solid fa-triangle-exclamation mr-1"></i>Admin Access
-                    </span>
-                    <span class="text-xs text-slate-500">Session expires in 28:14</span>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <!-- Terminal Controls -->
-                <div class="lg:col-span-1">
-                    <div class="bg-slate-50 border border-border rounded-lg p-4">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-3 border-b pb-2">Terminal Settings</h3>
                         
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-2">Connection Type</label>
-                                <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                    <option selected>SSH</option>
-                                    <option>Serial</option>
-                                    <option>Telnet</option>
-                                    <option>WebSocket</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-2">Command History</label>
-                                <div class="space-y-2 max-h-40 overflow-y-auto">
-                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('uname -a')">
-                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>uname -a
-                                    </button>
-                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('top -b -n 1 | head -n 5')">
-                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>top -b -n 1 | head -n 5
-                                    </button>
-                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('rf-test-tool --scan')">
-                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>rf-test-tool --scan
-                                    </button>
-                                    <button class="w-full text-left text-xs text-slate-600 hover:text-primary hover:bg-slate-100 px-2 py-1 rounded" onclick="executeCommand('df -h')">
-                                        <i class="fa-solid fa-chevron-right text-xs mr-2 text-slate-400"></i>df -h
-                                    </button>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Capture Settings</label>
+                                <div class="space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Promiscuous Mode</span>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="promiscuous" checked>
+                                            <span class="toggle-slider"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-700">Store to File</span>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="store-file">
+                                            <span class="toggle-slider"></span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div class="pt-4 border-t border-border">
-                                <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="connectTerminal()">
-                                    <i class="fa-solid fa-plug mr-2"></i> Connect Terminal
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Terminal Console -->
-                <div class="lg:col-span-3">
-                    <div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden h-full">
-                        <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-terminal text-emerald-400"></i>
-                                <span class="text-sm font-medium text-slate-200">root@univa-gw:~</span>
-                            </div>
-                            <button class="text-xs text-slate-300 hover:text-white px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded" onclick="disconnectTerminal()">
-                                Disconnect
+                            <button class="w-full mt-6 bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="startPacketCapture()">
+                                <i class="fa-solid fa-play mr-2"></i> Start Capture
+                            </button>
+                            <button class="w-full mt-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="showCaptureSettings()">
+                                <i class="fa-solid fa-cog mr-2"></i> Advanced Settings
                             </button>
                         </div>
-                        
-                        <div id="terminal-output" class="font-mono text-sm text-slate-300 p-4 h-96 overflow-y-auto terminal-scroll">
-                            <div class="mb-4">
-                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">uname -a</span><br>
-                                Linux univa-gw 5.10.0-21-arm64 #1 SMP Debian 5.10.162-1 (2023-01-21) aarch64 GNU/Linux
-                            </div>
-                            <div class="mb-4">
-                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">top -b -n 1 | head -n 5</span><br>
-                                top - 09:45:02 up 2 days, 14:12,  1 user,  load average: 0.45, 0.32, 0.28<br>
-                                Tasks: 112 total,   1 running, 111 sleeping,   0 stopped,   0 zombie<br>
-                                %Cpu(s):  4.2 us,  1.8 sy,  0.0 ni, 93.8 id,  0.1 wa,  0.0 hi,  0.1 si,  0.0 st<br>
-                                MiB Mem :   3920.0 total,   1452.2 free,    824.5 used,   1643.3 buff/cache<br>
-                                MiB Swap:      0.0 total,      0.0 free,      0.0 used.   2850.1 avail Mem
-                            </div>
-                            <div class="mb-4">
-                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="text-white">rf-test-tool --scan</span><br>
-                                Scanning 433MHz band...<br>
-                                [+] Channel 1 (433.100): RSSI -92 dBm (Clear)<br>
-                                [+] Channel 2 (433.200): RSSI -88 dBm (Clear)<br>
-                                [!] Channel 3 (433.300): RSSI -45 dBm (BUSY)<br>
-                                Scan complete.
-                            </div>
-                            <div id="terminal-cursor">
-                                <span class="text-emerald-500">root@univa-gw:~$</span> <span class="animate-pulse bg-slate-500 w-2 h-4 inline-block align-middle ml-1"></span>
-                            </div>
-                        </div>
-                        
-                        <div class="px-4 py-2 bg-slate-800 border-t border-slate-700">
-                            <div class="flex items-center gap-2">
-                                <input type="text" id="terminal-input" placeholder="Enter command..." class="flex-1 bg-slate-900 border border-slate-700 text-slate-300 text-sm rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500" onkeypress="handleTerminalInput(event)">
-                                <button class="text-sm text-slate-300 hover:text-white px-4 py-2 bg-primary hover:bg-primaryHover rounded" onclick="sendCommand()">
-                                    Send
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
 
-        <!-- SECTION 3: SYSTEM RESOURCE MONITOR -->
-        <section id="section-resources" class="bg-white rounded-xl shadow-sm border border-border p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-chart-line mr-2 text-warning"></i> 
-                    <span class="mr-2">System Resource Monitor</span>
-                    <span class="text-xs font-normal text-slate-500">Real-time Metrics</span>
-                </h2>
-                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                    Live Updates
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- CPU/RAM Chart -->
-                <div class="bg-slate-50 border border-border rounded-lg p-4">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-semibold text-slate-800 text-sm">CPU & Memory Usage</h3>
-                        <div class="flex gap-2 text-xs">
-                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span>CPU</span>
-                            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success"></span>RAM</span>
-                        </div>
-                    </div>
-                    <div id="chart-cpu" class="h-[200px] w-full"></div>
-                </div>
-
-                <!-- RF Signal Chart -->
-                <div class="bg-slate-50 border border-border rounded-lg p-4">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-semibold text-slate-800 text-sm">RF Signal Quality (RSSI)</h3>
-                        <span class="text-xs bg-success/20 text-success px-2 py-0.5 rounded-full">Good (-65dBm)</span>
-                    </div>
-                    <div id="chart-rf" class="h-[200px] w-full"></div>
-                </div>
-
-                <!-- Network Throughput -->
-                <div class="bg-slate-50 border border-border rounded-lg p-4">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-semibold text-slate-800 text-sm">Network I/O (KB/s)</h3>
-                        <span class="text-xs text-slate-500">eth0</span>
-                    </div>
-                    <div id="chart-net" class="h-[200px] w-full"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- SECTION 4: DIAGNOSTIC TOOLS -->
-        <section id="section-tools" class="bg-white rounded-xl shadow-sm border border-border p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-screwdriver-wrench mr-2 text-danger"></i> 
-                    <span class="mr-2">Diagnostic Tools</span>
-                    <span class="text-xs font-normal text-slate-500">Advanced Utilities</span>
-                </h2>
-                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                    Packet Capture & Analysis
-                </div>
-            </div>
-
-            <div class="border-b border-border">
-                <div class="flex space-x-8">
-                    <button id="tab-packet" class="pb-4 border-b-2 border-primary text-primary font-medium text-sm flex items-center">
-                        <i class="fa-solid fa-network-wired mr-2"></i> Packet Capture
-                    </button>
-                    <button id="tab-serial" class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center transition-colors">
-                        <i class="fa-solid fa-microchip mr-2"></i> Serial Monitor
-                    </button>
-                    <button id="tab-rf" class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm flex items-center transition-colors">
-                        <i class="fa-solid fa-tower-broadcast mr-2"></i> RF Scanner
-                    </button>
-                </div>
-            </div>
-
-            <!-- Packet Capture Content -->
-            <div id="content-packet" class="pt-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Capture Interface</label>
-                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                <option>eth0 (WAN)</option>
-                                <option>wlan0 (WiFi)</option>
-                                <option>can0 (CAN Bus)</option>
-                                <option>rf0 (Radio)</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Capture Duration</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">10s</button>
-                                <button class="text-sm border border-primary bg-primary/5 text-primary rounded-lg py-2 font-medium">30s</button>
-                                <button class="text-sm border border-border rounded-lg py-2 hover:bg-slate-50">Custom</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Protocol Filters</label>
-                            <div class="space-y-3">
-                                <label class="flex items-center">
-                                    <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">Modbus TCP (Port 502)</span>
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">MQTT (Port 1883/8883)</span>
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">HTTP/HTTPS</span>
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">SSH (Port 22)</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Capture Settings</label>
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm text-slate-700">Promiscuous Mode</span>
-                                    <div class="toggle-switch">
-                                        <input type="checkbox" id="promiscuous" checked>
-                                        <span class="toggle-slider"></span>
-                                    </div>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-sm text-slate-700">Store to File</span>
-                                    <div class="toggle-switch">
-                                        <input type="checkbox" id="store-file">
-                                        <span class="toggle-slider"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <button class="w-full mt-6 bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="startPacketCapture()">
-                            <i class="fa-solid fa-play mr-2"></i> Start Capture
-                        </button>
-                        <button class="w-full mt-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="showCaptureSettings()">
-                            <i class="fa-solid fa-cog mr-2"></i> Advanced Settings
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Serial Monitor Content (Hidden) -->
-            <div id="content-serial" class="pt-6 hidden">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Serial Port</label>
-                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                <option>/dev/ttyUSB0</option>
-                                <option>/dev/ttyUSB1</option>
-                                <option>/dev/ttyACM0</option>
-                                <option>/dev/ttyS0</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Baud Rate</label>
-                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                <option>9600</option>
-                                <option>19200</option>
-                                <option>38400</option>
-                                <option selected>115200</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
+                <!-- Serial Monitor Content (Hidden) -->
+                <div id="content-serial" class="pt-6 hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="space-y-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">Data Bits</label>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Serial Port</label>
                                 <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                    <option>7</option>
-                                    <option selected>8</option>
+                                    <option>/dev/ttyUSB0</option>
+                                    <option>/dev/ttyUSB1</option>
+                                    <option>/dev/ttyACM0</option>
+                                    <option>/dev/ttyS0</option>
                                 </select>
                             </div>
+                            
                             <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">Parity</label>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Baud Rate</label>
                                 <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                    <option selected>None</option>
-                                    <option>Odd</option>
-                                    <option>Even</option>
+                                    <option>9600</option>
+                                    <option>19200</option>
+                                    <option>38400</option>
+                                    <option selected>115200</option>
                                 </select>
                             </div>
                         </div>
                         
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Flow Control</label>
-                            <div class="space-y-2">
-                                <label class="flex items-center">
-                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
-                                    <span class="ml-2 text-sm text-slate-700">RTS/CTS</span>
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
-                                    <span class="ml-2 text-sm text-slate-700">XON/XOFF</span>
-                                </label>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">Data Bits</label>
+                                    <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                        <option>7</option>
+                                        <option selected>8</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">Parity</label>
+                                    <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                        <option selected>None</option>
+                                        <option>Odd</option>
+                                        <option>Even</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div class="bg-slate-50 border border-border rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-medium text-slate-700">Serial Console</span>
-                                <button class="text-xs text-primary hover:text-primaryHover" onclick="clearSerialConsole()">Clear</button>
-                            </div>
-                            <div id="serial-console" class="bg-slate-900 text-slate-300 font-mono text-xs p-2 rounded h-32 overflow-y-auto">
-                                <div>> Serial port opened at 115200 baud</div>
-                                <div>> Ready for data transmission</div>
-                                <div>> Monitoring Modbus RTU traffic...</div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Flow Control</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">RTS/CTS</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">XON/XOFF</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         
-                        <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="connectSerial()">
-                            <i class="fa-solid fa-plug mr-2"></i> Connect Serial
-                        </button>
+                        <div class="space-y-4">
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-slate-700">Serial Console</span>
+                                    <button class="text-xs text-primary hover:text-primaryHover" onclick="clearSerialConsole()">Clear</button>
+                                </div>
+                                <div id="serial-console" class="bg-slate-900 text-slate-300 font-mono text-xs p-2 rounded h-32 overflow-y-auto">
+                                    <div>> Serial port opened at 115200 baud</div>
+                                    <div>> Ready for data transmission</div>
+                                    <div>> Monitoring Modbus RTU traffic...</div>
+                                </div>
+                            </div>
+                            
+                            <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="connectSerial()">
+                                <i class="fa-solid fa-plug mr-2"></i> Connect Serial
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- RF Scanner Content (Hidden) -->
-            <div id="content-rf" class="pt-6 hidden">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Frequency Range</label>
-                            <div class="flex items-center">
-                                <input type="number" value="433" min="300" max="500" class="w-20 text-sm border border-border rounded-lg px-3 py-2">
-                                <span class="mx-2 text-slate-500">-</span>
-                                <input type="number" value="434" min="300" max="500" class="w-20 text-sm border border-border rounded-lg px-3 py-2">
-                                <span class="ml-2 text-sm text-slate-700">MHz</span>
+                <!-- RF Scanner Content (Hidden) -->
+                <div id="content-rf" class="pt-6 hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Frequency Range</label>
+                                <div class="flex items-center">
+                                    <input type="number" value="433" min="300" max="500" class="w-20 text-sm border border-border rounded-lg px-3 py-2">
+                                    <span class="mx-2 text-slate-500">-</span>
+                                    <input type="number" value="434" min="300" max="500" class="w-20 text-sm border border-border rounded-lg px-3 py-2">
+                                    <span class="ml-2 text-sm text-slate-700">MHz</span>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Step Size</label>
+                                <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
+                                    <option>0.1 MHz</option>
+                                    <option selected>0.2 MHz</option>
+                                    <option>0.5 MHz</option>
+                                    <option>1.0 MHz</option>
+                                </select>
                             </div>
                         </div>
                         
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Step Size</label>
-                            <select class="w-full text-sm border border-border rounded-lg px-3 py-2 bg-white">
-                                <option>0.1 MHz</option>
-                                <option selected>0.2 MHz</option>
-                                <option>0.5 MHz</option>
-                                <option>1.0 MHz</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Scan Sensitivity</label>
-                            <div class="flex items-center">
-                                <input type="range" id="sensitivity" min="-120" max="-30" value="-80" class="flex-1" oninput="updateSensitivityValue(this.value)">
-                                <span class="ml-4 text-sm font-medium text-slate-900 w-20 text-right" id="sensitivityValue">-80 dBm</span>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Scan Sensitivity</label>
+                                <div class="flex items-center">
+                                    <input type="range" id="sensitivity" min="-120" max="-30" value="-80" class="flex-1" oninput="updateSensitivityValue(this.value)">
+                                    <span class="ml-4 text-sm font-medium text-slate-900 w-20 text-right" id="sensitivityValue">-80 dBm</span>
+                                </div>
+                                <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                    <span>-120 dBm</span>
+                                    <span>-30 dBm</span>
+                                </div>
                             </div>
-                            <div class="flex justify-between text-xs text-slate-500 mt-1">
-                                <span>-120 dBm</span>
-                                <span>-30 dBm</span>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Output Format</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <label class="flex items-center justify-center p-2 border border-border rounded cursor-pointer hover:bg-slate-50">
-                                    <input type="radio" name="rfFormat" value="csv" class="h-4 w-4 text-primary focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">CSV</span>
-                                </label>
-                                <label class="flex items-center justify-center p-2 border border-primary rounded cursor-pointer bg-blue-50">
-                                    <input type="radio" name="rfFormat" value="json" checked class="h-4 w-4 text-primary focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">JSON</span>
-                                </label>
-                                <label class="flex items-center justify-center p-2 border border-border rounded cursor-pointer hover:bg-slate-50">
-                                    <input type="radio" name="rfFormat" value="text" class="h-4 w-4 text-primary focus:ring-primary">
-                                    <span class="ml-2 text-sm text-slate-700">Text</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-4">
-                        <div class="bg-slate-50 border border-border rounded-lg p-4">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-sm font-medium text-slate-700">Scan Results</span>
-                                <button class="text-xs text-primary hover:text-primaryHover" onclick="exportRFScan()">Export</button>
-                            </div>
-                            <div id="rf-results" class="space-y-1">
-                                <div class="text-xs text-slate-600">433.1 MHz: -92 dBm (Clear)</div>
-                                <div class="text-xs text-slate-600">433.3 MHz: -45 dBm (BUSY)</div>
-                                <div class="text-xs text-slate-600">433.5 MHz: -85 dBm (Clear)</div>
-                                <div class="text-xs text-slate-600">433.7 MHz: -82 dBm (Clear)</div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">Output Format</label>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <label class="flex items-center justify-center p-2 border border-border rounded cursor-pointer hover:bg-slate-50">
+                                        <input type="radio" name="rfFormat" value="csv" class="h-4 w-4 text-primary focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">CSV</span>
+                                    </label>
+                                    <label class="flex items-center justify-center p-2 border border-primary rounded cursor-pointer bg-blue-50">
+                                        <input type="radio" name="rfFormat" value="json" checked class="h-4 w-4 text-primary focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">JSON</span>
+                                    </label>
+                                    <label class="flex items-center justify-center p-2 border border-border rounded cursor-pointer hover:bg-slate-50">
+                                        <input type="radio" name="rfFormat" value="text" class="h-4 w-4 text-primary focus:ring-primary">
+                                        <span class="ml-2 text-sm text-slate-700">Text</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         
-                        <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="startRFScan()">
-                            <i class="fa-solid fa-satellite-dish mr-2"></i> Start RF Scan
-                        </button>
+                        <div class="space-y-4">
+                            <div class="bg-slate-50 border border-border rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-slate-700">Scan Results</span>
+                                    <button class="text-xs text-primary hover:text-primaryHover" onclick="exportRFScan()">Export</button>
+                                </div>
+                                <div id="rf-results" class="space-y-1">
+                                    <div class="text-xs text-slate-600">433.1 MHz: -92 dBm (Clear)</div>
+                                    <div class="text-xs text-slate-600">433.3 MHz: -45 dBm (BUSY)</div>
+                                    <div class="text-xs text-slate-600">433.5 MHz: -85 dBm (Clear)</div>
+                                    <div class="text-xs text-slate-600">433.7 MHz: -82 dBm (Clear)</div>
+                                </div>
+                            </div>
+                            
+                            <button class="w-full bg-primary hover:bg-primaryHover text-white text-sm font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center" onclick="startRFScan()">
+                                <i class="fa-solid fa-satellite-dish mr-2"></i> Start RF Scan
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </section>
-    </main>
+            </section>
+        </main>
 
-    <!-- FOOTER -->
-    <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runQuickDiagnostics()">
-                    <i class="fa-solid fa-stethoscope mr-2 text-slate-400"></i> Quick Diagnostics
-                </button>
-                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="exportAllData()">
-                    <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export All
-                </button>
+        <!-- FOOTER -->
+        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runQuickDiagnostics()">
+                        <i class="fa-solid fa-stethoscope mr-2 text-slate-400"></i> Quick Diagnostics
+                    </button>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="exportAllData()">
+                        <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export All
+                    </button>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="clearAllLogs()">
+                        <i class="fa-solid fa-trash mr-2"></i> Clear Data
+                    </button>
+                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                        Cancel
+                    </button>
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" onclick="saveSettings()">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Diagnostics Settings
+                    </button>
+                </div>
             </div>
-            <div class="flex items-center space-x-3">
-                <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="clearAllLogs()">
-                    <i class="fa-solid fa-trash mr-2"></i> Clear Data
-                </button>
-                <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
-                    Cancel
-                </button>
-                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" onclick="saveSettings()">
-                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Diagnostics Settings
-                </button>
-            </div>
-        </div>
-    </footer>
+        </footer>
+    </div> <!-- End of main content container -->
 
     <script>
+        // ==================== SIDEBAR INTEGRATION ====================
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Update active page
+                updateActivePage();
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                createFallbackSidebar();
+            }
+        }
+
+        // Create fallback sidebar if fetch fails
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-network-wired mr-2"></i> Univa Gateway
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> General Configuration
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> Device Management
+                            </a>
+                            <a href="data-retention.html" class="nav-item">
+                                <i class="fa-solid fa-database"></i> Data Retention
+                            </a>
+                            <a href="diagnostics.html" class="nav-item active">
+                                <i class="fa-solid fa-stethoscope"></i> Diagnostics & Terminal
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4 class="text-sm font-medium text-slate-900">Admin User</h4>
+                                <p class="text-xs text-slate-500">System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Update active page in sidebar
+        function updateActivePage() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            const diagnosticsLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Diagnostics') || 
+                item.textContent.includes('Terminal')
+            );
+            
+            if (diagnosticsLink) {
+                diagnosticsLink.classList.add('active');
+            }
+        }
+
+        // Initialize sidebar functionality
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (!sidebar || !sidebarToggle) return;
+            
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                const icon = this.querySelector('i');
+                icon.className = sidebar.classList.contains('active') ? 'fa-solid fa-times' : 'fa-solid fa-bars';
+            });
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.add('active');
+                sidebarToggle.style.left = '260px';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
+            }
+            
+            window.addEventListener('resize', handleResponsive);
+        }
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 1024) {
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'block';
+                sidebarToggle.style.left = '0';
+                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+            } else {
+                sidebar.classList.remove('collapsed');
+                sidebar.classList.remove('active');
+                sidebarToggle.style.display = 'none';
+                sidebarToggle.style.left = '260px';
+            }
+        }
+
+        // Close sidebar when clicking outside on mobile
+        function handleSidebarClickOutside(event) {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile && sidebar.classList.contains('active')) {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnToggle = sidebarToggle.contains(event.target);
+                
+                if (!isClickInsideSidebar && !isClickOnToggle) {
+                    sidebar.classList.remove('active');
+                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
+                    sidebarToggle.style.left = '0';
+                }
+            }
+        }
+
         // ==================== APPLICATION STATE ====================
         let appState = {
             terminalConnected: true,
@@ -1696,6 +2026,9 @@
 
         // ==================== INITIALIZATION ====================
         document.addEventListener('DOMContentLoaded', function() {
+            // Load sidebar first
+            loadSidebar();
+            
             // Initialize systems
             window.modalSystem = new ModalSystem();
             window.toastSystem = new ToastSystem();
@@ -1784,6 +2117,16 @@
                     toast.show(`Live stream ${this.checked ? 'enabled' : 'disabled'}`, 'info');
                 });
             }
+            
+            // Add click outside handler for sidebar
+            document.addEventListener('click', handleSidebarClickOutside);
+            
+            // Initial responsive setup
+            setTimeout(() => {
+                if (window.innerWidth <= 1024) {
+                    document.getElementById('sidebar')?.classList.add('active');
+                }
+            }, 100);
         }
 
         function loadInitialData() {
