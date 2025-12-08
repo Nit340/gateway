@@ -322,6 +322,11 @@
             color: #2563EB;
             font-weight: 500;
         }
+        
+        .selected-device-row {
+            background-color: #EFF6FF !important;
+            border-left: 2px solid #2563EB !important;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -725,10 +730,7 @@
                             <div class="flex items-center space-x-3">
                                 <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceFilter">
                                     <option>All Devices</option>
-                                    <option>LoadCell_1</option>
-                                    <option>Inclin_Arm</option>
-                                    <option>HoistDrive</option>
-                                    <option>WindSensor</option>
+                                    <!-- Devices will be populated dynamically -->
                                 </select>
                                 <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center" id="addMappingBtn">
                                     <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Mapping
@@ -1004,6 +1006,38 @@
                 minValid: '0',
                 maxValid: '200',
                 endianness: 'big-endian'
+            },
+            {
+                id: 2,
+                deviceId: 2,
+                address: '40002',
+                tagName: 'Boom_Angle',
+                dataType: 'FLOAT32',
+                scale: '0.1',
+                offset: '0',
+                unit: 'degrees',
+                pollInterval: '500',
+                category: 'Position Tracking',
+                description: 'Boom angle measurement',
+                minValid: '-10',
+                maxValid: '85',
+                endianness: 'little-endian'
+            },
+            {
+                id: 3,
+                deviceId: 3,
+                address: '0x100',
+                tagName: 'Motor_RPM',
+                dataType: 'INT16',
+                scale: '1',
+                offset: '0',
+                unit: 'RPM',
+                pollInterval: '100',
+                category: 'Motor',
+                description: 'Motor rotation speed',
+                minValid: '-100',
+                maxValid: '3000',
+                endianness: 'big-endian'
             }
         ];
 
@@ -1013,10 +1047,30 @@
             mappings = [...sampleMappings];
             
             generateTags();
+            initDeviceFilter();
             renderDevicesTable();
             renderMappingsTable();
             renderTagsList();
             setupEventListeners();
+        }
+
+        // Initialize device filter dropdown
+        function initDeviceFilter() {
+            const deviceFilter = document.getElementById('deviceFilter');
+            if (!deviceFilter) return;
+            
+            // Clear existing options except "All Devices"
+            while (deviceFilter.options.length > 1) {
+                deviceFilter.remove(1);
+            }
+            
+            // Add device options
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.name;
+                option.textContent = device.name;
+                deviceFilter.appendChild(option);
+            });
         }
 
         // Generate tags from mappings
@@ -1120,7 +1174,7 @@
                     </td>
                     <td>${device.tags}</td>
                     <td class="text-right">
-                        <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary text-xs" onclick="editDevice(${device.id})">
+                        <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary text-xs" onclick="selectDevice(${device.id})">
                             <i class="fa-solid fa-pen"></i>
                         </button>
                     </td>
@@ -1128,6 +1182,16 @@
                 
                 tbody.appendChild(row);
             });
+        }
+
+        // Select device (for editing or adding mappings)
+        function selectDevice(id) {
+            selectedDeviceId = id;
+            const device = devices.find(d => d.id === id);
+            if (device) {
+                // Just set the global selectedDeviceId - DON'T touch the dropdown
+                console.log(`Device selected: ${device.name} (ID: ${id})`);
+            }
         }
 
         // Render mappings table
@@ -1268,25 +1332,19 @@
             });
         }
 
-        // Edit device
-        function editDevice(id) {
-            selectedDeviceId = id;
-            const device = devices.find(d => d.id === id);
-            if (device) {
-                document.getElementById('deviceFilter').value = device.name;
-                renderMappingsTable();
-            }
-        }
-
         // Add new mapping
         function addNewMapping() {
             if (!selectedDeviceId) {
-                alert('Please select a device first by clicking on it in the device list.');
+                // If no device is selected, show device selection modal
+                showDeviceSelectionModal();
                 return;
             }
             
             const device = devices.find(d => d.id === selectedDeviceId);
-            if (!device) return;
+            if (!device) {
+                alert('Selected device not found. Please select a device first.');
+                return;
+            }
             
             // Reset modal state
             resetModal();
@@ -1296,7 +1354,7 @@
             
             // Fill device info
             document.getElementById('mappingDeviceName').textContent = device.name;
-            document.getElementById('mappingProtocol').textContent = device.protocol.toUpperCase() + ' | Addr: ' + device.address;
+            document.getElementById('mappingProtocol').textContent = formatProtocolText(device.protocol, device.address);
             
             // Set current protocol based on device
             currentProtocol = getProtocolType(device.protocol);
@@ -1304,8 +1362,104 @@
             // Load protocol-specific configuration
             loadProtocolConfiguration(currentProtocol);
             
+            // Set default address based on device protocol
+            setDefaultAddress(device);
+            
             // Show modal
             document.getElementById('editMappingModal').classList.add('active');
+        }
+
+        // Helper function to format protocol text
+        function formatProtocolText(protocol, address) {
+            const protocolMap = {
+                'modbus-rtu': 'Modbus RTU',
+                'modbus-tcp': 'Modbus TCP',
+                'can': 'CAN',
+                'ethernet-ip': 'EtherNet/IP'
+            };
+            
+            return `${protocolMap[protocol] || protocol.toUpperCase()} | Address: ${address}`;
+        }
+
+        // Set default address based on protocol
+        function setDefaultAddress(device) {
+            const addressInput = document.getElementById('mappingAddressValue');
+            if (!addressInput) return;
+            
+            switch(getProtocolType(device.protocol)) {
+                case 'modbus':
+                    addressInput.value = '40001';
+                    break;
+                case 'can':
+                    addressInput.value = '0x100';
+                    break;
+                case 'ethernet':
+                    addressInput.value = 'Tag_1';
+                    break;
+                default:
+                    addressInput.value = '1';
+            }
+        }
+
+        // Show device selection modal
+        function showDeviceSelectionModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay active';
+            modal.id = 'deviceSelectModal';
+            
+            modal.innerHTML = `
+                <div class="modal" style="max-width: 400px;">
+                    <div class="p-5">
+                        <div class="flex items-center justify-between mb-5">
+                            <h2 class="text-base font-semibold text-slate-800">Select a Device</h2>
+                            <button class="text-slate-400 hover:text-slate-600" onclick="closeDeviceSelectModal()">
+                                <i class="fa-solid fa-xmark text-base"></i>
+                            </button>
+                        </div>
+                        
+                        <p class="text-sm text-slate-600 mb-4">Please select a device to add mappings to:</p>
+                        
+                        <div class="space-y-2 max-h-60 overflow-y-auto" id="deviceSelectList">
+                            ${devices.map(device => `
+                                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer flex items-center justify-between"
+                                     onclick="selectDeviceForMapping(${device.id})">
+                                    <div>
+                                        <div class="font-medium">${device.name}</div>
+                                        <div class="text-xs text-slate-500">${device.type} • ${device.protocol}</div>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 rounded ${device.status === 'online' ? 'bg-green-100 text-green-800' : device.status === 'warning' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}">
+                                        ${device.status}
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div class="mt-6 pt-4 border-t border-slate-200 flex justify-end">
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50"
+                                    onclick="closeDeviceSelectModal()">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // Select device for mapping
+        function selectDeviceForMapping(deviceId) {
+            selectedDeviceId = deviceId;
+            closeDeviceSelectModal();
+            addNewMapping();
+        }
+
+        // Close device selection modal
+        function closeDeviceSelectModal() {
+            const modal = document.getElementById('deviceSelectModal');
+            if (modal) {
+                modal.remove();
+            }
         }
 
         // Edit mapping
@@ -1315,6 +1469,9 @@
             const device = mapping ? devices.find(d => d.id === mapping.deviceId) : null;
             
             if (mapping && device) {
+                // Set the selected device
+                selectedDeviceId = device.id;
+                
                 // Reset modal state
                 resetModal();
                 
@@ -1323,7 +1480,7 @@
                 
                 // Fill device info
                 document.getElementById('mappingDeviceName').textContent = device.name;
-                document.getElementById('mappingProtocol').textContent = device.protocol.toUpperCase() + ' | Addr: ' + device.address;
+                document.getElementById('mappingProtocol').textContent = formatProtocolText(device.protocol, device.address);
                 
                 // Set current protocol
                 currentProtocol = getProtocolType(device.protocol);
@@ -1333,22 +1490,23 @@
                 
                 // Fill form with existing data
                 document.getElementById('mappingTagName').value = mapping.tagName;
-                document.getElementById('mappingDescription').value = mapping.description;
+                document.getElementById('mappingDescription').value = mapping.description || '';
                 document.getElementById('mappingDataType').value = mapping.dataType;
                 document.getElementById('mappingEndianness').value = mapping.endianness || 'big-endian';
-                document.getElementById('mappingUnit').value = mapping.unit;
-                document.getElementById('mappingScale').value = mapping.scale;
-                document.getElementById('mappingOffset').value = mapping.offset;
+                document.getElementById('mappingUnit').value = mapping.unit || '';
+                document.getElementById('mappingScale').value = mapping.scale || '1';
+                document.getElementById('mappingOffset').value = mapping.offset || '0';
                 document.getElementById('mappingMinValue').value = mapping.minValid || '';
                 document.getElementById('mappingMaxValue').value = mapping.maxValid || '';
                 document.getElementById('mappingPollInterval').value = mapping.pollInterval;
                 document.getElementById('mappingPollPreset').value = getPollPreset(mapping.pollInterval);
-                document.getElementById('mappingCategory').value = mapping.category;
+                document.getElementById('mappingCategory').value = mapping.category || 'Sensors';
                 
                 // Set address based on mapping
-                const addressType = getAddressType(mapping.address, device.protocol);
-                document.getElementById('mappingAddressType').value = addressType;
-                document.getElementById('mappingAddressValue').value = mapping.address;
+                const addressInput = document.getElementById('mappingAddressValue');
+                if (addressInput) {
+                    addressInput.value = mapping.address;
+                }
                 
                 // Show modal
                 document.getElementById('editMappingModal').classList.add('active');
@@ -1364,13 +1522,6 @@
             if (protocol === 'can') return 'can';
             if (protocol.includes('ethernet')) return 'ethernet';
             return 'modbus';
-        }
-
-        function getAddressType(address, protocol) {
-            if (address.startsWith('0x')) return 'hex';
-            if (address.includes('.')) return 'ip';
-            if (protocol === 'can') return 'can-id';
-            return 'decimal';
         }
 
         function getPollPreset(interval) {
@@ -1644,7 +1795,7 @@
 
         // Setup event listeners
         function setupEventListeners() {
-            // Device filter
+            // Device filter - only affects mapping table
             document.getElementById('deviceFilter').addEventListener('change', renderMappingsTable);
 
             // Tag search
@@ -1826,16 +1977,12 @@
                 document.getElementById('editMappingModal').classList.remove('active');
             });
 
-            // Device table click
+            // Device table click - only selects device, doesn't affect dropdown
             document.getElementById('devicesTableBody').addEventListener('click', function(e) {
                 const row = e.target.closest('tr[data-device-id]');
                 if (row && !e.target.closest('button')) {
-                    selectedDeviceId = parseInt(row.dataset.deviceId);
-                    const device = devices.find(d => d.id === selectedDeviceId);
-                    if (device) {
-                        document.getElementById('deviceFilter').value = device.name;
-                        renderMappingsTable();
-                    }
+                    const deviceId = parseInt(row.dataset.deviceId);
+                    selectDevice(deviceId);
                 }
             });
 
