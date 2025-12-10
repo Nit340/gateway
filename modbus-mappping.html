@@ -172,12 +172,18 @@
             100% { opacity: 1; }
         }
         
-        .compact-tag-card {
-            padding: 10px;
+        .tag-card {
+            padding: 12px;
             border-radius: 6px;
             background: white;
             border: 1px solid #E2E8F0;
-            font-size: 12px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .tag-card:hover {
+            border-color: #2563EB;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
         }
         
         .modal-overlay {
@@ -327,6 +333,18 @@
             background-color: #EFF6FF !important;
             border-left: 2px solid #2563EB !important;
         }
+        
+        .tags-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        
+        @media (min-width: 1536px) {
+            .tags-grid {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -379,14 +397,9 @@
                     </div>
                 </div>
                 
-                <!-- Tabs for different protocol configurations -->
-                <div class="tab-container mb-5">
-                    <div class="flex space-x-1">
-                        <div class="tab active" data-tab="modbus">Modbus</div>
-                        <div class="tab" data-tab="can">CAN</div>
-                        <div class="tab" data-tab="ethernet">EtherNet/IP</div>
-                        <div class="tab" data-tab="advanced">Advanced</div>
-                    </div>
+                <!-- Protocol-specific tabs (Will be dynamically loaded based on device protocol) -->
+                <div class="tab-container mb-5" id="protocolTabsContainer">
+                    <!-- Tabs will be dynamically loaded here -->
                 </div>
                 
                 <!-- Dynamic Form Content -->
@@ -677,29 +690,35 @@
                             <p class="text-slate-500 text-sm mt-1">Map device registers to tags for data processing</p>
                         </div>
                         <div class="flex items-center space-x-2">
-                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
-                                <i class="fa-solid fa-file-import mr-2 text-sm"></i> Import
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" onclick="importCSV()">
+                                <i class="fa-solid fa-file-import mr-2 text-sm"></i> Import CSV
                             </button>
-                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
-                                <i class="fa-solid fa-file-export mr-2 text-sm"></i> Export
+                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" onclick="exportCSV()">
+                                <i class="fa-solid fa-file-export mr-2 text-sm"></i> Export CSV
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Device List -->
+                <!-- Tag Mapping Table -->
                 <section class="bg-white rounded-xl shadow-sm border border-border mb-8">
                     <div class="p-6 border-b border-border flex items-center justify-between">
                         <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                            <i class="fa-solid fa-list mr-2 text-primary"></i> 
-                            Device List
+                            <i class="fa-solid fa-table mr-2 text-primary"></i> 
+                            Tag Mapping
                         </h2>
-                        <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 flex items-center gap-1" onclick="window.location.href='device-management.html'">
-                            <i class="fa-solid fa-plus text-sm"></i> Add Device
-                        </button>
+                        <div class="flex items-center space-x-3">
+                            <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceFilter">
+                                <option>All Devices</option>
+                                <!-- Devices will be populated dynamically -->
+                            </select>
+                            <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center" id="addMappingBtn">
+                                <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Mapping
+                            </button>
+                        </div>
                     </div>
                     
-                    <!-- Device Table -->
+                    <!-- Mapping Table -->
                     <div class="overflow-x-auto">
                         <table class="w-full compact-table">
                             <thead class="bg-slate-50 border-b border-border">
@@ -707,86 +726,72 @@
                                     <th class="text-left">Device</th>
                                     <th class="text-left">Protocol</th>
                                     <th class="text-left">Address</th>
-                                    <th class="text-left">Status</th>
-                                    <th class="text-left">Tags</th>
+                                    <th class="text-left">Tag</th>
+                                    <th class="text-left">Type</th>
+                                    <th class="text-left">Unit</th>
+                                    <th class="text-left">Poll</th>
                                     <th class="text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-border" id="devicesTableBody">
+                            <tbody class="divide-y divide-border" id="mappingTableBody">
                                 <!-- Populated by JS -->
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Table Info -->
+                    <div class="p-4 border-t border-border bg-slate-50 text-sm text-slate-500">
+                        Showing <span class="font-medium text-slate-900" id="mappingCount">0</span> mappings
+                    </div>
                 </section>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <!-- Register Mapping Table -->
-                    <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-border">
-                        <div class="p-6 border-b border-border flex items-center justify-between">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-table mr-2 text-primary"></i> 
-                                Register Mappings
-                            </h2>
-                            <div class="flex items-center space-x-3">
-                                <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceFilter">
-                                    <option>All Devices</option>
-                                    <!-- Devices will be populated dynamically -->
-                                </select>
-                                <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center" id="addMappingBtn">
-                                    <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Mapping
-                                </button>
+                <!-- Tag Browser - Full Width Section -->
+                <section class="bg-white rounded-xl shadow-sm border border-border">
+                    <div class="p-6 border-b border-border flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-tags mr-2 text-primary"></i> 
+                            Tag Browser
+                        </h2>
+                        <div class="flex items-center space-x-2">
+                            <div class="relative">
+                                <input type="text" placeholder="Search tags..." class="pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary w-64" id="tagSearch">
+                                <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-sm"></i>
                             </div>
+                            <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="tagCategoryFilter">
+                                <option value="">All Categories</option>
+                                <option value="Sensors">Sensors</option>
+                                <option value="Motor">Motor</option>
+                                <option value="Safety">Safety</option>
+                                <option value="Diagnostic">Diagnostic</option>
+                                <option value="Load Monitoring">Load Monitoring</option>
+                                <option value="Position Tracking">Position Tracking</option>
+                                <option value="Status">Status</option>
+                                <option value="Configuration">Configuration</option>
+                            </select>
+                            <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="tagDeviceFilter">
+                                <option value="">All Devices</option>
+                                <!-- Devices will be populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <!-- Tags Grid -->
+                        <div class="tags-grid" id="tagsList">
+                            <!-- Populated by JS -->
                         </div>
                         
-                        <!-- Mapping Table -->
-                        <div class="overflow-x-auto">
-                            <table class="w-full compact-table">
-                                <thead class="bg-slate-50 border-b border-border">
-                                    <tr>
-                                        <th class="text-left">Device</th>
-                                        <th class="text-left">Address</th>
-                                        <th class="text-left">Tag</th>
-                                        <th class="text-left">Type</th>
-                                        <th class="text-left">Unit</th>
-                                        <th class="text-left">Poll</th>
-                                        <th class="text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-border" id="mappingTableBody">
-                                    <!-- Populated by JS -->
-                                </tbody>
-                            </table>
+                        <!-- Empty State -->
+                        <div id="tagsEmptyState" class="hidden text-center py-12">
+                            <i class="fa-solid fa-tags text-4xl text-slate-300 mb-4"></i>
+                            <h3 class="text-lg font-medium text-slate-900 mb-2">No tags found</h3>
+                            <p class="text-slate-500 mb-4">Create your first tag by clicking "Add Mapping"</p>
+                            <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center mx-auto" id="addFirstMappingBtn">
+                                <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Your First Mapping
+                            </button>
                         </div>
-                        
-                        <!-- Table Info -->
-                        <div class="p-4 border-t border-border bg-slate-50 text-sm text-slate-500">
-                            Showing <span class="font-medium text-slate-900" id="mappingCount">0</span> mappings
-                        </div>
-                    </section>
-
-                    <!-- Tag Browser -->
-                    <section class="bg-white rounded-xl shadow-sm border border-border">
-                        <div class="p-6 border-b border-border">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-tags mr-2 text-primary"></i> 
-                                Tag Browser
-                            </h2>
-                        </div>
-                        
-                        <div class="p-5">
-                            <!-- Search -->
-                            <div class="relative mb-4">
-                                <input type="text" placeholder="Search tags..." class="w-full pl-10 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" id="tagSearch">
-                                <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
-                            </div>
-                            
-                            <!-- Tags List -->
-                            <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2" id="tagsList">
-                                <!-- Populated by JS -->
-                            </div>
-                        </div>
-                    </section>
-                </div>
+                    </div>
+                </section>
             </div>
         </main>
 
@@ -1038,6 +1043,54 @@
                 minValid: '-100',
                 maxValid: '3000',
                 endianness: 'big-endian'
+            },
+            {
+                id: 4,
+                deviceId: 1,
+                address: '30002',
+                tagName: 'Hoist_Height',
+                dataType: 'INT32',
+                scale: '0.01',
+                offset: '0',
+                unit: 'meters',
+                pollInterval: '200',
+                category: 'Position Tracking',
+                description: 'Hoist height measurement',
+                minValid: '0',
+                maxValid: '100',
+                endianness: 'big-endian'
+            },
+            {
+                id: 5,
+                deviceId: 1,
+                address: '30003',
+                tagName: 'Load_Sway',
+                dataType: 'FLOAT32',
+                scale: '0.5',
+                offset: '0',
+                unit: 'degrees',
+                pollInterval: '500',
+                category: 'Safety',
+                description: 'Load sway angle',
+                minValid: '-30',
+                maxValid: '30',
+                endianness: 'little-endian'
+            },
+            {
+                id: 6,
+                deviceId: 2,
+                address: '40003',
+                tagName: 'Wind_Speed',
+                dataType: 'FLOAT32',
+                scale: '0.1',
+                offset: '0',
+                unit: 'm/s',
+                pollInterval: '1000',
+                category: 'Safety',
+                description: 'Wind speed measurement',
+                minValid: '0',
+                maxValid: '50',
+                endianness: 'little-endian'
             }
         ];
 
@@ -1047,30 +1100,46 @@
             mappings = [...sampleMappings];
             
             generateTags();
-            initDeviceFilter();
-            renderDevicesTable();
+            initDeviceFilters();
             renderMappingsTable();
             renderTagsList();
             setupEventListeners();
         }
 
-        // Initialize device filter dropdown
-        function initDeviceFilter() {
-            const deviceFilter = document.getElementById('deviceFilter');
-            if (!deviceFilter) return;
+        // Initialize device filter dropdowns
+        function initDeviceFilters() {
+            const mappingDeviceFilter = document.getElementById('deviceFilter');
+            const tagDeviceFilter = document.getElementById('tagDeviceFilter');
             
-            // Clear existing options except "All Devices"
-            while (deviceFilter.options.length > 1) {
-                deviceFilter.remove(1);
+            if (mappingDeviceFilter) {
+                // Clear existing options except "All Devices"
+                while (mappingDeviceFilter.options.length > 1) {
+                    mappingDeviceFilter.remove(1);
+                }
+                
+                // Add device options
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.name;
+                    option.textContent = device.name;
+                    mappingDeviceFilter.appendChild(option);
+                });
             }
             
-            // Add device options
-            devices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.name;
-                option.textContent = device.name;
-                deviceFilter.appendChild(option);
-            });
+            if (tagDeviceFilter) {
+                // Clear existing options except "All Devices"
+                while (tagDeviceFilter.options.length > 1) {
+                    tagDeviceFilter.remove(1);
+                }
+                
+                // Add device options
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.name;
+                    option.textContent = device.name;
+                    tagDeviceFilter.appendChild(option);
+                });
+            }
         }
 
         // Generate tags from mappings
@@ -1089,7 +1158,9 @@
                     unit: mapping.unit,
                     address: mapping.address,
                     category: mapping.category,
-                    usedBy: getUsedBy(mapping.category)
+                    usedBy: getUsedBy(mapping.category),
+                    dataType: mapping.dataType,
+                    pollInterval: mapping.pollInterval
                 };
             });
         }
@@ -1098,6 +1169,7 @@
             const ranges = {
                 'tons': {min: 0, max: 200},
                 'degrees': {min: -10, max: 85},
+                'meters': {min: 0, max: 100},
                 'm/s': {min: 0, max: 50},
                 'RPM': {min: -100, max: 3000},
                 'flag': {min: 0, max: 65535},
@@ -1122,76 +1194,11 @@
                 'Sensors': ['Rules', 'Dash'],
                 'Motor': ['Rules', 'CraneIQ'],
                 'Diagnostic': ['Rules', 'Logging'],
+                'Status': ['Dash', 'Alerts'],
+                'Configuration': ['System'],
                 'default': ['Rules', 'Dash']
             };
             return usage[category] || usage.default;
-        }
-
-        // Render devices table
-        function renderDevicesTable() {
-            const tbody = document.getElementById('devicesTableBody');
-            tbody.innerHTML = '';
-            
-            devices.forEach(device => {
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-slate-50 cursor-pointer';
-                row.dataset.deviceId = device.id;
-                
-                // Protocol badge
-                let protocolClass = 'protocol-badge ';
-                switch(device.protocol) {
-                    case 'modbus-rtu':
-                    case 'modbus-tcp':
-                        protocolClass += 'modbus'; break;
-                    case 'can':
-                        protocolClass += 'can'; break;
-                    case 'ethernet-ip':
-                        protocolClass += 'ethernet'; break;
-                    default:
-                        protocolClass += 'serial';
-                }
-                
-                // Status
-                let statusClass = 'status-indicator ';
-                let statusText = device.status.charAt(0).toUpperCase() + device.status.slice(1);
-                switch(device.status) {
-                    case 'online': statusClass += 'online'; break;
-                    case 'offline': statusClass += 'offline'; break;
-                    case 'warning': statusClass += 'warning'; break;
-                }
-                
-                row.innerHTML = `
-                    <td>
-                        <div class="font-medium text-slate-900">${device.name}</div>
-                        <div class="text-xs text-slate-500">${device.type}</div>
-                    </td>
-                    <td>
-                        <span class="${protocolClass}">${device.protocol.replace('-', ' ').toUpperCase()}</span>
-                    </td>
-                    <td class="font-mono">${device.address}</td>
-                    <td>
-                        <span class="${statusClass}">${statusText}</span>
-                    </td>
-                    <td>${device.tags}</td>
-                    <td class="text-right">
-                        <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary text-xs" onclick="selectDevice(${device.id})">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                    </td>
-                `;
-                
-                tbody.appendChild(row);
-            });
-        }
-
-        // Select device (for editing or adding mappings)
-        function selectDevice(id) {
-            selectedDeviceId = id;
-            const device = devices.find(d => d.id === id);
-            if (device) {
-                // Just set the global selectedDeviceId - DON'T touch the dropdown
-                console.log(`Device selected: ${device.name} (ID: ${id})`);
-            }
         }
 
         // Render mappings table
@@ -1226,15 +1233,32 @@
                 else if (mapping.dataType.includes('UINT')) dataTypeClass += 'uint16';
                 else dataTypeClass += 'bool';
                 
+                // Protocol badge
+                let protocolClass = 'protocol-badge ';
+                switch(device.protocol) {
+                    case 'modbus-rtu':
+                    case 'modbus-tcp':
+                        protocolClass += 'modbus'; break;
+                    case 'can':
+                        protocolClass += 'can'; break;
+                    case 'ethernet-ip':
+                        protocolClass += 'ethernet'; break;
+                    default:
+                        protocolClass += 'serial';
+                }
+                
                 row.innerHTML = `
                     <td>
-                        <div class="font-medium">${device.name}</div>
+                        <div class="font-medium text-slate-900">${device.name}</div>
                         <div class="text-xs text-slate-500">${device.type}</div>
+                    </td>
+                    <td>
+                        <span class="${protocolClass}">${device.protocol.replace('-', ' ').toUpperCase()}</span>
                     </td>
                     <td class="font-mono">${mapping.address}</td>
                     <td>
                         <div class="font-medium">${mapping.tagName}</div>
-                        <div class="text-xs text-slate-500 truncate max-w-[120px]">${mapping.description}</div>
+                        <div class="text-xs text-slate-500 truncate max-w-[150px]">${mapping.description}</div>
                     </td>
                     <td><span class="${dataTypeClass}">${mapping.dataType}</span></td>
                     <td>${mapping.unit}</td>
@@ -1261,18 +1285,44 @@
         // Render tags list
         function renderTagsList() {
             const container = document.getElementById('tagsList');
-            container.innerHTML = '';
+            const emptyState = document.getElementById('tagsEmptyState');
             
             const searchTerm = document.getElementById('tagSearch').value.toLowerCase();
+            const categoryFilter = document.getElementById('tagCategoryFilter').value;
+            const deviceFilter = document.getElementById('tagDeviceFilter').value;
+            
             let filteredTags = tags;
             
+            // Apply filters
             if (searchTerm) {
-                filteredTags = tags.filter(tag => 
+                filteredTags = filteredTags.filter(tag => 
                     tag.name.toLowerCase().includes(searchTerm) ||
                     tag.description.toLowerCase().includes(searchTerm) ||
                     tag.deviceName.toLowerCase().includes(searchTerm)
                 );
             }
+            
+            if (categoryFilter) {
+                filteredTags = filteredTags.filter(tag => tag.category === categoryFilter);
+            }
+            
+            if (deviceFilter) {
+                const device = devices.find(d => d.name === deviceFilter);
+                if (device) {
+                    filteredTags = filteredTags.filter(tag => tag.deviceId === device.id);
+                }
+            }
+            
+            // Show/hide empty state
+            if (filteredTags.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+            
+            container.innerHTML = '';
             
             filteredTags.forEach(tag => {
                 const device = devices.find(d => d.id === tag.deviceId);
@@ -1293,32 +1343,46 @@
                     }
                 }
                 
+                // Data type badge
+                let dataTypeClass = 'data-type-badge ';
+                if (tag.dataType.includes('INT16')) dataTypeClass += 'int16';
+                else if (tag.dataType.includes('INT32')) dataTypeClass += 'int32';
+                else if (tag.dataType.includes('FLOAT')) dataTypeClass += 'float32';
+                else if (tag.dataType.includes('UINT')) dataTypeClass += 'uint16';
+                else dataTypeClass += 'bool';
+                
                 const tagElement = document.createElement('div');
-                tagElement.className = 'compact-tag-card';
+                tagElement.className = 'tag-card';
                 tagElement.innerHTML = `
-                    <div class="flex justify-between items-start mb-2">
-                        <div>
-                            <div class="font-medium text-slate-900">${tag.name}</div>
-                            <div class="text-xs text-slate-500">${tag.description}</div>
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-slate-900 truncate">${tag.name}</div>
+                            <div class="text-xs text-slate-500 truncate">${tag.description}</div>
                         </div>
                         <div class="flex flex-col items-end gap-1">
                             <span class="${protocolClass}">${device?.protocol.replace('-', ' ').toUpperCase() || ''}</span>
-                            <span class="device-badge">${tag.deviceName}</span>
+                            <span class="${dataTypeClass}">${tag.dataType}</span>
                         </div>
                     </div>
                     
-                    <div class="flex items-center justify-between text-xs mb-2">
-                        <div class="text-slate-600">
-                            <i class="fa-solid fa-hashtag mr-1"></i>${tag.address}
+                    <div class="flex items-center justify-between text-xs mb-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="device-badge">${tag.deviceName}</span>
+                            <span class="text-slate-600">
+                                <i class="fa-solid fa-hashtag mr-1"></i>${tag.address}
+                            </span>
                         </div>
                         <div class="text-slate-500">
                             <i class="fa-solid fa-clock mr-1"></i>${tag.lastUpdated}
                         </div>
                     </div>
                     
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="text-lg font-bold text-primary">${tag.value}</div>
-                        <div class="text-sm font-medium">${tag.unit}</div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="text-xl font-bold text-primary">${tag.value}</div>
+                        <div class="flex flex-col items-end">
+                            <div class="text-sm font-medium">${tag.unit}</div>
+                            <div class="text-xs text-slate-500">Poll: ${tag.pollInterval}ms</div>
+                        </div>
                     </div>
                     
                     <div class="mt-2 flex flex-wrap gap-1">
@@ -1330,6 +1394,44 @@
                 `;
                 container.appendChild(tagElement);
             });
+        }
+
+        // Import CSV function
+        function importCSV() {
+            alert('Import CSV functionality would be implemented here. This would allow importing tag mappings from a CSV file.');
+            // In a real implementation, this would:
+            // 1. Open a file picker dialog
+            // 2. Parse the CSV file
+            // 3. Validate the data
+            // 4. Add new mappings to the system
+            // 5. Refresh the UI
+        }
+
+        // Export CSV function
+        function exportCSV() {
+            // Create CSV content
+            let csvContent = "Device,Protocol,Address,Tag Name,Data Type,Unit,Scale,Offset,Poll Interval,Category,Description,Min Valid,Max Valid\n";
+            
+            mappings.forEach(mapping => {
+                const device = devices.find(d => d.id === mapping.deviceId);
+                const protocol = device ? device.protocol : 'Unknown';
+                const deviceName = device ? device.name : 'Unknown';
+                
+                csvContent += `"${deviceName}","${protocol}","${mapping.address}","${mapping.tagName}","${mapping.dataType}","${mapping.unit}","${mapping.scale}","${mapping.offset}","${mapping.pollInterval}","${mapping.category}","${mapping.description}","${mapping.minValid || ''}","${mapping.maxValid || ''}"\n`;
+            });
+            
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'tag_mappings_export.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert('CSV export completed! File: tag_mappings_export.csv');
         }
 
         // Add new mapping
@@ -1359,8 +1461,8 @@
             // Set current protocol based on device
             currentProtocol = getProtocolType(device.protocol);
             
-            // Load protocol-specific configuration
-            loadProtocolConfiguration(currentProtocol);
+            // Load protocol-specific configuration - ONLY for the selected device's protocol
+            loadProtocolConfigurationForDevice(device);
             
             // Set default address based on device protocol
             setDefaultAddress(device);
@@ -1485,8 +1587,8 @@
                 // Set current protocol
                 currentProtocol = getProtocolType(device.protocol);
                 
-                // Load protocol configuration
-                loadProtocolConfiguration(currentProtocol);
+                // Load protocol configuration - ONLY for the selected device's protocol
+                loadProtocolConfigurationForDevice(device);
                 
                 // Fill form with existing data
                 document.getElementById('mappingTagName').value = mapping.tagName;
@@ -1535,23 +1637,40 @@
             return presets[interval] || 'custom';
         }
 
-        // Load protocol-specific configuration
-        function loadProtocolConfiguration(protocol) {
-            currentProtocol = protocol;
+        // Load protocol-specific configuration for a specific device (only show that protocol)
+        function loadProtocolConfigurationForDevice(device) {
+            currentProtocol = getProtocolType(device.protocol);
             
-            // Update active tab
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-                if (tab.dataset.tab === protocol) {
-                    tab.classList.add('active');
-                }
-            });
+            // Create tabs container with only the device's protocol
+            const tabsContainer = document.getElementById('protocolTabsContainer');
+            
+            // Only show tab for the device's protocol
+            let protocolName = '';
+            switch(currentProtocol) {
+                case 'modbus':
+                    protocolName = 'Modbus';
+                    break;
+                case 'can':
+                    protocolName = 'CAN';
+                    break;
+                case 'ethernet':
+                    protocolName = 'EtherNet/IP';
+                    break;
+                default:
+                    protocolName = 'Advanced';
+            }
+            
+            tabsContainer.innerHTML = `
+                <div class="flex space-x-1">
+                    <div class="tab active" data-tab="${currentProtocol}">${protocolName}</div>
+                </div>
+            `;
             
             // Load address configuration
-            loadAddressConfiguration(protocol);
+            loadAddressConfiguration(currentProtocol);
             
             // Load protocol-specific fields
-            loadProtocolSpecificFields(protocol);
+            loadProtocolSpecificFields(currentProtocol);
         }
 
         // Load address configuration
@@ -1785,7 +1904,6 @@
                 }
                 
                 generateTags();
-                renderDevicesTable();
                 renderMappingsTable();
                 renderTagsList();
                 
@@ -1795,21 +1913,30 @@
 
         // Setup event listeners
         function setupEventListeners() {
-            // Device filter - only affects mapping table
+            // Device filter - affects mapping table
             document.getElementById('deviceFilter').addEventListener('change', renderMappingsTable);
 
-            // Tag search
+            // Tag filters
             document.getElementById('tagSearch').addEventListener('input', renderTagsList);
+            document.getElementById('tagCategoryFilter').addEventListener('change', renderTagsList);
+            document.getElementById('tagDeviceFilter').addEventListener('change', renderTagsList);
 
             // Add Mapping button
             document.getElementById('addMappingBtn').addEventListener('click', addNewMapping);
+            document.getElementById('addFirstMappingBtn').addEventListener('click', addNewMapping);
 
             // Modal tabs
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', function() {
-                    const protocol = this.dataset.tab;
-                    loadProtocolConfiguration(protocol);
-                });
+            document.getElementById('protocolTabsContainer').addEventListener('click', function(e) {
+                const tab = e.target.closest('.tab');
+                if (tab && tab.dataset.tab) {
+                    const protocol = tab.dataset.tab;
+                    loadAddressConfiguration(protocol);
+                    loadProtocolSpecificFields(protocol);
+                    
+                    // Update active tab
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                }
             });
 
             // Step navigation
@@ -1969,21 +2096,11 @@
                 
                 // Refresh UI
                 generateTags();
-                renderDevicesTable();
                 renderMappingsTable();
                 renderTagsList();
                 
                 // Close modal
                 document.getElementById('editMappingModal').classList.remove('active');
-            });
-
-            // Device table click - only selects device, doesn't affect dropdown
-            document.getElementById('devicesTableBody').addEventListener('click', function(e) {
-                const row = e.target.closest('tr[data-device-id]');
-                if (row && !e.target.closest('button')) {
-                    const deviceId = parseInt(row.dataset.deviceId);
-                    selectDevice(deviceId);
-                }
             });
 
             // Test buttons

@@ -120,6 +120,49 @@
             ]
           },
           {
+            "title": "Publishing Options",
+            "fields": [
+              {
+                "type": "select",
+                "id": "publishMode",
+                "label": "Publish Mode",
+                "default": "onChange",
+                "options": [
+                  {"value": "onChange", "label": "On Value Change"},
+                  {"value": "periodic", "label": "Periodic Interval"},
+                  {"value": "event", "label": "Event Based"}
+                ],
+                "help": "When to publish tag values"
+              },
+              {
+                "type": "number",
+                "id": "publishInterval",
+                "label": "Publish Interval",
+                "default": 1000,
+                "min": 10,
+                "max": 3600000,
+                "unit": "ms",
+                "help": "Interval for periodic publishing"
+              },
+              {
+                "type": "toggle",
+                "id": "enableBatching",
+                "label": "Enable Batching",
+                "default": false,
+                "help": "Group messages into batches"
+              },
+              {
+                "type": "number",
+                "id": "batchSize",
+                "label": "Batch Size",
+                "default": 50,
+                "min": 1,
+                "max": 1000,
+                "help": "Messages per batch"
+              }
+            ]
+          },
+          {
             "title": "Last Will & Testament",
             "fields": [
               {
@@ -750,6 +793,537 @@
         "precision": "ms",
         "retryOnError": true
       }
+    },
+    
+    "websocket": {
+      "name": "WebSocket Server",
+      "description": "Real-time bidirectional communication",
+      "icon": "fa-bolt",
+      "color": "green",
+      "defaultName": "WebSocket Server",
+      "form": {
+        "sections": [
+          {
+            "title": "WebSocket Configuration",
+            "fields": [
+              {
+                "type": "select",
+                "id": "protocol",
+                "label": "Protocol",
+                "default": "wss://",
+                "options": [
+                  {"value": "ws://", "label": "WebSocket"},
+                  {"value": "wss://", "label": "WebSocket Secure"}
+                ],
+                "required": true
+              },
+              {
+                "type": "host-port",
+                "hostId": "host",
+                "portId": "port",
+                "hostLabel": "WebSocket Hostname",
+                "portLabel": "Port",
+                "hostDefault": "ws.company.com",
+                "portDefault": 443,
+                "required": true
+              },
+              {
+                "type": "text",
+                "id": "path",
+                "label": "Path",
+                "default": "/ws",
+                "placeholder": "/websocket",
+                "help": "WebSocket endpoint path"
+              },
+              {
+                "type": "text",
+                "id": "subprotocols",
+                "label": "Subprotocols",
+                "default": "mqtt, json",
+                "placeholder": "protocol1, protocol2",
+                "help": "Comma-separated list of supported subprotocols"
+              }
+            ]
+          },
+          {
+            "title": "Connection Options",
+            "fields": [
+              {
+                "type": "number",
+                "id": "pingInterval",
+                "label": "Ping Interval",
+                "default": 30,
+                "min": 5,
+                "max": 300,
+                "unit": "seconds",
+                "help": "Seconds between keep-alive pings"
+              },
+              {
+                "type": "number",
+                "id": "reconnectDelay",
+                "label": "Reconnect Delay",
+                "default": 5,
+                "min": 1,
+                "max": 60,
+                "unit": "seconds",
+                "help": "Seconds before attempting reconnect"
+              },
+              {
+                "type": "number",
+                "id": "maxReconnectAttempts",
+                "label": "Max Reconnect Attempts",
+                "default": 10,
+                "min": 0,
+                "max": 50,
+                "help": "0 = infinite retries"
+              },
+              {
+                "type": "toggle",
+                "id": "autoReconnect",
+                "label": "Auto Reconnect",
+                "default": true,
+                "help": "Automatically reconnect on connection loss"
+              }
+            ]
+          },
+          {
+            "title": "Message Format",
+            "fields": [
+              {
+                "type": "select",
+                "id": "messageFormat",
+                "label": "Message Format",
+                "default": "json",
+                "options": [
+                  {"value": "json", "label": "JSON"},
+                  {"value": "binary", "label": "Binary"},
+                  {"value": "text", "label": "Plain Text"},
+                  {"value": "protobuf", "label": "Protocol Buffers"}
+                ],
+                "help": "Format for WebSocket messages"
+              },
+              {
+                "type": "number",
+                "id": "maxMessageSize",
+                "label": "Max Message Size",
+                "default": 65536,
+                "min": 1024,
+                "max": 1048576,
+                "unit": "bytes",
+                "help": "Maximum size of a single WebSocket message"
+              },
+              {
+                "type": "toggle",
+                "id": "compressMessages",
+                "label": "Compress Messages",
+                "default": false,
+                "help": "Use permessage-deflate compression"
+              }
+            ]
+          },
+          {
+            "title": "Advanced Options",
+            "fields": [
+              {
+                "type": "key-value-list",
+                "id": "customHeaders",
+                "label": "Custom Headers",
+                "default": [
+                  {"key": "Origin", "value": "https://univa-gateway.local"},
+                  {"key": "User-Agent", "value": "UnivaIoTGateway/2.4.1"}
+                ],
+                "keyPlaceholder": "Header Name",
+                "valuePlaceholder": "Header Value",
+                "help": "Custom HTTP headers for WebSocket handshake"
+              },
+              {
+                "type": "toggle",
+                "id": "verifySSL",
+                "label": "Verify SSL Certificate",
+                "default": true,
+                "help": "Verify server SSL certificate (wss:// only)"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "server": "wss://ws.company.com:443/ws",
+        "pingInterval": 30,
+        "reconnectDelay": 5,
+        "autoReconnect": true,
+        "messageFormat": "json",
+        "maxMessageSize": 65536,
+        "maxReconnectAttempts": 10
+      }
+    },
+    
+    "ftp": {
+      "name": "FTP Server",
+      "description": "File transfer for data logs",
+      "icon": "fa-folder",
+      "color": "orange",
+      "defaultName": "FTP Server",
+      "form": {
+        "sections": [
+          {
+            "title": "FTP Server Configuration",
+            "fields": [
+              {
+                "type": "text",
+                "id": "host",
+                "label": "FTP Hostname",
+                "default": "ftp.company.com",
+                "placeholder": "ftp.example.com",
+                "required": true,
+                "help": "FTP server hostname or IP address"
+              },
+              {
+                "type": "number",
+                "id": "port",
+                "label": "Port",
+                "default": 21,
+                "min": 1,
+                "max": 65535,
+                "help": "FTP server port (21 for FTP, 22 for SFTP)"
+              },
+              {
+                "type": "select",
+                "id": "protocol",
+                "label": "Protocol",
+                "default": "ftp",
+                "options": [
+                  {"value": "ftp", "label": "FTP (File Transfer Protocol)"},
+                  {"value": "sftp", "label": "SFTP (SSH File Transfer Protocol)"},
+                  {"value": "ftps", "label": "FTPS (FTP over SSL/TLS)"}
+                ],
+                "required": true
+              },
+              {
+                "type": "select",
+                "id": "mode",
+                "label": "Transfer Mode",
+                "default": "passive",
+                "options": [
+                  {"value": "active", "label": "Active"},
+                  {"value": "passive", "label": "Passive (Recommended)"}
+                ],
+                "help": "FTP data connection mode"
+              }
+            ]
+          },
+          {
+            "title": "Authentication",
+            "fields": [
+              {
+                "type": "text",
+                "id": "username",
+                "label": "Username",
+                "default": "univa-user",
+                "placeholder": "Enter FTP username",
+                "required": true
+              },
+              {
+                "type": "password",
+                "id": "password",
+                "label": "Password",
+                "placeholder": "Enter FTP password",
+                "required": true,
+                "showGenerate": false
+              },
+              {
+                "type": "toggle",
+                "id": "anonymous",
+                "label": "Anonymous Login",
+                "default": false,
+                "help": "Login as anonymous user"
+              }
+            ]
+          },
+          {
+            "title": "File Options",
+            "fields": [
+              {
+                "type": "text",
+                "id": "remotePath",
+                "label": "Remote Directory",
+                "default": "/uploads/crane-data/",
+                "placeholder": "/remote/directory/path/",
+                "required": true,
+                "help": "Remote directory for file uploads"
+              },
+              {
+                "type": "text",
+                "id": "filenamePattern",
+                "label": "Filename Pattern",
+                "default": "data_${YYYY}-${MM}-${DD}_${HH}-${mm}.csv",
+                "placeholder": "filename_${TIMESTAMP}.ext",
+                "help": "Pattern for uploaded files. Variables: ${TIMESTAMP}, ${DATE}, ${DEVICE_ID}"
+              },
+              {
+                "type": "select",
+                "id": "fileFormat",
+                "label": "File Format",
+                "default": "csv",
+                "options": [
+                  {"value": "csv", "label": "CSV (Comma Separated Values)"},
+                  {"value": "json", "label": "JSON Lines"},
+                  {"value": "xml", "label": "XML"},
+                  {"value": "binary", "label": "Binary"}
+                ],
+                "help": "Format of uploaded files"
+              },
+              {
+                "type": "number",
+                "id": "maxFileSize",
+                "label": "Max File Size",
+                "default": 10485760,
+                "min": 1024,
+                "max": 1073741824,
+                "unit": "bytes",
+                "help": "Maximum size of a single file (10MB default)"
+              }
+            ]
+          },
+          {
+            "title": "Transfer Settings",
+            "fields": [
+              {
+                "type": "number",
+                "id": "uploadInterval",
+                "label": "Upload Interval",
+                "default": 300,
+                "min": 30,
+                "max": 86400,
+                "unit": "seconds",
+                "help": "How often to upload files (0 = upload immediately)"
+              },
+              {
+                "type": "toggle",
+                "id": "appendMode",
+                "label": "Append Mode",
+                "default": true,
+                "help": "Append data to existing files instead of creating new ones"
+              },
+              {
+                "type": "toggle",
+                "id": "compressFiles",
+                "label": "Compress Files",
+                "default": true,
+                "help": "Compress files with gzip before uploading"
+              },
+              {
+                "type": "number",
+                "id": "retryAttempts",
+                "label": "Retry Attempts",
+                "default": 3,
+                "min": 0,
+                "max": 10,
+                "help": "Number of upload retry attempts on failure"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "host": "ftp.company.com",
+        "port": 21,
+        "protocol": "ftp",
+        "username": "univa-user",
+        "remotePath": "/uploads/crane-data/",
+        "mode": "passive",
+        "uploadInterval": 300,
+        "appendMode": true,
+        "compressFiles": true,
+        "fileFormat": "csv",
+        "maxFileSize": 10485760
+      }
+    },
+    
+    "udp": {
+      "name": "UDP Stream",
+      "description": "Low-latency unidirectional streaming",
+      "icon": "fa-wave-square",
+      "color": "purple",
+      "defaultName": "UDP Stream",
+      "form": {
+        "sections": [
+          {
+            "title": "UDP Configuration",
+            "fields": [
+              {
+                "type": "text",
+                "id": "remoteHost",
+                "label": "Remote Host",
+                "default": "192.168.1.100",
+                "placeholder": "hostname or IP address",
+                "required": true,
+                "help": "Destination hostname or IP address"
+              },
+              {
+                "type": "number",
+                "id": "remotePort",
+                "label": "Remote Port",
+                "default": 5000,
+                "min": 1,
+                "max": 65535,
+                "required": true,
+                "help": "Destination UDP port"
+              },
+              {
+                "type": "number",
+                "id": "localPort",
+                "label": "Local Port",
+                "default": 0,
+                "min": 0,
+                "max": 65535,
+                "help": "Local port to bind (0 = random available port)"
+              },
+              {
+                "type": "select",
+                "id": "addressFamily",
+                "label": "Address Family",
+                "default": "ipv4",
+                "options": [
+                  {"value": "ipv4", "label": "IPv4"},
+                  {"value": "ipv6", "label": "IPv6"}
+                ],
+                "help": "Internet Protocol version"
+              }
+            ]
+          },
+          {
+            "title": "Stream Options",
+            "fields": [
+              {
+                "type": "number",
+                "id": "packetSize",
+                "label": "Max Packet Size",
+                "default": 1472,
+                "min": 28,
+                "max": 65507,
+                "unit": "bytes",
+                "help": "Maximum UDP packet size (MTU - headers)"
+              },
+              {
+                "type": "number",
+                "id": "sendRate",
+                "label": "Send Rate",
+                "default": 100,
+                "min": 1,
+                "max": 10000,
+                "unit": "packets/second",
+                "help": "Maximum packets per second"
+              },
+              {
+                "type": "number",
+                "id": "bufferSize",
+                "label": "Buffer Size",
+                "default": 65536,
+                "min": 1024,
+                "max": 1048576,
+                "unit": "bytes",
+                "help": "Socket buffer size"
+              },
+              {
+                "type": "toggle",
+                "id": "broadcast",
+                "label": "Broadcast Mode",
+                "default": false,
+                "help": "Send as broadcast packets"
+              }
+            ]
+          },
+          {
+            "title": "Message Format",
+            "fields": [
+              {
+                "type": "select",
+                "id": "messageFormat",
+                "label": "Message Format",
+                "default": "binary",
+                "options": [
+                  {"value": "binary", "label": "Binary (Little Endian)"},
+                  {"value": "binary-be", "label": "Binary (Big Endian)"},
+                  {"value": "json", "label": "JSON (UDP/TCP)"},
+                  {"value": "string", "label": "Null-terminated String"}
+                ],
+                "help": "Format of UDP packet payload"
+              },
+              {
+                "type": "toggle",
+                "id": "includeTimestamp",
+                "label": "Include Timestamp",
+                "default": true,
+                "help": "Add timestamp to each packet"
+              },
+              {
+                "type": "toggle",
+                "id": "includeSequence",
+                "label": "Include Sequence Number",
+                "default": true,
+                "help": "Add sequence number for packet ordering"
+              },
+              {
+                "type": "toggle",
+                "id": "checksum",
+                "label": "Add Checksum",
+                "default": false,
+                "help": "Add checksum to packets for integrity"
+              }
+            ]
+          },
+          {
+            "title": "Advanced Options",
+            "fields": [
+              {
+                "type": "number",
+                "id": "ttl",
+                "label": "Time To Live (TTL)",
+                "default": 64,
+                "min": 1,
+                "max": 255,
+                "help": "IP packet TTL (hop count)"
+              },
+              {
+                "type": "toggle",
+                "id": "multicast",
+                "label": "Multicast",
+                "default": false,
+                "help": "Send to multicast address"
+              },
+              {
+                "type": "text",
+                "id": "multicastGroup",
+                "label": "Multicast Group",
+                "default": "239.255.0.1",
+                "placeholder": "239.x.x.x",
+                "help": "Multicast group address (if multicast enabled)"
+              },
+              {
+                "type": "toggle",
+                "id": "dontFragment",
+                "label": "Don't Fragment",
+                "default": true,
+                "help": "Set IP Don't Fragment flag"
+              }
+            ]
+          }
+        ]
+      },
+      "defaultConfig": {
+        "remoteHost": "192.168.1.100",
+        "remotePort": 5000,
+        "localPort": 0,
+        "packetSize": 1472,
+        "sendRate": 100,
+        "messageFormat": "binary",
+        "includeTimestamp": true,
+        "includeSequence": true,
+        "addressFamily": "ipv4",
+        "ttl": 64,
+        "bufferSize": 65536
+      }
     }
   },
   
@@ -783,7 +1357,214 @@
       "template": "<div class='radio-group'>{options}</div>"
     },
     "file": {
-      "template": "<div class='file-upload'><input type='file' accept='{accept}' class='hidden' onchange='handleFileUpload(this, \"{id}\")'><button type='button' class='btn-secondary' onclick='this.previousElementSibling.click()'>{label}</button><span class='file-name'>{value}</span></div>"
+      "template": "<div class='file-upload'><input type='file' accept='{accept}' class='hidden' onchange='handleFileUpload(this, \"{id}\")'><button type='button' class='btn-secondary' onclick='this.previousElementSibling.click()'><i class='fa-solid fa-upload mr-1'></i>{label}</button><span class='file-name ml-2 text-xs text-slate-500'>{value}</span></div>"
+    },
+    "protocol-select": {
+      "template": "<div class='flex gap-2'><select class='form-select protocol-select' {required}>{options}</select><input type='text' class='form-input flex-1' placeholder='{hostPlaceholder}' value='{hostValue}' {required}><input type='number' class='form-input w-24' placeholder='Port' value='{portValue}' min='1' max='65535' {required}></div>"
+    },
+    "host-port": {
+      "template": "<div class='flex gap-2'><input type='text' class='form-input flex-1' placeholder='{hostPlaceholder}' value='{hostValue}' {required}><input type='number' class='form-input w-24' placeholder='Port' value='{portValue}' min='1' max='65535' {required}></div>"
+    },
+    "key-value-list": {
+      "template": "<div class='key-value-list space-y-2'>{items}</div>"
+    }
+  },
+  
+  "publishingOptions": {
+    "modes": {
+      "onChange": {
+        "name": "On Value Change",
+        "description": "Publish only when tag value changes significantly",
+        "fields": [
+          {
+            "type": "number",
+            "id": "deadband",
+            "label": "Deadband Value",
+            "default": 0.5,
+            "min": 0,
+            "max": 100,
+            "step": 0.1,
+            "unit": "% or absolute",
+            "help": "Minimum change required to trigger publish"
+          },
+          {
+            "type": "select",
+            "id": "deadbandType",
+            "label": "Deadband Type",
+            "default": "absolute",
+            "options": [
+              {"value": "absolute", "label": "Absolute Value"},
+              {"value": "percentage", "label": "Percentage"},
+              {"value": "relative", "label": "Relative to Range"}
+            ]
+          }
+        ]
+      },
+      "periodic": {
+        "name": "Periodic Interval",
+        "description": "Publish at regular time intervals",
+        "fields": [
+          {
+            "type": "number",
+            "id": "interval",
+            "label": "Publish Interval",
+            "default": 1000,
+            "min": 10,
+            "max": 3600000,
+            "step": 10,
+            "unit": "milliseconds"
+          },
+          {
+            "type": "toggle",
+            "id": "alignedToClock",
+            "label": "Align to Clock",
+            "default": false,
+            "help": "Align publish times to wall clock"
+          }
+        ]
+      },
+      "event": {
+        "name": "Event Based",
+        "description": "Publish only on specific events or conditions",
+        "fields": [
+          {
+            "type": "key-value-list",
+            "id": "eventRules",
+            "label": "Event Rules",
+            "default": [
+              {"key": "alarm", "value": "publish_all"},
+              {"key": "shutdown", "value": "publish_critical"}
+            ],
+            "keyPlaceholder": "Event Type",
+            "valuePlaceholder": "Action"
+          }
+        ]
+      }
+    },
+    
+    "batching": {
+      "enabled": false,
+      "batchSize": 50,
+      "batchTimeout": 1000,
+      "maxBatchSize": 1000,
+      "compression": false,
+      "fields": [
+        {
+          "type": "toggle",
+          "id": "enabled",
+          "label": "Enable Batching",
+          "default": false,
+          "help": "Group multiple messages into batches"
+        },
+        {
+          "type": "number",
+          "id": "batchSize",
+          "label": "Batch Size",
+          "default": 50,
+          "min": 1,
+          "max": 10000,
+          "help": "Maximum messages per batch"
+        },
+        {
+          "type": "number",
+          "id": "batchTimeout",
+          "label": "Batch Timeout",
+          "default": 1000,
+          "min": 10,
+          "max": 10000,
+          "unit": "ms",
+          "help": "Maximum time to wait for batch completion"
+        },
+        {
+          "type": "toggle",
+          "id": "compression",
+          "label": "Compress Batches",
+          "default": false,
+          "help": "Compress batch data with gzip"
+        }
+      ]
+    },
+    
+    "optimization": {
+      "rateLimiting": {
+        "enabled": false,
+        "maxMessagesPerSecond": 100,
+        "burstSize": 10
+      },
+      "prioritization": {
+        "enabled": false,
+        "highPriorityTags": [],
+        "lowPriorityTags": []
+      },
+      "fields": [
+        {
+          "type": "toggle",
+          "id": "rateLimiting",
+          "label": "Rate Limiting",
+          "default": false,
+          "help": "Limit maximum publish frequency"
+        },
+        {
+          "type": "number",
+          "id": "maxMessagesPerSecond",
+          "label": "Max Messages/Second",
+          "default": 100,
+          "min": 1,
+          "max": 10000,
+          "help": "Maximum publish rate"
+        },
+        {
+          "type": "number",
+          "id": "burstSize",
+          "label": "Burst Size",
+          "default": 10,
+          "min": 1,
+          "max": 1000,
+          "help": "Allowed burst above rate limit"
+        },
+        {
+          "type": "toggle",
+          "id": "tagPrioritization",
+          "label": "Tag Prioritization",
+          "default": false,
+          "help": "Prioritize critical tags"
+        }
+      ]
+    },
+    
+    "rules": {
+      "conditional": {
+        "enabled": false,
+        "rules": []
+      },
+      "transformations": {
+        "enabled": false,
+        "transformations": []
+      },
+      "fields": [
+        {
+          "type": "toggle",
+          "id": "conditionalPublishing",
+          "label": "Conditional Publishing",
+          "default": false,
+          "help": "Publish based on conditions"
+        },
+        {
+          "type": "key-value-list",
+          "id": "publishingRules",
+          "label": "Publishing Rules",
+          "default": [],
+          "keyPlaceholder": "Condition",
+          "valuePlaceholder": "Action"
+        },
+        {
+          "type": "toggle",
+          "id": "dataTransformations",
+          "label": "Data Transformations",
+          "default": false,
+          "help": "Apply transformations before publishing"
+        }
+      ]
     }
   },
   
@@ -832,6 +1613,82 @@
         "lastActive": "5 min ago",
         "bandwidth": "1.2 MB",
         "successRate": "99.6%"
+      }
+    },
+    "websocket": {
+      "id": "ws-realtime",
+      "type": "websocket",
+      "name": "Real-time Dashboard",
+      "enabled": true,
+      "config": {
+        "server": "wss://dashboard.company.com:443/ws",
+        "pingInterval": 30,
+        "reconnectDelay": 5,
+        "autoReconnect": true,
+        "messageFormat": "json",
+        "maxMessageSize": 65536,
+        "path": "/realtime",
+        "subprotocols": "json, mqtt"
+      },
+      "stats": {
+        "messages": 45789,
+        "errors": 5,
+        "latency": 35,
+        "uptime": "12h 45m",
+        "lastActive": "0.1s ago",
+        "bandwidth": "15.2 MB",
+        "successRate": "99.9%"
+      }
+    },
+    "ftp": {
+      "id": "ftp-logs",
+      "type": "ftp",
+      "name": "Log File Archive",
+      "enabled": false,
+      "config": {
+        "host": "archive.company.com",
+        "port": 21,
+        "protocol": "ftp",
+        "username": "logs_user",
+        "remotePath": "/uploads/crane-logs/",
+        "mode": "passive",
+        "uploadInterval": 300,
+        "appendMode": true,
+        "fileFormat": "csv"
+      },
+      "stats": {
+        "messages": 124,
+        "errors": 2,
+        "latency": 1200,
+        "uptime": "2h 10m",
+        "lastActive": "15 min ago",
+        "bandwidth": "45 MB",
+        "successRate": "98.4%"
+      }
+    },
+    "udp": {
+      "id": "udp-telemetry",
+      "type": "udp",
+      "name": "Telemetry Stream",
+      "enabled": true,
+      "config": {
+        "remoteHost": "192.168.1.200",
+        "remotePort": 6000,
+        "localPort": 54321,
+        "packetSize": 1400,
+        "sendRate": 100,
+        "messageFormat": "binary",
+        "includeTimestamp": true,
+        "includeSequence": true
+      },
+      "stats": {
+        "messages": 89245,
+        "errors": 128,
+        "latency": 8,
+        "uptime": "5h 22m",
+        "lastActive": "0.0s ago",
+        "bandwidth": "142 MB",
+        "successRate": "99.8%"
       }
     }
   }

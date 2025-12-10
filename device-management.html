@@ -299,6 +299,20 @@
             max-height: 90vh;
             overflow-y: auto;
         }
+        
+        /* Drag and drop styles */
+        #dropArea.dragover {
+            border-color: #2563EB;
+            background-color: #EFF6FF;
+        }
+        
+        #dropArea.dragover i {
+            color: #2563EB;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -350,12 +364,6 @@
                             <div class="font-medium text-sm text-slate-900">ACS Sensor</div>
                         </div>
                     </label>
-                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input type="radio" name="device-type" value="custom" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <div class="ml-3">
-                            <div class="font-medium text-sm text-slate-900">Custom Device</div>
-                        </div>
-                    </label>
                 </div>
             </div>
             
@@ -387,8 +395,8 @@
                     <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus RTU Settings</h3>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Modbus Address</label>
-                            <input type="number" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
+                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -420,18 +428,46 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
-                                <input type="number" value="500" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
+                                <input type="number" min="100" step="100" value="500" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
                             </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
-                            <input type="number" value="200" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="timeout">
+                            <input type="number" min="50" step="50" value="200" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="timeout">
                         </div>
+                        
+                    </div>
+                </div>
+                
+                <!-- Modbus TCP Configuration -->
+                <div id="modbus-tcp-config" class="protocol-config">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus TCP Settings</h3>
+                    <div class="space-y-4">
                         <div>
-                            <button class="text-primary hover:text-primaryHover font-medium text-sm px-3 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors" id="linkModbusBtn">
-                                <i class="fa-solid fa-link mr-2"></i> Link to Modbus Mapping (Page 4)
-                            </button>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
+                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpSlaveAddress">
                         </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                                <input type="text" value="192.168.1.100" pattern="^([0-9]{1,3}\.){3}[0-9]{1,3}$" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpIp">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                                <input type="number" min="1" max="65535" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpPort">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                                <input type="number" min="100" step="100" value="500" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpPolling">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
+                                <input type="number" min="50" step="50" value="1000" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpTimeout">
+                            </div>
+                        </div>
+                       
                     </div>
                 </div>
                 
@@ -486,6 +522,42 @@
                             <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="startPairingBtn">
                                 <i class="fa-solid fa-link mr-2"></i> Start Pairing
                             </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ACS Sensor Configuration -->
+                <div id="acs-config" class="protocol-config">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">ACS Sensor Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Sensor ID</label>
+                            <input type="text" value="ACS-001" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="acsSensorId">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Sampling Rate</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="acsSamplingRate">
+                                    <option>10 Hz</option>
+                                    <option>50 Hz</option>
+                                    <option>100 Hz</option>
+                                    <option>500 Hz</option>
+                                    <option>1 kHz</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Sensitivity</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="acsSensitivity">
+                                    <option>Low</option>
+                                    <option>Medium</option>
+                                    <option>High</option>
+                                    <option>Very High</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Calibration Value</label>
+                            <input type="number" step="0.01" value="1.00" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="acsCalibration">
                         </div>
                     </div>
                 </div>
@@ -589,7 +661,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <h1 class="text-2xl font-bold text-slate-900">Device Management</h1>
-                            <p class="text-slate-500 text-sm mt-1">Register, configure, monitor, and manage all devices connected to the Univa IoT Gateway.</p>
+                            <p class="text-slate-500 text-sm mt-1">Register, configure, monitor, and manage all Field devices connected to the Univa IoT Gateway.</p>
                         </div>
                         <div class="flex items-center space-x-3">
                             <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="scanNetworksBtn">
@@ -785,7 +857,7 @@
                         <p class="text-sm text-slate-500 mt-4">Assign/unassign devices quickly for organized management.</p>
                     </section>
 
-                    <!-- SECTION E: Import / Export -->
+                    <!-- SECTION E: Import / Export - CSV ONLY -->
                     <section id="section-import-export" class="bg-white rounded-xl shadow-sm border border-border p-6">
                         <div class="flex items-center justify-between mb-6">
                             <h2 class="text-lg font-semibold text-slate-800 flex items-center">
@@ -794,19 +866,97 @@
                                 <span class="text-xs font-normal text-slate-500">SECTION E</span>
                             </h2>
                             <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                                Supports JSON / XML formats
+                                CSV Format
                             </div>
                         </div>
                         
-                        <div class="flex space-x-4">
-                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="exportBtn">
-                                <i class="fa-solid fa-download mr-2"></i> Export Device List
-                            </button>
-                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="importBtn">
-                                <i class="fa-solid fa-upload mr-2"></i> Import Device Template
-                            </button>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Export Section -->
+                            <div class="space-y-4">
+                                <h3 class="text-sm font-semibold text-slate-900">Export Devices</h3>
+                                <p class="text-sm text-slate-600">Export device configuration for backup or deployment to other gateways.</p>
+                                
+                                <div class="space-y-3">
+                                    <div class="space-y-2">
+                                        <div class="flex items-center">
+                                            <input type="checkbox" id="export-all-devices" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
+                                            <label for="export-all-devices" class="ml-2 text-sm text-slate-700">Export all devices</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input type="checkbox" id="export-configuration" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
+                                            <label for="export-configuration" class="ml-2 text-sm text-slate-700">Include device configuration</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input type="checkbox" id="export-timestamp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
+                                            <label for="export-timestamp" class="ml-2 text-sm text-slate-700">Include timestamp in filename</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center" id="exportBtn">
+                                        <i class="fa-solid fa-download mr-2"></i> Export to CSV
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Import Section -->
+                            <div class="space-y-4">
+                                <h3 class="text-sm font-semibold text-slate-900">Import Devices</h3>
+                                <p class="text-sm text-slate-600">Import device configuration from CSV file.</p>
+                                
+                                <div class="space-y-3">
+                                    <!-- File Upload Area -->
+                                    <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition-colors cursor-pointer" id="dropArea">
+                                        <input type="file" id="fileInput" accept=".csv,.txt" class="hidden">
+                                        <i class="fa-solid fa-file-csv text-2xl text-slate-400 mb-3"></i>
+                                        <p class="text-sm text-slate-600 mb-1">Drag & drop CSV file here</p>
+                                        <p class="text-xs text-slate-500">or</p>
+                                        <button class="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="browseFilesBtn">
+                                            Browse Files
+                                        </button>
+                                        <p class="text-xs text-slate-400 mt-2">Supports: CSV files only</p>
+                                    </div>
+                                    
+                                    <!-- Import Options -->
+                                    <div class="space-y-2">
+                                        <div class="flex items-center">
+                                            <input type="checkbox" id="import-overwrite" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
+                                            <label for="import-overwrite" class="ml-2 text-sm text-slate-700">Overwrite existing devices</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input type="checkbox" id="import-template" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
+                                            <label for="import-template" class="ml-2 text-sm text-slate-700">Use as template (create new devices)</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center" id="importBtn" disabled>
+                                        <i class="fa-solid fa-upload mr-2"></i> Import from CSV
+                                    </button>
+                                    
+                                    <!-- Quick Template -->
+                                    <div class="mt-4">
+                                        <p class="text-xs text-slate-500 mb-2">Need a template?</p>
+                                        <button class="text-xs px-3 py-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded" id="downloadCsvTemplateBtn">
+                                            <i class="fa-solid fa-file-arrow-down mr-1"></i> Download CSV Template
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <p class="text-sm text-slate-500 mt-3">Useful for deploying multiple gateways on similar cranes.</p>
+                        
+                        <!-- Import Status -->
+                        <div id="importStatus" class="hidden mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-slate-700" id="statusText">Importing...</span>
+                                <span class="text-xs text-slate-500" id="statusCount">0/0 devices</span>
+                            </div>
+                            <div class="mt-2">
+                                <div class="h-1 bg-slate-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-primary transition-all duration-300" id="progressBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <p class="text-sm text-slate-500 mt-4">Export device configuration in CSV format for easy spreadsheet editing and import.</p>
                     </section>
                 </div>
             </div>
@@ -844,8 +994,8 @@
             {
                 id: 'loadcell',
                 name: 'LoadCell-Front',
-                type: 'Modbus',
-                address: '01',
+                type: 'Modbus RTU',
+                address: 'Slave 01',
                 status: 'Online',
                 lastPoll: '2 sec ago',
                 firmware: '1.2.4',
@@ -908,6 +1058,23 @@
                     signalStrength: '-65 dBm',
                     firmwareVersion: '3.0.1'
                 }
+            },
+            {
+                id: 'modbustcp',
+                name: 'PLC-Main',
+                type: 'Modbus TCP',
+                address: '192.168.1.100:502',
+                status: 'Online',
+                lastPoll: '1 sec ago',
+                firmware: '2.3.0',
+                group: 'Crane-01',
+                details: {
+                    status: 'Online',
+                    lastResponse: '1 sec ago',
+                    retries: 0,
+                    signalStrength: 'N/A (Wired)',
+                    firmwareVersion: '2.3.0'
+                }
             }
         ];
 
@@ -919,32 +1086,151 @@
             { id: 4, name: 'Motors & Brakes', deviceCount: 4, color: 'orange' }
         ];
 
-        // Fetch and insert sidebar
-        // Fetch and insert sidebar
-async function loadSidebar() {
-    try {
-        const response = await fetch('sidebar.html');
-        if (!response.ok) {
-            throw new Error(`Failed to load sidebar: ${response.status}`);
+        // CSV Export/Import Functions
+        function convertToCSV(devicesArray) {
+            if (devicesArray.length === 0) return '';
+            
+            // Define CSV headers
+            const headers = ['Device Name', 'Type', 'Address/ID', 'Status', 'Last Poll', 'Firmware', 'Group'];
+            
+            // Create header row
+            let csv = headers.join(',') + '\n';
+            
+            // Add data rows
+            devicesArray.forEach(device => {
+                const row = [
+                    `"${device.name.replace(/"/g, '""')}"`,
+                    `"${device.type.replace(/"/g, '""')}"`,
+                    `"${device.address.replace(/"/g, '""')}"`,
+                    `"${device.status.replace(/"/g, '""')}"`,
+                    `"${device.lastPoll.replace(/"/g, '""')}"`,
+                    `"${device.firmware.replace(/"/g, '""')}"`,
+                    `"${device.group.replace(/"/g, '""')}"`
+                ];
+                csv += row.join(',') + '\n';
+            });
+            
+            return csv;
         }
-        
-        const html = await response.text();
-        
-        // Insert the entire HTML content
-        document.getElementById('sidebar-container').innerHTML = html;
-        
-        // Update the active page to Device Management
-        updateActivePage();
-        
-        // Initialize sidebar functionality
-        initializeSidebar();
-        
-    } catch (error) {
-        console.error('Error loading sidebar:', error);
-        // Fallback: create a basic sidebar if fetch fails
-        createFallbackSidebar();
-    }
-}
+
+        function downloadCSV(csvContent, fileName = 'devices-export.csv') {
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            
+            if (navigator.msSaveBlob) {
+                // For IE
+                navigator.msSaveBlob(blob, fileName);
+            } else {
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            if (lines.length < 2) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const devices = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                
+                // Parse CSV line, handling quoted fields
+                const values = [];
+                let currentValue = '';
+                let insideQuotes = false;
+                
+                for (let char of lines[i]) {
+                    if (char === '"') {
+                        insideQuotes = !insideQuotes;
+                    } else if (char === ',' && !insideQuotes) {
+                        values.push(currentValue);
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                values.push(currentValue);
+                
+                const device = {};
+                
+                headers.forEach((header, index) => {
+                    if (values[index] !== undefined) {
+                        device[header] = values[index].trim().replace(/"/g, '');
+                    }
+                });
+                
+                if (device['Device Name']) {
+                    devices.push({
+                        id: `imported-${Date.now()}-${i}`,
+                        name: device['Device Name'] || 'Imported Device',
+                        type: device['Type'] || 'Unknown',
+                        address: device['Address/ID'] || 'N/A',
+                        status: device['Status'] || 'Online',
+                        lastPoll: device['Last Poll'] || 'Just now',
+                        firmware: device['Firmware'] || '1.0.0',
+                        group: device['Group'] || 'None',
+                        details: {
+                            status: device['Status'] || 'Online',
+                            lastResponse: device['Last Poll'] || 'Just now',
+                            retries: 0,
+                            signalStrength: 'N/A',
+                            firmwareVersion: device['Firmware'] || '1.0.0'
+                        }
+                    });
+                }
+            }
+            
+            return devices;
+        }
+
+        function downloadCSVTemplate() {
+            const templateHeaders = ['Device Name', 'Type', 'Address/ID', 'Status', 'Last Poll', 'Firmware', 'Group'];
+            const exampleRows = [
+                ['LoadCell-Front', 'Modbus RTU', 'Slave 01', 'Online', '2 sec ago', '1.2.4', 'Safety Sensors'],
+                ['BoomAngleSensor', 'CAN', '0x212', 'Online', '500 ms ago', '2.1.0', 'Crane-01'],
+                ['ACS-Node-Left', 'Wireless', 'RF:0x09', 'Offline', '20 sec ago', '1.5.2', 'Safety Sensors'],
+                ['PLC-Main', 'Modbus TCP', '192.168.1.100:502', 'Online', '1 sec ago', '2.3.0', 'Crane-01']
+            ];
+            
+            let csv = templateHeaders.join(',') + '\n';
+            exampleRows.forEach(row => {
+                csv += row.map(v => `"${v}"`).join(',') + '\n';
+            });
+            
+            downloadCSV(csv, 'device-template.csv');
+        }
+
+        // Fetch and insert sidebar
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                
+                // Insert the entire HTML content
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Update the active page to Device Management
+                updateActivePage();
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Fallback: create a basic sidebar if fetch fails
+                createFallbackSidebar();
+            }
+        }
 
         // Create fallback sidebar if fetch fails
         function createFallbackSidebar() {
@@ -1093,6 +1379,8 @@ async function loadSidebar() {
                 let typeColor = 'bg-blue-100 text-blue-800';
                 if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
                 if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
+                if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
+                if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
                 
                 row.innerHTML = `
                     <td class="p-4">
@@ -1231,11 +1519,35 @@ async function loadSidebar() {
             let protocol = 'modbus-rtu';
             if (device.type === 'CAN') protocol = 'canbus';
             if (device.type === 'Wireless') protocol = 'wireless';
+            if (device.type === 'Modbus TCP') protocol = 'modbus-tcp';
+            if (device.type === 'ACS Sensor') protocol = 'acs';
             
             document.querySelector(`input[name="device-type"][value="${protocol}"]`).checked = true;
             
             // Trigger protocol change
             document.querySelector(`input[name="device-type"][value="${protocol}"]`).dispatchEvent(new Event('change'));
+            
+            // Fill protocol-specific fields
+            if (protocol === 'modbus-rtu') {
+                // Extract slave address from string like "Slave 01"
+                const slaveMatch = device.address.match(/Slave\s*(\d+)/);
+                if (slaveMatch) {
+                    document.getElementById('modbusAddress').value = slaveMatch[1];
+                }
+            } else if (protocol === 'modbus-tcp') {
+                // Extract IP and port from string like "192.168.1.100:502"
+                const tcpMatch = device.address.match(/(\d+\.\d+\.\d+\.\d+):(\d+)/);
+                if (tcpMatch) {
+                    document.getElementById('modbusTcpIp').value = tcpMatch[1];
+                    document.getElementById('modbusTcpPort').value = tcpMatch[2];
+                }
+            } else if (protocol === 'canbus') {
+                document.getElementById('canId').value = device.address;
+            } else if (protocol === 'wireless') {
+                document.getElementById('rfAddress').value = device.address;
+            } else if (protocol === 'acs') {
+                document.getElementById('acsSensorId').value = device.address;
+            }
             
             closeAllDropdowns();
         }
@@ -1353,6 +1665,67 @@ async function loadSidebar() {
             alert(`Group "${newGroup.name}" created successfully.`);
         }
 
+        // File handling functions
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                
+                // Validate file type
+                if (!file.name.endsWith('.csv')) {
+                    alert('Please select a CSV file.');
+                    return;
+                }
+                
+                readFile(file);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                const file = files[0];
+                
+                // Validate file type
+                if (!file.name.endsWith('.csv')) {
+                    alert('Please select a CSV file.');
+                    return;
+                }
+                
+                readFile(file);
+            }
+        }
+
+        function readFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                processFile(content, file.name);
+            };
+            
+            reader.onerror = function() {
+                alert('Error reading file. Please try again.');
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function processFile(content, filename) {
+            // Validate CSV content
+            if (!content.trim()) {
+                alert('The file is empty.');
+                return;
+            }
+            
+            // Show status
+            const importBtn = document.getElementById('importBtn');
+            importBtn.disabled = false;
+            importBtn.innerHTML = `<i class="fa-solid fa-upload mr-2"></i> Import from ${filename}`;
+            
+            // Store the file content for later processing
+            importBtn.dataset.fileContent = content;
+            importBtn.dataset.fileName = filename;
+        }
+
         // Setup event listeners
         function setupEventListeners() {
             // Add device panel
@@ -1403,21 +1776,34 @@ async function loadSidebar() {
                 
                 // Create new device
                 const typeMap = {
-                    'modbus-rtu': 'Modbus',
+                    'modbus-rtu': 'Modbus RTU',
                     'modbus-tcp': 'Modbus TCP',
                     'canbus': 'CAN',
                     'wireless': 'Wireless',
-                    'acs': 'ACS Sensor',
-                    'custom': 'Custom'
+                    'acs': 'ACS Sensor'
                 };
+                
+                let address = 'N/A';
+                if (deviceType === 'modbus-rtu') {
+                    const slaveAddress = document.getElementById('modbusAddress').value;
+                    address = `Slave ${slaveAddress}`;
+                } else if (deviceType === 'modbus-tcp') {
+                    const ip = document.getElementById('modbusTcpIp').value;
+                    const port = document.getElementById('modbusTcpPort').value;
+                    address = `${ip}:${port}`;
+                } else if (deviceType === 'canbus') {
+                    address = document.getElementById('canId').value;
+                } else if (deviceType === 'wireless') {
+                    address = document.getElementById('rfAddress').value;
+                } else if (deviceType === 'acs') {
+                    address = document.getElementById('acsSensorId').value;
+                }
                 
                 const newDevice = {
                     id: `device-${Date.now()}`,
                     name: deviceName,
-                    type: typeMap[deviceType] || 'Custom',
-                    address: deviceType === 'modbus-rtu' ? document.getElementById('modbusAddress').value : 
-                             deviceType === 'canbus' ? document.getElementById('canId').value : 
-                             deviceType === 'wireless' ? document.getElementById('rfAddress').value : 'N/A',
+                    type: typeMap[deviceType],
+                    address: address,
                     status: 'Online',
                     lastPoll: 'Just now',
                     firmware: '1.0.0',
@@ -1571,25 +1957,168 @@ async function loadSidebar() {
                 }, 1000);
             });
             
+            // Export button
             document.getElementById('exportBtn').addEventListener('click', function() {
-                const dataStr = JSON.stringify(devices, null, 2);
-                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                const exportFileDefaultName = 'devices-export.json';
+                const exportAll = document.getElementById('export-all-devices').checked;
+                const exportConfig = document.getElementById('export-configuration').checked;
+                const exportTimestamp = document.getElementById('export-timestamp').checked;
                 
-                const linkElement = document.createElement('a');
-                linkElement.setAttribute('href', dataUri);
-                linkElement.setAttribute('download', exportFileDefaultName);
-                linkElement.click();
+                // Get devices to export
+                let devicesToExport = exportAll ? devices : devices.filter(d => d.status === 'Online');
                 
-                alert('Device list exported successfully as JSON.');
+                if (devicesToExport.length === 0) {
+                    alert('No devices to export.');
+                    return;
+                }
+                
+                // Export as CSV
+                let csvContent = convertToCSV(devicesToExport);
+                
+                if (exportTimestamp) {
+                    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+                    const filename = `devices-export-${timestamp}.csv`;
+                    downloadCSV(csvContent, filename);
+                } else {
+                    downloadCSV(csvContent, 'devices-export.csv');
+                }
+                
+                alert(`Exported ${devicesToExport.length} devices to CSV.`);
             });
-            
+
+            // Import functionality
+            document.getElementById('browseFilesBtn').addEventListener('click', function() {
+                document.getElementById('fileInput').click();
+            });
+
+            document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+            // Drag and drop functionality
+            const dropArea = document.getElementById('dropArea');
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('border-primary', 'bg-blue-50');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('border-primary', 'bg-blue-50');
+            }
+
+            dropArea.addEventListener('drop', function(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }, false);
+
             document.getElementById('importBtn').addEventListener('click', function() {
-                // In a real app, this would open a file picker
-                alert('Import device template. In a real application, this would open a file upload dialog.');
+                const content = this.dataset.fileContent;
+                const filename = this.dataset.fileName;
+                
+                if (!content) {
+                    alert('Please select a CSV file first.');
+                    return;
+                }
+                
+                const overwrite = document.getElementById('import-overwrite').checked;
+                const useTemplate = document.getElementById('import-template').checked;
+                
+                // Show progress
+                const importStatus = document.getElementById('importStatus');
+                const statusText = document.getElementById('statusText');
+                const statusCount = document.getElementById('statusCount');
+                const progressBar = document.getElementById('progressBar');
+                
+                importStatus.classList.remove('hidden');
+                statusText.textContent = 'Processing CSV file...';
+                progressBar.style.width = '30%';
+                
+                try {
+                    // Parse CSV
+                    const importedDevices = parseCSV(content);
+                    
+                    if (importedDevices.length === 0) {
+                        statusText.textContent = 'No valid devices found in CSV';
+                        progressBar.style.width = '0%';
+                        setTimeout(() => {
+                            importStatus.classList.add('hidden');
+                        }, 3000);
+                        alert('No valid devices found in the CSV file. Please check the format.');
+                        return;
+                    }
+                    
+                    // Update progress
+                    statusText.textContent = `Importing ${importedDevices.length} devices...`;
+                    progressBar.style.width = '60%';
+                    statusCount.textContent = `0/${importedDevices.length} devices`;
+                    
+                    // Simulate import process
+                    setTimeout(() => {
+                        if (overwrite) {
+                            devices = [...importedDevices];
+                        } else {
+                            devices = [...devices, ...importedDevices];
+                        }
+                        
+                        renderDevicesTable();
+                        
+                        // Update progress to complete
+                        progressBar.style.width = '100%';
+                        statusText.textContent = 'Import completed successfully!';
+                        statusCount.textContent = `${importedDevices.length} devices imported`;
+                        
+                        // Hide status after 3 seconds
+                        setTimeout(() => {
+                            importStatus.classList.add('hidden');
+                            progressBar.style.width = '0%';
+                            
+                            // Reset import button
+                            const importBtn = document.getElementById('importBtn');
+                            importBtn.disabled = true;
+                            importBtn.innerHTML = '<i class="fa-solid fa-upload mr-2"></i> Import from CSV';
+                            delete importBtn.dataset.fileContent;
+                            delete importBtn.dataset.fileName;
+                            
+                            alert(`Successfully imported ${importedDevices.length} devices from CSV.`);
+                        }, 3000);
+                        
+                    }, 1000);
+                    
+                } catch (error) {
+                    statusText.textContent = 'Error importing CSV file';
+                    statusCount.textContent = 'Invalid format';
+                    progressBar.style.width = '0%';
+                    console.error('Import error:', error);
+                    
+                    setTimeout(() => {
+                        importStatus.classList.add('hidden');
+                        alert('Error importing CSV file. Please ensure it has the correct format.');
+                    }, 3000);
+                }
+            });
+
+            // Template download button
+            document.getElementById('downloadCsvTemplateBtn').addEventListener('click', downloadCSVTemplate);
+
+            document.getElementById('linkModbusBtn').addEventListener('click', function() {
+                alert('Opening Modbus Mapping page...');
             });
             
-            document.getElementById('linkModbusBtn').addEventListener('click', function() {
+            document.getElementById('linkModbusTcpBtn').addEventListener('click', function() {
                 alert('Opening Modbus Mapping page...');
             });
             
@@ -1655,12 +2184,7 @@ async function loadSidebar() {
             }
             
             if (typeFilter !== 'All Device Types') {
-                filteredDevices = filteredDevices.filter(device => {
-                    if (typeFilter === 'Modbus RTU' || typeFilter === 'Modbus TCP') {
-                        return device.type === 'Modbus';
-                    }
-                    return device.type === typeFilter;
-                });
+                filteredDevices = filteredDevices.filter(device => device.type === typeFilter);
             }
             
             if (statusFilter !== 'All Status') {
