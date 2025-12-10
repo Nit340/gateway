@@ -20,6 +20,21 @@
                         surface: '#F8FAFC',
                         card: '#FFFFFF',
                         border: '#E2E8F0',
+                        green: {
+                            500: '#10B981',
+                            600: '#059669',
+                            700: '#047857'
+                        },
+                        orange: {
+                            500: '#F97316',
+                            600: '#EA580C',
+                            700: '#C2410C'
+                        },
+                        purple: {
+                            500: '#8B5CF6',
+                            600: '#7C3AED',
+                            700: '#6D28D9'
+                        }
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -336,6 +351,24 @@
             border: 1px solid #FFD9C2;
         }
         
+        .protocol-badge.websocket {
+            background: #DCFCE7;
+            color: #059669;
+            border: 1px solid #BBF7D0;
+        }
+        
+        .protocol-badge.ftp {
+            background: #FEF3C7;
+            color: #92400E;
+            border: 1px solid #FDE68A;
+        }
+        
+        .protocol-badge.udp {
+            background: #F3E8FF;
+            color: #6D28D9;
+            border: 1px solid #E9D5FF;
+        }
+        
         /* Card Styles */
         .config-card {
             background: white;
@@ -344,7 +377,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         
-        /* Smaller form controls */
+        /* Form Styles */
         .compact-input {
             padding: 6px 10px;
             font-size: 13px;
@@ -550,24 +583,222 @@
             border-radius: 4px;
             font-size: 12px;
         }
+        
+        /* Enhanced Publishing Options Styles */
+        .publishing-option-card {
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: white;
+            transition: all 0.2s;
+        }
+        
+        .publishing-option-card:hover {
+            border-color: #BFDBFE;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.05);
+        }
+        
+        .publishing-option-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .publishing-option-content {
+            padding-left: 24px;
+        }
+        
+        /* File upload styles */
+        .file-upload {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .file-name {
+            font-size: 12px;
+            color: #64748B;
+        }
+        
+        /* Form input groups */
+        .form-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .form-input-group .compact-input {
+            flex: 1;
+        }
+        
+        /* Help text */
+        .help-text {
+            font-size: 11px;
+            color: #64748B;
+            margin-top: 2px;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
     
-    <!-- Sidebar will be inserted here by JavaScript -->
-    <div id="sidebar-container"></div>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">
+                <i class="fa-solid fa-satellite-dish mr-2"></i> Univa IoT
+            </div>
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-section">
+                <div class="section-title">Configuration</div>
+                <a href="general-configuration.html" class="nav-item">
+                    <i class="fa-solid fa-sliders"></i>
+                    General
+                </a>
+                <a href="device-management.html" class="nav-item">
+                    <i class="fa-solid fa-microchip"></i>
+                    Devices
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <div class="section-title">Protocols</div>
+                <a href="protocol-mapping.html" class="nav-item">
+                    <i class="fa-solid fa-plug"></i>
+                    Protocol Mapping
+                </a>
+                <a href="mqtt-cloud.html" class="nav-item active">
+                    <i class="fa-solid fa-cloud"></i>
+                    MQTT / Cloud
+                </a>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <div class="user-profile">
+                <div class="user-avatar">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div class="user-info">
+                    <h4 class="text-sm font-medium text-slate-900">Admin User</h4>
+                    <p class="text-xs text-slate-500">System Administrator</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fa-solid fa-bars"></i>
+    </div>
 
-    <!-- All existing modals remain -->
+    <!-- Existing Modals -->
     <div id="addTagModal" class="modal">
-        <!-- ... existing addTagModal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Add Tags to Publish</h3>
+                    <button onclick="closeModal('addTagModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <input type="text" placeholder="Search tags..." class="w-full compact-input">
+                </div>
+                <div class="border border-slate-200 rounded max-h-64 overflow-y-auto">
+                    <!-- Tags list would go here -->
+                </div>
+                <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="closeModal('addTagModal')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="addSelectedTags()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Add Selected Tags
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div id="uploadCertModal" class="modal">
-        <!-- ... existing uploadCertModal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Upload Certificate</h3>
+                    <button onclick="closeModal('uploadCertModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Certificate Type</label>
+                        <select class="w-full compact-select">
+                            <option>CA Certificate</option>
+                            <option>Client Certificate</option>
+                            <option>Private Key</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select File</label>
+                        <input type="file" class="w-full">
+                        <p class="text-xs text-slate-500 mt-1">Supported formats: .pem, .crt, .cer, .key</p>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="closeModal('uploadCertModal')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="uploadCertificate()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Upload
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="testResultsModal" class="modal">
-        <!-- ... existing testResultsModal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Connection Test Results</h3>
+                    <button onclick="closeModal('testResultsModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-700">Connection Status:</span>
+                        <span class="status-indicator online">Connected</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-700">Latency:</span>
+                        <span class="text-sm font-mono text-slate-900">124 ms</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-700">Authentication:</span>
+                        <span class="text-sm font-mono text-green-600">Success</span>
+                    </div>
+                </div>
+                <div class="mt-6 p-4 bg-green-50 rounded border border-green-200">
+                    <div class="flex items-center">
+                        <i class="fa-solid fa-check-circle text-green-600 mr-2"></i>
+                        <span class="text-sm text-green-800">Connection test successful! All systems operational.</span>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="closeModal('testResultsModal')" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- NEW: Connection Manager Modal (for adding new connections) -->
@@ -657,17 +888,12 @@
                             <div class="p-4 border-b border-border">
                                 <h2 class="text-sm font-semibold text-slate-800 flex items-center">
                                     <i class="fa-solid fa-list mr-2 text-primary text-xs"></i> 
-                                    Active Connections (<span id="connectionCount">0</span>)
+                                    Active Connections (<span id="connectionCount">5</span>)
                                 </h2>
                             </div>
                             
                             <div class="p-3 space-y-3" id="connectionsList">
                                 <!-- Connections will be dynamically loaded here -->
-                                <div class="text-center py-8 text-slate-400">
-                                    <i class="fa-solid fa-cloud text-3xl mb-3"></i>
-                                    <p class="text-sm">No connections yet</p>
-                                    <p class="text-xs mt-1">Click "Add Connection" to get started</p>
-                                </div>
                             </div>
                         </div>
                     </section>
@@ -723,512 +949,22 @@
                             
                             <!-- Connection Settings (Tab 1) -->
                             <div id="tab-content-connection" class="p-4 space-y-6">
-                                <!-- Server Configuration -->
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Broker Settings</h4>
-                                    <div class="space-y-3">
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Server URL</label>
-                                                <input type="text" id="server-url" value="mqtt.example.com" class="w-full compact-input">
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
-                                                <input type="number" id="server-port" value="8883" class="w-full compact-input">
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
-                                                <input type="text" id="client-id" value="AUTO-GENERATED" class="w-full compact-input">
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive</label>
-                                                <input type="number" id="keep-alive" value="60" class="w-full compact-input">
-                                                <span class="text-xs text-slate-500">seconds</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Authentication -->
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Authentication & Security</h4>
-                                    <div class="space-y-3">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-xs text-slate-700">Use TLS/SSL</span>
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" id="use-tls" checked>
-                                                <span class="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                        
-                                        <div class="p-3 bg-slate-50 rounded border border-slate-200 space-y-3" id="tls-settings">
-                                            <div class="flex items-center justify-between">
-                                                <div class="flex items-center gap-2">
-                                                    <i class="fa-solid fa-certificate text-green-600"></i>
-                                                    <span class="text-xs font-medium">CA Certificate</span>
-                                                </div>
-                                                <div class="flex items-center gap-1">
-                                                    <button onclick="showUploadModal('uploadCertModal')" class="text-xs text-primary hover:text-primaryHover">
-                                                        <i class="fa-solid fa-upload"></i> Upload
-                                                    </button>
-                                                    <span class="text-xs text-slate-500 px-2 py-1 bg-white rounded border">Uploaded</span>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center justify-between">
-                                                <div class="flex items-center gap-2">
-                                                    <i class="fa-solid fa-key text-blue-600"></i>
-                                                    <span class="text-xs font-medium">Client Certificate</span>
-                                                </div>
-                                                <div class="flex items-center gap-1">
-                                                    <button onclick="showUploadModal('uploadCertModal')" class="text-xs text-primary hover:text-primaryHover">
-                                                        <i class="fa-solid fa-upload"></i> Upload
-                                                    </button>
-                                                    <button class="text-xs text-red-600 hover:text-red-700">
-                                                        <i class="fa-solid fa-trash"></i> Remove
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center justify-between">
-                                                <div class="flex items-center gap-2">
-                                                    <i class="fa-solid fa-lock text-purple-600"></i>
-                                                    <span class="text-xs font-medium">Private Key</span>
-                                                </div>
-                                                <button onclick="showUploadModal('uploadCertModal')" class="text-xs text-primary hover:text-primaryHover">
-                                                    <i class="fa-solid fa-upload"></i> Upload Key
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
-                                                <input type="text" id="username" value="admin" class="w-full compact-input">
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
-                                                <input type="password" id="password" value="********" class="w-full compact-input">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- MQTT Options -->
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">MQTT Options</h4>
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-xs font-medium text-slate-700 mb-1">QoS Level</label>
-                                            <div class="flex space-x-4">
-                                                <label class="flex items-center">
-                                                    <input type="radio" name="qos" value="0" class="mr-1">
-                                                    <span class="text-xs">0</span>
-                                                </label>
-                                                <label class="flex items-center">
-                                                    <input type="radio" name="qos" value="1" checked class="mr-1">
-                                                    <span class="text-xs">1</span>
-                                                </label>
-                                                <label class="flex items-center">
-                                                    <input type="radio" name="qos" value="2" class="mr-1">
-                                                    <span class="text-xs">2</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs font-medium text-slate-700 mb-1">Clean Session</label>
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" id="clean-session" checked>
-                                                <span class="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Action Buttons -->
-                                <div class="pt-4 border-t border-slate-200">
-                                    <div class="flex space-x-2">
-                                        <button onclick="testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
-                                            <i class="fa-solid fa-bolt mr-1"></i> Test Connection
-                                        </button>
-                                        <button onclick="saveBrokerSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
-                                            <i class="fa-solid fa-save mr-1"></i> Save Broker Settings
-                                        </button>
-                                    </div>
-                                </div>
+                                <!-- This will be dynamically populated based on selected connection -->
                             </div>
                             
-                            <!-- Topics & Format (Tab 2) -->
+                            <!-- Topics & Format (Tab 2) - MQTT Specific -->
                             <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;">
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Topic Configuration</h4>
-                                    <div class="space-y-3">
-                                        <div>
-                                            <label class="block text-xs font-medium text-slate-700 mb-1">Base Topic</label>
-                                            <input type="text" id="base-topic" value="univa/crane/${DEVICE_ID}" class="w-full compact-input font-mono text-xs">
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Data Topic</label>
-                                                <input type="text" id="data-topic" value="univa/crane/${DEVICE_ID}/data" class="w-full compact-input font-mono text-xs">
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Status Topic</label>
-                                                <input type="text" id="status-topic" value="univa/crane/${DEVICE_ID}/status" class="w-full compact-input font-mono text-xs">
-                                            </div>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Event Topic</label>
-                                                <input type="text" id="event-topic" value="univa/crane/${DEVICE_ID}/event" class="w-full compact-input font-mono text-xs">
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-1">Command Topic</label>
-                                                <input type="text" id="command-topic" value="univa/crane/${DEVICE_ID}/cmd" class="w-full compact-input font-mono text-xs">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Payload Format -->
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Payload Format</h4>
-                                    <div class="space-y-3">
-                                        <div class="flex space-x-4 mb-3">
-                                            <label class="flex items-center">
-                                                <input type="radio" name="payload-format" value="json" checked class="mr-1">
-                                                <span class="text-xs">JSON</span>
-                                            </label>
-                                            <label class="flex items-center">
-                                                <input type="radio" name="payload-format" value="key-value" class="mr-1">
-                                                <span class="text-xs">Key-Value Pairs</span>
-                                            </label>
-                                            <label class="flex items-center">
-                                                <input type="radio" name="payload-format" value="raw" class="mr-1">
-                                                <span class="text-xs">Raw Binary</span>
-                                            </label>
-                                        </div>
-                                        
-                                        <!-- JSON Preview -->
-                                        <div class="bg-slate-900 rounded border border-slate-800 p-3">
-                                            <div class="flex items-center justify-between mb-2">
-                                                <span class="text-xs font-medium text-slate-300">Payload Preview</span>
-                                                <span class="text-xs text-slate-500">JSON Format</span>
-                                            </div>
-                                            <pre class="text-xs text-slate-300 font-mono overflow-x-auto" id="json-preview">
-{
-  "device_id": "CRN001",
-  "timestamp": 1736004933,
-  "Hoist_Load": 18.5,
-  "Boom_Angle": 45,
-  "WindSpeed": 12
-}</pre>
-                                        </div>
-                                        
-                                        <div class="text-xs text-slate-500">
-                                            <p class="font-medium mb-1">Available Variables:</p>
-                                            <div class="flex flex-wrap gap-1">
-                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${DEVICE_ID}</span>
-                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${TIMESTAMP}</span>
-                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${GATEWAY_ID}</span>
-                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${TAG_NAME}</span>
-                                                <span class="px-2 py-1 bg-slate-100 rounded border border-slate-200">${VALUE}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="pt-4 border-t border-slate-200">
-                                    <button onclick="saveTopicSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
-                                        Save Topic Settings
-                                    </button>
-                                </div>
+                                <!-- This content is only shown for MQTT connections -->
                             </div>
                             
-                            <!-- Tag Publishing (Tab 3) -->
+                            <!-- Tag Publishing (Tab 3) - MQTT Specific -->
                             <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;">
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Tag Publishing Rules</h4>
-                                    
-                                    <div class="space-y-3 mb-4">
-                                        <div class="flex items-center space-x-4">
-                                            <label class="flex items-center">
-                                                <input type="radio" name="publish-mode" value="all" class="mr-1">
-                                                <span class="text-xs">Publish All Tags</span>
-                                            </label>
-                                            <label class="flex items-center">
-                                                <input type="radio" name="publish-mode" value="selected" checked class="mr-1">
-                                                <span class="text-xs">Publish Selected Tags</span>
-                                            </label>
-                                            <label class="flex items-center">
-                                                <input type="radio" name="publish-mode" value="custom" class="mr-1">
-                                                <span class="text-xs">Custom Tag Sets</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Tag Selection Table -->
-                                    <div class="mb-4">
-                                        <div class="flex items-center justify-between mb-3">
-                                            <span class="text-xs font-medium text-slate-700">Selected Tags (4)</span>
-                                            <div class="flex space-x-2">
-                                                <button onclick="showAddTagModal()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs flex items-center">
-                                                    <i class="fa-solid fa-plus mr-1"></i> Add Tags
-                                                </button>
-                                                <button onclick="removeSelectedTags()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs flex items-center">
-                                                    <i class="fa-solid fa-trash mr-1"></i> Remove Selected
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="border border-slate-200 rounded overflow-hidden">
-                                            <table class="tag-table w-full">
-                                                <thead class="bg-slate-50">
-                                                    <tr>
-                                                        <th class="p-2 w-8">
-                                                            <input type="checkbox">
-                                                        </th>
-                                                        <th class="p-2">Tag Name</th>
-                                                        <th class="p-2">Group</th>
-                                                        <th class="p-2">Publish</th>
-                                                        <th class="p-2">Filter</th>
-                                                        <th class="p-2">Poll Rate</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr>
-                                                        <td class="p-2 text-center">
-                                                            <input type="checkbox">
-                                                        </td>
-                                                        <td class="p-2 font-mono text-xs">Hoist_Load</td>
-                                                        <td class="p-2">
-                                                            <span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">Load</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <label class="toggle-switch">
-                                                                <input type="checkbox" checked>
-                                                                <span class="toggle-slider"></span>
-                                                            </label>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">Δ > 0.5</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">200ms</span>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td class="p-2 text-center">
-                                                            <input type="checkbox">
-                                                        </td>
-                                                        <td class="p-2 font-mono text-xs">Boom_Angle</td>
-                                                        <td class="p-2">
-                                                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Angle</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <label class="toggle-switch">
-                                                                <input type="checkbox" checked>
-                                                                <span class="toggle-slider"></span>
-                                                            </label>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">Δ > 0.2</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">100ms</span>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td class="p-2 text-center">
-                                                            <input type="checkbox">
-                                                        </td>
-                                                        <td class="p-2 font-mono text-xs">WindSpeed</td>
-                                                        <td class="p-2">
-                                                            <span class="px-2 py-1 bg-yellow-50 text-yellow-700 rounded text-xs">Weather</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <label class="toggle-switch">
-                                                                <input type="checkbox" checked>
-                                                                <span class="toggle-slider"></span>
-                                                            </label>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">Periodic 1s</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">1s</span>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td class="p-2 text-center">
-                                                            <input type="checkbox">
-                                                        </td>
-                                                        <td class="p-2 font-mono text-xs">Motor_Temp</td>
-                                                        <td class="p-2">
-                                                            <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Motor</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <label class="toggle-switch">
-                                                                <input type="checkbox" checked>
-                                                                <span class="toggle-slider"></span>
-                                                            </label>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">Periodic 2s</span>
-                                                        </td>
-                                                        <td class="p-2">
-                                                            <span class="text-xs">2s</span>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Publishing Options -->
-                                    <div>
-                                        <h5 class="text-xs font-semibold text-slate-900 mb-3">Publishing Options</h5>
-                                        <div class="grid grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-2">Publish Mode</label>
-                                                <div class="space-y-2">
-                                                    <label class="flex items-center">
-                                                        <input type="radio" name="publish-trigger" value="on-change" checked class="mr-1">
-                                                        <span class="text-xs">On Change</span>
-                                                    </label>
-                                                    <label class="flex items-center">
-                                                        <input type="radio" name="publish-trigger" value="periodic" class="mr-1">
-                                                        <span class="text-xs">Periodic</span>
-                                                    </label>
-                                                    <label class="flex items-center">
-                                                        <input type="radio" name="publish-trigger" value="event-only" class="mr-1">
-                                                        <span class="text-xs">Event Only</span>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-slate-700 mb-2">Batching Options</label>
-                                                <div class="space-y-2">
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enable-batching" class="mr-1">
-                                                        <span class="text-xs">Enable Batching</span>
-                                                    </label>
-                                                    <div class="ml-6">
-                                                        <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
-                                                        <input type="number" id="batch-size" value="10" class="w-full compact-input" disabled>
-                                                        <span class="text-xs text-slate-500">tags per message</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="pt-4 border-t border-slate-200">
-                                    <button onclick="savePublishingRules()" class="compact-button bg-primary hover:bg-primaryHover text-white">
-                                        Save Publishing Rules
-                                    </button>
-                                </div>
+                                <!-- This content is only shown for MQTT connections -->
                             </div>
                             
-                            <!-- Advanced (Tab 4) -->
+                            <!-- Advanced (Tab 4) - MQTT Specific -->
                             <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;">
-                                <div>
-                                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Advanced Options</h4>
-                                    
-                                    <div class="space-y-4">
-                                        <!-- Compression -->
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <span class="text-xs font-medium text-slate-700">Compression (gzip)</span>
-                                                <p class="text-xs text-slate-500">Compress payloads for low-bandwidth mode</p>
-                                            </div>
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" id="compression-enabled">
-                                                <span class="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                        
-                                        <!-- Timestamp Sync -->
-                                        <div>
-                                            <label class="block text-xs font-medium text-slate-700 mb-2">Timestamp Format</label>
-                                            <div class="flex space-x-4">
-                                                <label class="flex items-center">
-                                                    <input type="radio" name="timestamp-format" value="utc" checked class="mr-1">
-                                                    <span class="text-xs">UTC</span>
-                                                </label>
-                                                <label class="flex items-center">
-                                                    <input type="radio" name="timestamp-format" value="local" class="mr-1">
-                                                    <span class="text-xs">Local Time</span>
-                                                </label>
-                                                <label class="flex items-center">
-                                                    <input type="radio" name="timestamp-format" value="epoch" class="mr-1">
-                                                    <span class="text-xs">Epoch Milliseconds</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Offline Buffer -->
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <span class="text-xs font-medium text-slate-700">Offline Buffer (Store & Forward)</span>
-                                                <p class="text-xs text-slate-500">Store messages when connection is lost</p>
-                                            </div>
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" id="offline-buffer-enabled" checked>
-                                                <span class="toggle-slider"></span>
-                                            </label>
-                                        </div>
-                                        
-                                        <!-- Buffer Settings -->
-                                        <div class="ml-6 space-y-2" id="buffer-settings">
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label class="block text-xs font-medium text-slate-700 mb-1">Queue Size</label>
-                                                    <input type="number" id="queue-size" value="1000" class="w-full compact-input">
-                                                    <span class="text-xs text-slate-500">messages</span>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
-                                                    <input type="number" id="retention-period" value="24" class="w-full compact-input">
-                                                    <span class="text-xs text-slate-500">hours</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Last Will & Testament -->
-                                        <div class="pt-2">
-                                            <h5 class="text-xs font-semibold text-slate-900 mb-3">Last Will & Testament</h5>
-                                            <div class="space-y-3">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-xs font-medium text-slate-700">Enable LWT</span>
-                                                    <label class="toggle-switch">
-                                                        <input type="checkbox" id="lwt-enabled">
-                                                        <span class="toggle-slider"></span>
-                                                    </label>
-                                                </div>
-                                                
-                                                <div class="ml-6 space-y-2" id="lwt-settings" style="display: none;">
-                                                    <div>
-                                                        <label class="block text-xs font-medium text-slate-700 mb-1">Will Topic</label>
-                                                        <input type="text" id="will-topic" value="gateway/status" class="w-full compact-input">
-                                                    </div>
-                                                    <div>
-                                                        <label class="block text-xs font-medium text-slate-700 mb-1">Will Message</label>
-                                                        <input type="text" id="will-message" value='{"status": "offline"}' class="w-full compact-input">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="pt-4 border-t border-slate-200">
-                                    <button onclick="saveAdvancedSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
-                                        Save Advanced Settings
-                                    </button>
-                                </div>
+                                <!-- This content is only shown for MQTT connections -->
                             </div>
                         </div>
                         
@@ -1311,10 +1047,10 @@
                 </div>
             </div>
         </main>
-    </div> <!-- End of main content container -->
+    </div>
 
     <script>
-        // Load configuration from config.json
+        // Load configuration from the JSON you provided (with additions)
         const config = {
             "app": {
                 "name": "Univa IoT Gateway",
@@ -1329,43 +1065,7 @@
                     "icon": "fa-solid fa-cloud",
                     "color": "blue",
                     "defaultName": "MQTT Broker",
-                    "form": {
-                        "sections": [
-                            {
-                                "title": "Broker Configuration",
-                                "fields": [
-                                    {
-                                        "type": "select",
-                                        "id": "protocol",
-                                        "label": "Protocol",
-                                        "default": "mqtts://",
-                                        "options": [
-                                            {"value": "mqtt://", "label": "MQTT"},
-                                            {"value": "mqtts://", "label": "MQTTS (SSL)"},
-                                            {"value": "tcp://", "label": "TCP"},
-                                            {"value": "ws://", "label": "WebSocket"},
-                                            {"value": "wss://", "label": "WebSocket Secure"}
-                                        ],
-                                        "required": true
-                                    },
-                                    {
-                                        "type": "text",
-                                        "id": "host",
-                                        "label": "Broker Hostname",
-                                        "default": "broker.company.com",
-                                        "required": true
-                                    },
-                                    {
-                                        "type": "number",
-                                        "id": "port",
-                                        "label": "Port",
-                                        "default": 8883,
-                                        "required": true
-                                    }
-                                ]
-                            }
-                        ]
-                    }
+                    "formFile": "connection-forms/mqtt-form.html"
                 },
                 
                 "http": {
@@ -1373,7 +1073,8 @@
                     "description": "REST API endpoints",
                     "icon": "fa-solid fa-globe",
                     "color": "yellow",
-                    "defaultName": "HTTP API"
+                    "defaultName": "HTTP API",
+                    "formFile": "connection-forms/http-form.html"
                 },
                 
                 "aws": {
@@ -1381,7 +1082,8 @@
                     "description": "Amazon Web Services IoT",
                     "icon": "fa-brands fa-aws",
                     "color": "purple",
-                    "defaultName": "AWS IoT"
+                    "defaultName": "AWS IoT",
+                    "formFile": "connection-forms/aws-form.html"
                 },
                 
                 "azure": {
@@ -1389,7 +1091,8 @@
                     "description": "Microsoft Azure IoT",
                     "icon": "fa-brands fa-microsoft",
                     "color": "blue",
-                    "defaultName": "Azure IoT Hub"
+                    "defaultName": "Azure IoT Hub",
+                    "formFile": "connection-forms/azure-form.html"
                 },
                 
                 "grafana": {
@@ -1397,7 +1100,35 @@
                     "description": "Monitoring & Dashboards",
                     "icon": "fa-solid fa-chart-line",
                     "color": "orange",
-                    "defaultName": "Grafana Cloud"
+                    "defaultName": "Grafana Cloud",
+                    "formFile": "connection-forms/grafana-form.html"
+                },
+                
+                "websocket": {
+                    "name": "WebSocket Server",
+                    "description": "Real-time bidirectional communication",
+                    "icon": "fa-solid fa-bolt",
+                    "color": "green",
+                    "defaultName": "WebSocket Server",
+                    "formFile": "connection-forms/websocket-form.html"
+                },
+                
+                "ftp": {
+                    "name": "FTP Server",
+                    "description": "File transfer for data logs",
+                    "icon": "fa-solid fa-folder",
+                    "color": "orange",
+                    "defaultName": "FTP Server",
+                    "formFile": "connection-forms/ftp-form.html"
+                },
+                
+                "udp": {
+                    "name": "UDP Stream",
+                    "description": "Low-latency unidirectional streaming",
+                    "icon": "fa-solid fa-wave-square",
+                    "color": "purple",
+                    "defaultName": "UDP Stream",
+                    "formFile": "connection-forms/udp-form.html"
                 }
             },
             
@@ -1418,9 +1149,13 @@
                     "name": "Production MQTT Broker",
                     "enabled": true,
                     "config": {
-                        "protocol": "mqtts://",
-                        "host": "broker.company.com",
-                        "port": 8883
+                        "server": "mqtts://broker.company.com:8883",
+                        "clientId": "univa-gw-01",
+                        "qos": 1,
+                        "username": "admin",
+                        "tls": true,
+                        "keepAlive": 60,
+                        "cleanSession": true
                     },
                     "stats": {
                         "messages": 8953,
@@ -1438,7 +1173,11 @@
                     "name": "Analytics API",
                     "enabled": true,
                     "config": {
-                        "url": "https://api.company.com/v1/data"
+                        "url": "https://api.company.com/v1/data",
+                        "method": "POST",
+                        "interval": 300,
+                        "batchSize": 100,
+                        "contentType": "application/json"
                     },
                     "stats": {
                         "messages": 3245,
@@ -1450,21 +1189,79 @@
                         "successRate": "99.6%"
                     }
                 },
-                "aws": {
-                    "id": "aws-iot",
-                    "type": "aws",
-                    "name": "AWS IoT Core",
+                "websocket": {
+                    "id": "ws-realtime",
+                    "type": "websocket",
+                    "name": "Real-time Dashboard",
                     "enabled": true,
                     "config": {
-                        "endpoint": "a3qj7x...iot.us-east-1.amazonaws.com"
+                        "server": "wss://dashboard.company.com:443/ws",
+                        "pingInterval": 30,
+                        "reconnectDelay": 5,
+                        "autoReconnect": true,
+                        "messageFormat": "json",
+                        "maxMessageSize": 65536,
+                        "path": "/realtime",
+                        "subprotocols": "json, mqtt"
                     },
                     "stats": {
-                        "messages": 1523,
-                        "errors": 3,
-                        "latency": 145,
-                        "uptime": "3h 22m",
-                        "lastActive": "1.2s ago",
-                        "bandwidth": "0.8 MB",
+                        "messages": 45789,
+                        "errors": 5,
+                        "latency": 35,
+                        "uptime": "12h 45m",
+                        "lastActive": "0.1s ago",
+                        "bandwidth": "15.2 MB",
+                        "successRate": "99.9%"
+                    }
+                },
+                "ftp": {
+                    "id": "ftp-logs",
+                    "type": "ftp",
+                    "name": "Log File Archive",
+                    "enabled": false,
+                    "config": {
+                        "host": "archive.company.com",
+                        "port": 21,
+                        "protocol": "ftp",
+                        "username": "logs_user",
+                        "remotePath": "/uploads/crane-logs/",
+                        "mode": "passive",
+                        "uploadInterval": 300,
+                        "appendMode": true,
+                        "fileFormat": "csv"
+                    },
+                    "stats": {
+                        "messages": 124,
+                        "errors": 2,
+                        "latency": 1200,
+                        "uptime": "2h 10m",
+                        "lastActive": "15 min ago",
+                        "bandwidth": "45 MB",
+                        "successRate": "98.4%"
+                    }
+                },
+                "udp": {
+                    "id": "udp-telemetry",
+                    "type": "udp",
+                    "name": "Telemetry Stream",
+                    "enabled": true,
+                    "config": {
+                        "remoteHost": "192.168.1.200",
+                        "remotePort": 6000,
+                        "localPort": 54321,
+                        "packetSize": 1400,
+                        "sendRate": 100,
+                        "messageFormat": "binary",
+                        "includeTimestamp": true,
+                        "includeSequence": true
+                    },
+                    "stats": {
+                        "messages": 89245,
+                        "errors": 128,
+                        "latency": 8,
+                        "uptime": "5h 22m",
+                        "lastActive": "0.0s ago",
+                        "bandwidth": "142 MB",
                         "successRate": "99.8%"
                     }
                 }
@@ -1478,120 +1275,29 @@
 
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
-            // Load sidebar first
-            loadSidebar();
+            // Initialize sidebar functionality
+            initializeSidebar();
             
             // Initialize app functions
             initializeApp();
             loadConnections();
             renderConnectionTypes();
             
-            // Select the first connection by default
+            // Set up initial empty state
             if (Object.keys(connections).length > 0) {
                 const firstId = Object.keys(connections)[0];
                 selectConnection(firstId);
+            } else {
+                // Show empty state in the configuration area
+                document.getElementById('tab-content-connection').innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-plug text-3xl mb-3"></i>
+                        <p class="text-sm">Select a connection to configure</p>
+                        <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
+                    </div>
+                `;
             }
         });
-
-        // Fetch and insert sidebar from sidebar.html
-        async function loadSidebar() {
-            try {
-                const response = await fetch('sidebar.html');
-                if (!response.ok) {
-                    throw new Error(`Failed to load sidebar: ${response.status}`);
-                }
-                
-                const html = await response.text();
-                
-                // Insert the entire HTML content
-                document.getElementById('sidebar-container').innerHTML = html;
-                
-                // Update the active page to MQTT / Cloud
-                updateActivePage();
-                
-                // Initialize sidebar functionality
-                initializeSidebar();
-                
-            } catch (error) {
-                console.error('Error loading sidebar:', error);
-                // Fallback: create a basic sidebar if fetch fails
-                createFallbackSidebar();
-            }
-        }
-
-        // Create fallback sidebar if fetch fails
-        function createFallbackSidebar() {
-            const fallbackHTML = `
-                <div class="sidebar" id="sidebar">
-                    <div class="sidebar-logo">
-                        <div class="logo-text">
-                            <i class="fa-solid fa-satellite-dish mr-2"></i> Univa IoT
-                        </div>
-                    </div>
-                    <div class="sidebar-nav">
-                        <div class="nav-section">
-                            <div class="section-title">Configuration</div>
-                            <a href="general-configuration.html" class="nav-item">
-                                <i class="fa-solid fa-sliders"></i>
-                                General
-                            </a>
-                            <a href="device-management.html" class="nav-item">
-                                <i class="fa-solid fa-microchip"></i>
-                                Devices
-                            </a>
-                        </div>
-                        
-                        <div class="nav-section">
-                            <div class="section-title">Protocols</div>
-                            <a href="protocol-mapping.html" class="nav-item">
-                                <i class="fa-solid fa-plug"></i>
-                                Protocol Mapping
-                            </a>
-                            <a href="mqtt-cloud.html" class="nav-item active">
-                                <i class="fa-solid fa-cloud"></i>
-                                MQTT / Cloud
-                            </a>
-                        </div>
-                    </div>
-                    <div class="sidebar-footer">
-                        <div class="user-profile">
-                            <div class="user-avatar">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
-                            <div class="user-info">
-                                <h4 class="text-sm font-medium text-slate-900">Admin User</h4>
-                                <p class="text-xs text-slate-500">System Administrator</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="sidebar-toggle" id="sidebarToggle">
-                    <i class="fa-solid fa-bars"></i>
-                </div>
-            `;
-            
-            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
-            initializeSidebar();
-        }
-
-        // Update active page in sidebar
-        function updateActivePage() {
-            // Remove active class from all nav items
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            // Add active class to MQTT / Cloud
-            const mqttLink = Array.from(navItems).find(item => 
-                item.textContent.includes('MQTT / Cloud') || 
-                item.textContent.includes('Cloud Connection')
-            );
-            
-            if (mqttLink) {
-                mqttLink.classList.add('active');
-            }
-        }
 
         // Initialize sidebar functionality
         function initializeSidebar() {
@@ -1673,40 +1379,16 @@
         }
 
         function setupEventListeners() {
-            // TLS toggle
-            document.getElementById('use-tls').addEventListener('change', function() {
-                const tlsSettings = document.getElementById('tls-settings');
-                if (this.checked) {
-                    tlsSettings.style.display = 'block';
-                } else {
-                    tlsSettings.style.display = 'none';
-                }
-            });
-            
-            // Batching toggle
-            document.getElementById('enable-batching').addEventListener('change', function() {
-                const batchSize = document.getElementById('batch-size');
-                batchSize.disabled = !this.checked;
-            });
-            
-            // Offline buffer toggle
-            document.getElementById('offline-buffer-enabled').addEventListener('change', function() {
-                const bufferSettings = document.getElementById('buffer-settings');
-                if (this.checked) {
-                    bufferSettings.style.display = 'block';
-                } else {
-                    bufferSettings.style.display = 'none';
-                }
-            });
-            
-            // LWT toggle
-            document.getElementById('lwt-enabled').addEventListener('change', function() {
-                const lwtSettings = document.getElementById('lwt-settings');
-                if (this.checked) {
-                    lwtSettings.style.display = 'block';
-                } else {
-                    lwtSettings.style.display = 'none';
-                }
+            // Enhanced publishing options listeners
+            document.querySelectorAll('input[name="publish-trigger"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const intervalSettings = document.getElementById('interval-settings');
+                    if (this.value === 'periodic') {
+                        if (intervalSettings) intervalSettings.style.display = 'block';
+                    } else {
+                        if (intervalSettings) intervalSettings.style.display = 'none';
+                    }
+                });
             });
             
             // Payload format change
@@ -1765,7 +1447,8 @@
                     blue: '#3B82F6',
                     yellow: '#F59E0B',
                     purple: '#8B5CF6',
-                    orange: '#F97316'
+                    orange: '#F97316',
+                    green: '#10B981'
                 };
                 
                 const color = colorMap[connectionConfig.color] || '#3B82F6';
@@ -1782,7 +1465,7 @@
             });
         }
 
-        function selectConnectionType(type) {
+        async function selectConnectionType(type) {
             selectedConnectionType = type;
             const connectionConfig = config.connectionTypes[type];
             
@@ -1790,119 +1473,91 @@
             document.getElementById('connectionTypeSelection').classList.add('hidden');
             document.getElementById('connectionFormContainer').classList.remove('hidden');
             
-            renderConnectionForm(type);
+            // Load form from external file
+            await renderConnectionForm(type);
         }
 
-        function renderConnectionForm(type) {
+        async function renderConnectionForm(type) {
             const formContent = document.getElementById('formContent');
             const connectionConfig = config.connectionTypes[type];
             
-            if (!connectionConfig.form) {
+            try {
+                // Load form from external file
+                const response = await fetch(connectionConfig.formFile);
+                if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
+                
+                const html = await response.text();
+                formContent.innerHTML = html;
+                
+                // Initialize dynamic elements in the loaded form
+                initializeTemplateFields();
+            } catch (error) {
+                console.error('Error loading form:', error);
                 formContent.innerHTML = `
                     <div class="text-center py-8 text-slate-500">
-                        <i class="fa-solid fa-cogs text-3xl mb-3"></i>
-                        <p>Configuration form for ${connectionConfig.name} coming soon</p>
+                        <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
+                        <p>Unable to load configuration form</p>
+                        <p class="text-xs mt-1">${error.message}</p>
+                        <button onclick="showConnectionTypeSelection()" class="mt-4 compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Back to Connection Types
+                        </button>
                     </div>
                 `;
-                return;
             }
-            
-            let html = '';
-            connectionConfig.form.sections.forEach((section) => {
-                html += `
-                    <div class="form-section">
-                        <h5 class="form-section-title">${section.title}</h5>
-                        <div class="space-y-4">
-                `;
-                
-                section.fields.forEach(field => {
-                    html += renderFormField(field);
-                });
-                
-                html += `
-                        </div>
-                    </div>
-                `;
-            });
-            
-            formContent.innerHTML = html;
         }
 
-        function renderFormField(field) {
-            const fieldId = `field-${field.id}`;
-            const required = field.required ? 'required' : '';
-            const placeholder = field.placeholder || '';
+        function initializeTemplateFields() {
+            // Setup toggle switches in loaded template
+            document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+                toggle.addEventListener('change', function() {
+                    const label = this.nextElementSibling;
+                    label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
+                });
+                
+                // Set initial color
+                const label = toggle.nextElementSibling;
+                label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
+            });
             
-            // Process default value
-            let defaultValue = field.default || '';
-            if (typeof defaultValue === 'string' && defaultValue.includes('${randomId}')) {
-                defaultValue = defaultValue.replace('${randomId}', generateRandomId(6));
-            }
+            // Setup key-value item listeners
+            document.querySelectorAll('.key-value-list').forEach(list => {
+                const addButton = list.querySelector('button');
+                if (addButton) {
+                    addButton.onclick = function() {
+                        addKeyValueItem(this);
+                    };
+                }
+                
+                // Setup delete buttons
+                list.querySelectorAll('.key-value-item button').forEach(btn => {
+                    btn.onclick = function() {
+                        removeKeyValueItem(this);
+                    };
+                });
+            });
             
-            switch(field.type) {
-                case 'text':
-                    return `
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">${field.label}</label>
-                            <input type="text" id="${fieldId}" 
-                                   class="w-full compact-input"
-                                   value="${defaultValue}"
-                                   placeholder="${placeholder}"
-                                   ${required}>
-                            ${field.help ? `<p class="text-xs text-slate-500 mt-1">${field.help}</p>` : ''}
-                        </div>
-                    `;
-                    
-                case 'password':
-                    return `
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">${field.label}</label>
-                            <input type="password" id="${fieldId}"
-                                   class="w-full compact-input"
-                                   value="${defaultValue}"
-                                   placeholder="${placeholder}"
-                                   ${required}>
-                            ${field.help ? `<p class="text-xs text-slate-500 mt-1">${field.help}</p>` : ''}
-                        </div>
-                    `;
-                    
-                case 'number':
-                    return `
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">${field.label}</label>
-                            <input type="number" id="${fieldId}"
-                                   class="w-full compact-input"
-                                   value="${defaultValue}"
-                                   min="${field.min || ''}"
-                                   max="${field.max || ''}"
-                                   ${required}>
-                            ${field.help ? `<p class="text-xs text-slate-500 mt-1">${field.help}</p>` : ''}
-                        </div>
-                    `;
-                    
-                case 'select':
-                    const options = field.options.map(opt => {
-                        const isSelected = String(opt.value) === String(defaultValue) ? 'selected' : '';
-                        const label = typeof opt === 'object' ? opt.label : opt;
-                        const value = typeof opt === 'object' ? opt.value : opt;
-                        return `<option value="${value}" ${isSelected}>${label}</option>`;
-                    }).join('');
-                    
-                    return `
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">${field.label}</label>
-                            <select id="${fieldId}"
-                                    class="w-full compact-select"
-                                    ${required}>
-                                ${options}
-                            </select>
-                            ${field.help ? `<p class="text-xs text-slate-500 mt-1">${field.help}</p>` : ''}
-                        </div>
-                    `;
-                    
-                default:
-                    return `<div class="text-slate-500 text-xs">Field type "${field.type}" not supported</div>`;
-            }
+            // Setup file upload handlers
+            document.querySelectorAll('.file-upload input[type="file"]').forEach(input => {
+                input.onchange = function() {
+                    const fieldId = this.id;
+                    const fileName = this.files[0]?.name || 'No file selected';
+                    const nameSpan = document.getElementById(`${fieldId}-name`);
+                    if (nameSpan) {
+                        nameSpan.textContent = fileName;
+                    }
+                };
+            });
+            
+            // Setup generate password buttons
+            document.querySelectorAll('button[onclick^="generatePassword"]').forEach(btn => {
+                const match = btn.getAttribute('onclick').match(/generatePassword\('([^']+)'\)/);
+                if (match) {
+                    const fieldId = match[1];
+                    btn.onclick = function() {
+                        generatePassword(fieldId);
+                    };
+                }
+            });
         }
 
         function cancelConnectionForm() {
@@ -1913,7 +1568,7 @@
             if (!selectedConnectionType) return;
             
             const connectionConfig = config.connectionTypes[selectedConnectionType];
-            const formData = collectFormData();
+            const formData = collectFormDataFromTemplate();
             
             // Create connection ID
             const connectionId = `${selectedConnectionType}-${Date.now()}`;
@@ -1941,20 +1596,67 @@
             selectConnection(connectionId);
         }
 
-        function collectFormData() {
+        function collectFormDataFromTemplate() {
             const formData = {};
-            const connectionConfig = config.connectionTypes[selectedConnectionType];
             
-            if (!connectionConfig.form) return formData;
+            // Collect all input fields from the template
+            const formContent = document.getElementById('formContent');
             
-            connectionConfig.form.sections.forEach(section => {
-                section.fields.forEach(field => {
-                    const element = document.getElementById(`field-${field.id}`);
-                    if (element) {
-                        formData[field.id] = element.value;
-                    }
-                });
+            // Text inputs
+            formContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
+                const id = input.id;
+                if (id.startsWith('field-')) {
+                    const fieldName = id.replace('field-', '');
+                    formData[fieldName] = input.value;
+                }
             });
+            
+            // Selects
+            formContent.querySelectorAll('select').forEach(select => {
+                const id = select.id;
+                if (id.startsWith('field-')) {
+                    const fieldName = id.replace('field-', '');
+                    formData[fieldName] = select.value;
+                }
+            });
+            
+            // Checkboxes (toggles)
+            formContent.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(checkbox => {
+                const id = checkbox.id;
+                if (id.startsWith('field-')) {
+                    const fieldName = id.replace('field-', '');
+                    formData[fieldName] = checkbox.checked;
+                }
+            });
+            
+            // Radio buttons
+            formContent.querySelectorAll('input[type="radio"]').forEach(radio => {
+                const name = radio.name;
+                if (name.startsWith('field-')) {
+                    const fieldName = name.replace('field-', '');
+                    if (radio.checked) {
+                        formData[fieldName] = radio.value;
+                    }
+                }
+            });
+            
+            // Collect key-value pairs
+            const keyValueData = {};
+            formContent.querySelectorAll('.key-value-item').forEach(item => {
+                const inputs = item.querySelectorAll('input[type="text"]');
+                if (inputs.length >= 2) {
+                    const key = inputs[0].value.trim();
+                    const value = inputs[1].value.trim();
+                    if (key && value) {
+                        keyValueData[key] = value;
+                    }
+                }
+            });
+            
+            // Add key-value data if exists
+            if (Object.keys(keyValueData).length > 0) {
+                formData.headers = keyValueData;
+            }
             
             return formData;
         }
@@ -1989,7 +1691,8 @@
                 blue: 'border-blue-500 text-blue-600',
                 yellow: 'border-yellow-500 text-yellow-600',
                 purple: 'border-purple-500 text-purple-600',
-                orange: 'border-orange-500 text-orange-600'
+                orange: 'border-orange-500 text-orange-600',
+                green: 'border-green-500 text-green-600'
             };
             
             const colorClass = colorMap[connectionConfig.color] || 'border-blue-500 text-blue-600';
@@ -2026,7 +1729,8 @@
                 blue: 'text-blue-600',
                 yellow: 'text-yellow-600',
                 purple: 'text-purple-600',
-                orange: 'text-orange-600'
+                orange: 'text-orange-600',
+                green: 'text-green-600'
             };
             
             const iconClass = colorMap[connectionConfig.color] || 'text-blue-600';
@@ -2046,12 +1750,24 @@
                 const port = conn.config.port || (protocol.includes('mqtts') ? 8883 : 1883);
                 return `${protocol}${conn.config.host}:${port}`;
             }
+            if (conn.type === 'websocket' && conn.config.host) {
+                const protocol = conn.config.protocol || 'ws://';
+                const port = conn.config.port || (protocol.includes('wss') ? 443 : 80);
+                return `${protocol}${conn.config.host}:${port}${conn.config.path || ''}`;
+            }
+            if (conn.type === 'ftp' && conn.config.host) {
+                return `ftp://${conn.config.host}:${conn.config.port || 21}`;
+            }
+            if (conn.type === 'udp' && conn.config.remoteHost) {
+                return `udp://${conn.config.remoteHost}:${conn.config.remotePort}`;
+            }
             if (conn.config.url) return conn.config.url;
             if (conn.config.endpoint) return conn.config.endpoint;
             if (conn.config.hostname) return conn.config.hostname;
             return `${config.connectionTypes[conn.type]?.name} Connection`;
         }
 
+        // Enhanced Connection Selection Function
         function selectConnection(id) {
             selectedConnectionId = id;
             const conn = connections[id];
@@ -2070,11 +1786,12 @@
                 selectedEl.classList.remove('border-slate-200');
             }
             
-            // Update main configuration area based on connection type
+            // Update main configuration area with the ACTUAL connection form
             updateConfigurationForConnection(conn);
         }
 
-        function updateConfigurationForConnection(conn) {
+        // Enhanced Connection Configuration Function
+        async function updateConfigurationForConnection(conn) {
             const connectionConfig = config.connectionTypes[conn.type];
             
             // Update header information
@@ -2087,47 +1804,348 @@
             document.getElementById('statLastSent').textContent = conn.stats.lastActive;
             document.getElementById('statLatency').textContent = conn.stats.latency + ' ms';
             
-            // For MQTT connections, update form fields with saved config
-            if (conn.type === 'mqtt' && conn.config) {
-                if (conn.config.host) {
-                    document.getElementById('server-url').value = conn.config.host;
+            // Clear the tab contents
+            const tabContent = document.getElementById('tab-content-connection');
+            tabContent.innerHTML = '<div class="text-center py-8"><i class="fa-solid fa-spinner fa-spin text-primary text-xl"></i><p class="text-xs text-slate-500 mt-2">Loading configuration...</p></div>';
+            
+            // Hide other tabs initially
+            document.getElementById('tab-content-topics').style.display = 'none';
+            document.getElementById('tab-content-publishing').style.display = 'none';
+            document.getElementById('tab-content-advanced').style.display = 'none';
+            
+            // Update tab buttons based on connection type
+            document.querySelectorAll('.tab-button').forEach(tab => {
+                if (tab.id === 'tab-connection') {
+                    tab.style.display = 'block';
+                    tab.classList.add('active');
+                } else {
+                    tab.style.display = 'none';
+                    tab.classList.remove('active');
                 }
-                if (conn.config.port) {
-                    document.getElementById('server-port').value = conn.config.port;
+            });
+            
+            // Load the specific connection form for editing
+            await loadConnectionEditForm(conn);
+        }
+
+        // Enhanced Connection Edit Form Loading
+        async function loadConnectionEditForm(conn) {
+            const connectionConfig = config.connectionTypes[conn.type];
+            const tabContent = document.getElementById('tab-content-connection');
+            
+            try {
+                // Load form from external file
+                const response = await fetch(connectionConfig.formFile);
+                if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
+                
+                const html = await response.text();
+                
+                // Create the edit form container
+                tabContent.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-sm font-semibold text-slate-900">${connectionConfig.name} Configuration</h4>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-700">Enabled</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="connection-enabled" ${conn.enabled ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Connection Name -->
+                        <div class="form-section">
+                            <h5 class="form-section-title">Connection Information</h5>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
+                                    <input type="text" id="edit-connection-name" 
+                                           class="w-full compact-input"
+                                           value="${conn.name}"
+                                           placeholder="Enter connection name">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- The actual connection form -->
+                        <div id="edit-form-content">
+                            ${html}
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="pt-4 border-t border-slate-200">
+                            <div class="flex justify-between items-center">
+                                <div class="flex space-x-2">
+                                    <button onclick="testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                        <i class="fa-solid fa-bolt mr-1"></i> Test Connection
+                                    </button>
+                                    <button onclick="deleteConnection('${conn.id}')" class="compact-button border border-red-300 text-red-700 hover:bg-red-50 flex items-center">
+                                        <i class="fa-solid fa-trash mr-1"></i> Delete
+                                    </button>
+                                </div>
+                                <button onclick="saveConnection('${conn.id}')" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
+                                    <i class="fa-solid fa-save mr-1"></i> Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Populate form with existing configuration
+                populateFormWithData(conn);
+                
+                // Initialize dynamic elements
+                initializeEditFormFields();
+                
+            } catch (error) {
+                console.error('Error loading form:', error);
+                tabContent.innerHTML = `
+                    <div class="text-center py-8 text-slate-500">
+                        <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
+                        <p>Unable to load configuration form</p>
+                        <p class="text-xs mt-1">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function populateFormWithData(conn) {
+            // Populate connection name
+            const nameInput = document.getElementById('edit-connection-name');
+            if (nameInput) nameInput.value = conn.name;
+            
+            // Populate all form fields from connection config
+            Object.entries(conn.config).forEach(([fieldName, value]) => {
+                const fieldId = `field-${fieldName}`;
+                const element = document.getElementById(fieldId);
+                
+                if (element) {
+                    if (element.type === 'checkbox') {
+                        element.checked = value;
+                    } else if (element.type === 'radio') {
+                        document.querySelectorAll(`input[name="${element.name}"][value="${value}"]`).forEach(radio => {
+                            radio.checked = true;
+                        });
+                    } else {
+                        element.value = value;
+                    }
                 }
-                if (conn.config.protocol && conn.config.protocol.includes('mqtts')) {
-                    document.getElementById('use-tls').checked = true;
+            });
+            
+            // Special handling for key-value lists (like headers)
+            if (conn.config.headers && typeof conn.config.headers === 'object') {
+                const keyValueLists = document.querySelectorAll('.key-value-list');
+                keyValueLists.forEach(list => {
+                    // Clear existing items except the add button
+                    const items = list.querySelectorAll('.key-value-item');
+                    items.forEach(item => {
+                        if (!item.querySelector('button[onclick*="addKeyValueItem"]')) {
+                            item.remove();
+                        }
+                    });
+                    
+                    // Add items from config
+                    Object.entries(conn.config.headers).forEach(([key, value]) => {
+                        const addButton = list.querySelector('button[onclick*="addKeyValueItem"]');
+                        if (addButton) {
+                            const newItem = document.createElement('div');
+                            newItem.className = 'key-value-item';
+                            newItem.innerHTML = `
+                                <input type="text" value="${key}" placeholder="Key" class="compact-input">
+                                <input type="text" value="${value}" placeholder="Value" class="compact-input">
+                                <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            `;
+                            list.insertBefore(newItem, addButton.parentNode);
+                        }
+                    });
+                });
+            }
+        }
+
+        function initializeEditFormFields() {
+            // Setup toggle switches
+            document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+                toggle.addEventListener('change', function() {
+                    const label = this.nextElementSibling;
+                    label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
+                });
+                
+                // Set initial color
+                const label = toggle.nextElementSibling;
+                label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
+            });
+            
+            // Setup key-value item listeners
+            document.querySelectorAll('.key-value-list').forEach(list => {
+                const addButton = list.querySelector('button[onclick*="addKeyValueItem"]');
+                if (addButton) {
+                    addButton.onclick = function() {
+                        addKeyValueItem(this);
+                    };
                 }
+                
+                // Setup delete buttons
+                list.querySelectorAll('.key-value-item button').forEach(btn => {
+                    if (btn.innerHTML.includes('fa-trash')) {
+                        btn.onclick = function() {
+                            removeKeyValueItem(this);
+                        };
+                    }
+                });
+            });
+            
+            // Setup file upload handlers
+            document.querySelectorAll('.file-upload input[type="file"]').forEach(input => {
+                input.onchange = function() {
+                    const fieldId = this.id;
+                    const fileName = this.files[0]?.name || 'No file selected';
+                    const nameSpan = document.getElementById(`${fieldId}-name`);
+                    if (nameSpan) {
+                        nameSpan.textContent = fileName;
+                    }
+                };
+            });
+            
+            // Setup generate password buttons
+            document.querySelectorAll('button[onclick^="generatePassword"]').forEach(btn => {
+                const match = btn.getAttribute('onclick').match(/generatePassword\('([^']+)'\)/);
+                if (match) {
+                    const fieldId = match[1];
+                    btn.onclick = function() {
+                        generatePassword(fieldId);
+                    };
+                }
+            });
+        }
+
+        function saveConnection(connectionId) {
+            const conn = connections[connectionId];
+            if (!conn) return;
+            
+            // Update connection name
+            const nameInput = document.getElementById('edit-connection-name');
+            if (nameInput) {
+                conn.name = nameInput.value;
             }
             
-            // Show/hide tabs based on connection type
-            // MQTT gets all tabs, others get limited tabs
-            if (conn.type === 'mqtt') {
-                document.querySelectorAll('.tab-button').forEach(tab => {
-                    tab.style.display = 'block';
-                });
-                // Switch to connection tab by default
-                switchTab('connection');
-            } else {
-                // For non-MQTT connections, only show connection tab
-                document.querySelectorAll('.tab-button').forEach(tab => {
-                    if (tab.id === 'tab-connection') {
-                        tab.style.display = 'block';
-                        tab.classList.add('active');
-                    } else {
-                        tab.style.display = 'none';
-                        tab.classList.remove('active');
-                    }
-                });
-                // Hide all tab contents except connection
-                document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
-                    if (tab.id === 'tab-content-connection') {
-                        tab.style.display = 'block';
-                    } else {
-                        tab.style.display = 'none';
-                    }
-                });
+            // Update enabled status
+            const enabledCheckbox = document.getElementById('connection-enabled');
+            if (enabledCheckbox) {
+                conn.enabled = enabledCheckbox.checked;
             }
+            
+            // Collect form data
+            const formData = collectFormDataFromEditForm();
+            
+            // Update connection config
+            conn.config = {...conn.config, ...formData};
+            
+            // Update UI
+            updateConnectionItem(connectionId, conn);
+            
+            // Show notification
+            showNotification(`${conn.name} updated successfully`, 'success');
+        }
+
+        function collectFormDataFromEditForm() {
+            const formData = {};
+            
+            // Collect all input fields from the edit form
+            const editFormContent = document.getElementById('edit-form-content');
+            if (!editFormContent) return formData;
+            
+            // Text inputs, numbers, passwords
+            editFormContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
+                const id = input.id;
+                if (id.startsWith('field-')) {
+                    const fieldName = id.replace('field-', '');
+                    formData[fieldName] = input.value;
+                }
+            });
+            
+            // Selects
+            editFormContent.querySelectorAll('select').forEach(select => {
+                const id = select.id;
+                if (id.startsWith('field-')) {
+                    const fieldName = id.replace('field-', '');
+                    formData[fieldName] = select.value;
+                }
+            });
+            
+            // Checkboxes (toggles)
+            editFormContent.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(checkbox => {
+                const id = checkbox.id;
+                if (id.startsWith('field-')) {
+                    const fieldName = id.replace('field-', '');
+                    formData[fieldName] = checkbox.checked;
+                }
+            });
+            
+            // Radio buttons
+            editFormContent.querySelectorAll('input[type="radio"]').forEach(radio => {
+                const name = radio.name;
+                if (name.startsWith('field-')) {
+                    const fieldName = name.replace('field-', '');
+                    if (radio.checked) {
+                        formData[fieldName] = radio.value;
+                    }
+                }
+            });
+            
+            // Collect key-value pairs
+            const keyValueData = {};
+            editFormContent.querySelectorAll('.key-value-item').forEach(item => {
+                const inputs = item.querySelectorAll('input[type="text"]');
+                if (inputs.length >= 2) {
+                    const key = inputs[0].value.trim();
+                    const value = inputs[1].value.trim();
+                    if (key && value) {
+                        keyValueData[key] = value;
+                    }
+                }
+            });
+            
+            // Add key-value data if exists
+            if (Object.keys(keyValueData).length > 0) {
+                formData.headers = keyValueData;
+            }
+            
+            return formData;
+        }
+
+        function deleteConnection(connectionId) {
+            if (!confirm(`Are you sure you want to delete "${connections[connectionId]?.name}"?`)) {
+                return;
+            }
+            
+            const connName = connections[connectionId]?.name || 'Connection';
+            delete connections[connectionId];
+            
+            // Remove from UI
+            const connectionElement = document.querySelector(`[data-connection-id="${connectionId}"]`);
+            if (connectionElement) {
+                connectionElement.remove();
+            }
+            
+            // Update count
+            updateConnectionCount();
+            
+            // If this was the selected connection, clear the right panel
+            if (selectedConnectionId === connectionId) {
+                selectedConnectionId = null;
+                document.getElementById('tab-content-connection').innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-plug text-3xl mb-3"></i>
+                        <p class="text-sm">Select a connection to configure</p>
+                        <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
+                    </div>
+                `;
+            }
+            
+            showNotification(`${connName} deleted successfully`, 'success');
         }
 
         function updateConnectionCount() {
@@ -2172,25 +2190,158 @@
             setTimeout(() => notification.remove(), 3000);
         }
 
-        // KEEP ALL EXISTING FUNCTIONS FROM ORIGINAL MQTT PAGE
+        // Key-Value List Functions
+        function addKeyValueItem(button) {
+            const list = button.closest('.key-value-list');
+            const keyPlaceholder = list.querySelector('input[placeholder*="Key"]')?.placeholder || 'Key';
+            const valuePlaceholder = list.querySelector('input[placeholder*="Value"]')?.placeholder || 'Value';
+            
+            const item = document.createElement('div');
+            item.className = 'key-value-item';
+            item.innerHTML = `
+                <input type="text" placeholder="${keyPlaceholder}" class="compact-input">
+                <input type="text" placeholder="${valuePlaceholder}" class="compact-input">
+                <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            `;
+            
+            list.insertBefore(item, button.parentNode);
+        }
+
+        function removeKeyValueItem(button) {
+            const item = button.closest('.key-value-item');
+            if (item) {
+                item.remove();
+            }
+        }
+
+        // File Upload Functions
+        function handleFileUpload(input, fieldId) {
+            const fileName = input.files[0]?.name || 'No file selected';
+            document.getElementById(`${fieldId}-name`).textContent = fileName;
+        }
+
+        function generatePassword(fieldId) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+            let password = '';
+            for (let i = 0; i < 16; i++) {
+                password += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.value = password;
+            }
+        }
+
+        // Enhanced Publishing Rules Functions
+        function addPublishingRule() {
+            const container = document.getElementById('publishing-rules-container');
+            
+            // Remove placeholder if exists
+            const placeholder = container.querySelector('.text-center');
+            if (placeholder) {
+                placeholder.remove();
+            }
+            
+            const ruleId = `rule-${Date.now()}`;
+            const ruleHtml = `
+                <div id="${ruleId}" class="p-3 bg-white rounded border border-slate-200">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-medium text-slate-700">Publishing Rule</span>
+                        <button onclick="removePublishingRule('${ruleId}')" class="text-xs text-red-600 hover:text-red-700">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-xs text-slate-600 mb-1">Tag</label>
+                            <select class="w-full compact-select">
+                                <option value="">Select Tag</option>
+                                <option value="Hoist_Load">Hoist_Load</option>
+                                <option value="Boom_Angle">Boom_Angle</option>
+                                <option value="WindSpeed">WindSpeed</option>
+                                <option value="Motor_Temp">Motor_Temp</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-600 mb-1">Condition</label>
+                            <select class="w-full compact-select">
+                                <option value="gt">Greater Than</option>
+                                <option value="lt">Less Than</option>
+                                <option value="eq">Equals</option>
+                                <option value="change">On Change</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-600 mb-1">Value</label>
+                            <input type="text" class="w-full compact-input" placeholder="Threshold">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="mr-2">
+                            <span class="text-xs text-slate-600">Publish only when condition is met</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', ruleHtml);
+        }
+
+        function removePublishingRule(ruleId) {
+            const rule = document.getElementById(ruleId);
+            if (rule) {
+                rule.remove();
+            }
+            
+            // Show placeholder if no rules left
+            const container = document.getElementById('publishing-rules-container');
+            if (container.children.length === 0) {
+                container.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">No rules defined yet</div>';
+            }
+        }
+
+        // Enhanced Tab Switching Function
+        function switchTab(tabName) {
+            const conn = connections[selectedConnectionId];
+            
+            if (conn && conn.type === 'mqtt' && tabName !== 'connection') {
+                // For MQTT connections, show the specific tabs
+                document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
+                    tab.style.display = 'none';
+                });
+                
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    button.classList.remove('active');
+                });
+                
+                document.getElementById(`tab-content-${tabName}`).style.display = 'block';
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+            } else {
+                // For non-MQTT or no connection selected, show connection tab
+                document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
+                    tab.style.display = 'none';
+                });
+                
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    button.classList.remove('active');
+                });
+                
+                document.getElementById('tab-content-connection').style.display = 'block';
+                document.getElementById('tab-connection').classList.add('active');
+                
+                // If we have a non-MQTT connection selected, reload its edit form
+                if (conn && conn.type !== 'mqtt' && tabName === 'connection') {
+                    loadConnectionEditForm(conn);
+                }
+            }
+        }
+
+        // EXISTING FUNCTIONS FROM ORIGINAL MQTT PAGE
         function showAddTagModal() {
             document.getElementById('addTagModal').classList.add('active');
-        }
-        
-        function switchTab(tabName) {
-            // Hide all tab contents
-            document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
-                tab.style.display = 'none';
-            });
-            
-            // Remove active class from all tab buttons
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('active');
-            });
-            
-            // Show selected tab content
-            document.getElementById(`tab-content-${tabName}`).style.display = 'block';
-            document.getElementById(`tab-${tabName}`).classList.add('active');
         }
         
         function addSelectedTags() {
@@ -2199,7 +2350,7 @@
             const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
             
             if (checkboxes.length > 0) {
-                alert(`${checkboxes.length} tags added successfully!`);
+                showNotification(`${checkboxes.length} tags added successfully!`, 'success');
                 closeModal('addTagModal');
                 
                 // Reset checkboxes
@@ -2217,7 +2368,7 @@
             if (selected.length > 0) {
                 if (confirm(`Remove ${selected.length} selected tags?`)) {
                     // In a real app, this would remove the selected rows
-                    alert(`${selected.length} tags removed successfully!`);
+                    showNotification(`${selected.length} tags removed successfully!`, 'success');
                     
                     // Uncheck all checkboxes
                     document.querySelectorAll('.tag-table input[type="checkbox"]').forEach(cb => {
@@ -2233,8 +2384,8 @@
             const currentConn = connections[selectedConnectionId];
             if (currentConn && currentConn.type === 'mqtt') {
                 // Update connection config with form values
-                currentConn.config.host = document.getElementById('server-url').value;
-                currentConn.config.port = document.getElementById('server-port').value;
+                currentConn.config.host = document.getElementById('server-url')?.value;
+                currentConn.config.port = document.getElementById('server-port')?.value;
                 
                 showNotification('Broker settings saved successfully!', 'success');
                 updateConnectionItem(selectedConnectionId, currentConn);
@@ -2303,7 +2454,7 @@
         }
         
         function showHelp() {
-            alert('Cloud Connection Manager Help:\n\n1. Click "Add Connection" to create new cloud connections\n2. Select a connection type (MQTT, HTTP, AWS, Azure, Grafana)\n3. Configure the connection settings\n4. Test the connection before saving\n5. Manage multiple connections from the list\n\nMaximum connections: ' + config.app.maxConnections);
+            alert('Cloud Connection Manager Help:\n\n1. Click "Add Connection" to create new cloud connections\n2. Select a connection type (MQTT, HTTP, AWS, Azure, Grafana, WebSocket, FTP, UDP)\n3. Configure the connection settings\n4. Test the connection before saving\n5. Manage multiple connections from the list\n\nMaximum connections: ' + config.app.maxConnections);
         }
         
         function showUploadModal(modalId) {
@@ -2316,10 +2467,12 @@
         }
         
         function updatePayloadPreview() {
-            const format = document.querySelector('input[name="payload-format"]:checked').value;
+            const format = document.querySelector('input[name="payload-format"]:checked');
             const preview = document.getElementById('json-preview');
             
-            switch(format) {
+            if (!format || !preview) return;
+            
+            switch(format.value) {
                 case 'json':
                     preview.textContent = `{
   "device_id": "CRN001",

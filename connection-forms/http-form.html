@@ -1,0 +1,161 @@
+<div class="space-y-6">
+    <div class="form-section">
+        <h5 class="form-section-title">Endpoint Configuration</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Endpoint URL</label>
+                <input type="text" id="field-url" 
+                       class="w-full compact-input"
+                       value="https://api.company.com/v1/data"
+                       placeholder="https://example.com/api/endpoint"
+                       required>
+                <p class="help-text">Full URL including protocol (http:// or https://)</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">HTTP Method</label>
+                <select id="field-method" class="w-full compact-select" required>
+                    <option value="POST" selected>POST (Create/Submit data)</option>
+                    <option value="PUT">PUT (Update resource)</option>
+                    <option value="PATCH">PATCH (Partial update)</option>
+                    <option value="GET">GET (Retrieve data)</option>
+                </select>
+                <p class="help-text">HTTP method for requests</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Content Type</label>
+                <select id="field-contentType" class="w-full compact-select">
+                    <option value="application/json" selected>application/json</option>
+                    <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+                    <option value="text/plain">text/plain</option>
+                    <option value="application/xml">application/xml</option>
+                </select>
+                <p class="help-text">Content-Type header for HTTP requests</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Push Settings</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Push Interval</label>
+                <select id="field-interval" class="w-full compact-select">
+                    <option value="0">Immediate (no batching)</option>
+                    <option value="10">10 seconds</option>
+                    <option value="30">30 seconds</option>
+                    <option value="60">1 minute</option>
+                    <option value="300" selected>5 minutes</option>
+                    <option value="900">15 minutes</option>
+                    <option value="3600">1 hour</option>
+                </select>
+                <p class="help-text">How often to send batched data</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
+                <input type="number" id="field-batchSize" 
+                       class="w-full compact-input"
+                       value="100"
+                       min="1"
+                       max="10000">
+                <p class="help-text">Maximum number of messages to batch before sending</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Request Timeout</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-timeout" 
+                           class="w-full compact-input"
+                           value="30"
+                           min="1"
+                           max="300">
+                    <span class="text-xs text-slate-500">seconds</span>
+                </div>
+                <p class="help-text">Timeout for HTTP requests</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Retry Attempts</label>
+                <input type="number" id="field-retryCount" 
+                       class="w-full compact-input"
+                       value="3"
+                       min="0"
+                       max="10">
+                <p class="help-text">Number of retries on failure</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Authentication</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Authentication Type</label>
+                <select id="field-authType" class="w-full compact-select">
+                    <option value="none">None</option>
+                    <option value="basic">Basic Authentication</option>
+                    <option value="bearer" selected>Bearer Token</option>
+                    <option value="apiKey">API Key</option>
+                    <option value="oauth2">OAuth 2.0</option>
+                </select>
+                <p class="help-text">Select authentication method</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">API Key / Token</label>
+                <div class="form-input-group">
+                    <input type="password" id="field-apiKey"
+                           class="w-full compact-input"
+                           placeholder="Enter API key or token">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-apiKey')">
+                        Generate
+                    </button>
+                </div>
+                <p class="help-text">Authentication token or API key</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Enable Compression</span>
+                    <p class="help-text">Compress data with gzip before sending</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-compression" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Custom Headers</h5>
+        <div class="space-y-4">
+            <div>
+                <div class="key-value-list">
+                    <div class="key-value-item">
+                        <input type="text" value="X-Client-ID" placeholder="Header Name" class="compact-input">
+                        <input type="text" value="univa-gateway" placeholder="Header Value" class="compact-input">
+                        <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="key-value-item">
+                        <input type="text" value="X-Version" placeholder="Header Name" class="compact-input">
+                        <input type="text" value="2.4.1" placeholder="Header Value" class="compact-input">
+                        <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="p-2 text-center">
+                        <button type="button" class="text-xs text-primary hover:text-primaryHover" onclick="addKeyValueItem(this)">
+                            <i class="fa-solid fa-plus mr-1"></i>Add Header
+                        </button>
+                    </div>
+                </div>
+                <p class="help-text">Custom HTTP headers to include in requests</p>
+            </div>
+        </div>
+    </div>
+</div>

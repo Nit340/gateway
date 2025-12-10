@@ -1,0 +1,217 @@
+<div class="space-y-6">
+    <div class="form-section">
+        <h5 class="form-section-title">Broker Configuration</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
+                <select id="field-protocol" class="w-full compact-select" required>
+                    <option value="mqtt://">MQTT</option>
+                    <option value="mqtts://" selected>MQTTS (SSL)</option>
+                    <option value="tcp://">TCP</option>
+                    <option value="ws://">WebSocket</option>
+                    <option value="wss://">WebSocket Secure</option>
+                </select>
+                <p class="help-text">Communication protocol with broker</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Broker Hostname</label>
+                    <input type="text" id="field-host" 
+                           class="w-full compact-input"
+                           value="broker.company.com"
+                           placeholder="Enter broker hostname"
+                           required>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                    <input type="number" id="field-port" 
+                           class="w-full compact-input"
+                           value="8883"
+                           min="1"
+                           max="65535"
+                           placeholder="Port number"
+                           required>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
+                <input type="text" id="field-clientId" 
+                       class="w-full compact-input"
+                       value="univa-gateway-${randomId}"
+                       placeholder="Enter unique client ID"
+                       required>
+                <p class="help-text">Must be unique across all connections</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive Interval</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-keepAlive" 
+                           class="w-full compact-input"
+                           value="60"
+                           min="5"
+                           max="65535"
+                           required>
+                    <span class="text-xs text-slate-500">seconds</span>
+                </div>
+                <p class="help-text">Seconds between keep-alive packets</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Authentication</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                <input type="text" id="field-username" 
+                       class="w-full compact-input"
+                       placeholder="Enter username">
+                <p class="help-text">Leave empty if no authentication required</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                <div class="form-input-group">
+                    <input type="password" id="field-password"
+                           class="w-full compact-input"
+                           placeholder="Enter password">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-password')">
+                        Generate
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Enable TLS/SSL</span>
+                    <p class="help-text">Secure connection with TLS/SSL</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-tls" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">MQTT Options</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Quality of Service</label>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="field-qos" value="0">
+                        <span class="text-xs">0 - At most once (Fire and forget)</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="field-qos" value="1" checked>
+                        <span class="text-xs">1 - At least once (Acknowledged delivery)</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="field-qos" value="2">
+                        <span class="text-xs">2 - Exactly once (Assured delivery)</span>
+                    </label>
+                </div>
+                <p class="help-text">Message delivery guarantee level</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Clean Session</span>
+                    <p class="help-text">Start with a clean session (no persistent subscriptions)</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-cleanSession" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Retain Messages</span>
+                    <p class="help-text">Server should retain last message</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-retainMessages">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Publishing Options</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Publish Mode</label>
+                <select id="field-publishMode" class="w-full compact-select">
+                    <option value="onChange" selected>On Value Change</option>
+                    <option value="periodic">Periodic Interval</option>
+                    <option value="event">Event Based</option>
+                </select>
+                <p class="help-text">When to publish tag values</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Publish Interval</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-publishInterval" 
+                           class="w-full compact-input"
+                           value="1000"
+                           min="10"
+                           max="3600000">
+                    <span class="text-xs text-slate-500">ms</span>
+                </div>
+                <p class="help-text">Interval for periodic publishing</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Enable Batching</span>
+                    <p class="help-text">Group messages into batches</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-enableBatching">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
+                <input type="number" id="field-batchSize" 
+                       class="w-full compact-input"
+                       value="50"
+                       min="1"
+                       max="1000">
+                <p class="help-text">Messages per batch</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Last Will & Testament</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Will Topic</label>
+                <input type="text" id="field-lastWillTopic" 
+                       class="w-full compact-input"
+                       value="gateway/status"
+                       placeholder="topic/for/last/will">
+                <p class="help-text">Topic to publish last will message</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Will Message</label>
+                <input type="text" id="field-lastWillMessage" 
+                       class="w-full compact-input"
+                       value='{"status":"offline"}'
+                       placeholder="Last will message content">
+                <p class="help-text">Message published when connection drops unexpectedly</p>
+            </div>
+        </div>
+    </div>
+</div>

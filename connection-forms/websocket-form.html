@@ -1,0 +1,186 @@
+<div class="space-y-6">
+    <div class="form-section">
+        <h5 class="form-section-title">WebSocket Configuration</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
+                <select id="field-protocol" class="w-full compact-select" required>
+                    <option value="ws://">WebSocket</option>
+                    <option value="wss://" selected>WebSocket Secure</option>
+                </select>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">WebSocket Hostname</label>
+                    <input type="text" id="field-host" 
+                           class="w-full compact-input"
+                           value="ws.company.com"
+                           placeholder="Enter WebSocket hostname"
+                           required>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                    <input type="number" id="field-port" 
+                           class="w-full compact-input"
+                           value="443"
+                           min="1"
+                           max="65535"
+                           placeholder="Port number"
+                           required>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Path</label>
+                <input type="text" id="field-path" 
+                       class="w-full compact-input"
+                       value="/ws"
+                       placeholder="/websocket">
+                <p class="help-text">WebSocket endpoint path</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Subprotocols</label>
+                <input type="text" id="field-subprotocols" 
+                       class="w-full compact-input"
+                       value="mqtt, json"
+                       placeholder="protocol1, protocol2">
+                <p class="help-text">Comma-separated list of supported subprotocols</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Connection Options</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Ping Interval</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-pingInterval" 
+                           class="w-full compact-input"
+                           value="30"
+                           min="5"
+                           max="300">
+                    <span class="text-xs text-slate-500">seconds</span>
+                </div>
+                <p class="help-text">Seconds between keep-alive pings</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Reconnect Delay</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-reconnectDelay" 
+                           class="w-full compact-input"
+                           value="5"
+                           min="1"
+                           max="60">
+                    <span class="text-xs text-slate-500">seconds</span>
+                </div>
+                <p class="help-text">Seconds before attempting reconnect</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Max Reconnect Attempts</label>
+                <input type="number" id="field-maxReconnectAttempts" 
+                       class="w-full compact-input"
+                       value="10"
+                       min="0"
+                       max="50">
+                <p class="help-text">0 = infinite retries</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Auto Reconnect</span>
+                    <p class="help-text">Automatically reconnect on connection loss</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-autoReconnect" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Message Format</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Message Format</label>
+                <select id="field-messageFormat" class="w-full compact-select">
+                    <option value="json" selected>JSON</option>
+                    <option value="binary">Binary</option>
+                    <option value="text">Plain Text</option>
+                    <option value="protobuf">Protocol Buffers</option>
+                </select>
+                <p class="help-text">Format for WebSocket messages</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Max Message Size</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-maxMessageSize" 
+                           class="w-full compact-input"
+                           value="65536"
+                           min="1024"
+                           max="1048576">
+                    <span class="text-xs text-slate-500">bytes</span>
+                </div>
+                <p class="help-text">Maximum size of a single WebSocket message</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Compress Messages</span>
+                    <p class="help-text">Use permessage-deflate compression</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-compressMessages">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Advanced Options</h5>
+        <div class="space-y-4">
+            <div>
+                <div class="key-value-list">
+                    <div class="key-value-item">
+                        <input type="text" value="Origin" placeholder="Header Name" class="compact-input">
+                        <input type="text" value="https://univa-gateway.local" placeholder="Header Value" class="compact-input">
+                        <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="key-value-item">
+                        <input type="text" value="User-Agent" placeholder="Header Name" class="compact-input">
+                        <input type="text" value="UnivaIoTGateway/2.4.1" placeholder="Header Value" class="compact-input">
+                        <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="p-2 text-center">
+                        <button type="button" class="text-xs text-primary hover:text-primaryHover" onclick="addKeyValueItem(this)">
+                            <i class="fa-solid fa-plus mr-1"></i>Add Header
+                        </button>
+                    </div>
+                </div>
+                <p class="help-text">Custom HTTP headers for WebSocket handshake</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Verify SSL Certificate</span>
+                    <p class="help-text">Verify server SSL certificate (wss:// only)</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-verifySSL" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>

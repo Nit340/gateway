@@ -1,0 +1,196 @@
+<div class="space-y-6">
+    <div class="form-section">
+        <h5 class="form-section-title">UDP Configuration</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Remote Host</label>
+                <input type="text" id="field-remoteHost" 
+                       class="w-full compact-input"
+                       value="192.168.1.100"
+                       placeholder="hostname or IP address"
+                       required>
+                <p class="help-text">Destination hostname or IP address</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Remote Port</label>
+                <input type="number" id="field-remotePort" 
+                       class="w-full compact-input"
+                       value="5000"
+                       min="1"
+                       max="65535"
+                       required>
+                <p class="help-text">Destination UDP port</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Local Port</label>
+                <input type="number" id="field-localPort" 
+                       class="w-full compact-input"
+                       value="0"
+                       min="0"
+                       max="65535">
+                <p class="help-text">Local port to bind (0 = random available port)</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Address Family</label>
+                <select id="field-addressFamily" class="w-full compact-select">
+                    <option value="ipv4" selected>IPv4</option>
+                    <option value="ipv6">IPv6</option>
+                </select>
+                <p class="help-text">Internet Protocol version</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Stream Options</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Max Packet Size</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-packetSize" 
+                           class="w-full compact-input"
+                           value="1472"
+                           min="28"
+                           max="65507">
+                    <span class="text-xs text-slate-500">bytes</span>
+                </div>
+                <p class="help-text">Maximum UDP packet size (MTU - headers)</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Send Rate</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-sendRate" 
+                           class="w-full compact-input"
+                           value="100"
+                           min="1"
+                           max="10000">
+                    <span class="text-xs text-slate-500">packets/second</span>
+                </div>
+                <p class="help-text">Maximum packets per second</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Buffer Size</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-bufferSize" 
+                           class="w-full compact-input"
+                           value="65536"
+                           min="1024"
+                           max="1048576">
+                    <span class="text-xs text-slate-500">bytes</span>
+                </div>
+                <p class="help-text">Socket buffer size</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Broadcast Mode</span>
+                    <p class="help-text">Send as broadcast packets</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-broadcast">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Message Format</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Message Format</label>
+                <select id="field-messageFormat" class="w-full compact-select">
+                    <option value="binary" selected>Binary (Little Endian)</option>
+                    <option value="binary-be">Binary (Big Endian)</option>
+                    <option value="json">JSON (UDP/TCP)</option>
+                    <option value="string">Null-terminated String</option>
+                </select>
+                <p class="help-text">Format of UDP packet payload</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Include Timestamp</span>
+                    <p class="help-text">Add timestamp to each packet</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-includeTimestamp" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Include Sequence Number</span>
+                    <p class="help-text">Add sequence number for packet ordering</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-includeSequence" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Add Checksum</span>
+                    <p class="help-text">Add checksum to packets for integrity</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-checksum">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Advanced Options</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Time To Live (TTL)</label>
+                <input type="number" id="field-ttl" 
+                       class="w-full compact-input"
+                       value="64"
+                       min="1"
+                       max="255">
+                <p class="help-text">IP packet TTL (hop count)</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Multicast</span>
+                    <p class="help-text">Send to multicast address</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-multicast">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Multicast Group</label>
+                <input type="text" id="field-multicastGroup" 
+                       class="w-full compact-input"
+                       value="239.255.0.1"
+                       placeholder="239.x.x.x">
+                <p class="help-text">Multicast group address (if multicast enabled)</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Don't Fragment</span>
+                    <p class="help-text">Set IP Don't Fragment flag</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-dontFragment" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
