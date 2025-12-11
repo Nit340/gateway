@@ -41,7 +41,7 @@
         .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
         .radio-checkbox:checked { background-color: #2563EB; border-color: #2563EB; }
         
-        /* Sidebar Styles */
+        /* Sidebar Styles - Hidden by default */
         .sidebar {
             width: 260px;
             background: white;
@@ -49,12 +49,47 @@
             height: 100vh;
             overflow-y: auto;
             position: fixed;
-            left: 0;
+            left: -260px; /* Hidden by default */
             top: 0;
-            z-index: 40;
+            z-index: 50;
             display: flex;
             flex-direction: column;
-            transition: transform 0.3s ease;
+            transition: left 0.3s ease;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.active {
+            left: 0; /* Visible when active */
+        }
+        
+        .sidebar.collapsed {
+            width: 70px;
+        }
+        
+        .sidebar.collapsed .logo-text,
+        .sidebar.collapsed .section-title,
+        .sidebar.collapsed .nav-item span:not(.nav-item-count),
+        .sidebar.collapsed .user-info,
+        .sidebar.collapsed .sidebar-footer {
+            display: none;
+        }
+        
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 12px 0;
+        }
+        
+        .sidebar.collapsed .nav-item i {
+            margin-right: 0;
+            font-size: 16px;
+        }
+        
+        .sidebar.collapsed .nav-item-count {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 10px;
+            padding: 1px 4px;
         }
         
         .sidebar-logo {
@@ -64,12 +99,41 @@
             padding: 0 20px;
             border-bottom: 1px solid #E2E8F0;
             background: white;
+            position: relative;
         }
         
         .logo-text {
             font-weight: 700;
             font-size: 18px;
             color: #2563EB;
+            transition: opacity 0.3s;
+        }
+        
+        .sidebar-toggle-btn {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #64748B;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-toggle-btn:hover {
+            background: #F1F5F9;
+            color: #2563EB;
+        }
+        
+        .sidebar.collapsed .sidebar-toggle-btn {
+            transform: translateY(-50%) rotate(180deg);
         }
         
         .sidebar-nav {
@@ -91,6 +155,14 @@
             padding: 0 20px 8px;
             margin-bottom: 4px;
             border-bottom: 1px solid #F1F5F9;
+            transition: opacity 0.3s;
+        }
+        
+        .sidebar.collapsed .section-title {
+            padding: 0 8px 8px;
+            text-align: center;
+            font-size: 9px;
+            border-bottom: none;
         }
         
         .nav-item {
@@ -104,6 +176,7 @@
             transition: all 0.2s;
             border-left: 3px solid transparent;
             cursor: pointer;
+            position: relative;
         }
         
         .nav-item:hover {
@@ -118,11 +191,17 @@
             font-weight: 600;
         }
         
+        .sidebar.collapsed .nav-item.active {
+            border-left: none;
+            border-right: 3px solid #2563EB;
+        }
+        
         .nav-item i {
             width: 20px;
             margin-right: 12px;
             font-size: 14px;
             text-align: center;
+            transition: margin 0.3s;
         }
         
         .nav-item-count {
@@ -139,6 +218,7 @@
             padding: 16px 20px;
             border-top: 1px solid #E2E8F0;
             background: white;
+            transition: opacity 0.3s;
         }
         
         .user-profile {
@@ -151,91 +231,131 @@
             width: 36px;
             height: 36px;
             border-radius: 8px;
-            background: #2563EB;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: 600;
+            flex-shrink: 0;
         }
         
-        .sidebar-toggle {
-            display: none;
-            position: fixed;
-            left: 260px;
-            top: 20px;
-            z-index: 100;
-            background: white;
-            border: 1px solid #E2E8F0;
-            border-left: none;
-            border-radius: 0 6px 6px 0;
-            padding: 10px 8px;
-            cursor: pointer;
+        .user-info h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1E293B;
+            margin-bottom: 2px;
+        }
+        
+        .user-info p {
+            font-size: 12px;
             color: #64748B;
-            transition: all 0.3s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .sidebar.collapsed {
-            transform: translateX(-260px);
-        }
-        
-        .sidebar.collapsed ~ .main-content-with-sidebar {
-            margin-left: 0;
-        }
-        
-        .sidebar.collapsed + .sidebar-toggle {
-            left: 0;
         }
         
         .main-content-with-sidebar {
-            margin-left: 260px;
+            margin-left: 0;
             transition: margin-left 0.3s;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
         
+        .sidebar.active ~ .main-content-with-sidebar {
+            margin-left: 260px;
+        }
+        
+        .sidebar.active.collapsed ~ .main-content-with-sidebar {
+            margin-left: 70px;
+        }
+        
         @media (max-width: 1024px) {
             .sidebar {
-                transform: translateX(-260px);
+                left: -260px;
             }
             
             .sidebar.active {
-                transform: translateX(0);
+                left: 0;
                 box-shadow: 0 0 20px rgba(0,0,0,0.1);
             }
             
-            .sidebar-toggle {
-                display: block;
-                left: 0;
-            }
-            
-            .sidebar.active + .sidebar-toggle {
-                left: 260px;
-            }
-            
-            .main-content-with-sidebar {
+            .sidebar.active ~ .main-content-with-sidebar {
                 margin-left: 0;
             }
         }
         
-        /* Remove old signal strength CSS */
+        /* Header Logo */
+        .header-logo {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        
+        .header-logo:hover {
+            background: #F1F5F9;
+        }
+        
+        .header-logo .logo-icon {
+            font-size: 20px;
+            color: #2563EB;
+            margin-right: 8px;
+        }
+        
+        .header-logo .logo-text-header {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 45;
+            display: none;
+        }
+        
+        .sidebar.active + .sidebar-overlay {
+            display: block;
+        }
+        
+        /* Updated WiFi Signal Strength Styles */
         .signal-strength {
             display: flex;
-            gap: 2px;
+            align-items: flex-end;
+            gap: 3px;
+            height: 24px;
         }
         
         .signal-bar {
-            width: 4px;
-            border-radius: 1px;
+            width: 6px;
+            border-radius: 2px;
+            transition: background-color 0.3s;
         }
         
-        .signal-bar.active {
+        .signal-bar.excellent {
             background-color: #10B981;
         }
         
-        .signal-bar.inactive {
+        .signal-bar.good {
+            background-color: #3B82F6;
+        }
+        
+        .signal-bar.fair {
+            background-color: #F59E0B;
+        }
+        
+        .signal-bar.poor {
+            background-color: #EF4444;
+        }
+        
+        .signal-bar.none {
             background-color: #E2E8F0;
         }
     </style>
@@ -244,6 +364,8 @@
     
     <!-- Sidebar will be inserted here by JavaScript -->
     <div id="sidebar-container"></div>
+    <!-- Overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <!-- Main Content Container -->
     <div class="main-content-with-sidebar">
@@ -252,7 +374,16 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 <!-- Left: Logo & Breadcrumb -->
                 <div class="flex items-center space-x-4">
+                    <!-- Header Logo - Click to toggle sidebar -->
+                    <div class="header-logo" id="headerLogo">
+                        <i class="fa-solid fa-satellite-dish logo-icon"></i>
+                        <span class="logo-text-header">Innospace</span>
+                        <!-- Add a toggle icon next to the logo -->
+                        <i class="fa-solid fa-bars ml-2 text-slate-400 text-sm"></i>
+                    </div>
+                    
                     <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
                         <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
                         <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
                         <span class="text-slate-900 font-medium" id="page-title">General Configuration</span>
@@ -326,10 +457,18 @@
                                 <input type="text" value="Chennai Port - Zone A" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Site name or description">
                             </div>
                             
-                            <!-- Simplified Location Section - No GPS option -->
                             <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Location</label>
-                                <p class="text-xs text-slate-500 mb-3">Geographic coordinates for mapping and zoning</p>
+                                <label class="block text-sm font-medium text-slate-700 mb-3">Location Mode</label>
+                                <div class="flex items-center space-x-6">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="location-mode" value="manual" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                        <span class="ml-2 text-sm text-slate-700">Manual Entry</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="location-mode" value="gps" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                        <span class="ml-2 text-sm text-slate-700">GPS Automatic</span>
+                                    </label>
+                                </div>
                             </div>
                             
                             <div class="grid grid-cols-2 gap-4 md:col-span-2">
@@ -343,11 +482,10 @@
                                 </div>
                             </div>
                             
-                            <!-- Changed from "Asset/Crane ID" to just "Asset ID" -->
                             <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Asset ID</label>
-                                <input type="text" value="CT-12" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Optional asset identifier">
-                                <p class="text-xs text-slate-500 mt-1">Used for asset identification in the system</p>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Asset/Crane ID</label>
+                                <input type="text" value="CRN-CT-12" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Optional asset identifier">
+                                <p class="text-xs text-slate-500 mt-1">Used by CraneIQ for zoning, map overlays, and anti-collision</p>
                             </div>
                         </div>
                     </section>
@@ -518,15 +656,20 @@
                                     <input type="password" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="WiFi password">
                                 </div>
                             </div>
-                            <!-- Improved Signal Strength with Font Awesome icon -->
-                            <div class="flex items-center space-x-3">
+                            <!-- FIXED: WiFi Signal Strength - Now left-to-right (weakest on left, strongest on right) -->
+                            <div class="flex items-center space-x-2">
                                 <span class="text-sm text-slate-700">Signal Strength:</span>
-                                <div class="flex items-center">
-                                    <!-- Strong signal icon with color based on strength -->
-                                    <i class="fa-solid fa-wifi text-lg text-emerald-500"></i>
-                                    <span class="ml-2 text-sm font-medium text-emerald-700">Excellent</span>
-                                    <span class="ml-2 text-xs text-slate-500">(-45 dBm)</span>
+                                <div class="signal-strength">
+                                    <div class="signal-bar none" style="height: 4px;"></div>
+                                    <div class="signal-bar poor" style="height: 8px;"></div>
+                                    <div class="signal-bar fair" style="height: 12px;"></div>
+                                    <div class="signal-bar good" style="height: 16px;"></div>
+                                    <div class="signal-bar excellent" style="height: 20px;"></div>
                                 </div>
+                                <span class="text-sm font-medium text-slate-700 ml-2">Good</span>
+                                <button type="button" onclick="scanWiFi()" class="ml-2 text-xs text-primary hover:text-primaryHover">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
                             </div>
                         </div>
                         
@@ -546,17 +689,12 @@
                                     <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
                                     <input type="password" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                                 </div>
-                                <!-- Improved Signal Strength with Font Awesome icon -->
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Signal Strength</label>
-                                    <div class="flex items-center space-x-3">
-                                        <div class="relative">
-                                            <!-- Cellular signal icon -->
-                                            <i class="fa-solid fa-signal text-lg text-emerald-500"></i>
-                                        </div>
-                                        <div>
-                                            <span class="text-sm font-mono font-medium">-67 dBm</span>
-                                            <span class="ml-2 text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-medium">Good</span>
+                                <div class="flex items-center">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Signal Strength</label>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-sm font-mono">-67 dBm</span>
+                                            <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full">Good</span>
                                         </div>
                                     </div>
                                 </div>
@@ -671,33 +809,6 @@
                 </div>
             </div>
         </main>
-
-        <!-- Footer Actions -->
-        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center">
-                        <i class="fa-solid fa-plug mr-2 text-slate-400"></i> Test Connection
-                    </button>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
-                        <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
-                    </button>
-                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                    <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center">
-                        <i class="fa-solid fa-power-off mr-2"></i> Reboot Gateway
-                    </button>
-                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
-                        Cancel
-                    </button>
-                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
-                    </button>
-                </div>
-            </div>
-        </footer>
     </div> <!-- End of main content container -->
 
     <script>
@@ -727,7 +838,7 @@
             }
         }
 
-        // Create fallback sidebar if fetch fails
+        // Create fallback sidebar with toggle
         function createFallbackSidebar() {
             const fallbackHTML = `
                 <div class="sidebar" id="sidebar">
@@ -735,15 +846,50 @@
                         <div class="logo-text">
                             <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
                         </div>
+                        <button class="sidebar-toggle-btn" id="sidebarCollapseBtn">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
                     </div>
                     <div class="sidebar-nav">
                         <div class="nav-section">
                             <div class="section-title">Configuration</div>
                             <a href="general-configuration.html" class="nav-item active">
-                                <i class="fa-solid fa-sliders"></i> General Configuration
+                                <i class="fa-solid fa-sliders"></i> <span>General Configuration</span>
                             </a>
                             <a href="device-management.html" class="nav-item">
-                                <i class="fa-solid fa-microchip"></i> Device management
+                                <i class="fa-solid fa-microchip"></i> <span>Device management</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-shield-halved"></i> <span>Safety Logic</span>
+                                <span class="nav-item-count">12</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-plug"></i> <span>Protocols</span>
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">Monitoring</div>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-chart-line"></i> <span>Dashboard</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-bell"></i> <span>Alerts</span>
+                                <span class="nav-item-count">3</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-file-lines"></i> <span>Logs</span>
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">System</div>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-users"></i> <span>Users</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-download"></i> <span>Updates</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-gear"></i> <span>Settings</span>
                             </a>
                         </div>
                     </div>
@@ -758,9 +904,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="sidebar-toggle" id="sidebarToggle">
-                    <i class="fa-solid fa-bars"></i>
                 </div>
             `;
             
@@ -790,41 +933,156 @@
         // Initialize sidebar functionality
         function initializeSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
             
-            if (!sidebar || !sidebarToggle) return;
+            if (!sidebar) return;
             
-            // Toggle sidebar
-            sidebarToggle.addEventListener('click', function() {
-                sidebar.classList.toggle('active');
-                
-                // Toggle icon
-                const icon = this.querySelector('i');
-                if (sidebar.classList.contains('active')) {
-                    icon.className = 'fa-solid fa-times';
-                } else {
-                    icon.className = 'fa-solid fa-bars';
+            // Toggle sidebar collapse (expand/collapse within sidebar)
+            if (sidebarCollapseBtn) {
+                sidebarCollapseBtn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering parent click
+                    sidebar.classList.toggle('collapsed');
+                    
+                    // Toggle icon
+                    const icon = this.querySelector('i');
+                    if (sidebar.classList.contains('collapsed')) {
+                        icon.className = 'fa-solid fa-chevron-right';
+                    } else {
+                        icon.className = 'fa-solid fa-chevron-left';
+                    }
+                });
+            }
+            
+            // Close sidebar when clicking overlay (mobile)
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', function() {
+                    closeSidebar();
+                });
+            }
+            
+            // Close sidebar when clicking outside on desktop
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth > 1024) {
+                    const isClickInsideSidebar = sidebar.contains(event.target);
+                    const isClickOnHeaderLogo = event.target.closest('#headerLogo');
+                    
+                    if (!isClickInsideSidebar && !isClickOnHeaderLogo && sidebar.classList.contains('active')) {
+                        closeSidebar();
+                    }
                 }
             });
             
-            // Handle mobile menu
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.add('active');
-                sidebarToggle.style.left = '260px';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
-            }
-            
-            // Update on resize
-            window.addEventListener('resize', handleResponsive);
+            // Close sidebar on escape key
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && sidebar.classList.contains('active')) {
+                    closeSidebar();
+                }
+            });
         }
 
-        // Simple Clock
-        setInterval(() => {
-            const now = new Date();
-            if (document.getElementById('clock')) {
-                document.getElementById('clock').innerText = now.toLocaleTimeString();
+        // Toggle sidebar open/close
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
+            
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+                
+                // Toggle the hamburger icon to X when sidebar is open
+                if (headerLogoIcon) {
+                    if (sidebar.classList.contains('active')) {
+                        headerLogoIcon.className = 'fa-solid fa-times ml-2 text-slate-400 text-sm';
+                    } else {
+                        headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
+                    }
+                }
+                
+                // Update overlay
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    if (sidebar.classList.contains('active')) {
+                        overlay.style.display = 'block';
+                    } else {
+                        overlay.style.display = 'none';
+                    }
+                }
             }
-        }, 1000);
+        }
+
+        // Close sidebar
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
+            
+            if (sidebar) {
+                sidebar.classList.remove('active');
+                
+                // Reset hamburger icon
+                if (headerLogoIcon) {
+                    headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
+                }
+                
+                // Hide overlay
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
+        }
+
+        // WiFi Signal Strength Functions
+        function updateWiFiSignalStrength(strength) {
+            // strength can be 0-4 (0=none, 1=poor, 2=fair, 3=good, 4=excellent)
+            const signalBars = document.querySelectorAll('#wifi-config .signal-bar');
+            const strengthTexts = ['None', 'Poor', 'Fair', 'Good', 'Excellent'];
+            
+            // Reset all bars to none
+            signalBars.forEach(bar => {
+                bar.className = 'signal-bar none';
+            });
+            
+            // Activate bars from left to right
+            for (let i = 0; i <= strength; i++) {
+                if (i < signalBars.length) {
+                    const bar = signalBars[i];
+                    if (i === 0) bar.className = 'signal-bar poor';
+                    else if (i === 1) bar.className = 'signal-bar fair';
+                    else if (i === 2) bar.className = 'signal-bar good';
+                    else if (i === 3) bar.className = 'signal-bar good';
+                    else if (i === 4) bar.className = 'signal-bar excellent';
+                }
+            }
+            
+            // Update strength text
+            const strengthSpan = document.querySelector('#wifi-config .signal-strength + span');
+            if (strengthSpan) {
+                strengthSpan.textContent = strengthTexts[strength];
+            }
+        }
+
+        function scanWiFi() {
+            const scanButton = document.querySelector('#wifi-config button');
+            const originalHTML = scanButton.innerHTML;
+            
+            // Show scanning animation
+            scanButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            scanButton.disabled = true;
+            
+            // Simulate WiFi scan
+            setTimeout(() => {
+                // Random signal strength between 1-4
+                const randomStrength = Math.floor(Math.random() * 4) + 1;
+                updateWiFiSignalStrength(randomStrength);
+                
+                // Restore button
+                scanButton.innerHTML = '<i class="fa-solid fa-rotate"></i>';
+                scanButton.disabled = false;
+                
+                // Show notification
+                alert(`WiFi scan complete. Signal strength: ${['None', 'Poor', 'Fair', 'Good', 'Excellent'][randomStrength]}`);
+            }, 1500);
+        }
 
         // Network Configuration Functions
         function toggleNetworkConfig() {
@@ -840,6 +1098,8 @@
                 document.getElementById('ethernet-config').style.display = 'block';
             } else if (networkMode === 'wifi') {
                 document.getElementById('wifi-config').style.display = 'block';
+                // Initialize WiFi signal strength
+                updateWiFiSignalStrength(3); // Start with "Good" signal
             } else if (networkMode === 'lte') {
                 document.getElementById('cellular-config').style.display = 'block';
             }
@@ -862,50 +1122,9 @@
         // Enable Save button on interaction
         function checkFormChanges() {
             const saveBtn = document.getElementById('header-save-btn');
-            const footerSaveBtn = document.getElementById('footer-save-btn');
             if (saveBtn) {
                 saveBtn.disabled = false;
                 saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-            if (footerSaveBtn) {
-                footerSaveBtn.disabled = false;
-                footerSaveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-        }
-
-        // Close sidebar when clicking outside on mobile
-        function handleSidebarClickOutside(event) {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            const isMobile = window.innerWidth <= 1024;
-            
-            if (isMobile && sidebar.classList.contains('active')) {
-                const isClickInsideSidebar = sidebar.contains(event.target);
-                const isClickOnToggle = sidebarToggle.contains(event.target);
-                
-                if (!isClickInsideSidebar && !isClickOnToggle) {
-                    sidebar.classList.remove('active');
-                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-                    sidebarToggle.style.left = '0';
-                }
-            }
-        }
-
-        // Handle responsive behavior
-        function handleResponsive() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'block';
-                sidebarToggle.style.left = '0';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-            } else {
-                sidebar.classList.remove('collapsed');
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'none';
-                sidebarToggle.style.left = '260px';
             }
         }
 
@@ -913,19 +1132,14 @@
         function saveConfiguration() {
             // In a real implementation, this would send data to backend
             const saveBtn = document.getElementById('header-save-btn');
-            const footerSaveBtn = document.getElementById('footer-save-btn');
             
             saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-            footerSaveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
             saveBtn.disabled = true;
-            footerSaveBtn.disabled = true;
             
             // Simulate API call
             setTimeout(() => {
                 saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Save';
-                footerSaveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration';
                 saveBtn.disabled = false;
-                footerSaveBtn.disabled = false;
                 
                 // Show success message
                 alert('Configuration saved successfully!');
@@ -936,6 +1150,12 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Load sidebar first
             loadSidebar();
+            
+            // Header logo click to toggle sidebar
+            const headerLogo = document.getElementById('headerLogo');
+            if (headerLogo) {
+                headerLogo.addEventListener('click', toggleSidebar);
+            }
             
             // Network mode toggle
             document.querySelectorAll('input[name="network-mode"]').forEach(radio => {
@@ -964,15 +1184,8 @@
                 }
             });
             
-            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
-                if (confirm('Discard all unsaved changes?')) {
-                    window.location.reload();
-                }
-            });
-            
-            // Handle save buttons
+            // Handle save button
             document.getElementById('header-save-btn').addEventListener('click', saveConfiguration);
-            document.getElementById('footer-save-btn').addEventListener('click', saveConfiguration);
             
             // Handle gateway select
             const gatewaySelect = document.getElementById('gateway-select');
@@ -986,14 +1199,29 @@
                 });
             }
             
-            // Add click outside handler for sidebar
-            document.addEventListener('click', handleSidebarClickOutside);
-            
             // Initial responsive setup
             setTimeout(() => {
                 handleResponsive();
             }, 100);
         });
+
+        // Handle responsive behavior
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            
+            if (window.innerWidth <= 1024) {
+                // On mobile, ensure sidebar is hidden by default
+                if (sidebar && sidebar.classList.contains('active')) {
+                    sidebar.classList.remove('active');
+                }
+            } else {
+                // On desktop, ensure overlay is hidden
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
+        }
     </script>
 </body>
 </html>
