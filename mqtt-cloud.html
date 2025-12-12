@@ -81,7 +81,7 @@
             overflow-y: auto;
         }
         
-        /* Sidebar Styles - Same as your General Configuration page */
+        /* Sidebar Styles - Same as General Configuration page */
         .sidebar {
             width: 260px;
             background: white;
@@ -89,12 +89,47 @@
             height: 100vh;
             overflow-y: auto;
             position: fixed;
-            left: 0;
+            left: -260px; /* Hidden by default */
             top: 0;
-            z-index: 40;
+            z-index: 50;
             display: flex;
             flex-direction: column;
-            transition: transform 0.3s ease;
+            transition: left 0.3s ease;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar.active {
+            left: 0; /* Visible when active */
+        }
+        
+        .sidebar.collapsed {
+            width: 70px;
+        }
+        
+        .sidebar.collapsed .logo-text,
+        .sidebar.collapsed .section-title,
+        .sidebar.collapsed .nav-item span:not(.nav-item-count),
+        .sidebar.collapsed .user-info,
+        .sidebar.collapsed .sidebar-footer {
+            display: none;
+        }
+        
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 12px 0;
+        }
+        
+        .sidebar.collapsed .nav-item i {
+            margin-right: 0;
+            font-size: 16px;
+        }
+        
+        .sidebar.collapsed .nav-item-count {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 10px;
+            padding: 1px 4px;
         }
         
         .sidebar-logo {
@@ -104,12 +139,41 @@
             padding: 0 20px;
             border-bottom: 1px solid #E2E8F0;
             background: white;
+            position: relative;
         }
         
         .logo-text {
             font-weight: 700;
             font-size: 18px;
             color: #2563EB;
+            transition: opacity 0.3s;
+        }
+        
+        .sidebar-toggle-btn {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #64748B;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-toggle-btn:hover {
+            background: #F1F5F9;
+            color: #2563EB;
+        }
+        
+        .sidebar.collapsed .sidebar-toggle-btn {
+            transform: translateY(-50%) rotate(180deg);
         }
         
         .sidebar-nav {
@@ -131,6 +195,14 @@
             padding: 0 20px 8px;
             margin-bottom: 4px;
             border-bottom: 1px solid #F1F5F9;
+            transition: opacity 0.3s;
+        }
+        
+        .sidebar.collapsed .section-title {
+            padding: 0 8px 8px;
+            text-align: center;
+            font-size: 9px;
+            border-bottom: none;
         }
         
         .nav-item {
@@ -144,6 +216,7 @@
             transition: all 0.2s;
             border-left: 3px solid transparent;
             cursor: pointer;
+            position: relative;
         }
         
         .nav-item:hover {
@@ -158,17 +231,34 @@
             font-weight: 600;
         }
         
+        .sidebar.collapsed .nav-item.active {
+            border-left: none;
+            border-right: 3px solid #2563EB;
+        }
+        
         .nav-item i {
             width: 20px;
             margin-right: 12px;
             font-size: 14px;
             text-align: center;
+            transition: margin 0.3s;
+        }
+        
+        .nav-item-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
         }
         
         .sidebar-footer {
             padding: 16px 20px;
             border-top: 1px solid #E2E8F0;
             background: white;
+            transition: opacity 0.3s;
         }
         
         .user-profile {
@@ -181,73 +271,98 @@
             width: 36px;
             height: 36px;
             border-radius: 8px;
-            background: #2563EB;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: 600;
+            flex-shrink: 0;
         }
         
-        .sidebar-toggle {
-            display: none;
-            position: fixed;
-            left: 260px;
-            top: 20px;
-            z-index: 100;
-            background: white;
-            border: 1px solid #E2E8F0;
-            border-left: none;
-            border-radius: 0 6px 6px 0;
-            padding: 10px 8px;
-            cursor: pointer;
+        .user-info h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1E293B;
+            margin-bottom: 2px;
+        }
+        
+        .user-info p {
+            font-size: 12px;
             color: #64748B;
-            transition: all 0.3s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .sidebar.collapsed {
-            transform: translateX(-260px);
-        }
-        
-        .sidebar.collapsed ~ .main-content-with-sidebar {
-            margin-left: 0;
-        }
-        
-        .sidebar.collapsed + .sidebar-toggle {
-            left: 0;
         }
         
         .main-content-with-sidebar {
-            margin-left: 260px;
+            margin-left: 0;
             transition: margin-left 0.3s;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
         
+        .sidebar.active ~ .main-content-with-sidebar {
+            margin-left: 260px;
+        }
+        
+        .sidebar.active.collapsed ~ .main-content-with-sidebar {
+            margin-left: 70px;
+        }
+        
         @media (max-width: 1024px) {
             .sidebar {
-                transform: translateX(-260px);
+                left: -260px;
             }
             
             .sidebar.active {
-                transform: translateX(0);
+                left: 0;
                 box-shadow: 0 0 20px rgba(0,0,0,0.1);
             }
             
-            .sidebar-toggle {
-                display: block;
-                left: 0;
-            }
-            
-            .sidebar.active + .sidebar-toggle {
-                left: 260px;
-            }
-            
-            .main-content-with-sidebar {
+            .sidebar.active ~ .main-content-with-sidebar {
                 margin-left: 0;
             }
+        }
+        
+        /* Header Logo */
+        .header-logo {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        
+        .header-logo:hover {
+            background: #F1F5F9;
+        }
+        
+        .header-logo .logo-icon {
+            font-size: 20px;
+            color: #2563EB;
+            margin-right: 8px;
+        }
+        
+        .header-logo .logo-text-header {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+        
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 45;
+            display: none;
+        }
+        
+        .sidebar.active + .sidebar-overlay {
+            display: block;
         }
         
         /* Compact Table Styles */
@@ -643,59 +758,214 @@
     
     <!-- Sidebar will be inserted here by JavaScript -->
     <div id="sidebar-container"></div>
+    <!-- Overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <!-- Existing Modals -->
     <div id="addTagModal" class="modal">
-        <!-- ... existing modal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Add Tags to Publish</h3>
+                    <button onclick="closeModal('addTagModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <input type="text" placeholder="Search tags..." class="w-full compact-input">
+                </div>
+                <div class="border border-slate-200 rounded max-h-64 overflow-y-auto">
+                    <!-- Tags list would go here -->
+                </div>
+                <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="closeModal('addTagModal')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="addSelectedTags()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Add Selected Tags
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <div id="uploadCertModal" class="modal">
-        <!-- ... existing modal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Upload Certificate</h3>
+                    <button onclick="closeModal('uploadCertModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Certificate Type</label>
+                        <select class="w-full compact-select">
+                            <option>CA Certificate</option>
+                            <option>Client Certificate</option>
+                            <option>Private Key</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select File</label>
+                        <input type="file" class="w-full">
+                        <p class="text-xs text-slate-500 mt-1">Supported formats: .pem, .crt, .cer, .key</p>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="closeModal('uploadCertModal')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="uploadCertificate()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Upload
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="testResultsModal" class="modal">
-        <!-- ... existing modal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Connection Test Results</h3>
+                    <button onclick="closeModal('testResultsModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-700">Connection Status:</span>
+                        <span class="status-indicator online">Connected</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-700">Latency:</span>
+                        <span class="text-sm font-mono text-slate-900">124 ms</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-slate-700">Authentication:</span>
+                        <span class="text-sm font-mono text-green-600">Success</span>
+                    </div>
+                </div>
+                <div class="mt-6 p-4 bg-green-50 rounded border border-green-200">
+                    <div class="flex items-center">
+                        <i class="fa-solid fa-check-circle text-green-600 mr-2"></i>
+                        <span class="text-sm text-green-800">Connection test successful! All systems operational.</span>
+                    </div>
+                </div>
+                <div class="flex justify-end mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="closeModal('testResultsModal')" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- NEW: Connection Manager Modal (for adding new connections) -->
     <div id="connectionManagerModal" class="modal">
-        <!-- ... existing modal content ... -->
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-slate-900">Add New Connection</h3>
+                    <button onclick="closeModal('connectionManagerModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <!-- Connection Type Selection -->
+                <div id="connectionTypeSelection">
+                    <h4 class="text-sm font-semibold text-slate-900 mb-4">Select Connection Type</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="connectionTypesGrid"></div>
+                </div>
+                
+                <!-- Connection Form -->
+                <div id="connectionFormContainer" class="hidden">
+                    <h4 id="formTitle" class="text-sm font-semibold text-slate-900 mb-6"></h4>
+                    <div id="formContent" class="space-y-6 max-h-[50vh] overflow-y-auto pr-2"></div>
+                    <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+                        <button onclick="cancelConnectionForm()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                            Cancel
+                        </button>
+                        <button onclick="saveNewConnection()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Connection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Main Content Container -->
     <div class="main-content-with-sidebar">
         <!-- Header -->
-        <header class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
-            <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 h-14 flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="hidden md:flex items-center text-xs text-slate-500">
-                        <span><i class="fa-solid fa-cloud mr-1"></i>Protocols</span>
-                        <i class="fa-solid fa-chevron-right text-xs mx-1"></i>
-                        <span class="text-slate-900 font-medium">Cloud Connection Manager</span>
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <!-- Header Logo - Click to toggle sidebar -->
+                    <div class="header-logo" id="headerLogo">
+                        <i class="fa-solid fa-satellite-dish logo-icon"></i>
+                        <span class="logo-text-header">Innospace</span>
+                        <!-- Add a toggle icon next to the logo -->
+                        <i class="fa-solid fa-bars ml-2 text-slate-400 text-sm"></i>
+                    </div>
+                    
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span><i class="fa-solid fa-cloud mr-2"></i>Protocols</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">Cloud Connection Manager</span>
                     </div>
                 </div>
 
-                <div class="flex items-center space-x-3">
-                    <button class="text-slate-500 hover:text-slate-700 font-medium text-xs px-2 py-1 rounded hover:bg-slate-100" onclick="cancelChanges()">
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
                         Cancel
                     </button>
-                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-xs px-3 py-1 rounded shadow-sm flex items-center" onclick="saveAllConnections()">
-                        <i class="fa-solid fa-floppy-disk mr-1"></i> Save
+                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="header-save-btn">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
                     </button>
                 </div>
             </div>
         </header>
 
         <!-- Main Content -->
+        <<!-- Main Content -->
         <main class="flex-grow">
-            <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-6">
-                <div class="mb-6">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- ADDED BACK THE TITLE SECTION WITH ADD CONNECTION BUTTON -->
+                <div class="mb-8">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h1 class="text-xl font-bold text-slate-900">Cloud Connection Manager</h1>
-                            <p class="text-slate-500 text-xs mt-1">Configure and manage connections to various cloud services</p>
+                            <h1 class="text-2xl font-bold text-slate-900">Cloud Connection Manager</h1>
+                            <p class="text-slate-500 text-sm mt-1">Configure and manage connections to various cloud services</p>
                         </div>
                         <div class="flex items-center space-x-2">
+                            <!-- ADD CONNECTION BUTTON -->
                             <button onclick="showConnectionManager()" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
                                 <i class="fa-solid fa-plus mr-1 text-xs"></i> Add Connection
                             </button>
@@ -706,343 +976,162 @@
                     </div>
                 </div>
 
-                <!-- Two Column Layout -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <!-- Left Column: Connections List -->
-                    <section class="lg:col-span-1">
-                        <div class="config-card">
-                            <div class="p-4 border-b border-border">
-                                <h2 class="text-sm font-semibold text-slate-800 flex items-center">
-                                    <i class="fa-solid fa-list mr-2 text-primary text-xs"></i> 
-                                    Active Connections (<span id="connectionCount">5</span>)
-                                </h2>
+                <div class="space-y-8">
+                    <!-- Two Column Layout -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Left Column: Connections List -->
+                        <section class="lg:col-span-1">
+                            <div class="config-card">
+                                <div class="p-4 border-b border-border">
+                                    <h2 class="text-sm font-semibold text-slate-800 flex items-center">
+                                        <i class="fa-solid fa-list mr-2 text-primary text-xs"></i> 
+                                        Active Connections (<span id="connectionCount">0</span>)
+                                    </h2>
+                                </div>
+                                
+                                <div class="p-3 space-y-3" id="connectionsList">
+                                    <!-- Connections will be dynamically loaded here -->
+                                </div>
                             </div>
-                            
-                            <div class="p-3 space-y-3" id="connectionsList">
-                                <!-- Connections will be dynamically loaded here -->
-                            </div>
-                        </div>
-                    </section>
+                        </section>
 
-                    <!-- Right Column: Configuration -->
-                    <section class="lg:col-span-2 space-y-4">
-                        <!-- Connection Status Card -->
-                        <div class="config-card p-4">
-                            <div class="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 class="text-sm font-semibold text-slate-900" id="connectionName">Primary MQTT Broker</h3>
-                                    <p class="text-xs text-slate-500" id="connectionDescription">Primary cloud connection for telemetry data</p>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-medium text-slate-700">Enabled</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" checked id="mqtt-enabled">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <!-- Quick Stats -->
-                            <div class="grid grid-cols-4 gap-3 mb-4">
-                                <div class="bg-slate-50 p-2 rounded text-center">
-                                    <div class="text-xs text-slate-500">Messages</div>
-                                    <div class="text-sm font-bold text-slate-900" id="statMessages">14,593</div>
-                                </div>
-                                <div class="bg-slate-50 p-2 rounded text-center">
-                                    <div class="text-xs text-slate-500">Errors</div>
-                                    <div class="text-sm font-bold text-success" id="statErrors">0</div>
-                                </div>
-                                <div class="bg-slate-50 p-2 rounded text-center">
-                                    <div class="text-xs text-slate-500">Last Sent</div>
-                                    <div class="text-sm font-bold text-slate-900" id="statLastSent">2.3s ago</div>
-                                </div>
-                                <div class="bg-slate-50 p-2 rounded text-center">
-                                    <div class="text-xs text-slate-500">Latency</div>
-                                    <div class="text-sm font-bold text-slate-900" id="statLatency">124 ms</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Configuration Tabs -->
-                        <div class="config-card">
-                            <!-- Tabs -->
-                            <div class="flex border-b border-border">
-                                <button onclick="switchTab('connection')" class="tab-button active" id="tab-connection">Connection</button>
-                                <button onclick="switchTab('topics')" class="tab-button" id="tab-topics">Topics & Format</button>
-                                <button onclick="switchTab('publishing')" class="tab-button" id="tab-publishing">Tag Publishing</button>
-                                <button onclick="switchTab('advanced')" class="tab-button" id="tab-advanced">Advanced</button>
-                            </div>
-                            
-                            <!-- Connection Settings (Tab 1) -->
-                            <div id="tab-content-connection" class="p-4 space-y-6">
-                                <!-- This will be dynamically populated based on selected connection -->
-                            </div>
-                            
-                            <!-- Topics & Format (Tab 2) - MQTT Specific -->
-                            <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;">
-                                <!-- This content is only shown for MQTT connections -->
-                            </div>
-                            
-                            <!-- Tag Publishing (Tab 3) - MQTT Specific -->
-                            <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;">
-                                <!-- This content is only shown for MQTT connections -->
-                            </div>
-                            
-                            <!-- Advanced (Tab 4) - MQTT Specific -->
-                            <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;">
-                                <!-- This content is only shown for MQTT connections -->
-                            </div>
-                        </div>
-                        
-                        <!-- Connection Monitor -->
-                        <div class="config-card p-4">
-                            <h4 class="text-xs font-semibold text-slate-900 mb-3">Connection Diagnostics</h4>
-                            
-                            <div class="grid grid-cols-2 gap-6">
-                                <!-- Status Panel -->
-                                <div>
-                                    <div class="space-y-2">
-                                        <div class="flex justify-between">
-                                            <span class="text-xs text-slate-600">Status:</span>
-                                            <span class="status-indicator online">Connected</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-xs text-slate-600">Last Message Published:</span>
-                                            <span class="text-xs font-mono text-slate-900">2.3 sec ago</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-xs text-slate-600">Packets Sent:</span>
-                                            <span class="text-xs font-mono text-slate-900">14,593</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-xs text-slate-600">Packets Received:</span>
-                                            <span class="text-xs font-mono text-slate-900">129</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-xs text-slate-600">Last Error:</span>
-                                            <span class="text-xs font-mono text-green-600">None</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-xs text-slate-600">Round-trip Latency:</span>
-                                            <span class="text-xs font-mono text-slate-900">124 ms</span>
-                                        </div>
+                        <!-- Right Column: Configuration -->
+                        <section class="lg:col-span-2 space-y-4">
+                            <!-- Connection Status Card -->
+                            <div class="config-card p-4">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="text-sm font-semibold text-slate-900" id="connectionName">No Connection Selected</h3>
+                                        <p class="text-xs text-slate-500" id="connectionDescription">Select a connection to view details</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-medium text-slate-700">Enabled</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" checked id="mqtt-enabled">
+                                            <span class="toggle-slider"></span>
+                                        </label>
                                     </div>
                                 </div>
                                 
-                                <!-- Downlink Commands -->
-                                <div>
-                                    <h5 class="text-xs font-medium text-slate-700 mb-2">Recent Downlink Commands</h5>
-                                    <div class="border border-slate-200 rounded overflow-hidden">
-                                        <table class="w-full text-xs">
-                                            <thead class="bg-slate-50">
-                                                <tr>
-                                                    <th class="p-2 text-left">Timestamp</th>
-                                                    <th class="p-2 text-left">Command</th>
-                                                    <th class="p-2 text-left">Result</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr class="border-t border-slate-100">
-                                                    <td class="p-2">10:43:12</td>
-                                                    <td class="p-2 font-mono">SetSpeed=12</td>
-                                                    <td class="p-2">
-                                                        <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
-                                                    </td>
-                                                </tr>
-                                                <tr class="border-t border-slate-100">
-                                                    <td class="p-2">10:41:04</td>
-                                                    <td class="p-2 font-mono">ResetWarning</td>
-                                                    <td class="p-2">
-                                                        <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Failed</span>
-                                                    </td>
-                                                </tr>
-                                                <tr class="border-t border-slate-100">
-                                                    <td class="p-2">10:38:55</td>
-                                                    <td class="p-2 font-mono">GetStatus</td>
-                                                    <td class="p-2">
-                                                        <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                <!-- Quick Stats -->
+                                <div class="grid grid-cols-4 gap-3 mb-4">
+                                    <div class="bg-slate-50 p-2 rounded text-center">
+                                        <div class="text-xs text-slate-500">Messages</div>
+                                        <div class="text-sm font-bold text-slate-900" id="statMessages">0</div>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded text-center">
+                                        <div class="text-xs text-slate-500">Errors</div>
+                                        <div class="text-sm font-bold text-success" id="statErrors">0</div>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded text-center">
+                                        <div class="text-xs text-slate-500">Last Sent</div>
+                                        <div class="text-sm font-bold text-slate-900" id="statLastSent">Never</div>
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded text-center">
+                                        <div class="text-xs text-slate-500">Latency</div>
+                                        <div class="text-sm font-bold text-slate-900" id="statLatency">0 ms</div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
+
+                            <!-- Configuration Tabs -->
+                            <div class="config-card">
+                                <!-- Tabs -->
+                                <div class="flex border-b border-border">
+                                    <button onclick="switchTab('connection')" class="tab-button active" id="tab-connection">Connection</button>
+                                    <button onclick="switchTab('topics')" class="tab-button" id="tab-topics">Topics & Format</button>
+                                    <button onclick="switchTab('publishing')" class="tab-button" id="tab-publishing">Tag Publishing</button>
+                                    <button onclick="switchTab('advanced')" class="tab-button" id="tab-advanced">Advanced</button>
+                                </div>
+                                
+                                <!-- Connection Settings (Tab 1) -->
+                                <div id="tab-content-connection" class="p-4 space-y-6">
+                                    <!-- This will be dynamically populated based on selected connection -->
+                                </div>
+                                
+                                <!-- Topics & Format (Tab 2) - MQTT Specific -->
+                                <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;">
+                                    <!-- This content is only shown for MQTT connections -->
+                                </div>
+                                
+                                <!-- Tag Publishing (Tab 3) - MQTT Specific -->
+                                <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;">
+                                    <!-- This content is only shown for MQTT connections -->
+                                </div>
+                                
+                                <!-- Advanced (Tab 4) - MQTT Specific -->
+                                <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;">
+                                    <!-- This content is only shown for MQTT connections -->
+                                </div>
+                            </div>
+                            
+                            <!-- Connection Monitor -->
+                            <div class="config-card p-4">
+                                <h4 class="text-xs font-semibold text-slate-900 mb-3">Connection Diagnostics</h4>
+                                
+                                <div class="grid grid-cols-2 gap-6">
+                                    <!-- Status Panel -->
+                                    <div>
+                                        <div class="space-y-2">
+                                            <div class="flex justify-between">
+                                                <span class="text-xs text-slate-600">Status:</span>
+                                                <span class="status-indicator offline" id="diagnosticStatus">Disconnected</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-xs text-slate-600">Last Message Published:</span>
+                                                <span class="text-xs font-mono text-slate-900" id="diagnosticLastMessage">Never</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-xs text-slate-600">Packets Sent:</span>
+                                                <span class="text-xs font-mono text-slate-900" id="diagnosticPacketsSent">0</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-xs text-slate-600">Packets Received:</span>
+                                                <span class="text-xs font-mono text-slate-900" id="diagnosticPacketsReceived">0</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-xs text-slate-600">Last Error:</span>
+                                                <span class="text-xs font-mono text-green-600" id="diagnosticLastError">None</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-xs text-slate-600">Round-trip Latency:</span>
+                                                <span class="text-xs font-mono text-slate-900" id="diagnosticLatency">0 ms</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Downlink Commands -->
+                                    <div>
+                                        <h5 class="text-xs font-medium text-slate-700 mb-2">Recent Downlink Commands</h5>
+                                        <div class="border border-slate-200 rounded overflow-hidden">
+                                            <table class="w-full text-xs">
+                                                <thead class="bg-slate-50">
+                                                    <tr>
+                                                        <th class="p-2 text-left">Timestamp</th>
+                                                        <th class="p-2 text-left">Command</th>
+                                                        <th class="p-2 text-left">Result</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="downlinkCommands">
+                                                    <tr>
+                                                        <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
+                                                            No commands received
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </div>
         </main>
-    </div>
+    </div> <!-- End of main content container -->
 
     <script>
-        // Fetch and insert sidebar from sidebar.html
-        async function loadSidebar() {
-            try {
-                const response = await fetch('sidebar.html');
-                if (!response.ok) {
-                    throw new Error(`Failed to load sidebar: ${response.status}`);
-                }
-                
-                const html = await response.text();
-                
-                // Insert the entire HTML content
-                document.getElementById('sidebar-container').innerHTML = html;
-                
-                // Update the active page to MQTT / Cloud Integration
-                updateActivePage();
-                
-                // Initialize sidebar functionality
-                initializeSidebar();
-                
-            } catch (error) {
-                console.error('Error loading sidebar:', error);
-                // Fallback: create a basic sidebar if fetch fails
-                createFallbackSidebar();
-            }
-        }
-
-        // Create fallback sidebar if fetch fails
-        function createFallbackSidebar() {
-            const fallbackHTML = `
-                <div class="sidebar" id="sidebar">
-                    <div class="sidebar-logo">
-                        <div class="logo-text">
-                            <i class="fa-solid fa-satellite-dish mr-2"></i> Univa IoT
-                        </div>
-                    </div>
-                    <div class="sidebar-nav">
-                        <div class="nav-section">
-                            <div class="section-title">Configuration</div>
-                            <a href="general-configuration.html" class="nav-item">
-                                <i class="fa-solid fa-sliders"></i> General
-                            </a>
-                            <a href="device-management.html" class="nav-item">
-                                <i class="fa-solid fa-microchip"></i> Devices
-                            </a>
-                        </div>
-                        
-                        <div class="nav-section">
-                            <div class="section-title">Protocols</div>
-                            <a href="protocol-mapping.html" class="nav-item">
-                                <i class="fa-solid fa-plug"></i> Protocol Mapping
-                            </a>
-                            <a href="mqtt-cloud.html" class="nav-item active">
-                                <i class="fa-solid fa-cloud"></i> MQTT / Cloud
-                            </a>
-                        </div>
-                    </div>
-                    <div class="sidebar-footer">
-                        <div class="user-profile">
-                            <div class="user-avatar">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
-                            <div class="user-info">
-                                <h4>Admin User</h4>
-                                <p>System Administrator</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="sidebar-toggle" id="sidebarToggle">
-                    <i class="fa-solid fa-bars"></i>
-                </div>
-            `;
-            
-            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
-            initializeSidebar();
-        }
-
-        // Update active page in sidebar
-        function updateActivePage() {
-            // Remove active class from all nav items
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            // Add active class to MQTT / Cloud Integration
-            const mqttCloudLink = Array.from(navItems).find(item => 
-                item.textContent.includes('MQTT / Cloud') || 
-                item.textContent.includes('MQTT / Cloud') ||
-                item.textContent.includes('Cloud Connection Manager')
-            );
-            
-            if (mqttCloudLink) {
-                mqttCloudLink.classList.add('active');
-            }
-        }
-
-        // Initialize sidebar functionality
-        function initializeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            
-            if (!sidebar || !sidebarToggle) return;
-            
-            // Toggle sidebar
-            sidebarToggle.addEventListener('click', function() {
-                sidebar.classList.toggle('active');
-                
-                // Toggle icon
-                const icon = this.querySelector('i');
-                if (sidebar.classList.contains('active')) {
-                    icon.className = 'fa-solid fa-times';
-                } else {
-                    icon.className = 'fa-solid fa-bars';
-                }
-            });
-            
-            // Handle mobile menu
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.add('active');
-                sidebarToggle.style.left = '260px';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
-            }
-            
-            // Update on resize
-            window.addEventListener('resize', handleResponsive);
-            
-            // Close sidebar when clicking outside on mobile
-            document.addEventListener('click', handleSidebarClickOutside);
-        }
-
-        // Handle responsive behavior
-        function handleResponsive() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'block';
-                sidebarToggle.style.left = '0';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-            } else {
-                sidebar.classList.remove('collapsed');
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'none';
-                sidebarToggle.style.left = '260px';
-            }
-        }
-
-        // Close sidebar when clicking outside on mobile
-        function handleSidebarClickOutside(event) {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            const isMobile = window.innerWidth <= 1024;
-            
-            if (isMobile && sidebar.classList.contains('active')) {
-                const isClickInsideSidebar = sidebar.contains(event.target);
-                const isClickOnToggle = sidebarToggle.contains(event.target);
-                
-                if (!isClickInsideSidebar && !isClickOnToggle) {
-                    sidebar.classList.remove('active');
-                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-                    sidebarToggle.style.left = '0';
-                }
-            }
-        }
-
         // Load configuration from the JSON you provided (with additions)
         const config = {
             "app": {
@@ -1142,10 +1231,13 @@
                     "name": "Production MQTT Broker",
                     "enabled": true,
                     "config": {
-                        "server": "mqtts://broker.company.com:8883",
+                        "host": "broker.company.com",
+                        "port": 8883,
+                        "protocol": "mqtts",
                         "clientId": "univa-gw-01",
                         "qos": 1,
                         "username": "admin",
+                        "password": "",
                         "tls": true,
                         "keepAlive": 60,
                         "cleanSession": true
@@ -1188,13 +1280,15 @@
                     "name": "Real-time Dashboard",
                     "enabled": true,
                     "config": {
-                        "server": "wss://dashboard.company.com:443/ws",
+                        "host": "dashboard.company.com",
+                        "port": 443,
+                        "protocol": "wss",
+                        "path": "/ws/realtime",
                         "pingInterval": 30,
                         "reconnectDelay": 5,
                         "autoReconnect": true,
                         "messageFormat": "json",
                         "maxMessageSize": 65536,
-                        "path": "/realtime",
                         "subprotocols": "json, mqtt"
                     },
                     "stats": {
@@ -1217,6 +1311,7 @@
                         "port": 21,
                         "protocol": "ftp",
                         "username": "logs_user",
+                        "password": "",
                         "remotePath": "/uploads/crane-logs/",
                         "mode": "passive",
                         "uploadInterval": 300,
@@ -1266,32 +1361,292 @@
         let selectedConnectionId = null;
         let selectedConnectionType = null;
 
-        // Initialize app
+        // Fetch and insert sidebar from sidebar.html - SAME METHOD AS GENERAL CONFIGURATION
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) {
+                    throw new Error(`Failed to load sidebar: ${response.status}`);
+                }
+                
+                const html = await response.text();
+                
+                // Insert the entire HTML content
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                // Update the active page to Cloud Connection Manager
+                updateActivePage();
+                
+                // Initialize sidebar functionality
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                // Fallback: create a basic sidebar if fetch fails
+                createFallbackSidebar();
+            }
+        }
+
+        // Create fallback sidebar with toggle - SAME AS GENERAL CONFIGURATION
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                        <button class="sidebar-toggle-btn" id="sidebarCollapseBtn">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> <span>General Configuration</span>
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> <span>Device management</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-shield-halved"></i> <span>Safety Logic</span>
+                                <span class="nav-item-count">12</span>
+                            </a>
+                            <a href="mqtt-cloud.html" class="nav-item active">
+                                <i class="fa-solid fa-plug"></i> <span>Protocols</span>
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">Monitoring</div>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-chart-line"></i> <span>Dashboard</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-bell"></i> <span>Alerts</span>
+                                <span class="nav-item-count">3</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-file-lines"></i> <span>Logs</span>
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">System</div>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-users"></i> <span>Users</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-download"></i> <span>Updates</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-gear"></i> <span>Settings</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        // Update active page in sidebar - MODIFIED FOR CLOUD CONNECTION MANAGER
+        function updateActivePage() {
+            // Remove active class from all nav items
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to Protocols (Cloud Connection Manager)
+            const protocolsLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Protocols') || 
+                item.textContent.includes('MQTT / Cloud') ||
+                item.getAttribute('href') === 'mqtt-cloud.html'
+            );
+            
+            if (protocolsLink) {
+                protocolsLink.classList.add('active');
+            }
+        }
+
+        // Initialize sidebar functionality - SAME AS GENERAL CONFIGURATION
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            if (!sidebar) return;
+            
+            // Toggle sidebar collapse (expand/collapse within sidebar)
+            if (sidebarCollapseBtn) {
+                sidebarCollapseBtn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent triggering parent click
+                    sidebar.classList.toggle('collapsed');
+                    
+                    // Toggle icon
+                    const icon = this.querySelector('i');
+                    if (sidebar.classList.contains('collapsed')) {
+                        icon.className = 'fa-solid fa-chevron-right';
+                    } else {
+                        icon.className = 'fa-solid fa-chevron-left';
+                    }
+                });
+            }
+            
+            // Close sidebar when clicking overlay (mobile)
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', function() {
+                    closeSidebar();
+                });
+            }
+            
+            // Close sidebar when clicking outside on desktop
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth > 1024) {
+                    const isClickInsideSidebar = sidebar.contains(event.target);
+                    const isClickOnHeaderLogo = event.target.closest('#headerLogo');
+                    
+                    if (!isClickInsideSidebar && !isClickOnHeaderLogo && sidebar.classList.contains('active')) {
+                        closeSidebar();
+                    }
+                }
+            });
+            
+            // Close sidebar on escape key
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && sidebar.classList.contains('active')) {
+                    closeSidebar();
+                }
+            });
+        }
+
+        // Toggle sidebar open/close - SAME AS GENERAL CONFIGURATION
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
+            
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+                
+                // Toggle the hamburger icon to X when sidebar is open
+                if (headerLogoIcon) {
+                    if (sidebar.classList.contains('active')) {
+                        headerLogoIcon.className = 'fa-solid fa-times ml-2 text-slate-400 text-sm';
+                    } else {
+                        headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
+                    }
+                }
+                
+                // Update overlay
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    if (sidebar.classList.contains('active')) {
+                        overlay.style.display = 'block';
+                    } else {
+                        overlay.style.display = 'none';
+                    }
+                }
+            }
+        }
+
+        // Close sidebar - SAME AS GENERAL CONFIGURATION
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
+            
+            if (sidebar) {
+                sidebar.classList.remove('active');
+                
+                // Reset hamburger icon
+                if (headerLogoIcon) {
+                    headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
+                }
+                
+                // Hide overlay
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
+        }
+
+        // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
-            // Load sidebar first
+            // Load sidebar first - USING SAME METHOD AS GENERAL CONFIGURATION
             loadSidebar();
             
-            // Initialize app functions
+            // Header logo click to toggle sidebar - SAME AS GENERAL CONFIGURATION
+            const headerLogo = document.getElementById('headerLogo');
+            if (headerLogo) {
+                headerLogo.addEventListener('click', toggleSidebar);
+            }
+            
+            // Initialize Cloud Connection Manager functionality
             initializeApp();
             loadConnections();
             renderConnectionTypes();
             
-            // Set up initial empty state
-            if (Object.keys(connections).length > 0) {
-                const firstId = Object.keys(connections)[0];
-                selectConnection(firstId);
-            } else {
-                // Show empty state in the configuration area
-                document.getElementById('tab-content-connection').innerHTML = `
-                    <div class="text-center py-12 text-slate-400">
-                        <i class="fa-solid fa-plug text-3xl mb-3"></i>
-                        <p class="text-sm">Select a connection to configure</p>
-                        <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
-                    </div>
-                `;
+            // Handle cancel button
+            document.getElementById('cancel-btn').addEventListener('click', function() {
+                if (confirm('Discard all unsaved changes?')) {
+                    cancelChanges();
+                }
+            });
+            
+            // Handle save button
+            document.getElementById('header-save-btn').addEventListener('click', saveAllConnections);
+            
+            // Handle gateway select
+            const gatewaySelect = document.getElementById('gateway-select');
+            if (gatewaySelect) {
+                gatewaySelect.addEventListener('change', function() {
+                    if (confirm('Switch to another gateway? Unsaved changes will be lost.')) {
+                        window.location.reload();
+                    } else {
+                        this.value = 'Univa-GW-01';
+                    }
+                });
             }
+            
+            // Initial responsive setup
+            setTimeout(() => {
+                handleResponsive();
+            }, 100);
         });
 
+        // Handle responsive behavior - SAME AS GENERAL CONFIGURATION
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
+            
+            if (window.innerWidth <= 1024) {
+                // On mobile, ensure sidebar is hidden by default
+                if (sidebar && sidebar.classList.contains('active')) {
+                    sidebar.classList.remove('active');
+                }
+            } else {
+                // On desktop, ensure overlay is hidden
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
+        }
+
+        // =============================================
+        // CLOUD CONNECTION MANAGER FUNCTIONALITY
+        // =============================================
+        
         function initializeApp() {
             // Setup event listeners
             setupEventListeners();
@@ -1405,7 +1760,7 @@
             const connectionConfig = config.connectionTypes[type];
             
             try {
-                // Load form from external file
+                // Try to load form from external file
                 const response = await fetch(connectionConfig.formFile);
                 if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
                 
@@ -1416,14 +1771,122 @@
                 initializeTemplateFields();
             } catch (error) {
                 console.error('Error loading form:', error);
-                formContent.innerHTML = `
+                // Use fallback form
+                formContent.innerHTML = createFallbackForm(type);
+                
+                // Still initialize dynamic elements
+                initializeTemplateFields();
+                
+                // Add back button
+                const backButton = document.createElement('button');
+                backButton.onclick = showConnectionTypeSelection;
+                backButton.className = 'mt-4 compact-button border border-slate-300 text-slate-700 hover:bg-slate-50';
+                backButton.innerHTML = '<i class="fa-solid fa-arrow-left mr-1"></i> Back to Connection Types';
+                formContent.appendChild(backButton);
+            }
+        }
+
+        function createFallbackForm(type) {
+            if (type === 'mqtt') {
+                return `
+                    <div class="form-section">
+                        <h5 class="form-section-title">Broker Configuration</h5>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Server Host</label>
+                                <input type="text" id="field-host" class="w-full compact-input" placeholder="broker.example.com">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                                    <input type="number" id="field-port" class="w-full compact-input" value="8883">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
+                                    <select id="field-protocol" class="w-full compact-select">
+                                        <option value="mqtt">MQTT</option>
+                                        <option value="mqtts" selected>MQTTS (SSL)</option>
+                                        <option value="ws">WebSocket</option>
+                                        <option value="wss">WebSocket Secure</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
+                                <input type="text" id="field-clientId" class="w-full compact-input" placeholder="univa-gw-01">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h5 class="form-section-title">Authentication</h5>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                                <input type="text" id="field-username" class="w-full compact-input" placeholder="Username">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                                <div class="form-input-group">
+                                    <input type="password" id="field-password" class="flex-1 compact-input" placeholder="Password">
+                                    <button type="button" onclick="generatePassword('field-password')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                                        <i class="fa-solid fa-key"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <h5 class="form-section-title">MQTT Settings</h5>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">QoS Level</label>
+                                    <select id="field-qos" class="w-full compact-select">
+                                        <option value="0">0 - At most once</option>
+                                        <option value="1" selected>1 - At least once</option>
+                                        <option value="2">2 - Exactly once</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive (seconds)</label>
+                                    <input type="number" id="field-keepAlive" class="w-full compact-input" value="60">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-medium text-slate-700">Clean Session</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="field-cleanSession" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="form-section">
+                        <h5 class="form-section-title">Connection Configuration</h5>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
+                                <input type="text" id="field-name" class="w-full compact-input" placeholder="${config.connectionTypes[type]?.defaultName || 'New Connection'}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Host / Endpoint</label>
+                                <input type="text" id="field-host" class="w-full compact-input" placeholder="example.com">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                                <input type="number" id="field-port" class="w-full compact-input" value="443">
+                            </div>
+                        </div>
+                    </div>
                     <div class="text-center py-8 text-slate-500">
                         <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
-                        <p>Unable to load configuration form</p>
-                        <p class="text-xs mt-1">${error.message}</p>
-                        <button onclick="showConnectionTypeSelection()" class="mt-4 compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
-                            <i class="fa-solid fa-arrow-left mr-1"></i> Back to Connection Types
-                        </button>
+                        <p>Detailed configuration form for ${config.connectionTypes[type]?.name} is not available</p>
+                        <p class="text-xs mt-1">Using basic configuration options</p>
                     </div>
                 `;
             }
@@ -1496,11 +1959,14 @@
             // Create connection ID
             const connectionId = `${selectedConnectionType}-${Date.now()}`;
             
+            // Get connection name from form or use default
+            const name = formData.name || connectionConfig.defaultName;
+            
             // Create connection object
             connections[connectionId] = {
                 id: connectionId,
                 type: selectedConnectionType,
-                name: connectionConfig.defaultName,
+                name: name,
                 enabled: true,
                 config: formData,
                 stats: {...config.defaultStats}
@@ -1521,10 +1987,14 @@
 
         function collectFormDataFromTemplate() {
             const formData = {};
-            
-            // Collect all input fields from the template
             const formContent = document.getElementById('formContent');
             
+            if (!formContent) {
+                console.error('Form content not found');
+                return formData;
+            }
+            
+            // Collect all input fields from the template
             // Text inputs
             formContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
                 const id = input.id;
@@ -1592,6 +2062,12 @@
             });
             
             updateConnectionCount();
+            
+            // Select first connection if none selected
+            if (Object.keys(connections).length > 0 && !selectedConnectionId) {
+                const firstId = Object.keys(connections)[0];
+                selectConnection(firstId);
+            }
         }
 
         function addConnectionToList(id, conn) {
@@ -1695,7 +2171,11 @@
             selectedConnectionId = id;
             const conn = connections[id];
             
-            if (!conn) return;
+            if (!conn) {
+                // No connection selected - show empty state
+                showEmptyConnectionState();
+                return;
+            }
             
             // Update UI in left panel
             document.querySelectorAll('[data-connection-id]').forEach(el => {
@@ -1713,6 +2193,58 @@
             updateConfigurationForConnection(conn);
         }
 
+        function showEmptyConnectionState() {
+            document.getElementById('connectionName').textContent = 'No Connection Selected';
+            document.getElementById('connectionDescription').textContent = 'Select a connection to view details';
+            document.getElementById('statMessages').textContent = '0';
+            document.getElementById('statErrors').textContent = '0';
+            document.getElementById('statLastSent').textContent = 'Never';
+            document.getElementById('statLatency').textContent = '0 ms';
+            
+            // Update diagnostics
+            document.getElementById('diagnosticStatus').className = 'status-indicator offline';
+            document.getElementById('diagnosticStatus').textContent = 'Disconnected';
+            document.getElementById('diagnosticLastMessage').textContent = 'Never';
+            document.getElementById('diagnosticPacketsSent').textContent = '0';
+            document.getElementById('diagnosticPacketsReceived').textContent = '0';
+            document.getElementById('diagnosticLastError').textContent = 'None';
+            document.getElementById('diagnosticLatency').textContent = '0 ms';
+            
+            // Clear downlink commands
+            document.getElementById('downlinkCommands').innerHTML = `
+                <tr>
+                    <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
+                        No commands received
+                    </td>
+                </tr>
+            `;
+            
+            // Show empty state in tab content
+            document.getElementById('tab-content-connection').innerHTML = `
+                <div class="text-center py-12 text-slate-400">
+                    <i class="fa-solid fa-plug text-3xl mb-3"></i>
+                    <p class="text-sm">Select a connection to configure</p>
+                    <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
+                </div>
+            `;
+            
+            // Hide other tabs
+            document.getElementById('tab-content-topics').style.display = 'none';
+            document.getElementById('tab-content-publishing').style.display = 'none';
+            document.getElementById('tab-content-advanced').style.display = 'none';
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-button').forEach(tab => {
+                if (tab.id === 'tab-connection') {
+                    tab.style.display = 'block';
+                    tab.classList.add('active');
+                } else {
+                    tab.style.display = 'none';
+                    tab.classList.remove('active');
+                }
+            });
+        }
+
         // Enhanced Connection Configuration Function
         async function updateConfigurationForConnection(conn) {
             const connectionConfig = config.connectionTypes[conn.type];
@@ -1726,6 +2258,42 @@
             document.getElementById('statErrors').textContent = conn.stats.errors;
             document.getElementById('statLastSent').textContent = conn.stats.lastActive;
             document.getElementById('statLatency').textContent = conn.stats.latency + ' ms';
+            
+            // Update diagnostics
+            document.getElementById('diagnosticStatus').className = conn.enabled ? 'status-indicator online' : 'status-indicator offline';
+            document.getElementById('diagnosticStatus').textContent = conn.enabled ? 'Connected' : 'Disconnected';
+            document.getElementById('diagnosticLastMessage').textContent = conn.stats.lastActive;
+            document.getElementById('diagnosticPacketsSent').textContent = conn.stats.messages.toLocaleString();
+            document.getElementById('diagnosticPacketsReceived').textContent = Math.floor(conn.stats.messages * 0.01).toLocaleString();
+            document.getElementById('diagnosticLastError').textContent = conn.stats.errors > 0 ? `${conn.stats.errors} errors` : 'None';
+            document.getElementById('diagnosticLatency').textContent = conn.stats.latency + ' ms';
+            
+            // Update downlink commands if connected
+            if (conn.enabled) {
+                document.getElementById('downlinkCommands').innerHTML = `
+                    <tr class="border-t border-slate-100">
+                        <td class="p-2">10:43:12</td>
+                        <td class="p-2 font-mono">SetSpeed=12</td>
+                        <td class="p-2">
+                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
+                        </td>
+                    </tr>
+                    <tr class="border-t border-slate-100">
+                        <td class="p-2">10:41:04</td>
+                        <td class="p-2 font-mono">ResetWarning</td>
+                        <td class="p-2">
+                            <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Failed</span>
+                        </td>
+                    </tr>
+                    <tr class="border-t border-slate-100">
+                        <td class="p-2">10:38:55</td>
+                        <td class="p-2 font-mono">GetStatus</td>
+                        <td class="p-2">
+                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
+                        </td>
+                    </tr>
+                `;
+            }
             
             // Clear the tab contents
             const tabContent = document.getElementById('tab-content-connection');
@@ -1757,7 +2325,7 @@
             const tabContent = document.getElementById('tab-content-connection');
             
             try {
-                // Load form from external file
+                // Try to load form from external file
                 const response = await fetch(connectionConfig.formFile);
                 if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
                 
@@ -1823,13 +2391,61 @@
                 
             } catch (error) {
                 console.error('Error loading form:', error);
+                // Use fallback form for editing
                 tabContent.innerHTML = `
-                    <div class="text-center py-8 text-slate-500">
-                        <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
-                        <p>Unable to load configuration form</p>
-                        <p class="text-xs mt-1">${error.message}</p>
+                    <div class="space-y-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-sm font-semibold text-slate-900">${connectionConfig.name} Configuration</h4>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-slate-700">Enabled</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="connection-enabled" ${conn.enabled ? 'checked' : ''}>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Connection Name -->
+                        <div class="form-section">
+                            <h5 class="form-section-title">Connection Information</h5>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
+                                    <input type="text" id="edit-connection-name" 
+                                           class="w-full compact-input"
+                                           value="${conn.name}"
+                                           placeholder="Enter connection name">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Fallback form -->
+                        <div id="edit-form-content">
+                            ${createFallbackForm(conn.type)}
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="pt-4 border-t border-slate-200">
+                            <div class="flex justify-between items-center">
+                                <div class="flex space-x-2">
+                                    <button onclick="testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                                        <i class="fa-solid fa-bolt mr-1"></i> Test Connection
+                                    </button>
+                                    <button onclick="deleteConnection('${conn.id}')" class="compact-button border border-red-300 text-red-700 hover:bg-red-50 flex items-center">
+                                        <i class="fa-solid fa-trash mr-1"></i> Delete
+                                    </button>
+                                </div>
+                                <button onclick="saveConnection('${conn.id}')" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
+                                    <i class="fa-solid fa-save mr-1"></i> Save Changes
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 `;
+                
+                // Populate form with existing configuration
+                populateFormWithData(conn);
+                initializeEditFormFields();
             }
         }
 
@@ -1837,6 +2453,10 @@
             // Populate connection name
             const nameInput = document.getElementById('edit-connection-name');
             if (nameInput) nameInput.value = conn.name;
+            
+            // Populate connection enabled
+            const enabledCheckbox = document.getElementById('connection-enabled');
+            if (enabledCheckbox) enabledCheckbox.checked = conn.enabled;
             
             // Populate all form fields from connection config
             Object.entries(conn.config).forEach(([fieldName, value]) => {
@@ -1968,6 +2588,7 @@
             
             // Update UI
             updateConnectionItem(connectionId, conn);
+            updateConfigurationForConnection(conn);
             
             // Show notification
             showNotification(`${conn.name} updated successfully`, 'success');
@@ -2059,13 +2680,7 @@
             // If this was the selected connection, clear the right panel
             if (selectedConnectionId === connectionId) {
                 selectedConnectionId = null;
-                document.getElementById('tab-content-connection').innerHTML = `
-                    <div class="text-center py-12 text-slate-400">
-                        <i class="fa-solid fa-plug text-3xl mb-3"></i>
-                        <p class="text-sm">Select a connection to configure</p>
-                        <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
-                    </div>
-                `;
+                showEmptyConnectionState();
             }
             
             showNotification(`${connName} deleted successfully`, 'success');
@@ -2075,8 +2690,9 @@
             const count = Object.keys(connections).length;
             document.getElementById('connectionCount').textContent = count;
             
+            const connectionsList = document.getElementById('connectionsList');
             if (count === 0) {
-                document.getElementById('connectionsList').innerHTML = `
+                connectionsList.innerHTML = `
                     <div class="text-center py-8 text-slate-400">
                         <i class="fa-solid fa-cloud text-3xl mb-3"></i>
                         <p class="text-sm">No connections yet</p>
@@ -2355,6 +2971,9 @@
                 
                 updateConnectionItem(selectedConnectionId, currentConn);
                 updateConfigurationForConnection(currentConn);
+                
+                // Show test results modal
+                showModal('testResultsModal');
                 
                 showNotification(`Connection test for ${currentConn.name} successful!`, 'success');
             }, 1500);
