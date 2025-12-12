@@ -617,6 +617,95 @@
         </div>
     </div>
 
+    <!-- Scan Device Type Modal -->
+    <div class="modal-overlay" id="scanDeviceTypeModal">
+        <div class="modal p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800">Scan Network for Device Type</h2>
+                <button class="text-slate-400 hover:text-slate-600" id="closeScanModal">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="mb-4">
+                    <p class="text-sm text-slate-600">Select the type of devices you want to scan for:</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="scan-device-type" value="modbus-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
+                            <div class="text-xs text-slate-500">Scan for Modbus RTU devices</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="scan-device-type" value="modbus-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
+                            <div class="text-xs text-slate-500">Scan IP network for Modbus TCP</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="scan-device-type" value="canbus" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">CANBus</div>
+                            <div class="text-xs text-slate-500">Scan CAN bus for nodes</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="scan-device-type" value="wireless" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">Wireless IO</div>
+                            <div class="text-xs text-slate-500">Scan for wireless devices</div>
+                        </div>
+                    </label>
+                    <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
+                        <input type="radio" name="scan-device-type" value="all" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <div class="ml-3">
+                            <div class="font-medium text-sm text-slate-900">All Types</div>
+                            <div class="text-xs text-slate-500">Scan for all device types</div>
+                        </div>
+                    </label>
+                </div>
+                
+                <!-- Scan Options -->
+                <div class="pt-4 border-t border-slate-200">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Scan Options</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="scan-auto-add" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
+                            <label for="scan-auto-add" class="ml-2 text-sm text-slate-700">Auto-add discovered devices</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="scan-overwrite" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
+                            <label for="scan-overwrite" class="ml-2 text-sm text-slate-700">Overwrite existing devices with same address</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Scan Range</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="scanRange">
+                                <option>Default</option>
+                                <option>Quick Scan (1-10)</option>
+                                <option>Full Scan (1-247)</option>
+                                <option>Custom Range...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelScanBtn">
+                    Cancel
+                </button>
+                <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="startScanBtn">
+                    <i class="fa-solid fa-radar mr-2"></i> Start Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Content Container -->
     <div class="main-content-with-sidebar">
         <!-- Header -->
@@ -1726,6 +1815,275 @@
             importBtn.dataset.fileName = filename;
         }
 
+        // Scan functionality
+        function handleScanResults(deviceType, devicesFound) {
+            const autoAdd = document.getElementById('scan-auto-add').checked;
+            const overwrite = document.getElementById('scan-overwrite').checked;
+            
+            if (devicesFound.length === 0) {
+                alert(`No ${deviceType} devices found during scan.`);
+                return;
+            }
+            
+            let addedCount = 0;
+            let skippedCount = 0;
+            
+            devicesFound.forEach(device => {
+                // Check if device already exists
+                const existingIndex = devices.findIndex(d => 
+                    d.address === device.address && d.type === device.type
+                );
+                
+                if (existingIndex >= 0) {
+                    if (overwrite) {
+                        // Replace existing device
+                        devices[existingIndex] = device;
+                        addedCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                } else if (autoAdd) {
+                    // Add new device
+                    devices.push(device);
+                    addedCount++;
+                }
+            });
+            
+            if (autoAdd) {
+                renderDevicesTable();
+                
+                // Show detailed results
+                let message = `Scan completed!\n\nFound: ${devicesFound.length} ${deviceType} device(s)`;
+                if (addedCount > 0) {
+                    message += `\nAdded: ${addedCount} device(s)`;
+                }
+                if (skippedCount > 0) {
+                    message += `\nSkipped: ${skippedCount} duplicate(s)`;
+                }
+                
+                alert(message);
+            } else {
+                // Show discovery without adding
+                let message = `Scan completed!\n\nFound ${devicesFound.length} ${deviceType} device(s):\n\n`;
+                devicesFound.forEach((device, index) => {
+                    message += `${index + 1}. ${device.name} (${device.address})\n`;
+                });
+                
+                if (confirm(message + "\n\nWould you like to add these devices?")) {
+                    devicesFound.forEach(device => {
+                        devices.push(device);
+                    });
+                    renderDevicesTable();
+                    alert(`Added ${devicesFound.length} devices.`);
+                }
+            }
+        }
+
+        // Simulate scanning for different device types
+        function simulateScan(deviceType) {
+            const scanRange = document.getElementById('scanRange').value;
+            
+            // Simulate different scan results based on device type
+            let devicesFound = [];
+            let scanDuration = 2000; // Default duration
+            
+            switch (deviceType) {
+                case 'modbus-rtu':
+                    scanDuration = 3000;
+                    devicesFound = [
+                        {
+                            id: `scanned-${Date.now()}-1`,
+                            name: 'Modbus-Slave-01',
+                            type: 'Modbus RTU',
+                            address: 'Slave 2',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '1.0.0',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'N/A (Wired)',
+                                firmwareVersion: '1.0.0'
+                            }
+                        },
+                        {
+                            id: `scanned-${Date.now()}-2`,
+                            name: 'Modbus-Slave-03',
+                            type: 'Modbus RTU',
+                            address: 'Slave 3',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '1.2.0',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'N/A (Wired)',
+                                firmwareVersion: '1.2.0'
+                            }
+                        }
+                    ];
+                    break;
+                    
+                case 'modbus-tcp':
+                    scanDuration = 4000;
+                    devicesFound = [
+                        {
+                            id: `scanned-${Date.now()}-3`,
+                            name: 'PLC-192.168.1.101',
+                            type: 'Modbus TCP',
+                            address: '192.168.1.101:502',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '2.1.0',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'N/A (Wired)',
+                                firmwareVersion: '2.1.0'
+                            }
+                        },
+                        {
+                            id: `scanned-${Date.now()}-4`,
+                            name: 'HMI-192.168.1.102',
+                            type: 'Modbus TCP',
+                            address: '192.168.1.102:502',
+                            status: 'Offline',
+                            lastPoll: 'Just now',
+                            firmware: '1.5.0',
+                            group: 'None',
+                            details: {
+                                status: 'Offline',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'N/A (Wired)',
+                                firmwareVersion: '1.5.0'
+                            }
+                        }
+                    ];
+                    break;
+                    
+                case 'canbus':
+                    scanDuration = 2500;
+                    devicesFound = [
+                        {
+                            id: `scanned-${Date.now()}-5`,
+                            name: 'CAN-Node-0x213',
+                            type: 'CAN',
+                            address: '0x213',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '3.0.1',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'Good',
+                                firmwareVersion: '3.0.1'
+                            }
+                        }
+                    ];
+                    break;
+                    
+                case 'wireless':
+                    scanDuration = 5000;
+                    devicesFound = [
+                        {
+                            id: `scanned-${Date.now()}-6`,
+                            name: 'Wireless-IO-0x0A',
+                            type: 'Wireless',
+                            address: 'RF:0x0A',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '2.3.0',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: '-68 dBm',
+                                firmwareVersion: '2.3.0'
+                            }
+                        },
+                        {
+                            id: `scanned-${Date.now()}-7`,
+                            name: 'Wireless-Sensor-0x0B',
+                            type: 'Wireless',
+                            address: 'RF:0x0B',
+                            status: 'Warning',
+                            lastPoll: 'Just now',
+                            firmware: '1.8.0',
+                            group: 'None',
+                            details: {
+                                status: 'Warning',
+                                lastResponse: 'Just now',
+                                retries: 2,
+                                signalStrength: '-85 dBm',
+                                firmwareVersion: '1.8.0'
+                            }
+                        }
+                    ];
+                    break;
+                    
+                case 'all':
+                    scanDuration = 6000;
+                    // Combine results from all types
+                    devicesFound = [
+                        {
+                            id: `scanned-${Date.now()}-8`,
+                            name: 'Modbus-Slave-04',
+                            type: 'Modbus RTU',
+                            address: 'Slave 4',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '1.1.0',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'N/A (Wired)',
+                                firmwareVersion: '1.1.0'
+                            }
+                        },
+                        {
+                            id: `scanned-${Date.now()}-9`,
+                            name: 'CAN-Node-0x214',
+                            type: 'CAN',
+                            address: '0x214',
+                            status: 'Online',
+                            lastPoll: 'Just now',
+                            firmware: '2.9.0',
+                            group: 'None',
+                            details: {
+                                status: 'Online',
+                                lastResponse: 'Just now',
+                                retries: 0,
+                                signalStrength: 'Good',
+                                firmwareVersion: '2.9.0'
+                            }
+                        }
+                    ];
+                    break;
+                    
+                default:
+                    devicesFound = [];
+            }
+            
+            // Adjust based on scan range
+            if (scanRange === 'Quick Scan (1-10)' && deviceType === 'modbus-rtu') {
+                devicesFound = devicesFound.slice(0, 1);
+            }
+            
+            return { devicesFound, scanDuration };
+        }
+
         // Setup event listeners
         function setupEventListeners() {
             // Add device panel
@@ -1934,18 +2292,55 @@
                 filterDevices();
             });
 
-            // Other buttons
+            // Scan Networks button
             document.getElementById('scanNetworksBtn').addEventListener('click', function() {
-                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Scanning...';
-                this.disabled = true;
-                
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fa-solid fa-wifi mr-2"></i> Scan Networks';
-                    this.disabled = false;
-                    alert('Network scan completed! Found 3 new devices.');
-                }, 2000);
+                document.getElementById('scanDeviceTypeModal').classList.add('active');
             });
             
+            // Scan modal event listeners
+            document.getElementById('closeScanModal').addEventListener('click', function() {
+                document.getElementById('scanDeviceTypeModal').classList.remove('active');
+            });
+            
+            document.getElementById('cancelScanBtn').addEventListener('click', function() {
+                document.getElementById('scanDeviceTypeModal').classList.remove('active');
+            });
+            
+            document.getElementById('startScanBtn').addEventListener('click', function() {
+                const selectedType = document.querySelector('input[name="scan-device-type"]:checked').value;
+                const typeMap = {
+                    'modbus-rtu': 'Modbus RTU',
+                    'modbus-tcp': 'Modbus TCP',
+                    'canbus': 'CAN',
+                    'wireless': 'Wireless',
+                    'all': 'All Types'
+                };
+                
+                const deviceType = typeMap[selectedType];
+                
+                // Close modal
+                document.getElementById('scanDeviceTypeModal').classList.remove('active');
+                
+                // Show scanning status on the original button
+                const scanBtn = document.getElementById('scanNetworksBtn');
+                const originalText = scanBtn.innerHTML;
+                scanBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Scanning for ${deviceType}...`;
+                scanBtn.disabled = true;
+                
+                // Simulate scan
+                const scanResults = simulateScan(selectedType);
+                
+                setTimeout(() => {
+                    // Restore button
+                    scanBtn.innerHTML = originalText;
+                    scanBtn.disabled = false;
+                    
+                    // Handle results
+                    handleScanResults(deviceType, scanResults.devicesFound);
+                }, scanResults.scanDuration);
+            });
+            
+            // Other buttons
             document.getElementById('refreshBtn').addEventListener('click', function() {
                 this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...';
                 this.disabled = true;
