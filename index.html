@@ -283,48 +283,6 @@
             }
         }
         
-        /* Header Logo */
-        .header-logo {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
-        
-        .header-logo:hover {
-            background: #F1F5F9;
-        }
-        
-        .header-logo .logo-icon {
-            font-size: 20px;
-            color: #2563EB;
-            margin-right: 8px;
-        }
-        
-        .header-logo .logo-text-header {
-            font-weight: 700;
-            font-size: 18px;
-            color: #2563EB;
-        }
-        
-        /* Overlay for mobile */
-        .sidebar-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 45;
-            display: none;
-        }
-        
-        .sidebar.active + .sidebar-overlay {
-            display: block;
-        }
-        
         /* Updated WiFi Signal Strength Styles */
         .signal-strength {
             display: flex;
@@ -369,22 +327,13 @@
 
     <!-- Main Content Container -->
     <div class="main-content-with-sidebar">
-        <!-- Header -->
+        <!-- Header - Your requested header -->
         <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 <!-- Left: Logo & Breadcrumb -->
                 <div class="flex items-center space-x-4">
-                    <!-- Header Logo - Click to toggle sidebar -->
-                    <div class="header-logo" id="headerLogo">
-                        <i class="fa-solid fa-satellite-dish logo-icon"></i>
-                        <span class="logo-text-header">Innospace</span>
-                        <!-- Add a toggle icon next to the logo -->
-                        <i class="fa-solid fa-bars ml-2 text-slate-400 text-sm"></i>
-                    </div>
-                    
                     <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
-                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
-                        <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
+                        <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
                         <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
                         <span class="text-slate-900 font-medium" id="page-title">General Configuration</span>
                     </div>
@@ -406,12 +355,7 @@
                     <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
                         <i class="fa-solid fa-circle-question mr-2"></i> Help
                     </button>
-                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="cancel-btn">
-                        Cancel
-                    </button>
-                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-1.5 rounded-lg shadow-sm transition-colors flex items-center" id="header-save-btn">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save
-                    </button>
+                    
                 </div>
             </div>
         </header>
@@ -965,9 +909,8 @@
             document.addEventListener('click', function(event) {
                 if (window.innerWidth > 1024) {
                     const isClickInsideSidebar = sidebar.contains(event.target);
-                    const isClickOnHeaderLogo = event.target.closest('#headerLogo');
                     
-                    if (!isClickInsideSidebar && !isClickOnHeaderLogo && sidebar.classList.contains('active')) {
+                    if (!isClickInsideSidebar && sidebar.classList.contains('active')) {
                         closeSidebar();
                     }
                 }
@@ -981,47 +924,12 @@
             });
         }
 
-        // Toggle sidebar open/close
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
-            
-            if (sidebar) {
-                sidebar.classList.toggle('active');
-                
-                // Toggle the hamburger icon to X when sidebar is open
-                if (headerLogoIcon) {
-                    if (sidebar.classList.contains('active')) {
-                        headerLogoIcon.className = 'fa-solid fa-times ml-2 text-slate-400 text-sm';
-                    } else {
-                        headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
-                    }
-                }
-                
-                // Update overlay
-                const overlay = document.getElementById('sidebarOverlay');
-                if (overlay) {
-                    if (sidebar.classList.contains('active')) {
-                        overlay.style.display = 'block';
-                    } else {
-                        overlay.style.display = 'none';
-                    }
-                }
-            }
-        }
-
         // Close sidebar
         function closeSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
             
             if (sidebar) {
                 sidebar.classList.remove('active');
-                
-                // Reset hamburger icon
-                if (headerLogoIcon) {
-                    headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
-                }
                 
                 // Hide overlay
                 const overlay = document.getElementById('sidebarOverlay');
@@ -1103,8 +1011,6 @@
             } else if (networkMode === 'lte') {
                 document.getElementById('cellular-config').style.display = 'block';
             }
-            
-            checkFormChanges();
         }
 
         function toggleIPAssignment() {
@@ -1116,46 +1022,12 @@
             } else {
                 staticConfig.classList.add('hidden');
             }
-            checkFormChanges();
-        }
-
-        // Enable Save button on interaction
-        function checkFormChanges() {
-            const saveBtn = document.getElementById('header-save-btn');
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-            }
-        }
-
-        // Save configuration function
-        function saveConfiguration() {
-            // In a real implementation, this would send data to backend
-            const saveBtn = document.getElementById('header-save-btn');
-            
-            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-            saveBtn.disabled = true;
-            
-            // Simulate API call
-            setTimeout(() => {
-                saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Save';
-                saveBtn.disabled = false;
-                
-                // Show success message
-                alert('Configuration saved successfully!');
-            }, 1500);
         }
 
         // Initialize event listeners
         document.addEventListener('DOMContentLoaded', function() {
             // Load sidebar first
             loadSidebar();
-            
-            // Header logo click to toggle sidebar
-            const headerLogo = document.getElementById('headerLogo');
-            if (headerLogo) {
-                headerLogo.addEventListener('click', toggleSidebar);
-            }
             
             // Network mode toggle
             document.querySelectorAll('input[name="network-mode"]').forEach(radio => {
@@ -1167,25 +1039,9 @@
                 radio.addEventListener('change', toggleIPAssignment);
             });
             
-            // Attach listeners to all inputs for "Save" enablement
-            document.querySelectorAll('input, select, textarea').forEach(element => {
-                element.addEventListener('change', checkFormChanges);
-                element.addEventListener('keyup', checkFormChanges);
-            });
-            
             // Initialize network config
             toggleNetworkConfig();
             toggleIPAssignment();
-            
-            // Handle cancel buttons
-            document.getElementById('cancel-btn').addEventListener('click', function() {
-                if (confirm('Discard all unsaved changes?')) {
-                    window.location.reload();
-                }
-            });
-            
-            // Handle save button
-            document.getElementById('header-save-btn').addEventListener('click', saveConfiguration);
             
             // Handle gateway select
             const gatewaySelect = document.getElementById('gateway-select');

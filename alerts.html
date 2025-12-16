@@ -196,6 +196,53 @@
             @apply px-6 py-4 border-b border-border bg-slate-50 flex justify-between items-center;
         }
         
+        /* Section Toggle */
+        .section-toggle {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        
+        .section-toggle-header {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            background: white;
+            transition: background-color 0.2s;
+        }
+        
+        .section-toggle-header:hover {
+            background-color: #f8fafc;
+        }
+        
+        .section-toggle-header.active {
+            border-bottom: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        
+        .section-toggle-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+        }
+        
+        .section-toggle-content.active {
+            max-height: 2000px;
+            padding: 20px;
+        }
+        
+        .section-toggle-indicator {
+            transition: transform 0.3s ease;
+        }
+        
+        .section-toggle-indicator.active {
+            transform: rotate(180deg);
+        }
+        
         /* Badge styles */
         .badge-critical {
             @apply px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold uppercase tracking-wider;
@@ -211,34 +258,6 @@
         
         .badge-success {
             @apply px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold uppercase tracking-wider;
-        }
-        
-        /* Section Toggle Styles */
-        .section-toggle {
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .section-toggle:hover {
-            background-color: #F8FAFC;
-        }
-        
-        .section-toggle-icon {
-            transition: transform 0.3s;
-        }
-        
-        .section-toggle.collapsed .section-toggle-icon {
-            transform: rotate(-90deg);
-        }
-        
-        .section-content {
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-            max-height: 5000px; /* Large enough to contain content */
-        }
-        
-        .section-content.collapsed {
-            max-height: 0;
         }
         
         /* Modal Styles */
@@ -409,6 +428,24 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Content Section */
+        .content-section {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .content-section.active {
+            display: block;
+            opacity: 1;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -428,49 +465,42 @@
 
     <!-- Main Content Container -->
     <div class="main-content-with-sidebar">
-        <!-- Header -->
-        <header class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
-            <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2 text-slate-900 font-bold text-xl tracking-tight">
-                        <i class="fa-solid fa-network-wired text-primary"></i>
-                        <span>Univa Gateway</span>
+     <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">Alerts</span> <!-- Updated page title -->
                     </div>
-                    <div class="h-6 w-px bg-slate-300 mx-2"></div>
-                    <nav class="flex items-center gap-2 text-sm text-slate-500">
-                        <span class="hover:text-slate-900 cursor-pointer">Automation & Event Engine</span>
-                        <i class="fa-solid fa-chevron-right text-xs"></i>
-                        <span class="text-slate-900 font-medium">Alerts & Event Logging</span>
-                    </nav>
                 </div>
-                
-                <div class="flex items-center gap-4">
-                    <!-- Gateway Select -->
-                    <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
-                        <span class="text-xs font-semibold text-slate-500 uppercase">Gateway</span>
-                        <select class="bg-transparent text-sm font-medium text-slate-700 outline-none cursor-pointer" id="gateway-select">
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors"> <!-- Updated styling -->
                             <option>Univa-GW-01</option>
                             <option>Univa-GW-02</option>
                             <option>Univa-GW-03</option>
                         </select>
                     </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
                     
-                    <div class="flex gap-2">
-                        <button class="px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors" onclick="resetConfiguration()">
-                            <i class="fa-solid fa-rotate-left mr-1"></i> Reset
-                        </button>
-                        <button class="px-4 py-1.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-md shadow-sm transition-colors" onclick="saveConfiguration()">
-                            <i class="fa-solid fa-floppy-disk mr-1"></i> Save Configuration
-                        </button>
-                    </div>
                 </div>
             </div>
         </header>
 
-        <main class="max-w-[1600px] mx-auto p-6 space-y-6">
+        <main class="max-w-[1600px] mx-auto p-6 space-y-4">
             
             <!-- Page Title & Description -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 class="text-2xl font-bold text-slate-900">Alerts, Event Classes & Logging</h1>
                     <p class="text-slate-500 text-sm mt-1">Define alert classification, routing, and logging rules for CraneIQ, Modbus, sensors, and system events</p>
@@ -488,370 +518,392 @@
                 </div>
             </div>
 
-            <!-- Event Classes Section -->
-            <div class="card">
-                <div class="card-header section-toggle" data-section="event-classes">
-                    <div class="flex items-center gap-3 cursor-pointer" onclick="toggleSection('event-classes')">
-                        <i class="fa-solid fa-chevron-down section-toggle-icon"></i>
-                        <h3 class="font-semibold text-slate-800">Event Classes</h3>
-                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">Standardize severity across all sources</span>
-                    </div>
-                    <button class="inline-flex items-center px-3 py-1.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition" onclick="showAddEventClassModal()">
-                        <i class="fa-solid fa-plus mr-2"></i> Add Event Class
-                    </button>
-                </div>
-                <div id="event-classes-section" class="section-content">
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
-                        <div class="lg:col-span-2">
-                            <div class="table-container">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Severity</th>
-                                            <th>Color</th>
-                                            <th>Auto-Log</th>
-                                            <th>Default Notify</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="event-classes-table">
-                                        <!-- Event classes will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div class="lg:col-span-1">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3 class="font-semibold text-slate-800">Quick Stats</h3>
-                                </div>
-                                <div class="p-4 space-y-4">
-                                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                        <span class="text-sm text-slate-600">Total Event Classes</span>
-                                        <span class="font-bold text-slate-900" id="total-event-classes">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                                        <span class="text-sm text-red-600">Critical (5)</span>
-                                        <span class="font-bold text-red-700" id="critical-count">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                                        <span class="text-sm text-yellow-600">Warning (3-4)</span>
-                                        <span class="font-bold text-yellow-700" id="warning-count">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                                        <span class="text-sm text-blue-600">Info (1-2)</span>
-                                        <span class="font-bold text-blue-700" id="info-count">0</span>
-                                    </div>
-                                    <div class="p-3 bg-slate-50 rounded-lg">
-                                        <p class="text-xs text-slate-500">
-                                            <i class="fa-solid fa-circle-info mr-1"></i>
-                                            Event classes standardize severity across CraneIQ, Modbus, CAN, and sensors.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Alert Definitions Section -->
-            <div class="card">
-                <div class="card-header section-toggle" data-section="alert-definitions">
-                    <div class="flex items-center gap-3 cursor-pointer" onclick="toggleSection('alert-definitions')">
-                        <i class="fa-solid fa-chevron-down section-toggle-icon"></i>
-                        <h3 class="font-semibold text-slate-800">Alert Definitions</h3>
-                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">Configure individual alert types</span>
-                    </div>
-                    <button class="inline-flex items-center px-3 py-1.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition" onclick="showAddAlertModal()">
-                        <i class="fa-solid fa-plus mr-2"></i> Add Alert Type
-                    </button>
-                </div>
-                <div id="alert-definitions-section" class="section-content">
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
-                        <div class="lg:col-span-2">
-                            <div class="table-container">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Alert Name</th>
-                                            <th>Code</th>
-                                            <th>Class</th>
-                                            <th>Source</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="alert-definitions-table">
-                                        <!-- Alert definitions will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        
-                        <div class="lg:col-span-1">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3 class="font-semibold text-slate-800">Alert Sources</h3>
-                                </div>
-                                <div class="p-4 space-y-3">
-                                    <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
-                                        <span class="text-sm text-slate-700">CraneIQ</span>
-                                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="craneiq-count">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
-                                        <span class="text-sm text-slate-700">Modbus Input</span>
-                                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="modbus-count">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
-                                        <span class="text-sm text-slate-700">Sensor Threshold</span>
-                                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="sensor-count">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
-                                        <span class="text-sm text-slate-700">System Health</span>
-                                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="system-count">0</span>
-                                    </div>
-                                    <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
-                                        <span class="text-sm text-slate-700">Custom</span>
-                                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="custom-count">0</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="card mt-6">
-                                <div class="card-header">
-                                    <h3 class="font-semibold text-slate-800">Alert Templates</h3>
-                                </div>
-                                <div class="p-4">
-                                    <p class="text-sm text-slate-600 mb-3">Predefined OEM fault dictionaries:</p>
-                                    <div class="space-y-2">
-                                        <button class="w-full text-left p-2 hover:bg-slate-50 rounded text-sm text-slate-700" onclick="loadTemplate('safety')">
-                                            <i class="fa-solid fa-shield mr-2"></i> Safety Alerts Template
-                                        </button>
-                                        <button class="w-full text-left p-2 hover:bg-slate-50 rounded text-sm text-slate-700" onclick="loadTemplate('craneiq')">
-                                            <i class="fa-solid fa-crane mr-2"></i> CraneIQ Fault Dictionary
-                                        </button>
-                                        <button class="w-full text-left p-2 hover:bg-slate-50 rounded text-sm text-slate-700" onclick="loadTemplate('modbus')">
-                                            <i class="fa-solid fa-plug mr-2"></i> Modbus Alarm Template
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Alert Routing Section -->
-            <div class="card">
-                <div class="card-header section-toggle" data-section="alert-routing">
-                    <div class="flex items-center gap-3 cursor-pointer" onclick="toggleSection('alert-routing')">
-                        <i class="fa-solid fa-chevron-down section-toggle-icon"></i>
-                        <h3 class="font-semibold text-slate-800">Alert Routing Configuration</h3>
-                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">Configure where alerts are sent</span>
-                    </div>
-                </div>
-                <div id="alert-routing-section" class="section-content">
-                    <div class="p-6 space-y-6">
-                        <div>
-                            <h4 class="font-medium text-slate-800 mb-3">Default Routing Options</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" id="route-cloud" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                    <div>
-                                        <span class="text-sm font-medium text-slate-700">Send to Cloud</span>
-                                        <p class="text-xs text-slate-500">Forward alerts to cloud platform</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" id="route-local-log" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                    <div>
-                                        <span class="text-sm font-medium text-slate-700">Maintain Local Log</span>
-                                        <p class="text-xs text-slate-500">Store in gateway log files</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" id="route-mqtt" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                    <div>
-                                        <span class="text-sm font-medium text-slate-700">Forward to MQTT Broker</span>
-                                        <p class="text-xs text-slate-500">Publish to /alerts topic</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" id="route-push" class="rounded border-slate-300 text-primary focus:ring-primary">
-                                    <div>
-                                        <span class="text-sm font-medium text-slate-700">Generate Push Notification</span>
-                                        <p class="text-xs text-slate-500">Send to mobile devices</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" id="route-rule-engine" class="rounded border-slate-300 text-primary focus:ring-primary">
-                                    <div>
-                                        <span class="text-sm font-medium text-slate-700">Trigger Rule Engine</span>
-                                        <p class="text-xs text-slate-500">Activate automation rules</p>
-                                    </div>
-                                </label>
-                                <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                    <input type="checkbox" id="route-email" class="rounded border-slate-300 text-primary focus:ring-primary">
-                                    <div>
-                                        <span class="text-sm font-medium text-slate-700">Email Notification</span>
-                                        <p class="text-xs text-slate-500">Send to configured email</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="border-t border-border pt-6">
-                            <h4 class="font-medium text-slate-800 mb-3">Per-Class Routing Overrides</h4>
-                            <p class="text-sm text-slate-600 mb-4">Override default routing for specific event classes:</p>
-                            
-                            <div class="table-container">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Event Class</th>
-                                            <th>Send to Cloud</th>
-                                            <th>MQTT</th>
-                                            <th>Push</th>
-                                            <th>Email</th>
-                                            <th>Rule Engine</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="routing-overrides-table">
-                                        <!-- Routing overrides will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Logging Configuration Section -->
-            <div class="card">
-                <div class="card-header section-toggle" data-section="logging-config">
-                    <div class="flex items-center gap-3 cursor-pointer" onclick="toggleSection('logging-config')">
-                        <i class="fa-solid fa-chevron-down section-toggle-icon"></i>
-                        <h3 class="font-semibold text-slate-800">Logging Configuration</h3>
-                        <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">Configure log storage and format</span>
-                    </div>
-                </div>
-                <div id="logging-config-section" class="section-content">
-                    <div class="p-6 space-y-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- All sections are now in one container with toggles -->
+            <div id="sections-container" class="space-y-4">
+                
+                <!-- SECTION 1: EVENT CLASSES -->
+                <div class="section-toggle">
+                    <div class="section-toggle-header active" onclick="toggleSection('event-classes')">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-layer-group text-red-500"></i>
                             <div>
-                                <h4 class="font-medium text-slate-800 mb-3">Log Storage Mode</h4>
-                                <div class="space-y-3">
+                                <h2 class="font-semibold text-slate-800">Event Classes</h2>
+                                <p class="text-xs text-slate-500">Standardize severity across all sources</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-down section-toggle-indicator active text-slate-400"></i>
+                    </div>
+                    <div class="section-toggle-content active" id="section-event-classes">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="font-semibold text-slate-800">Event Class Configuration</h3>
+                                    <button class="inline-flex items-center px-3 py-1.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition" onclick="showAddEventClassModal()">
+                                        <i class="fa-solid fa-plus mr-2"></i> Add Event Class
+                                    </button>
+                                </div>
+                                <div class="table-container">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Severity</th>
+                                                <th>Color</th>
+                                                <th>Auto-Log</th>
+                                                <th>Default Notify</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="event-classes-table">
+                                            <!-- Event classes will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="lg:col-span-1">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="font-semibold text-slate-800">Quick Stats</h3>
+                                    </div>
+                                    <div class="p-4 space-y-4">
+                                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                                            <span class="text-sm text-slate-600">Total Event Classes</span>
+                                            <span class="font-bold text-slate-900" id="total-event-classes">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                                            <span class="text-sm text-red-600">Critical (5)</span>
+                                            <span class="font-bold text-red-700" id="critical-count">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                                            <span class="text-sm text-yellow-600">Warning (3-4)</span>
+                                            <span class="font-bold text-yellow-700" id="warning-count">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                                            <span class="text-sm text-blue-600">Info (1-2)</span>
+                                            <span class="font-bold text-blue-700" id="info-count">0</span>
+                                        </div>
+                                        <div class="p-3 bg-slate-50 rounded-lg">
+                                            <p class="text-xs text-slate-500">
+                                                <i class="fa-solid fa-circle-info mr-1"></i>
+                                                Event classes standardize severity across CraneIQ, Modbus, CAN, and sensors.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: ALERT DEFINITIONS -->
+                <div class="section-toggle">
+                    <div class="section-toggle-header" onclick="toggleSection('alert-definitions')">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-bell text-orange-500"></i>
+                            <div>
+                                <h2 class="font-semibold text-slate-800">Alert Definitions</h2>
+                                <p class="text-xs text-slate-500">Configure individual alert types</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-down section-toggle-indicator text-slate-400"></i>
+                    </div>
+                    <div class="section-toggle-content" id="section-alert-definitions">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="font-semibold text-slate-800">Alert Definitions</h3>
+                                    <button class="inline-flex items-center px-3 py-1.5 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition" onclick="showAddAlertModal()">
+                                        <i class="fa-solid fa-plus mr-2"></i> Add Alert Type
+                                    </button>
+                                </div>
+                                <div class="table-container">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Alert Name</th>
+                                                <th>Code</th>
+                                                <th>Class</th>
+                                                <th>Source</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="alert-definitions-table">
+                                            <!-- Alert definitions will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="lg:col-span-1 space-y-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="font-semibold text-slate-800">Alert Sources</h3>
+                                    </div>
+                                    <div class="p-4 space-y-3">
+                                        <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                                            <span class="text-sm text-slate-700">CraneIQ</span>
+                                            <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="craneiq-count">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                                            <span class="text-sm text-slate-700">Modbus Input</span>
+                                            <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="modbus-count">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                                            <span class="text-sm text-slate-700">Sensor Threshold</span>
+                                            <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="sensor-count">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                                            <span class="text-sm text-slate-700">System Health</span>
+                                            <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="system-count">0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded">
+                                            <span class="text-sm text-slate-700">Custom</span>
+                                            <span class="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded" id="custom-count">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="font-semibold text-slate-800">Alert Templates</h3>
+                                    </div>
+                                    <div class="p-4">
+                                        <p class="text-sm text-slate-600 mb-3">Predefined OEM fault dictionaries:</p>
+                                        <div class="space-y-2">
+                                            <button class="w-full text-left p-2 hover:bg-slate-50 rounded text-sm text-slate-700" onclick="loadTemplate('safety')">
+                                                <i class="fa-solid fa-shield mr-2"></i> Safety Alerts Template
+                                            </button>
+                                            <button class="w-full text-left p-2 hover:bg-slate-50 rounded text-sm text-slate-700" onclick="loadTemplate('craneiq')">
+                                                <i class="fa-solid fa-crane mr-2"></i> CraneIQ Fault Dictionary
+                                            </button>
+                                            <button class="w-full text-left p-2 hover:bg-slate-50 rounded text-sm text-slate-700" onclick="loadTemplate('modbus')">
+                                                <i class="fa-solid fa-plug mr-2"></i> Modbus Alarm Template
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: ALERT ROUTING -->
+                <div class="section-toggle">
+                    <div class="section-toggle-header" onclick="toggleSection('alert-routing')">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-route text-blue-500"></i>
+                            <div>
+                                <h2 class="font-semibold text-slate-800">Alert Routing Configuration</h2>
+                                <p class="text-xs text-slate-500">Configure where alerts are sent</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-down section-toggle-indicator text-slate-400"></i>
+                    </div>
+                    <div class="section-toggle-content" id="section-alert-routing">
+                        <div class="space-y-6">
+                            <div>
+                                <h4 class="font-medium text-slate-800 mb-3">Default Routing Options</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                        <input type="radio" name="log-mode" value="ring" class="text-primary focus:ring-primary" checked>
+                                        <input type="checkbox" id="route-cloud" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
                                         <div>
-                                            <span class="text-sm font-medium text-slate-700">Ring Buffer</span>
-                                            <p class="text-xs text-slate-500">Overwrite oldest logs when full</p>
+                                            <span class="text-sm font-medium text-slate-700">Send to Cloud</span>
+                                            <p class="text-xs text-slate-500">Forward alerts to cloud platform</p>
                                         </div>
                                     </label>
                                     <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                        <input type="radio" name="log-mode" value="append" class="text-primary focus:ring-primary">
+                                        <input type="checkbox" id="route-local-log" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
                                         <div>
-                                            <span class="text-sm font-medium text-slate-700">Append Mode</span>
-                                            <p class="text-xs text-slate-500">Stop logging when full</p>
+                                            <span class="text-sm font-medium text-slate-700">Maintain Local Log</span>
+                                            <p class="text-xs text-slate-500">Store in gateway log files</p>
                                         </div>
                                     </label>
                                     <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
-                                        <input type="radio" name="log-mode" value="daily" class="text-primary focus:ring-primary">
+                                        <input type="checkbox" id="route-mqtt" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
                                         <div>
-                                            <span class="text-sm font-medium text-slate-700">Daily Files</span>
-                                            <p class="text-xs text-slate-500">Create new file each day</p>
+                                            <span class="text-sm font-medium text-slate-700">Forward to MQTT Broker</span>
+                                            <p class="text-xs text-slate-500">Publish to /alerts topic</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
+                                        <input type="checkbox" id="route-push" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                        <div>
+                                            <span class="text-sm font-medium text-slate-700">Generate Push Notification</span>
+                                            <p class="text-xs text-slate-500">Send to mobile devices</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
+                                        <input type="checkbox" id="route-rule-engine" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                        <div>
+                                            <span class="text-sm font-medium text-slate-700">Trigger Rule Engine</span>
+                                            <p class="text-xs text-slate-500">Activate automation rules</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
+                                        <input type="checkbox" id="route-email" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                        <div>
+                                            <span class="text-sm font-medium text-slate-700">Email Notification</span>
+                                            <p class="text-xs text-slate-500">Send to configured email</p>
                                         </div>
                                     </label>
                                 </div>
                             </div>
                             
-                            <div>
-                                <h4 class="font-medium text-slate-800 mb-3">Log Settings</h4>
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">Max File Size</label>
-                                        <div class="flex items-center space-x-2">
-                                            <input type="number" id="max-file-size" class="w-24 rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" value="2" min="0.1" step="0.1">
-                                            <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border">
-                                                <option>MB</option>
-                                                <option>GB</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">Max Retained Files</label>
-                                        <input type="number" id="max-files" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" value="10" min="1">
-                                    </div>
-                                    
-                                    <label class="flex items-center space-x-2">
-                                        <input type="checkbox" id="auto-clear-logs" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                        <span class="text-sm text-slate-700">Auto-clear older logs when limit reached</span>
-                                    </label>
+                            <div class="border-t border-border pt-6">
+                                <h4 class="font-medium text-slate-800 mb-3">Per-Class Routing Overrides</h4>
+                                <p class="text-sm text-slate-600 mb-4">Override default routing for specific event classes:</p>
+                                
+                                <div class="table-container">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Event Class</th>
+                                                <th>Send to Cloud</th>
+                                                <th>MQTT</th>
+                                                <th>Push</th>
+                                                <th>Email</th>
+                                                <th>Rule Engine</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="routing-overrides-table">
+                                            <!-- Routing overrides will be populated here -->
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="border-t border-border pt-6">
-                            <h4 class="font-medium text-slate-800 mb-3">Log Format</h4>
-                            <div class="bg-slate-50 rounded-lg p-4 font-mono text-sm">
-                                <code id="log-format-preview">[Timestamp] [Class] [Code] [Value] [Source]</code>
-                            </div>
-                            <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Timestamp]')">Timestamp</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Class]')">Class</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Code]')">Code</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Value]')">Value</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Source]')">Source</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Device]')">Device</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Severity]')">Severity</button>
-                                <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Message]')">Message</button>
+                    </div>
+                </div>
+
+                <!-- SECTION 4: LOGGING CONFIGURATION -->
+                <div class="section-toggle">
+                    <div class="section-toggle-header" onclick="toggleSection('logging-config')">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-file-lines text-green-500"></i>
+                            <div>
+                                <h2 class="font-semibold text-slate-800">Logging Configuration</h2>
+                                <p class="text-xs text-slate-500">Configure log storage and format</p>
                             </div>
                         </div>
-                        
-                        <div class="border-t border-border pt-6">
-                            <h4 class="font-medium text-slate-800 mb-3">Log Filters</h4>
+                        <i class="fa-solid fa-chevron-down section-toggle-indicator text-slate-400"></i>
+                    </div>
+                    <div class="section-toggle-content" id="section-logging-config">
+                        <div class="space-y-6">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <h5 class="text-sm font-medium text-slate-700 mb-2">Include Only:</h5>
-                                    <div class="space-y-2">
-                                        <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                            <span class="text-sm text-slate-700">Critical (5)</span>
+                                    <h4 class="font-medium text-slate-800 mb-3">Log Storage Mode</h4>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
+                                            <input type="radio" name="log-mode" value="ring" class="text-primary focus:ring-primary" checked>
+                                            <div>
+                                                <span class="text-sm font-medium text-slate-700">Ring Buffer</span>
+                                                <p class="text-xs text-slate-500">Overwrite oldest logs when full</p>
+                                            </div>
                                         </label>
-                                        <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                            <span class="text-sm text-slate-700">Warning (3-4)</span>
+                                        <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
+                                            <input type="radio" name="log-mode" value="append" class="text-primary focus:ring-primary">
+                                            <div>
+                                                <span class="text-sm font-medium text-slate-700">Append Mode</span>
+                                                <p class="text-xs text-slate-500">Stop logging when full</p>
+                                            </div>
                                         </label>
-                                        <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
-                                            <span class="text-sm text-slate-700">Info (1-2)</span>
+                                        <label class="flex items-center space-x-3 p-3 border border-border rounded-lg hover:bg-slate-50 cursor-pointer">
+                                            <input type="radio" name="log-mode" value="daily" class="text-primary focus:ring-primary">
+                                            <div>
+                                                <span class="text-sm font-medium text-slate-700">Daily Files</span>
+                                                <p class="text-xs text-slate-500">Create new file each day</p>
+                                            </div>
                                         </label>
                                     </div>
                                 </div>
                                 
                                 <div>
-                                    <h5 class="text-sm font-medium text-slate-700 mb-2">Sources:</h5>
-                                    <div class="space-y-2">
+                                    <h4 class="font-medium text-slate-800 mb-3">Log Settings</h4>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Max File Size</label>
+                                            <div class="flex items-center space-x-2">
+                                                <input type="number" id="max-file-size" class="w-24 rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" value="2" min="0.1" step="0.1">
+                                                <select class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border">
+                                                    <option>MB</option>
+                                                    <option>GB</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Max Retained Files</label>
+                                            <input type="number" id="max-files" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border" value="10" min="1">
+                                        </div>
+                                        
                                         <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                            <span class="text-sm text-slate-700">CraneIQ</span>
+                                            <input type="checkbox" id="auto-clear-logs" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                            <span class="text-sm text-slate-700">Auto-clear older logs when limit reached</span>
                                         </label>
-                                        <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                            <span class="text-sm text-slate-700">Modbus</span>
-                                        </label>
-                                        <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
-                                            <span class="text-sm text-slate-700">System</span>
-                                        </label>
-                                        <label class="flex items-center space-x-2">
-                                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
-                                            <span class="text-sm text-slate-700">Custom</span>
-                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-border pt-6">
+                                <h4 class="font-medium text-slate-800 mb-3">Log Format</h4>
+                                <div class="bg-slate-50 rounded-lg p-4 font-mono text-sm">
+                                    <code id="log-format-preview">[Timestamp] [Class] [Code] [Value] [Source]</code>
+                                </div>
+                                <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Timestamp]')">Timestamp</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Class]')">Class</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Code]')">Code</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Value]')">Value</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Source]')">Source</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Device]')">Device</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Severity]')">Severity</button>
+                                    <button class="text-xs px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200" onclick="addToLogFormat('[Message]')">Message</button>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t border-border pt-6">
+                                <h4 class="font-medium text-slate-800 mb-3">Log Filters</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <h5 class="text-sm font-medium text-slate-700 mb-2">Include Only:</h5>
+                                        <div class="space-y-2">
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                                <span class="text-sm text-slate-700">Critical (5)</span>
+                                            </label>
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                                <span class="text-sm text-slate-700">Warning (3-4)</span>
+                                            </label>
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                                <span class="text-sm text-slate-700">Info (1-2)</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <h5 class="text-sm font-medium text-slate-700 mb-2">Sources:</h5>
+                                        <div class="space-y-2">
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                                <span class="text-sm text-slate-700">CraneIQ</span>
+                                            </label>
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                                <span class="text-sm text-slate-700">Modbus</span>
+                                            </label>
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked>
+                                                <span class="text-sm text-slate-700">System</span>
+                                            </label>
+                                            <label class="flex items-center space-x-2">
+                                                <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary">
+                                                <span class="text-sm text-slate-700">Custom</span>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -866,12 +918,7 @@
         // ========== GLOBAL STATE ==========
         let eventClasses = [];
         let alertDefinitions = [];
-        let sectionStates = {
-            'event-classes': true,
-            'alert-definitions': true,
-            'alert-routing': true,
-            'logging-config': true
-        };
+        let activeSection = 'event-classes'; // Default active section
         
         // Default event classes
         const defaultEventClasses = [
@@ -1049,12 +1096,62 @@
             }
         }
         
+        // ========== SECTION TOGGLE FUNCTIONS ==========
+        function toggleSection(sectionId) {
+            const header = event.currentTarget;
+            const content = document.getElementById(`section-${sectionId}`);
+            const indicator = header.querySelector('.section-toggle-indicator');
+            
+            // Close all sections first
+            document.querySelectorAll('.section-toggle-content').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.section-toggle-header').forEach(header => {
+                header.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.section-toggle-indicator').forEach(ind => {
+                ind.classList.remove('active');
+            });
+            
+            // Open the clicked section
+            header.classList.add('active');
+            content.classList.add('active');
+            indicator.classList.add('active');
+            
+            activeSection = sectionId;
+        }
+        
+        function toggleAllSections() {
+            const allExpanded = Array.from(document.querySelectorAll('.section-toggle-content')).every(
+                section => section.classList.contains('active')
+            );
+            const newState = !allExpanded;
+            
+            // Update all sections
+            document.querySelectorAll('.section-toggle').forEach((toggle, index) => {
+                const header = toggle.querySelector('.section-toggle-header');
+                const content = toggle.querySelector('.section-toggle-content');
+                const indicator = header.querySelector('.section-toggle-indicator');
+                
+                if (newState) {
+                    header.classList.add('active');
+                    content.classList.add('active');
+                    indicator.classList.add('active');
+                } else {
+                    header.classList.remove('active');
+                    content.classList.remove('active');
+                    indicator.classList.remove('active');
+                }
+            });
+        }
+        
         // ========== INITIALIZATION ==========
         document.addEventListener('DOMContentLoaded', function() {
             loadSidebar();
             loadData();
             updateStats();
-            initializeSectionToggles();
             
             // Initialize gateway select
             const gatewaySelect = document.getElementById('gateway-select');
@@ -1066,45 +1163,6 @@
                 });
             }
         });
-        
-        // ========== SECTION TOGGLE FUNCTIONS ==========
-        function initializeSectionToggles() {
-            // Set initial state
-            Object.keys(sectionStates).forEach(sectionId => {
-                updateSectionToggle(sectionId, sectionStates[sectionId]);
-            });
-        }
-        
-        function toggleSection(sectionId) {
-            sectionStates[sectionId] = !sectionStates[sectionId];
-            updateSectionToggle(sectionId, sectionStates[sectionId]);
-        }
-        
-        function updateSectionToggle(sectionId, isExpanded) {
-            const toggle = document.querySelector(`[data-section="${sectionId}"]`);
-            const content = document.getElementById(`${sectionId}-section`);
-            
-            if (toggle && content) {
-                if (isExpanded) {
-                    toggle.classList.remove('collapsed');
-                    content.classList.remove('collapsed');
-                } else {
-                    toggle.classList.add('collapsed');
-                    content.classList.add('collapsed');
-                }
-            }
-        }
-        
-        function toggleAllSections() {
-            const allExpanded = Object.values(sectionStates).every(state => state);
-            const newState = !allExpanded;
-            
-            // Update all sections
-            Object.keys(sectionStates).forEach(sectionId => {
-                sectionStates[sectionId] = newState;
-                updateSectionToggle(sectionId, newState);
-            });
-        }
         
         // ========== DATA LOADING ==========
         function loadData() {

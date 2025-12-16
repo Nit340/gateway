@@ -40,8 +40,6 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .toggle-checkbox:checked { right: 0; border-color: #0ea5e9; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #0ea5e9; }
         
         /* Modal Styles */
         .modal-overlay {
@@ -354,6 +352,53 @@
             transform: translateX(20px);
         }
         
+        /* Section Toggle */
+        .section-toggle {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        
+        .section-toggle-header {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            background: white;
+            transition: background-color 0.2s;
+        }
+        
+        .section-toggle-header:hover {
+            background-color: #f8fafc;
+        }
+        
+        .section-toggle-header.active {
+            border-bottom: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        
+        .section-toggle-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+        }
+        
+        .section-toggle-content.active {
+            max-height: 2000px;
+            padding: 20px;
+        }
+        
+        .section-toggle-indicator {
+            transition: transform 0.3s ease;
+        }
+        
+        .section-toggle-indicator.active {
+            transform: rotate(180deg);
+        }
+        
         /* Tab Styles */
         .tab-button {
             padding: 10px 20px;
@@ -373,15 +418,7 @@
             font-weight: 600;
         }
         
-        /* Log Table Styles */
-        .log-row {
-            transition: background-color 0.2s ease;
-        }
-        
-        .log-row:hover {
-            background-color: #f8fafc;
-        }
-        
+        /* Status Badges */
         .status-badge {
             padding: 4px 8px;
             border-radius: 12px;
@@ -407,6 +444,24 @@
         .status-pending {
             background-color: #fef3c7;
             color: #92400e;
+        }
+        
+        /* Content Section */
+        .content-section {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .content-section.active {
+            display: block;
+            opacity: 1;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -437,10 +492,7 @@
         <!-- HEADER -->
         <header id="header" class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shrink-0 z-20">
             <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2 text-brand-700 font-bold text-xl">
-                    <i class="fa-solid fa-network-wired"></i>
-                    <span>Innospace</span>
-                </div>
+               
                 <div class="h-6 w-px bg-slate-300 mx-2"></div>
                 <nav class="flex items-center text-sm text-slate-500">
                     <span>Univa Gateway Config</span>
@@ -451,7 +503,7 @@
             
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2 bg-slate-100 rounded-md px-3 py-1.5 border border-slate-200">
-                    <span class="text-xs text-slate-500 font-semibold uppercase">Gateway</span>
+                   
                     <select id="gateway-select" class="bg-transparent text-sm font-medium text-slate-700 focus:outline-none cursor-pointer">
                         <option>Univa-GW-01</option>
                         <option>Univa-GW-02</option>
@@ -459,11 +511,9 @@
                     </select>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button class="px-4 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors" onclick="resetConfiguration()">Reset</button>
-                    <button class="px-4 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors" onclick="cancelChanges()">Cancel</button>
-                    <button class="px-4 py-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md shadow-sm transition-colors" onclick="saveConfiguration()">
-                        <i class="fa-solid fa-save mr-1"></i> Save Config
-                    </button>
+                   <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-circle-question mr-2"></i> Help
+            </button>
                 </div>
             </div>
         </header>
@@ -508,408 +558,456 @@
                     </div>
                 </div>
 
-                <!-- TAB 1: CHANNEL CONFIGURATION -->
-                <div id="tab-content-channels" class="space-y-6">
+                <!-- All sections are now in one container with toggles -->
+                <div id="sections-container" class="space-y-4">
                     
-                    <!-- Channel Selection Buttons -->
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                        <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-brand-500 hover:bg-brand-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('mqtt')">
-                            <i class="fa-solid fa-satellite-dish text-2xl text-brand-500"></i>
-                            <span class="text-sm font-medium text-slate-700">MQTT</span>
-                        </button>
-                        <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('email')">
-                            <i class="fa-solid fa-envelope text-2xl text-blue-500"></i>
-                            <span class="text-sm font-medium text-slate-700">Email</span>
-                        </button>
-                        <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('sms')">
-                            <i class="fa-solid fa-comment-sms text-2xl text-green-500"></i>
-                            <span class="text-sm font-medium text-slate-700">SMS</span>
-                        </button>
-                        <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('webhook')">
-                            <i class="fa-solid fa-code-branch text-2xl text-purple-500"></i>
-                            <span class="text-sm font-medium text-slate-700">Webhook</span>
-                        </button>
-                        <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('push')">
-                            <i class="fa-solid fa-bell text-2xl text-orange-500"></i>
-                            <span class="text-sm font-medium text-slate-700">Push</span>
-                        </button>
-                        <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-pink-500 hover:bg-pink-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('third-party')">
-                            <i class="fa-solid fa-plug text-2xl text-pink-500"></i>
-                            <span class="text-sm font-medium text-slate-700">Third-Party</span>
-                        </button>
-                    </div>
-
-                    <!-- Active Channels Table -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-share-nodes text-brand-500"></i> Active Channels
-                            </h2>
-                            <button class="px-3 py-1.5 text-sm bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 hover:text-brand-600 transition-all shadow-sm" onclick="showAddChannelModal()">
-                                <i class="fa-solid fa-plus mr-1"></i> Add Channel
-                            </button>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
-                                    <tr>
-                                        <th class="px-6 py-3 font-medium">Channel Name</th>
-                                        <th class="px-6 py-3 font-medium">Type</th>
-                                        <th class="px-6 py-3 font-medium">Status</th>
-                                        <th class="px-6 py-3 font-medium">Delivery Mode</th>
-                                        <th class="px-6 py-3 font-medium">Throughput</th>
-                                        <th class="px-6 py-3 font-medium text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="channels-list" class="divide-y divide-slate-100">
-                                    <!-- Channels will be loaded dynamically -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <!-- Channel Configuration Sections (Hidden by default, shown via JS) -->
-                    <div id="channel-config-sections" class="space-y-6">
-                        <!-- Each channel config will be loaded here -->
-                    </div>
-                </div>
-
-                <!-- TAB 2: TEMPLATES -->
-                <div id="tab-content-templates" class="space-y-6 hidden">
-                    
-                    <!-- Template Variables Panel -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-code text-brand-500"></i> Template Variables
-                            </h2>
-                        </div>
-                        <div class="p-6">
-                            <p class="text-sm text-slate-600 mb-4">Use these variables in your templates. They will be replaced with actual values during alert generation.</p>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <div class="border border-slate-200 rounded-lg p-4">
-                                    <h3 class="text-sm font-medium text-slate-700 mb-2">Alert Information</h3>
-                                    <div class="space-y-1">
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{alert_name}}</code>
-                                            <span class="text-xs text-slate-500">Alert name</span>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{alert_class}}</code>
-                                            <span class="text-xs text-slate-500">Alert class</span>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{severity}}</code>
-                                            <span class="text-xs text-slate-500">Severity level</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="border border-slate-200 rounded-lg p-4">
-                                    <h3 class="text-sm font-medium text-slate-700 mb-2">Data Values</h3>
-                                    <div class="space-y-1">
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{value}}</code>
-                                            <span class="text-xs text-slate-500">Current value</span>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{unit}}</code>
-                                            <span class="text-xs text-slate-500">Measurement unit</span>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{source}}</code>
-                                            <span class="text-xs text-slate-500">Source device</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="border border-slate-200 rounded-lg p-4">
-                                    <h3 class="text-sm font-medium text-slate-700 mb-2">Time & Context</h3>
-                                    <div class="space-y-1">
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{timestamp}}</code>
-                                            <span class="text-xs text-slate-500">Timestamp</span>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{gateway_id}}</code>
-                                            <span class="text-xs text-slate-500">Gateway ID</span>
-                                        </div>
-                                        <div class="flex justify-between items-center">
-                                            <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{location}}</code>
-                                            <span class="text-xs text-slate-500">Location</span>
-                                        </div>
-                                    </div>
+                    <!-- SECTION 1: CHANNEL CONFIGURATION -->
+                    <div class="section-toggle">
+                        <div class="section-toggle-header active" onclick="toggleSection('channels')">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-share-nodes text-brand-500"></i>
+                                <div>
+                                    <h2 class="font-semibold text-slate-800">Configure Channels</h2>
+                                    <p class="text-xs text-slate-500">Set up MQTT, Email, SMS, Webhooks, Push notifications, and third-party integrations</p>
                                 </div>
                             </div>
+                            <i class="fa-solid fa-chevron-down section-toggle-indicator active text-slate-400"></i>
                         </div>
-                    </section>
-
-                    <!-- Template Editor -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-file-lines text-slate-400"></i> Message Templates
-                            </h2>
-                            <button class="text-xs font-medium text-brand-600 hover:underline" onclick="showAllTemplates()">View All</button>
-                        </div>
-                        <div class="p-6 flex flex-col md:flex-row gap-6 h-full">
-                            <!-- Template List -->
-                            <div class="w-full md:w-1/3 border-r border-slate-100 pr-0 md:pr-6 space-y-3">
-                                <div id="templates-list" class="space-y-3">
-                                    <!-- Templates will be loaded dynamically -->
-                                </div>
-                                <button class="w-full py-2 border border-dashed border-slate-300 rounded-lg text-xs font-medium text-slate-500 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 transition-all" onclick="showCreateTemplateModal()">
-                                    + Create New Template
+                        <div class="section-toggle-content active" id="section-channels">
+                            <!-- Channel Selection Buttons -->
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+                                <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-brand-500 hover:bg-brand-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('mqtt')">
+                                    <i class="fa-solid fa-satellite-dish text-2xl text-brand-500"></i>
+                                    <span class="text-sm font-medium text-slate-700">MQTT</span>
+                                </button>
+                                <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('email')">
+                                    <i class="fa-solid fa-envelope text-2xl text-blue-500"></i>
+                                    <span class="text-sm font-medium text-slate-700">Email</span>
+                                </button>
+                                <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('sms')">
+                                    <i class="fa-solid fa-comment-sms text-2xl text-green-500"></i>
+                                    <span class="text-sm font-medium text-slate-700">SMS</span>
+                                </button>
+                                <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('webhook')">
+                                    <i class="fa-solid fa-code-branch text-2xl text-purple-500"></i>
+                                    <span class="text-sm font-medium text-slate-700">Webhook</span>
+                                </button>
+                                <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('push')">
+                                    <i class="fa-solid fa-bell text-2xl text-orange-500"></i>
+                                    <span class="text-sm font-medium text-slate-700">Push</span>
+                                </button>
+                                <button class="p-4 bg-white border border-slate-200 rounded-lg hover:border-pink-500 hover:bg-pink-50 transition-all flex flex-col items-center justify-center gap-2" onclick="showChannelConfig('third-party')">
+                                    <i class="fa-solid fa-plug text-2xl text-pink-500"></i>
+                                    <span class="text-sm font-medium text-slate-700">Third-Party</span>
                                 </button>
                             </div>
 
-                            <!-- Template Editor Preview -->
-                            <div class="w-full md:w-2/3 flex flex-col gap-4">
-                                <div id="template-editor" class="space-y-3">
-                                    <!-- Template editor will be loaded dynamically -->
+                            <!-- Active Channels Table -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-list-check text-brand-500"></i> Active Channels
+                                    </h3>
+                                    <button class="px-3 py-1.5 text-sm bg-white border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 hover:text-brand-600 transition-all shadow-sm" onclick="showAddChannelModal()">
+                                        <i class="fa-solid fa-plus mr-1"></i> Add Channel
+                                    </button>
                                 </div>
-                                <div class="mt-auto flex justify-end gap-2">
-                                    <button class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md" onclick="previewTemplate()">Preview</button>
-                                    <button class="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md" onclick="saveTemplate()">Save Changes</button>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                                            <tr>
+                                                <th class="px-6 py-3 font-medium">Channel Name</th>
+                                                <th class="px-6 py-3 font-medium">Type</th>
+                                                <th class="px-6 py-3 font-medium">Status</th>
+                                                <th class="px-6 py-3 font-medium">Delivery Mode</th>
+                                                <th class="px-6 py-3 font-medium">Throughput</th>
+                                                <th class="px-6 py-3 font-medium text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="channels-list" class="divide-y divide-slate-100">
+                                            <!-- Channels will be loaded dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Channel Configuration Sections -->
+                            <div id="channel-config-sections" class="mt-6 space-y-4">
+                                <!-- Each channel config will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: TEMPLATES -->
+                    <div class="section-toggle">
+                        <div class="section-toggle-header" onclick="toggleSection('templates')">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-file-lines text-blue-500"></i>
+                                <div>
+                                    <h2 class="font-semibold text-slate-800">Templates</h2>
+                                    <p class="text-xs text-slate-500">Create and manage message templates for different notification types</p>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-down section-toggle-indicator text-slate-400"></i>
+                        </div>
+                        <div class="section-toggle-content" id="section-templates">
+                            <!-- Template Variables Panel -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-code text-brand-500"></i> Template Variables
+                                    </h3>
+                                </div>
+                                <div class="p-6">
+                                    <p class="text-sm text-slate-600 mb-4">Use these variables in your templates. They will be replaced with actual values during alert generation.</p>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <div class="border border-slate-200 rounded-lg p-4">
+                                            <h4 class="text-sm font-medium text-slate-700 mb-2">Alert Information</h4>
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{alert_name}}</code>
+                                                    <span class="text-xs text-slate-500">Alert name</span>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{alert_class}}</code>
+                                                    <span class="text-xs text-slate-500">Alert class</span>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{severity}}</code>
+                                                    <span class="text-xs text-slate-500">Severity level</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="border border-slate-200 rounded-lg p-4">
+                                            <h4 class="text-sm font-medium text-slate-700 mb-2">Data Values</h4>
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{value}}</code>
+                                                    <span class="text-xs text-slate-500">Current value</span>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{unit}}</code>
+                                                    <span class="text-xs text-slate-500">Measurement unit</span>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{source}}</code>
+                                                    <span class="text-xs text-slate-500">Source device</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="border border-slate-200 rounded-lg p-4">
+                                            <h4 class="text-sm font-medium text-slate-700 mb-2">Time & Context</h4>
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{timestamp}}</code>
+                                                    <span class="text-xs text-slate-500">Timestamp</span>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{gateway_id}}</code>
+                                                    <span class="text-xs text-slate-500">Gateway ID</span>
+                                                </div>
+                                                <div class="flex justify-between items-center">
+                                                    <code class="text-xs bg-slate-100 px-2 py-1 rounded">{{location}}</code>
+                                                    <span class="text-xs text-slate-500">Location</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Template Editor -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+                                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-file-lines text-slate-400"></i> Message Templates
+                                    </h3>
+                                    <button class="text-xs font-medium text-brand-600 hover:underline" onclick="showAllTemplates()">View All</button>
+                                </div>
+                                <div class="p-6 flex flex-col md:flex-row gap-6 h-full">
+                                    <!-- Template List -->
+                                    <div class="w-full md:w-1/3 border-r border-slate-100 pr-0 md:pr-6 space-y-3">
+                                        <div id="templates-list" class="space-y-3">
+                                            <!-- Templates will be loaded dynamically -->
+                                        </div>
+                                        <button class="w-full py-2 border border-dashed border-slate-300 rounded-lg text-xs font-medium text-slate-500 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 transition-all" onclick="showCreateTemplateModal()">
+                                            + Create New Template
+                                        </button>
+                                    </div>
+
+                                    <!-- Template Editor Preview -->
+                                    <div class="w-full md:w-2/3 flex flex-col gap-4">
+                                        <div id="template-editor" class="space-y-3">
+                                            <!-- Template editor will be loaded dynamically -->
+                                        </div>
+                                        <div class="mt-auto flex justify-end gap-2">
+                                            <button class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md" onclick="previewTemplate()">Preview</button>
+                                            <button class="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md" onclick="saveTemplate()">Save Changes</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </section>
-                </div>
+                    </div>
 
-                <!-- TAB 3: ROUTING RULES -->
-                <div id="tab-content-routing" class="space-y-6 hidden">
-                    
-                    <!-- Routing Rules Table -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-route text-slate-400"></i> Routing Rules
-                            </h2>
-                            <button class="px-3 py-1.5 text-sm bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all shadow-sm" onclick="showAddRoutingRuleModal()">
-                                <i class="fa-solid fa-plus mr-1"></i> Add Routing Rule
-                            </button>
+                    <!-- SECTION 3: ROUTING RULES -->
+                    <div class="section-toggle">
+                        <div class="section-toggle-header" onclick="toggleSection('routing')">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-route text-green-500"></i>
+                                <div>
+                                    <h2 class="font-semibold text-slate-800">Routing Rules</h2>
+                                    <p class="text-xs text-slate-500">Define alert routing, throttling, and escalation policies</p>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-down section-toggle-indicator text-slate-400"></i>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
-                                    <tr>
-                                        <th class="px-6 py-3 font-medium">Alert Class</th>
-                                        <th class="px-6 py-3 font-medium">Channels</th>
-                                        <th class="px-6 py-3 font-medium">Condition</th>
-                                        <th class="px-6 py-3 font-medium">Throttling</th>
-                                        <th class="px-6 py-3 font-medium">Escalation</th>
-                                        <th class="px-6 py-3 font-medium text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="routing-rules-list" class="divide-y divide-slate-100">
-                                    <!-- Routing rules will be loaded dynamically -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                        <div class="section-toggle-content" id="section-routing">
+                            <!-- Routing Rules Table -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+                                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-route text-slate-400"></i> Routing Rules
+                                    </h3>
+                                    <button class="px-3 py-1.5 text-sm bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-all shadow-sm" onclick="showAddRoutingRuleModal()">
+                                        <i class="fa-solid fa-plus mr-1"></i> Add Routing Rule
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                                            <tr>
+                                                <th class="px-6 py-3 font-medium">Alert Class</th>
+                                                <th class="px-6 py-3 font-medium">Channels</th>
+                                                <th class="px-6 py-3 font-medium">Condition</th>
+                                                <th class="px-6 py-3 font-medium">Throttling</th>
+                                                <th class="px-6 py-3 font-medium">Escalation</th>
+                                                <th class="px-6 py-3 font-medium text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="routing-rules-list" class="divide-y divide-slate-100">
+                                            <!-- Routing rules will be loaded dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
 
-                    <!-- Escalation Configuration -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-arrow-up-wide-short text-orange-500"></i> Escalation Policies
-                            </h2>
+                            <!-- Escalation Configuration -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-arrow-up-wide-short text-orange-500"></i> Escalation Policies
+                                    </h3>
+                                </div>
+                                <div class="p-6">
+                                    <div class="space-y-4">
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div class="border border-slate-200 rounded-lg p-4">
+                                                <h4 class="text-sm font-medium text-slate-700 mb-2">Level 1 - Immediate</h4>
+                                                <p class="text-xs text-slate-500 mb-3">Initial notification to primary contacts</p>
+                                                <div class="space-y-1 text-xs">
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fa-solid fa-clock text-slate-400"></i>
+                                                        <span>Time: Immediately</span>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fa-solid fa-users text-slate-400"></i>
+                                                        <span>Contacts: Primary Team</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="border border-slate-200 rounded-lg p-4">
+                                                <h4 class="text-sm font-medium text-slate-700 mb-2">Level 2 - Escalated</h4>
+                                                <p class="text-xs text-slate-500 mb-3">If not acknowledged in 5 minutes</p>
+                                                <div class="space-y-1 text-xs">
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fa-solid fa-clock text-slate-400"></i>
+                                                        <span>Time: After 5 minutes</span>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fa-solid fa-user-tie text-slate-400"></i>
+                                                        <span>Contacts: Supervisors</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="border border-slate-200 rounded-lg p-4">
+                                                <h4 class="text-sm font-medium text-slate-700 mb-2">Level 3 - Critical</h4>
+                                                <p class="text-xs text-slate-500 mb-3">If still not resolved in 15 minutes</p>
+                                                <div class="space-y-1 text-xs">
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fa-solid fa-clock text-slate-400"></i>
+                                                        <span>Time: After 15 minutes</span>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fa-solid fa-triangle-exclamation text-slate-400"></i>
+                                                        <span>Contacts: Management</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex justify-end">
+                                            <button class="px-3 py-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-md border border-brand-200 transition-all" onclick="editEscalationPolicies()">
+                                                Edit Escalation Policies
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="p-6">
-                            <div class="space-y-4">
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div class="border border-slate-200 rounded-lg p-4">
-                                        <h3 class="text-sm font-medium text-slate-700 mb-2">Level 1 - Immediate</h3>
-                                        <p class="text-xs text-slate-500 mb-3">Initial notification to primary contacts</p>
-                                        <div class="space-y-1 text-xs">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-clock text-slate-400"></i>
-                                                <span>Time: Immediately</span>
-                                            </div>
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-users text-slate-400"></i>
-                                                <span>Contacts: Primary Team</span>
-                                            </div>
+                    </div>
+
+                    <!-- SECTION 4: DELIVERY LOGS -->
+                    <div class="section-toggle">
+                        <div class="section-toggle-header" onclick="toggleSection('logs')">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-list-check text-purple-500"></i>
+                                <div>
+                                    <h2 class="font-semibold text-slate-800">Delivery Logs</h2>
+                                    <p class="text-xs text-slate-500">Monitor notification delivery status, performance metrics, and statistics</p>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-down section-toggle-indicator text-slate-400"></i>
+                        </div>
+                        <div class="section-toggle-content" id="section-logs">
+                            <!-- Log Filters -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-filter text-brand-500"></i> Filter Logs
+                                    </h3>
+                                </div>
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-500 mb-1">Channel</label>
+                                            <select id="log-channel-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
+                                                <option value="">All Channels</option>
+                                                <option value="mqtt">MQTT</option>
+                                                <option value="email">Email</option>
+                                                <option value="sms">SMS</option>
+                                                <option value="webhook">Webhook</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-500 mb-1">Alert Class</label>
+                                            <select id="log-class-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
+                                                <option value="">All Classes</option>
+                                                <option value="critical">Critical</option>
+                                                <option value="warning">Warning</option>
+                                                <option value="info">Info</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+                                            <select id="log-status-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
+                                                <option value="">All Status</option>
+                                                <option value="sent">Sent</option>
+                                                <option value="delivered">Delivered</option>
+                                                <option value="failed">Failed</option>
+                                                <option value="pending">Pending</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-500 mb-1">Date Range</label>
+                                            <input type="date" id="log-date-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" onchange="filterLogs()">
                                         </div>
                                     </div>
                                     
-                                    <div class="border border-slate-200 rounded-lg p-4">
-                                        <h3 class="text-sm font-medium text-slate-700 mb-2">Level 2 - Escalated</h3>
-                                        <p class="text-xs text-slate-500 mb-3">If not acknowledged in 5 minutes</p>
-                                        <div class="space-y-1 text-xs">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-clock text-slate-400"></i>
-                                                <span>Time: After 5 minutes</span>
-                                            </div>
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-user-tie text-slate-400"></i>
-                                                <span>Contacts: Supervisors</span>
-                                            </div>
-                                        </div>
+                                    <!-- Logs Table -->
+                                    <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                                        <table class="w-full text-sm text-left">
+                                            <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                                <tr>
+                                                    <th class="px-6 py-3 font-medium">Time</th>
+                                                    <th class="px-6 py-3 font-medium">Channel</th>
+                                                    <th class="px-6 py-3 font-medium">Alert Name</th>
+                                                    <th class="px-6 py-3 font-medium">Class</th>
+                                                    <th class="px-6 py-3 font-medium">Status</th>
+                                                    <th class="px-6 py-3 font-medium">Details</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="notification-logs" class="divide-y divide-slate-100">
+                                                <!-- Logs will be loaded dynamically -->
+                                            </tbody>
+                                        </table>
                                     </div>
                                     
-                                    <div class="border border-slate-200 rounded-lg p-4">
-                                        <h3 class="text-sm font-medium text-slate-700 mb-2">Level 3 - Critical</h3>
-                                        <p class="text-xs text-slate-500 mb-3">If still not resolved in 15 minutes</p>
-                                        <div class="space-y-1 text-xs">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-clock text-slate-400"></i>
-                                                <span>Time: After 15 minutes</span>
+                                    <div class="mt-4 flex justify-between items-center">
+                                        <div class="text-sm text-slate-500">
+                                            Showing <span id="log-count">10</span> of <span id="log-total">124</span> records
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md border border-slate-300" onclick="exportLogs()">
+                                                <i class="fa-solid fa-download mr-1"></i> Export Logs
+                                            </button>
+                                            <button class="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md" onclick="refreshLogs()">
+                                                <i class="fa-solid fa-sync-alt mr-1"></i> Refresh
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Statistics -->
+                            <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                                    <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                        <i class="fa-solid fa-chart-line text-slate-400"></i> Delivery Statistics (Last 24h)
+                                    </h3>
+                                </div>
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-xs font-medium text-slate-500">Total Sent</span>
+                                                <i class="fa-solid fa-paper-plane text-slate-400"></i>
                                             </div>
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-solid fa-triangle-exclamation text-slate-400"></i>
-                                                <span>Contacts: Management</span>
+                                            <div class="text-2xl font-bold text-slate-900" id="total-sent">1,248</div>
+                                            <div class="text-xs text-green-600 flex items-center gap-1">
+                                                <i class="fa-solid fa-arrow-up"></i> 12% from yesterday
+                                            </div>
+                                        </div>
+                                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-xs font-medium text-slate-500">Delivery Rate</span>
+                                                <i class="fa-solid fa-check-circle text-green-500"></i>
+                                            </div>
+                                            <div class="text-2xl font-bold text-slate-900" id="delivery-rate">98.7%</div>
+                                            <div class="text-xs text-green-600 flex items-center gap-1">
+                                                <i class="fa-solid fa-arrow-up"></i> 0.3% improvement
+                                            </div>
+                                        </div>
+                                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-xs font-medium text-slate-500">Avg Response Time</span>
+                                                <i class="fa-solid fa-clock text-orange-500"></i>
+                                            </div>
+                                            <div class="text-2xl font-bold text-slate-900" id="response-time">2.3s</div>
+                                            <div class="text-xs text-red-600 flex items-center gap-1">
+                                                <i class="fa-solid fa-arrow-up"></i> 0.4s slower
+                                            </div>
+                                        </div>
+                                        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-xs font-medium text-slate-500">Failed Attempts</span>
+                                                <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
+                                            </div>
+                                            <div class="text-2xl font-bold text-slate-900" id="failed-attempts">16</div>
+                                            <div class="text-xs text-red-600 flex items-center gap-1">
+                                                <i class="fa-solid fa-arrow-up"></i> 4 more than usual
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <div class="flex justify-end">
-                                    <button class="px-3 py-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-md border border-brand-200 transition-all" onclick="editEscalationPolicies()">
-                                        Edit Escalation Policies
-                                    </button>
-                                </div>
                             </div>
                         </div>
-                    </section>
-                </div>
-
-                <!-- TAB 4: DELIVERY LOGS -->
-                <div id="tab-content-logs" class="space-y-6 hidden">
-                    
-                    <!-- Log Filters -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-list-check text-brand-500"></i> Notification Delivery Logs
-                            </h2>
-                        </div>
-                        <div class="p-6">
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-500 mb-1">Channel</label>
-                                    <select id="log-channel-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
-                                        <option value="">All Channels</option>
-                                        <option value="mqtt">MQTT</option>
-                                        <option value="email">Email</option>
-                                        <option value="sms">SMS</option>
-                                        <option value="webhook">Webhook</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-500 mb-1">Alert Class</label>
-                                    <select id="log-class-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
-                                        <option value="">All Classes</option>
-                                        <option value="critical">Critical</option>
-                                        <option value="warning">Warning</option>
-                                        <option value="info">Info</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
-                                    <select id="log-status-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none bg-white" onchange="filterLogs()">
-                                        <option value="">All Status</option>
-                                        <option value="sent">Sent</option>
-                                        <option value="delivered">Delivered</option>
-                                        <option value="failed">Failed</option>
-                                        <option value="pending">Pending</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-500 mb-1">Date Range</label>
-                                    <input type="date" id="log-date-filter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none" onchange="filterLogs()">
-                                </div>
-                            </div>
-                            
-                            <!-- Logs Table -->
-                            <div class="overflow-x-auto border border-slate-200 rounded-lg">
-                                <table class="w-full text-sm text-left">
-                                    <thead class="text-xs text-slate-500 uppercase bg-slate-50">
-                                        <tr>
-                                            <th class="px-6 py-3 font-medium">Time</th>
-                                            <th class="px-6 py-3 font-medium">Channel</th>
-                                            <th class="px-6 py-3 font-medium">Alert Name</th>
-                                            <th class="px-6 py-3 font-medium">Class</th>
-                                            <th class="px-6 py-3 font-medium">Status</th>
-                                            <th class="px-6 py-3 font-medium">Details</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="notification-logs" class="divide-y divide-slate-100">
-                                        <!-- Logs will be loaded dynamically -->
-                                    </tbody>
-                                </table>
-                            </div>
-                            
-                            <div class="mt-4 flex justify-between items-center">
-                                <div class="text-sm text-slate-500">
-                                    Showing <span id="log-count">10</span> of <span id="log-total">124</span> records
-                                </div>
-                                <div class="flex gap-2">
-                                    <button class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-md border border-slate-300" onclick="exportLogs()">
-                                        <i class="fa-solid fa-download mr-1"></i> Export Logs
-                                    </button>
-                                    <button class="px-3 py-1.5 text-xs font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-md" onclick="refreshLogs()">
-                                        <i class="fa-solid fa-sync-alt mr-1"></i> Refresh
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Statistics -->
-                    <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h2 class="font-semibold text-slate-800 flex items-center gap-2">
-                                <i class="fa-solid fa-chart-line text-slate-400"></i> Delivery Statistics (Last 24h)
-                            </h2>
-                        </div>
-                        <div class="p-6">
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-medium text-slate-500">Total Sent</span>
-                                        <i class="fa-solid fa-paper-plane text-slate-400"></i>
-                                    </div>
-                                    <div class="text-2xl font-bold text-slate-900" id="total-sent">1,248</div>
-                                    <div class="text-xs text-green-600 flex items-center gap-1">
-                                        <i class="fa-solid fa-arrow-up"></i> 12% from yesterday
-                                    </div>
-                                </div>
-                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-medium text-slate-500">Delivery Rate</span>
-                                        <i class="fa-solid fa-check-circle text-green-500"></i>
-                                    </div>
-                                    <div class="text-2xl font-bold text-slate-900" id="delivery-rate">98.7%</div>
-                                    <div class="text-xs text-green-600 flex items-center gap-1">
-                                        <i class="fa-solid fa-arrow-up"></i> 0.3% improvement
-                                    </div>
-                                </div>
-                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-medium text-slate-500">Avg Response Time</span>
-                                        <i class="fa-solid fa-clock text-orange-500"></i>
-                                    </div>
-                                    <div class="text-2xl font-bold text-slate-900" id="response-time">2.3s</div>
-                                    <div class="text-xs text-red-600 flex items-center gap-1">
-                                        <i class="fa-solid fa-arrow-up"></i> 0.4s slower
-                                    </div>
-                                </div>
-                                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-medium text-slate-500">Failed Attempts</span>
-                                        <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
-                                    </div>
-                                    <div class="text-2xl font-bold text-slate-900" id="failed-attempts">16</div>
-                                    <div class="text-xs text-red-600 flex items-center gap-1">
-                                        <i class="fa-solid fa-arrow-up"></i> 4 more than usual
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+                    </div>
                 </div>
             </div>
         </main>
@@ -930,6 +1028,7 @@
             responseTime: 2.3,
             failedAttempts: 16
         };
+        let activeSection = 'channels'; // Default active section
 
         // ========== SIDEBAR FUNCTIONS ==========
         async function loadSidebar() {
@@ -1064,26 +1163,32 @@
             }
         }
 
-        // ========== TAB NAVIGATION ==========
-        function switchTab(tabName) {
-            // Update tab buttons
-            ['channels', 'templates', 'routing', 'logs'].forEach(tab => {
-                const tabBtn = document.getElementById(`tab-${tab}`);
-                const tabContent = document.getElementById(`tab-content-${tab}`);
-                
-                if (tabBtn && tabContent) {
-                    if (tab === tabName) {
-                        tabBtn.classList.add('active');
-                        tabContent.classList.remove('hidden');
-                    } else {
-                        tabBtn.classList.remove('active');
-                        tabContent.classList.add('hidden');
-                    }
-                }
+        // ========== SECTION TOGGLE FUNCTIONS ==========
+        function toggleSection(sectionId) {
+            const header = event.currentTarget;
+            const content = document.getElementById(`section-${sectionId}`);
+            const indicator = header.querySelector('.section-toggle-indicator');
+            
+            // Close all sections first
+            document.querySelectorAll('.section-toggle-content').forEach(section => {
+                section.classList.remove('active');
             });
             
-            // Load data for the tab
-            switch(tabName) {
+            document.querySelectorAll('.section-toggle-header').forEach(header => {
+                header.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.section-toggle-indicator').forEach(ind => {
+                ind.classList.remove('active');
+            });
+            
+            // Open the clicked section
+            header.classList.add('active');
+            content.classList.add('active');
+            indicator.classList.add('active');
+            
+            // Load data for the section
+            switch(sectionId) {
                 case 'channels':
                     loadChannels();
                     break;
@@ -1097,6 +1202,36 @@
                     loadNotificationLogs();
                     break;
             }
+            
+            activeSection = sectionId;
+            
+            // Update tab button states
+            updateTabButtons(sectionId);
+        }
+
+        function updateTabButtons(activeTab) {
+            const tabs = ['channels', 'templates', 'routing', 'logs'];
+            tabs.forEach(tab => {
+                const tabBtn = document.getElementById(`tab-${tab}`);
+                if (tabBtn) {
+                    if (tab === activeTab) {
+                        tabBtn.classList.add('active');
+                    } else {
+                        tabBtn.classList.remove('active');
+                    }
+                }
+            });
+        }
+
+        function switchTab(tabName) {
+            // Find and click the corresponding section toggle
+            const sectionHeaders = document.querySelectorAll('.section-toggle-header');
+            sectionHeaders.forEach(header => {
+                const h2 = header.querySelector('h2');
+                if (h2 && h2.textContent.toLowerCase().includes(tabName.toLowerCase())) {
+                    header.click();
+                }
+            });
         }
 
         // ========== MODAL FUNCTIONS ==========
@@ -1315,9 +1450,12 @@
 
         function updateChannelsOnline() {
             const onlineCount = channels.filter(c => c.status === 'active').length;
-            document.getElementById('channels-online').innerHTML = `
-                <i class="fa-solid fa-tower-broadcast text-xs"></i> ${onlineCount} Channels Online
-            `;
+            const element = document.getElementById('channels-online');
+            if (element) {
+                element.innerHTML = `
+                    <i class="fa-solid fa-tower-broadcast text-xs"></i> ${onlineCount} Channels Online
+                `;
+            }
         }
 
         function showAddChannelModal() {
@@ -1552,6 +1690,9 @@
             currentChannelType = channelType;
             const container = document.getElementById('channel-config-sections');
             
+            // Clear existing content
+            container.innerHTML = '';
+            
             const configs = {
                 mqtt: getMQTTConfigHTML(),
                 email: getEmailConfigHTML(),
@@ -1567,16 +1708,16 @@
 
         function getMQTTConfigHTML() {
             return `
-                <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                             <i class="fa-solid fa-satellite-dish text-brand-500"></i> MQTT Notification Channel
-                        </h2>
+                        </h3>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h3 class="text-sm font-medium text-slate-700">Enabled</h3>
+                                <h4 class="text-sm font-medium text-slate-700">Enabled</h4>
                                 <p class="text-xs text-slate-500">Enable MQTT alert publishing</p>
                             </div>
                             <label class="toggle-switch">
@@ -1648,22 +1789,22 @@
                             </button>
                         </div>
                     </div>
-                </section>
+                </div>
             `;
         }
 
         function getEmailConfigHTML() {
             return `
-                <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                             <i class="fa-solid fa-envelope text-blue-500"></i> Email Notification Channel
-                        </h2>
+                        </h3>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h3 class="text-sm font-medium text-slate-700">Enabled</h3>
+                                <h4 class="text-sm font-medium text-slate-700">Enabled</h4>
                                 <p class="text-xs text-slate-500">Enable email alert delivery</p>
                             </div>
                             <label class="toggle-switch">
@@ -1743,22 +1884,22 @@ Please investigate immediately.</textarea>
                             </button>
                         </div>
                     </div>
-                </section>
+                </div>
             `;
         }
 
         function getSMSConfigHTML() {
             return `
-                <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                             <i class="fa-solid fa-comment-sms text-green-500"></i> SMS Notification Channel
-                        </h2>
+                        </h3>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h3 class="text-sm font-medium text-slate-700">Enabled</h3>
+                                <h4 class="text-sm font-medium text-slate-700">Enabled</h4>
                                 <p class="text-xs text-slate-500">Enable SMS alert delivery</p>
                             </div>
                             <label class="toggle-switch">
@@ -1838,22 +1979,22 @@ Location: {{location}}</textarea>
                             </button>
                         </div>
                     </div>
-                </section>
+                </div>
             `;
         }
 
         function getWebhookConfigHTML() {
             return `
-                <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                             <i class="fa-solid fa-code-branch text-purple-500"></i> HTTP Webhook Notification Channel
-                        </h2>
+                        </h3>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h3 class="text-sm font-medium text-slate-700">Enabled</h3>
+                                <h4 class="text-sm font-medium text-slate-700">Enabled</h4>
                                 <p class="text-xs text-slate-500">Enable webhook alert delivery</p>
                             </div>
                             <label class="toggle-switch">
@@ -1935,22 +2076,22 @@ Location: {{location}}</textarea>
                             </button>
                         </div>
                     </div>
-                </section>
+                </div>
             `;
         }
 
         function getPushConfigHTML() {
             return `
-                <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                             <i class="fa-solid fa-bell text-orange-500"></i> Push Notification Channel
-                        </h2>
+                        </h3>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h3 class="text-sm font-medium text-slate-700">Enabled</h3>
+                                <h4 class="text-sm font-medium text-slate-700">Enabled</h4>
                                 <p class="text-xs text-slate-500">Enable push notification delivery</p>
                             </div>
                             <label class="toggle-switch">
@@ -2019,22 +2160,22 @@ Time: {{timestamp}}</textarea>
                             </button>
                         </div>
                     </div>
-                </section>
+                </div>
             `;
         }
 
         function getThirdPartyConfigHTML() {
             return `
-                <section class="bg-white rounded-xl shadow-sm border border-slate-200">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
                     <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h2 class="font-semibold text-slate-800 flex items-center gap-2">
+                        <h3 class="font-semibold text-slate-800 flex items-center gap-2">
                             <i class="fa-solid fa-plug text-pink-500"></i> Third-Party Integration
-                        </h2>
+                        </h3>
                     </div>
                     <div class="p-6 space-y-6">
                         <div class="flex items-center justify-between">
                             <div>
-                                <h3 class="text-sm font-medium text-slate-700">Enabled</h3>
+                                <h4 class="text-sm font-medium text-slate-700">Enabled</h4>
                                 <p class="text-xs text-slate-500">Enable third-party integrations</p>
                             </div>
                             <label class="toggle-switch">
@@ -2109,7 +2250,7 @@ Time: {{timestamp}}</textarea>
                             </button>
                         </div>
                     </div>
-                </section>
+                </div>
             `;
         }
 

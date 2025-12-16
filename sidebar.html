@@ -130,36 +130,8 @@
             margin: 2px 0 0;
         }
         
-        .sidebar-toggle {
-            position: fixed;
-            left: 260px;
-            top: 20px;
-            z-index: 50;
-            background: white;
-            border: 1px solid #E2E8F0;
-            border-left: none;
-            border-radius: 0 6px 6px 0;
-            padding: 8px 6px;
-            cursor: pointer;
-            color: #64748B;
-            transition: all 0.3s;
-        }
-        
-        .sidebar.collapsed {
-            transform: translateX(-260px);
-        }
-        
-        .sidebar.collapsed + .sidebar-toggle {
-            left: 0;
-        }
-        
         .main-content-with-sidebar {
             margin-left: 260px;
-            transition: margin-left 0.3s;
-        }
-        
-        .sidebar.collapsed ~ .main-content-with-sidebar {
-            margin-left: 0;
         }
         
         @media (max-width: 1024px) {
@@ -169,14 +141,6 @@
             
             .sidebar.active {
                 transform: translateX(0);
-            }
-            
-            .sidebar-toggle {
-                left: 0;
-            }
-            
-            .sidebar.active + .sidebar-toggle {
-                left: 260px;
             }
             
             .main-content-with-sidebar {
@@ -319,35 +283,16 @@
         </div>
     </div>
     
-    <!-- Sidebar Toggle Button -->
-    <div class="sidebar-toggle" id="sidebarToggle">
-        <i class="fa-solid fa-bars"></i>
-    </div>
-    
     <script>
-        // Toggle sidebar
-        document.getElementById('sidebarToggle').addEventListener('click', function() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('collapsed');
-            
-            // Toggle icon
-            const icon = this.querySelector('i');
-            if (sidebar.classList.contains('collapsed')) {
-                icon.className = 'fa-solid fa-bars';
-            } else {
-                icon.className = 'fa-solid fa-times';
-            }
-        });
-        
-        // Set active page based on URL or storage
+        // Set active page based on URL
         function setActivePage() {
-            // For demo purposes, set General Configuration as active
-            // In real implementation, use window.location.pathname or localStorage
-            const currentPage = 'General Configuration';
+            // Get current page from URL
+            const currentPath = window.location.pathname.split('/').pop();
             const navItems = document.querySelectorAll('.nav-item');
             
             navItems.forEach(item => {
-                if (item.textContent.trim().includes(currentPage)) {
+                const href = item.getAttribute('href');
+                if (href === currentPath) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
@@ -357,20 +302,6 @@
         
         // Initialize
         setActivePage();
-        
-        // Handle mobile menu
-        if (window.innerWidth <= 1024) {
-            document.getElementById('sidebar').classList.add('collapsed');
-        }
-        
-        // Update on resize
-        window.addEventListener('resize', function() {
-            if (window.innerWidth <= 1024) {
-                document.getElementById('sidebar').classList.add('collapsed');
-            } else {
-                document.getElementById('sidebar').classList.remove('collapsed');
-            }
-        });
     </script>
 </body>
 </html>

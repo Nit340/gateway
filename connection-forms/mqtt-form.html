@@ -1,217 +1,465 @@
+<!-- MQTT FORM WITH ALL TAB CONTENT IN ONE FILE -->
 <div class="space-y-6">
-    <div class="form-section">
-        <h5 class="form-section-title">Broker Configuration</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
-                <select id="field-protocol" class="w-full compact-select" required>
-                    <option value="mqtt://">MQTT</option>
-                    <option value="mqtts://" selected>MQTTS (SSL)</option>
-                    <option value="tcp://">TCP</option>
-                    <option value="ws://">WebSocket</option>
-                    <option value="wss://">WebSocket Secure</option>
-                </select>
-                <p class="help-text">Communication protocol with broker</p>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4">
+    <!-- CONNECTION TAB CONTENT -->
+    <div id="mqtt-connection-content">
+        <div class="form-section">
+            <h5 class="form-section-title">Broker Configuration</h5>
+            <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Broker Hostname</label>
-                    <input type="text" id="field-host" 
-                           class="w-full compact-input"
-                           value="broker.company.com"
-                           placeholder="Enter broker hostname"
-                           required>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
+                    <select id="field-protocol" class="w-full compact-select" required>
+                        <option value="mqtt://">MQTT</option>
+                        <option value="mqtts://" selected>MQTTS (SSL)</option>
+                        <option value="tcp://">TCP</option>
+                        <option value="ws://">WebSocket</option>
+                        <option value="wss://">WebSocket Secure</option>
+                    </select>
+                    <p class="help-text">Communication protocol with broker</p>
                 </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Broker Hostname</label>
+                        <input type="text" id="field-host" 
+                               class="w-full compact-input"
+                               value="broker.company.com"
+                               placeholder="Enter broker hostname"
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                        <input type="number" id="field-port" 
+                               class="w-full compact-input"
+                               value="8883"
+                               min="1"
+                               max="65535"
+                               placeholder="Port number"
+                               required>
+                    </div>
+                </div>
+                
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
-                    <input type="number" id="field-port" 
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
+                    <input type="text" id="field-clientId" 
                            class="w-full compact-input"
-                           value="8883"
-                           min="1"
-                           max="65535"
-                           placeholder="Port number"
+                           value="univa-gateway-${randomId}"
+                           placeholder="Enter unique client ID"
                            required>
+                    <p class="help-text">Must be unique across all connections</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive Interval</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="field-keepAlive" 
+                               class="w-full compact-input"
+                               value="60"
+                               min="5"
+                               max="65535"
+                               required>
+                        <span class="text-xs text-slate-500">seconds</span>
+                    </div>
+                    <p class="help-text">Seconds between keep-alive packets</p>
                 </div>
             </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
-                <input type="text" id="field-clientId" 
-                       class="w-full compact-input"
-                       value="univa-gateway-${randomId}"
-                       placeholder="Enter unique client ID"
-                       required>
-                <p class="help-text">Must be unique across all connections</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive Interval</label>
-                <div class="flex items-center gap-2">
-                    <input type="number" id="field-keepAlive" 
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Authentication</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                    <input type="text" id="field-username" 
                            class="w-full compact-input"
-                           value="60"
-                           min="5"
-                           max="65535"
-                           required>
-                    <span class="text-xs text-slate-500">seconds</span>
+                           placeholder="Enter username">
+                    <p class="help-text">Leave empty if no authentication required</p>
                 </div>
-                <p class="help-text">Seconds between keep-alive packets</p>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                    <div class="form-input-group">
+                        <input type="password" id="field-password"
+                               class="w-full compact-input"
+                               placeholder="Enter password">
+                        <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-password')">
+                            Generate
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable TLS/SSL</span>
+                        <p class="help-text">Secure connection with TLS/SSL</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-tls" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">MQTT Options</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Quality of Service</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="field-qos" value="0">
+                            <span class="text-xs">0 - At most once (Fire and forget)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-qos" value="1" checked>
+                            <span class="text-xs">1 - At least once (Acknowledged delivery)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-qos" value="2">
+                            <span class="text-xs">2 - Exactly once (Assured delivery)</span>
+                        </label>
+                    </div>
+                    <p class="help-text">Message delivery guarantee level</p>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Clean Session</span>
+                        <p class="help-text">Start with a clean session (no persistent subscriptions)</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-cleanSession" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Retain Messages</span>
+                        <p class="help-text">Server should retain last message</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-retainMessages">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Publishing Options</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Publish Mode</label>
+                    <select id="field-publishMode" class="w-full compact-select">
+                        <option value="onChange" selected>On Value Change</option>
+                        <option value="periodic">Periodic Interval</option>
+                        <option value="event">Event Based</option>
+                    </select>
+                    <p class="help-text">When to publish tag values</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Publish Interval</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="field-publishInterval" 
+                               class="w-full compact-input"
+                               value="1000"
+                               min="10"
+                               max="3600000">
+                        <span class="text-xs text-slate-500">ms</span>
+                    </div>
+                    <p class="help-text">Interval for periodic publishing</p>
+                </div>
             </div>
         </div>
     </div>
     
-    <div class="form-section">
-        <h5 class="form-section-title">Authentication</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
-                <input type="text" id="field-username" 
-                       class="w-full compact-input"
-                       placeholder="Enter username">
-                <p class="help-text">Leave empty if no authentication required</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
-                <div class="form-input-group">
-                    <input type="password" id="field-password"
+    <!-- TOPICS & FORMAT TAB CONTENT -->
+    <div id="mqtt-topics-content" style="display: none;">
+        <div class="form-section">
+            <h5 class="form-section-title">Topic Configuration</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Base Topic</label>
+                    <input type="text" id="field-baseTopic" 
                            class="w-full compact-input"
-                           placeholder="Enter password">
-                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-password')">
-                        Generate
+                           value="factory/crane/001"
+                           placeholder="factory/crane/001">
+                    <p class="help-text">Root topic for all published messages</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Telemetry Topic</label>
+                    <input type="text" id="field-telemetryTopic" 
+                           class="w-full compact-input"
+                           value="telemetry"
+                           placeholder="telemetry">
+                    <p class="help-text">Sub-topic for telemetry data</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Topic</label>
+                    <input type="text" id="field-alarmTopic" 
+                           class="w-full compact-input"
+                           value="alarms"
+                           placeholder="alarms">
+                    <p class="help-text">Sub-topic for alarm notifications</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Message Format</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Payload Format</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="json" checked>
+                            <span class="text-xs">JSON</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="csv">
+                            <span class="text-xs">CSV</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="keyvalue">
+                            <span class="text-xs">Key-Value Pairs</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">JSON Template</label>
+                    <textarea id="field-jsonTemplate" 
+                              class="w-full compact-input font-mono text-xs h-32"
+                              placeholder='{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}'>{
+  "timestamp": "%TIMESTAMP%",
+  "device": "%DEVICE_ID%",
+  "data": %DATA%
+}</textarea>
+                    <p class="help-text">Use %TAG_NAME% for tag values, %TIMESTAMP% for timestamp</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- TAG PUBLISHING TAB CONTENT -->
+    <div id="mqtt-publishing-content" style="display: none;">
+        <div class="form-section">
+            <h5 class="form-section-title">Tag Selection</h5>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-medium text-slate-700">Select Tags to Publish</span>
+                    <button type="button" 
+                            onclick="showAddTagModal()"
+                            class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
+                        <i class="fa-solid fa-plus mr-1"></i> Add Tags
+                    </button>
+                </div>
+                
+                <div class="border border-slate-200 rounded overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags"></th>
+                                <th class="p-2 text-left">Tag Name</th>
+                                <th class="p-2 text-left">Topic</th>
+                                <th class="p-2 text-left">Publish Rate</th>
+                                <th class="p-2 text-left">QoS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mqtt-tags-table">
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2">Hoist_Load</td>
+                                <td class="p-2">factory/crane/001/load</td>
+                                <td class="p-2">
+                                    <select class="compact-select text-xs">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="compact-select text-xs">
+                                        <option value="0">0</option>
+                                        <option value="1" selected>1</option>
+                                        <option value="2">2</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2">Boom_Angle</td>
+                                <td class="p-2">factory/crane/001/angle</td>
+                                <td class="p-2">
+                                    <select class="compact-select text-xs">
+                                        <option value="onChange">On Change</option>
+                                        <option value="1000" selected>1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="compact-select text-xs">
+                                        <option value="0">0</option>
+                                        <option value="1" selected>1</option>
+                                        <option value="2">2</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2">WindSpeed</td>
+                                <td class="p-2">factory/crane/001/wind</td>
+                                <td class="p-2">
+                                    <select class="compact-select text-xs">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="compact-select text-xs">
+                                        <option value="0">0</option>
+                                        <option value="1" selected>1</option>
+                                        <option value="2">2</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="flex justify-end gap-2">
+                    <button onclick="removeSelectedMqttTags()" class="compact-button border border-red-300 text-red-700 hover:bg-red-50">
+                        <i class="fa-solid fa-trash mr-1"></i> Remove Selected
+                    </button>
+                    <button onclick="saveMqttPublishingSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        <i class="fa-solid fa-save mr-1"></i> Save Publishing
                     </button>
                 </div>
             </div>
-            
-            <div class="flex items-center justify-between">
-                <div>
-                    <span class="text-xs font-medium text-slate-700">Enable TLS/SSL</span>
-                    <p class="help-text">Secure connection with TLS/SSL</p>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="field-tls" checked>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
         </div>
     </div>
     
-    <div class="form-section">
-        <h5 class="form-section-title">MQTT Options</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Quality of Service</label>
-                <div class="radio-group">
-                    <label class="radio-option">
-                        <input type="radio" name="field-qos" value="0">
-                        <span class="text-xs">0 - At most once (Fire and forget)</span>
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="field-qos" value="1" checked>
-                        <span class="text-xs">1 - At least once (Acknowledged delivery)</span>
-                    </label>
-                    <label class="radio-option">
-                        <input type="radio" name="field-qos" value="2">
-                        <span class="text-xs">2 - Exactly once (Assured delivery)</span>
+    <!-- ADVANCED TAB CONTENT -->
+    <div id="mqtt-advanced-content" style="display: none;">
+        <div class="form-section">
+            <h5 class="form-section-title">Connection Settings</h5>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive (sec)</label>
+                        <input type="number" id="mqtt-keep-alive" 
+                               class="w-full compact-input"
+                               value="60"
+                               min="5"
+                               max="65535">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Reconnect Interval</label>
+                        <input type="number" id="mqtt-reconnect-interval" 
+                               class="w-full compact-input"
+                               value="5"
+                               min="1"
+                               max="60">
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Auto Reconnect</span>
+                        <p class="help-text">Automatically reconnect on connection loss</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mqtt-auto-reconnect" checked>
+                        <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <p class="help-text">Message delivery guarantee level</p>
-            </div>
-            
-            <div class="flex items-center justify-between">
-                <div>
-                    <span class="text-xs font-medium text-slate-700">Clean Session</span>
-                    <p class="help-text">Start with a clean session (no persistent subscriptions)</p>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="field-cleanSession" checked>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            
-            <div class="flex items-center justify-between">
-                <div>
-                    <span class="text-xs font-medium text-slate-700">Retain Messages</span>
-                    <p class="help-text">Server should retain last message</p>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="field-retainMessages">
-                    <span class="toggle-slider"></span>
-                </label>
             </div>
         </div>
-    </div>
-    
-    <div class="form-section">
-        <h5 class="form-section-title">Publishing Options</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Publish Mode</label>
-                <select id="field-publishMode" class="w-full compact-select">
-                    <option value="onChange" selected>On Value Change</option>
-                    <option value="periodic">Periodic Interval</option>
-                    <option value="event">Event Based</option>
-                </select>
-                <p class="help-text">When to publish tag values</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Publish Interval</label>
-                <div class="flex items-center gap-2">
-                    <input type="number" id="field-publishInterval" 
-                           class="w-full compact-input"
-                           value="1000"
-                           min="10"
-                           max="3600000">
-                    <span class="text-xs text-slate-500">ms</span>
-                </div>
-                <p class="help-text">Interval for periodic publishing</p>
-            </div>
-            
-            <div class="flex items-center justify-between">
+        
+        <div class="form-section">
+            <h5 class="form-section-title">TLS/SSL Configuration</h5>
+            <div class="space-y-4">
                 <div>
-                    <span class="text-xs font-medium text-slate-700">Enable Batching</span>
-                    <p class="help-text">Group messages into batches</p>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Certificate Files</label>
+                    <div class="space-y-2">
+                        <button type="button" 
+                                onclick="showUploadModal('uploadCertModal')"
+                                class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
+                            <i class="fa-solid fa-upload mr-1"></i> Upload CA Certificate
+                        </button>
+                        
+                        <button type="button" 
+                                onclick="showUploadModal('uploadCertModal')"
+                                class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
+                            <i class="fa-solid fa-key mr-1"></i> Upload Private Key
+                        </button>
+                    </div>
                 </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="field-enableBatching">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
-                <input type="number" id="field-batchSize" 
-                       class="w-full compact-input"
-                       value="50"
-                       min="1"
-                       max="1000">
-                <p class="help-text">Messages per batch</p>
             </div>
         </div>
-    </div>
-    
-    <div class="form-section">
-        <h5 class="form-section-title">Last Will & Testament</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Will Topic</label>
-                <input type="text" id="field-lastWillTopic" 
-                       class="w-full compact-input"
-                       value="gateway/status"
-                       placeholder="topic/for/last/will">
-                <p class="help-text">Topic to publish last will message</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Will Message</label>
-                <input type="text" id="field-lastWillMessage" 
-                       class="w-full compact-input"
-                       value='{"status":"offline"}'
-                       placeholder="Last will message content">
-                <p class="help-text">Message published when connection drops unexpectedly</p>
-            </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveMqttAdvancedSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Advanced
+            </button>
         </div>
     </div>
 </div>
+
+<script>
+    // Initialize MQTT form when loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Generate random ID for client ID
+        const randomId = Math.random().toString(36).substring(2, 8);
+        const clientIdInput = document.getElementById('field-clientId');
+        if (clientIdInput) {
+            clientIdInput.value = `univa-gateway-${randomId}`;
+        }
+        
+        // Setup event listeners
+        const selectAllCheckbox = document.getElementById('select-all-tags');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('click', function() {
+                const checkboxes = document.querySelectorAll('.tag-select');
+                checkboxes.forEach(cb => {
+                    cb.checked = this.checked;
+                });
+            });
+        }
+    });
+
+    // Tag management functions
+    function removeSelectedMqttTags() {
+        const selected = document.querySelectorAll('.tag-select:checked');
+        if (selected.length === 0) {
+            alert('Please select tags to remove.');
+            return;
+        }
+        
+        if (confirm(`Remove ${selected.length} selected tag(s)?`)) {
+            selected.forEach(checkbox => {
+                const row = checkbox.closest('tr');
+                row.remove();
+            });
+            alert(`${selected.length} tag(s) removed successfully.`);
+        }
+    }
+
+    // Save functions for each tab
+    function saveMqttTopicSettings() {
+        alert('MQTT Topics & Format settings saved!');
+    }
+
+    function saveMqttPublishingSettings() {
+        alert('MQTT Publishing settings saved!');
+    }
+
+    function saveMqttAdvancedSettings() {
+        alert('MQTT Advanced settings saved!');
+    }
+</script>

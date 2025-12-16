@@ -252,37 +252,35 @@
 
     <!-- Main Content Container -->
     <div class="main-content-with-sidebar">
-        <!-- Header -->
-        <header id="header" class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+               <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
                 <div class="flex items-center space-x-4">
-                    <div class="flex items-center text-blue-700 font-bold text-xl">
-                        <i class="fa-solid fa-layer-group mr-2"></i>
-                        <span>Innospace</span>
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">System OTA & Recovery</span>
                     </div>
-                    <div class="h-6 w-px bg-slate-300 mx-2"></div>
-                    <nav class="flex text-sm font-medium text-slate-500">
-                        <span class="hover:text-slate-800 cursor-pointer">Univa Gateway Config</span>
-                        <span class="mx-2">/</span>
-                        <span class="text-slate-800 font-semibold">System OTA & Recovery</span>
-                    </nav>
                 </div>
+
+                <!-- Right: Controls -->
                 <div class="flex items-center space-x-4">
-                    <div class="relative">
-                        <select id="gateway-select" class="appearance-none bg-slate-100 border border-slate-300 text-slate-700 py-1.5 pl-3 pr-8 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
                             <option>Univa-GW-01</option>
                             <option>Univa-GW-02</option>
-                            <option>Univa-GW-Backup</option>
+                            <option>Univa-GW-03</option>
                         </select>
-                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-                            <i class="fa-solid fa-chevron-down text-xs"></i>
-                        </div>
                     </div>
-                    <div class="flex space-x-2">
-                        <button id="reset-btn" class="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">Reset</button>
-                        <button id="cancel-btn" class="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors">Cancel</button>
-                        <button id="save-btn" class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors">Save Changes</button>
-                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                    
+                   
                 </div>
             </div>
         </header>
