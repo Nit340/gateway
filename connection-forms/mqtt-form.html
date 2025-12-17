@@ -1,18 +1,25 @@
 <!-- MQTT FORM WITH ALL TAB CONTENT IN ONE FILE -->
 <div class="space-y-6">
+    <!-- Tab Navigation for MQTT Form -->
+    <div class="flex border-b border-slate-200 mb-4">
+        <button class="tab-button active" onclick="switchMqttTab('connection')">Connection</button>
+        <button class="tab-button" onclick="switchMqttTab('topics')">Topics & Format</button>
+        <button class="tab-button" onclick="switchMqttTab('publishing')">Tag Publishing</button>
+        <button class="tab-button" onclick="switchMqttTab('advanced')">Advanced</button>
+    </div>
+    
     <!-- CONNECTION TAB CONTENT -->
-    <div id="mqtt-connection-content">
+    <div id="mqtt-connection-content" class="mqtt-tab-content active">
         <div class="form-section">
             <h5 class="form-section-title">Broker Configuration</h5>
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
                     <select id="field-protocol" class="w-full compact-select" required>
-                        <option value="mqtt://">MQTT</option>
-                        <option value="mqtts://" selected>MQTTS (SSL)</option>
-                        <option value="tcp://">TCP</option>
-                        <option value="ws://">WebSocket</option>
-                        <option value="wss://">WebSocket Secure</option>
+                        <option value="mqtt">MQTT</option>
+                        <option value="mqtts" selected>MQTTS (SSL)</option>
+                        <option value="ws">WebSocket</option>
+                        <option value="wss">WebSocket Secure</option>
                     </select>
                     <p class="help-text">Communication protocol with broker</p>
                 </div>
@@ -42,7 +49,7 @@
                     <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
                     <input type="text" id="field-clientId" 
                            class="w-full compact-input"
-                           value="univa-gateway-${randomId}"
+                           value="univa-gateway-001"
                            placeholder="Enter unique client ID"
                            required>
                     <p class="help-text">Must be unique across all connections</p>
@@ -71,6 +78,7 @@
                     <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
                     <input type="text" id="field-username" 
                            class="w-full compact-input"
+                           value="admin"
                            placeholder="Enter username">
                     <p class="help-text">Leave empty if no authentication required</p>
                 </div>
@@ -80,6 +88,7 @@
                     <div class="form-input-group">
                         <input type="password" id="field-password"
                                class="w-full compact-input"
+                               value="********"
                                placeholder="Enter password">
                         <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-password')">
                             Generate
@@ -146,37 +155,15 @@
             </div>
         </div>
         
-        <div class="form-section">
-            <h5 class="form-section-title">Publishing Options</h5>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Publish Mode</label>
-                    <select id="field-publishMode" class="w-full compact-select">
-                        <option value="onChange" selected>On Value Change</option>
-                        <option value="periodic">Periodic Interval</option>
-                        <option value="event">Event Based</option>
-                    </select>
-                    <p class="help-text">When to publish tag values</p>
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Publish Interval</label>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="field-publishInterval" 
-                               class="w-full compact-input"
-                               value="1000"
-                               min="10"
-                               max="3600000">
-                        <span class="text-xs text-slate-500">ms</span>
-                    </div>
-                    <p class="help-text">Interval for periodic publishing</p>
-                </div>
-            </div>
+        <div class="flex justify-end">
+            <button onclick="saveMqttConnectionSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Connection
+            </button>
         </div>
     </div>
     
     <!-- TOPICS & FORMAT TAB CONTENT -->
-    <div id="mqtt-topics-content" style="display: none;">
+    <div id="mqtt-topics-content" class="mqtt-tab-content" style="display: none;">
         <div class="form-section">
             <h5 class="form-section-title">Topic Configuration</h5>
             <div class="space-y-4">
@@ -189,22 +176,42 @@
                     <p class="help-text">Root topic for all published messages</p>
                 </div>
                 
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Telemetry Topic</label>
-                    <input type="text" id="field-telemetryTopic" 
-                           class="w-full compact-input"
-                           value="telemetry"
-                           placeholder="telemetry">
-                    <p class="help-text">Sub-topic for telemetry data</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Telemetry Topic</label>
+                        <input type="text" id="field-telemetryTopic" 
+                               class="w-full compact-input"
+                               value="telemetry"
+                               placeholder="telemetry">
+                        <p class="help-text">Sub-topic for telemetry data</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Topic</label>
+                        <input type="text" id="field-alarmTopic" 
+                               class="w-full compact-input"
+                               value="alarms"
+                               placeholder="alarms">
+                        <p class="help-text">Sub-topic for alarm notifications</p>
+                    </div>
                 </div>
                 
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Topic</label>
-                    <input type="text" id="field-alarmTopic" 
-                           class="w-full compact-input"
-                           value="alarms"
-                           placeholder="alarms">
-                    <p class="help-text">Sub-topic for alarm notifications</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Event Topic</label>
+                        <input type="text" id="field-eventTopic" 
+                               class="w-full compact-input"
+                               value="events"
+                               placeholder="events">
+                        <p class="help-text">Sub-topic for system events</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Command Topic</label>
+                        <input type="text" id="field-commandTopic" 
+                               class="w-full compact-input"
+                               value="commands"
+                               placeholder="commands">
+                        <p class="help-text">Sub-topic for receiving commands</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -227,6 +234,10 @@
                             <input type="radio" name="field-payloadFormat" value="keyvalue">
                             <span class="text-xs">Key-Value Pairs</span>
                         </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="binary">
+                            <span class="text-xs">Binary</span>
+                        </label>
                     </div>
                 </div>
                 
@@ -239,132 +250,260 @@
   "device": "%DEVICE_ID%",
   "data": %DATA%
 }</textarea>
-                    <p class="help-text">Use %TAG_NAME% for tag values, %TIMESTAMP% for timestamp</p>
+                    <p class="help-text">Use %TAG_NAME% for tag values, %TIMESTAMP% for timestamp, %DEVICE_ID% for device ID</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Timestamp Format</label>
+                    <select id="field-timestampFormat" class="w-full compact-select">
+                        <option value="epoch" selected>Unix Epoch (seconds)</option>
+                        <option value="epochms">Unix Epoch (milliseconds)</option>
+                        <option value="iso">ISO 8601</option>
+                        <option value="custom">Custom Format</option>
+                    </select>
                 </div>
             </div>
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveMqttTopicSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Topics & Format
+            </button>
         </div>
     </div>
     
     <!-- TAG PUBLISHING TAB CONTENT -->
-    <div id="mqtt-publishing-content" style="display: none;">
+    <div id="mqtt-publishing-content" class="mqtt-tab-content" style="display: none;">
         <div class="form-section">
             <h5 class="form-section-title">Tag Selection</h5>
             <div class="space-y-4">
                 <div class="flex justify-between items-center">
                     <span class="text-xs font-medium text-slate-700">Select Tags to Publish</span>
-                    <button type="button" 
-                            onclick="showAddTagModal()"
-                            class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
-                        <i class="fa-solid fa-plus mr-1"></i> Add Tags
-                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" 
+                                onclick="showAddTagModal()"
+                                class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Tags
+                        </button>
+                        <button type="button"
+                                onclick="removeSelectedMqttTags()"
+                                class="compact-button border border-red-300 text-red-700 hover:bg-red-50 text-xs">
+                            <i class="fa-solid fa-trash mr-1"></i> Remove Selected
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="border border-slate-200 rounded overflow-hidden">
-                    <table class="w-full">
+                    <table class="w-full text-xs">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags"></th>
+                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags" onchange="toggleAllTags()"></th>
                                 <th class="p-2 text-left">Tag Name</th>
                                 <th class="p-2 text-left">Topic</th>
                                 <th class="p-2 text-left">Publish Rate</th>
                                 <th class="p-2 text-left">QoS</th>
+                                <th class="p-2 text-left">Enabled</th>
                             </tr>
                         </thead>
                         <tbody id="mqtt-tags-table">
                             <tr class="border-t border-slate-100">
                                 <td class="p-2"><input type="checkbox" class="tag-select"></td>
-                                <td class="p-2">Hoist_Load</td>
-                                <td class="p-2">factory/crane/001/load</td>
+                                <td class="p-2 font-mono">Hoist_Load</td>
                                 <td class="p-2">
-                                    <select class="compact-select text-xs">
+                                    <input type="text" class="w-full compact-input text-xs" value="factory/crane/001/load">
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
                                         <option value="onChange" selected>On Change</option>
+                                        <option value="100">100 ms</option>
+                                        <option value="500">500 ms</option>
                                         <option value="1000">1 sec</option>
                                         <option value="5000">5 sec</option>
                                     </select>
                                 </td>
                                 <td class="p-2">
-                                    <select class="compact-select text-xs">
+                                    <select class="w-full compact-select text-xs">
                                         <option value="0">0</option>
                                         <option value="1" selected>1</option>
                                         <option value="2">2</option>
                                     </select>
                                 </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
                             </tr>
                             <tr class="border-t border-slate-100">
                                 <td class="p-2"><input type="checkbox" class="tag-select"></td>
-                                <td class="p-2">Boom_Angle</td>
-                                <td class="p-2">factory/crane/001/angle</td>
+                                <td class="p-2 font-mono">Boom_Angle</td>
                                 <td class="p-2">
-                                    <select class="compact-select text-xs">
+                                    <input type="text" class="w-full compact-input text-xs" value="factory/crane/001/angle">
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
                                         <option value="onChange">On Change</option>
-                                        <option value="1000" selected>1 sec</option>
-                                        <option value="5000">5 sec</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <select class="compact-select text-xs">
-                                        <option value="0">0</option>
-                                        <option value="1" selected>1</option>
-                                        <option value="2">2</option>
-                                    </select>
-                                </td>
-                            </tr>
-                            <tr class="border-t border-slate-100">
-                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
-                                <td class="p-2">WindSpeed</td>
-                                <td class="p-2">factory/crane/001/wind</td>
-                                <td class="p-2">
-                                    <select class="compact-select text-xs">
-                                        <option value="onChange" selected>On Change</option>
+                                        <option value="100">100 ms</option>
+                                        <option value="500" selected>500 ms</option>
                                         <option value="1000">1 sec</option>
                                         <option value="5000">5 sec</option>
                                     </select>
                                 </td>
                                 <td class="p-2">
-                                    <select class="compact-select text-xs">
+                                    <select class="w-full compact-select text-xs">
                                         <option value="0">0</option>
                                         <option value="1" selected>1</option>
                                         <option value="2">2</option>
                                     </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2 font-mono">WindSpeed</td>
+                                <td class="p-2">
+                                    <input type="text" class="w-full compact-input text-xs" value="factory/crane/001/wind">
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="100">100 ms</option>
+                                        <option value="500">500 ms</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2" selected>2</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
                 
-                <div class="flex justify-end gap-2">
-                    <button onclick="removeSelectedMqttTags()" class="compact-button border border-red-300 text-red-700 hover:bg-red-50">
-                        <i class="fa-solid fa-trash mr-1"></i> Remove Selected
-                    </button>
-                    <button onclick="saveMqttPublishingSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
-                        <i class="fa-solid fa-save mr-1"></i> Save Publishing
-                    </button>
+                <div class="text-xs text-slate-500">
+                    <p><i class="fa-solid fa-info-circle mr-1"></i> Total tags selected: <span id="selected-tags-count">3</span></p>
                 </div>
             </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Publishing Options</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Publish Mode</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="field-publishMode" value="onChange" checked>
+                            <span class="text-xs">On Value Change (default)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-publishMode" value="periodic">
+                            <span class="text-xs">Periodic Interval</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-publishMode" value="event">
+                            <span class="text-xs">Event Based</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Batch Publishing</label>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-600">Enable message batching</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="field-enableBatching">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div id="batching-options" class="mt-2 ml-4 space-y-2" style="display: none;">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
+                            <input type="number" id="field-batchSize" 
+                                   class="w-full compact-input"
+                                   value="10"
+                                   min="1"
+                                   max="100">
+                            <p class="help-text">Number of messages per batch</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Batch Timeout (ms)</label>
+                            <input type="number" id="field-batchTimeout" 
+                                   class="w-full compact-input"
+                                   value="1000"
+                                   min="10"
+                                   max="10000">
+                            <p class="help-text">Maximum time to wait before sending batch</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveMqttPublishingSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Publishing
+            </button>
         </div>
     </div>
     
     <!-- ADVANCED TAB CONTENT -->
-    <div id="mqtt-advanced-content" style="display: none;">
+    <div id="mqtt-advanced-content" class="mqtt-tab-content" style="display: none;">
         <div class="form-section">
             <h5 class="form-section-title">Connection Settings</h5>
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive (sec)</label>
-                        <input type="number" id="mqtt-keep-alive" 
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive (seconds)</label>
+                        <input type="number" id="field-mqtt-keep-alive" 
                                class="w-full compact-input"
                                value="60"
                                min="5"
                                max="65535">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Reconnect Interval</label>
-                        <input type="number" id="mqtt-reconnect-interval" 
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Reconnect Interval (seconds)</label>
+                        <input type="number" id="field-mqtt-reconnect-interval" 
                                class="w-full compact-input"
                                value="5"
                                min="1"
                                max="60">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Connect Timeout (seconds)</label>
+                        <input type="number" id="field-connect-timeout" 
+                               class="w-full compact-input"
+                               value="30"
+                               min="1"
+                               max="120">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Retries</label>
+                        <input type="number" id="field-max-retries" 
+                               class="w-full compact-input"
+                               value="5"
+                               min="0"
+                               max="20">
                     </div>
                 </div>
                 
@@ -374,7 +513,18 @@
                         <p class="help-text">Automatically reconnect on connection loss</p>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="mqtt-auto-reconnect" checked>
+                        <input type="checkbox" id="field-mqtt-auto-reconnect" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Store & Forward</span>
+                        <p class="help-text">Store messages when offline and send when reconnected</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-store-forward">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -387,17 +537,74 @@
                 <div>
                     <label class="block text-xs font-medium text-slate-700 mb-1">Certificate Files</label>
                     <div class="space-y-2">
-                        <button type="button" 
-                                onclick="showUploadModal('uploadCertModal')"
-                                class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
-                            <i class="fa-solid fa-upload mr-1"></i> Upload CA Certificate
-                        </button>
+                        <div class="file-upload">
+                            <button type="button" 
+                                    onclick="document.getElementById('field-ca-cert').click()"
+                                    class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
+                                <i class="fa-solid fa-upload mr-1"></i> Upload CA Certificate
+                            </button>
+                            <input type="file" id="field-ca-cert" style="display: none;" onchange="handleCertificateUpload(this, 'ca-cert-name')">
+                            <span id="ca-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
+                        </div>
                         
-                        <button type="button" 
-                                onclick="showUploadModal('uploadCertModal')"
-                                class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
-                            <i class="fa-solid fa-key mr-1"></i> Upload Private Key
-                        </button>
+                        <div class="file-upload">
+                            <button type="button" 
+                                    onclick="document.getElementById('field-private-key').click()"
+                                    class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
+                                <i class="fa-solid fa-key mr-1"></i> Upload Private Key
+                            </button>
+                            <input type="file" id="field-private-key" style="display: none;" onchange="handleCertificateUpload(this, 'private-key-name')">
+                            <span id="private-key-name" class="file-name text-xs text-slate-500">No file selected</span>
+                        </div>
+                        
+                        <div class="file-upload">
+                            <button type="button" 
+                                    onclick="document.getElementById('field-client-cert').click()"
+                                    class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
+                                <i class="fa-solid fa-certificate mr-1"></i> Upload Client Certificate
+                            </button>
+                            <input type="file" id="field-client-cert" style="display: none;" onchange="handleCertificateUpload(this, 'client-cert-name')">
+                            <span id="client-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Last Will & Testament</h5>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable LWT</span>
+                        <p class="help-text">Send a last will message if connection is lost</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-enable-lwt">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div id="lwt-options" class="space-y-2 ml-4" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">LWT Topic</label>
+                        <input type="text" id="field-lwt-topic" 
+                               class="w-full compact-input"
+                               value="factory/crane/001/status">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">LWT Message</label>
+                        <textarea id="field-lwt-message" 
+                                  class="w-full compact-input font-mono text-xs h-16"
+                                  placeholder='{"status":"offline","timestamp":"%TIMESTAMP%"}'>{"status":"offline","timestamp":"%TIMESTAMP%"}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">LWT QoS</label>
+                        <select id="field-lwt-qos" class="w-full compact-select">
+                            <option value="0">0</option>
+                            <option value="1" selected>1</option>
+                            <option value="2">2</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -413,27 +620,93 @@
 
 <script>
     // Initialize MQTT form when loaded
-    document.addEventListener('DOMContentLoaded', function() {
+    function initializeMqttForm() {
         // Generate random ID for client ID
         const randomId = Math.random().toString(36).substring(2, 8);
         const clientIdInput = document.getElementById('field-clientId');
-        if (clientIdInput) {
+        if (clientIdInput && clientIdInput.value.includes('${randomId}')) {
             clientIdInput.value = `univa-gateway-${randomId}`;
         }
         
-        // Setup event listeners
-        const selectAllCheckbox = document.getElementById('select-all-tags');
-        if (selectAllCheckbox) {
-            selectAllCheckbox.addEventListener('click', function() {
-                const checkboxes = document.querySelectorAll('.tag-select');
-                checkboxes.forEach(cb => {
-                    cb.checked = this.checked;
-                });
+        // Setup event listeners for toggle switches
+        const batchingToggle = document.getElementById('field-enableBatching');
+        const batchingOptions = document.getElementById('batching-options');
+        if (batchingToggle && batchingOptions) {
+            batchingToggle.addEventListener('change', function() {
+                batchingOptions.style.display = this.checked ? 'block' : 'none';
             });
         }
-    });
-
+        
+        const lwtToggle = document.getElementById('field-enable-lwt');
+        const lwtOptions = document.getElementById('lwt-options');
+        if (lwtToggle && lwtOptions) {
+            lwtToggle.addEventListener('change', function() {
+                lwtOptions.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Update selected tags count
+        updateSelectedTagsCount();
+    }
+    
+    // Tab switching for MQTT form
+    function switchMqttTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll('.mqtt-tab-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        
+        // Remove active class from all tab buttons
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        
+        // Show selected tab content
+        const tabContent = document.getElementById(`mqtt-${tabName}-content`);
+        if (tabContent) {
+            tabContent.style.display = 'block';
+        }
+        
+        // Activate tab button
+        const tabButtons = document.querySelectorAll('.tab-button');
+        tabButtons.forEach(button => {
+            if (button.textContent.includes(tabName.charAt(0).toUpperCase() + tabName.slice(1))) {
+                button.classList.add('active');
+            }
+        });
+    }
+    
     // Tag management functions
+    function toggleAllTags() {
+        const selectAll = document.getElementById('select-all-tags');
+        const checkboxes = document.querySelectorAll('.tag-select');
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+        updateSelectedTagsCount();
+    }
+    
+    function updateSelectedTagsCount() {
+        const checkboxes = document.querySelectorAll('.tag-select:checked');
+        const countElement = document.getElementById('selected-tags-count');
+        if (countElement) {
+            countElement.textContent = checkboxes.length;
+        }
+    }
+    
+    // Add event listeners to tag checkboxes
+    document.addEventListener('DOMContentLoaded', function() {
+        // This will run when the MQTT form is loaded
+        initializeMqttForm();
+        
+        // Add click events to tag checkboxes
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('tag-select')) {
+                updateSelectedTagsCount();
+            }
+        });
+    });
+    
     function removeSelectedMqttTags() {
         const selected = document.querySelectorAll('.tag-select:checked');
         if (selected.length === 0) {
@@ -446,19 +719,33 @@
                 const row = checkbox.closest('tr');
                 row.remove();
             });
+            updateSelectedTagsCount();
             alert(`${selected.length} tag(s) removed successfully.`);
         }
     }
-
+    
+    // Handle certificate upload
+    function handleCertificateUpload(input, nameSpanId) {
+        const fileName = input.files[0]?.name || 'No file selected';
+        const nameSpan = document.getElementById(nameSpanId);
+        if (nameSpan) {
+            nameSpan.textContent = fileName;
+        }
+    }
+    
     // Save functions for each tab
+    function saveMqttConnectionSettings() {
+        alert('MQTT Connection settings saved!');
+    }
+    
     function saveMqttTopicSettings() {
         alert('MQTT Topics & Format settings saved!');
     }
-
+    
     function saveMqttPublishingSettings() {
         alert('MQTT Publishing settings saved!');
     }
-
+    
     function saveMqttAdvancedSettings() {
         alert('MQTT Advanced settings saved!');
     }

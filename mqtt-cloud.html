@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT / Cloud Integration - Univa Gateway</title>
+    <title>Cloud Connection Manager - Univa Gateway</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
@@ -81,7 +81,7 @@
             overflow-y: auto;
         }
         
-        /* Sidebar Styles - Same as General Configuration page */
+        /* Sidebar Styles */
         .sidebar {
             width: 260px;
             background: white;
@@ -102,36 +102,6 @@
             left: 0; /* Visible when active */
         }
         
-        .sidebar.collapsed {
-            width: 70px;
-        }
-        
-        .sidebar.collapsed .logo-text,
-        .sidebar.collapsed .section-title,
-        .sidebar.collapsed .nav-item span:not(.nav-item-count),
-        .sidebar.collapsed .user-info,
-        .sidebar.collapsed .sidebar-footer {
-            display: none;
-        }
-        
-        .sidebar.collapsed .nav-item {
-            justify-content: center;
-            padding: 12px 0;
-        }
-        
-        .sidebar.collapsed .nav-item i {
-            margin-right: 0;
-            font-size: 16px;
-        }
-        
-        .sidebar.collapsed .nav-item-count {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            font-size: 10px;
-            padding: 1px 4px;
-        }
-        
         .sidebar-logo {
             height: 64px;
             display: flex;
@@ -146,34 +116,6 @@
             font-weight: 700;
             font-size: 18px;
             color: #2563EB;
-            transition: opacity 0.3s;
-        }
-        
-        .sidebar-toggle-btn {
-            position: absolute;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: transparent;
-            border: none;
-            color: #64748B;
-            cursor: pointer;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        
-        .sidebar-toggle-btn:hover {
-            background: #F1F5F9;
-            color: #2563EB;
-        }
-        
-        .sidebar.collapsed .sidebar-toggle-btn {
-            transform: translateY(-50%) rotate(180deg);
         }
         
         .sidebar-nav {
@@ -195,14 +137,6 @@
             padding: 0 20px 8px;
             margin-bottom: 4px;
             border-bottom: 1px solid #F1F5F9;
-            transition: opacity 0.3s;
-        }
-        
-        .sidebar.collapsed .section-title {
-            padding: 0 8px 8px;
-            text-align: center;
-            font-size: 9px;
-            border-bottom: none;
         }
         
         .nav-item {
@@ -231,34 +165,17 @@
             font-weight: 600;
         }
         
-        .sidebar.collapsed .nav-item.active {
-            border-left: none;
-            border-right: 3px solid #2563EB;
-        }
-        
         .nav-item i {
             width: 20px;
             margin-right: 12px;
             font-size: 14px;
             text-align: center;
-            transition: margin 0.3s;
-        }
-        
-        .nav-item-count {
-            margin-left: auto;
-            background: #E2E8F0;
-            color: #475569;
-            font-size: 12px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-weight: 500;
         }
         
         .sidebar-footer {
             padding: 16px 20px;
             border-top: 1px solid #E2E8F0;
             background: white;
-            transition: opacity 0.3s;
         }
         
         .user-profile {
@@ -280,18 +197,6 @@
             flex-shrink: 0;
         }
         
-        .user-info h4 {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1E293B;
-            margin-bottom: 2px;
-        }
-        
-        .user-info p {
-            font-size: 12px;
-            color: #64748B;
-        }
-        
         .main-content-with-sidebar {
             margin-left: 0;
             transition: margin-left 0.3s;
@@ -302,10 +207,6 @@
         
         .sidebar.active ~ .main-content-with-sidebar {
             margin-left: 260px;
-        }
-        
-        .sidebar.active.collapsed ~ .main-content-with-sidebar {
-            margin-left: 70px;
         }
         
         @media (max-width: 1024px) {
@@ -595,55 +496,16 @@
             font-weight: 600;
         }
         
-        /* Tag selection table */
-        .tag-table {
-            border-collapse: collapse;
-            width: 100%;
+        /* Form Tabs */
+        .form-tab-content {
+            display: none;
         }
         
-        .tag-table tr:hover {
-            background-color: #F8FAFC;
+        .form-tab-content.active {
+            display: block;
         }
         
-        .tag-table th {
-            text-align: left;
-            font-weight: 600;
-            color: #475569;
-            border-bottom: 1px solid #E2E8F0;
-        }
-        
-        .tag-table td {
-            border-bottom: 1px solid #E2E8F0;
-        }
-        
-        /* Connection Manager Styles */
-        .connection-type-card {
-            border: 2px solid #E2E8F0;
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: white;
-        }
-        
-        .connection-type-card:hover {
-            border-color: #2563EB;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
-            transform: translateY(-2px);
-        }
-        
-        .connection-type-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 12px;
-            font-size: 20px;
-        }
-        
+        /* Form section styling */
         .form-section {
             background: #F8FAFC;
             border-radius: 8px;
@@ -688,75 +550,75 @@
             border-bottom: none;
         }
         
-        .key-value-item input {
-            flex: 1;
-            padding: 6px 10px;
-            border: 1px solid #E2E8F0;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        
-        /* Enhanced Publishing Options Styles */
-        .publishing-option-card {
-            border: 1px solid #E2E8F0;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 8px;
+        /* Connection Manager Styles */
+        .connection-type-card {
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
             background: white;
-            transition: all 0.2s;
         }
         
-        .publishing-option-card:hover {
-            border-color: #BFDBFE;
-            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.05);
+        .connection-type-card:hover {
+            border-color: #2563EB;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+            transform: translateY(-2px);
         }
         
-        .publishing-option-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        
-        .publishing-option-content {
-            padding-left: 24px;
-        }
-        
-        /* File upload styles */
-        .file-upload {
+        .connection-type-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
-            gap: 8px;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 20px;
         }
         
-        .file-name {
-            font-size: 12px;
-            color: #64748B;
-        }
-        
-        /* Form input groups */
-        .form-input-group {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        
-        .form-input-group .compact-input {
-            flex: 1;
-        }
-        
-        /* Help text */
         .help-text {
             font-size: 11px;
             color: #64748B;
             margin-top: 2px;
             line-height: 1.4;
         }
+        
+        .form-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        /* Tab buttons in forms */
+        #edit-form-content .tab-button {
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748B;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: none;
+            border: none;
+        }
+        
+        #edit-form-content .tab-button:hover {
+            color: #2563EB;
+            border-bottom-color: #E2E8F0;
+        }
+        
+        #edit-form-content .tab-button.active {
+            color: #2563EB;
+            border-bottom-color: #2563EB;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
     
-    <!-- Sidebar will be inserted here by JavaScript -->
+    <!-- Sidebar Container -->
     <div id="sidebar-container"></div>
     <!-- Overlay for mobile -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -869,7 +731,7 @@
         </div>
     </div>
 
-    <!-- NEW: Connection Manager Modal (for adding new connections) -->
+    <!-- Connection Manager Modal -->
     <div id="connectionManagerModal" class="modal">
         <div class="modal-content">
             <div class="p-6 border-b border-slate-200">
@@ -954,10 +816,9 @@
         </header>
 
         <!-- Main Content -->
-        
         <main class="flex-grow">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <!-- ADDED BACK THE TITLE SECTION WITH ADD CONNECTION BUTTON -->
+                <!-- Title Section -->
                 <div class="mb-8">
                     <div class="flex items-center justify-between">
                         <div>
@@ -1049,17 +910,17 @@
                                     <!-- This will be dynamically populated based on selected connection -->
                                 </div>
                                 
-                                <!-- Topics & Format (Tab 2) - MQTT Specific -->
+                                <!-- Topics & Format (Tab 2) -->
                                 <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;">
                                     <!-- This content is only shown for MQTT connections -->
                                 </div>
                                 
-                                <!-- Tag Publishing (Tab 3) - MQTT Specific -->
+                                <!-- Tag Publishing (Tab 3) -->
                                 <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;">
                                     <!-- This content is only shown for MQTT connections -->
                                 </div>
                                 
-                                <!-- Advanced (Tab 4) - MQTT Specific -->
+                                <!-- Advanced (Tab 4) -->
                                 <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;">
                                     <!-- This content is only shown for MQTT connections -->
                                 </div>
@@ -1129,10 +990,10 @@
                 </div>
             </div>
         </main>
-    </div> <!-- End of main content container -->
+    </div>
 
     <script>
-        // Load configuration from the JSON you provided (with additions)
+        // Configuration
         const config = {
             "app": {
                 "name": "Univa IoT Gateway",
@@ -1273,85 +1134,6 @@
                         "bandwidth": "1.2 MB",
                         "successRate": "99.6%"
                     }
-                },
-                "websocket": {
-                    "id": "ws-realtime",
-                    "type": "websocket",
-                    "name": "Real-time Dashboard",
-                    "enabled": true,
-                    "config": {
-                        "host": "dashboard.company.com",
-                        "port": 443,
-                        "protocol": "wss",
-                        "path": "/ws/realtime",
-                        "pingInterval": 30,
-                        "reconnectDelay": 5,
-                        "autoReconnect": true,
-                        "messageFormat": "json",
-                        "maxMessageSize": 65536,
-                        "subprotocols": "json, mqtt"
-                    },
-                    "stats": {
-                        "messages": 45789,
-                        "errors": 5,
-                        "latency": 35,
-                        "uptime": "12h 45m",
-                        "lastActive": "0.1s ago",
-                        "bandwidth": "15.2 MB",
-                        "successRate": "99.9%"
-                    }
-                },
-                "ftp": {
-                    "id": "ftp-logs",
-                    "type": "ftp",
-                    "name": "Log File Archive",
-                    "enabled": false,
-                    "config": {
-                        "host": "archive.company.com",
-                        "port": 21,
-                        "protocol": "ftp",
-                        "username": "logs_user",
-                        "password": "",
-                        "remotePath": "/uploads/crane-logs/",
-                        "mode": "passive",
-                        "uploadInterval": 300,
-                        "appendMode": true,
-                        "fileFormat": "csv"
-                    },
-                    "stats": {
-                        "messages": 124,
-                        "errors": 2,
-                        "latency": 1200,
-                        "uptime": "2h 10m",
-                        "lastActive": "15 min ago",
-                        "bandwidth": "45 MB",
-                        "successRate": "98.4%"
-                    }
-                },
-                "udp": {
-                    "id": "udp-telemetry",
-                    "type": "udp",
-                    "name": "Telemetry Stream",
-                    "enabled": true,
-                    "config": {
-                        "remoteHost": "192.168.1.200",
-                        "remotePort": 6000,
-                        "localPort": 54321,
-                        "packetSize": 1400,
-                        "sendRate": 100,
-                        "messageFormat": "binary",
-                        "includeTimestamp": true,
-                        "includeSequence": true
-                    },
-                    "stats": {
-                        "messages": 89245,
-                        "errors": 128,
-                        "latency": 8,
-                        "uptime": "5h 22m",
-                        "lastActive": "0.0s ago",
-                        "bandwidth": "142 MB",
-                        "successRate": "99.8%"
-                    }
                 }
             }
         };
@@ -1361,239 +1143,17 @@
         let selectedConnectionId = null;
         let selectedConnectionType = null;
 
-        // Fetch and insert sidebar from sidebar.html - SAME METHOD AS GENERAL CONFIGURATION
-        async function loadSidebar() {
-            try {
-                const response = await fetch('sidebar.html');
-                if (!response.ok) {
-                    throw new Error(`Failed to load sidebar: ${response.status}`);
-                }
-                
-                const html = await response.text();
-                
-                // Insert the entire HTML content
-                document.getElementById('sidebar-container').innerHTML = html;
-                
-                // Update the active page to Cloud Connection Manager
-                updateActivePage();
-                
-                // Initialize sidebar functionality
-                initializeSidebar();
-                
-            } catch (error) {
-                console.error('Error loading sidebar:', error);
-                // Fallback: create a basic sidebar if fetch fails
-                createFallbackSidebar();
-            }
-        }
-
-        // Create fallback sidebar with toggle - SAME AS GENERAL CONFIGURATION
-        function createFallbackSidebar() {
-            const fallbackHTML = `
-                <div class="sidebar" id="sidebar">
-                    <div class="sidebar-logo">
-                        <div class="logo-text">
-                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
-                        </div>
-                        <button class="sidebar-toggle-btn" id="sidebarCollapseBtn">
-                            <i class="fa-solid fa-chevron-left"></i>
-                        </button>
-                    </div>
-                    <div class="sidebar-nav">
-                        <div class="nav-section">
-                            <div class="section-title">Configuration</div>
-                            <a href="general-configuration.html" class="nav-item">
-                                <i class="fa-solid fa-sliders"></i> <span>General Configuration</span>
-                            </a>
-                            <a href="device-management.html" class="nav-item">
-                                <i class="fa-solid fa-microchip"></i> <span>Device management</span>
-                            </a>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-shield-halved"></i> <span>Safety Logic</span>
-                                <span class="nav-item-count">12</span>
-                            </a>
-                            <a href="mqtt-cloud.html" class="nav-item active">
-                                <i class="fa-solid fa-plug"></i> <span>Protocols</span>
-                            </a>
-                        </div>
-                        <div class="nav-section">
-                            <div class="section-title">Monitoring</div>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-chart-line"></i> <span>Dashboard</span>
-                            </a>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-bell"></i> <span>Alerts</span>
-                                <span class="nav-item-count">3</span>
-                            </a>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-file-lines"></i> <span>Logs</span>
-                            </a>
-                        </div>
-                        <div class="nav-section">
-                            <div class="section-title">System</div>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-users"></i> <span>Users</span>
-                            </a>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-download"></i> <span>Updates</span>
-                            </a>
-                            <a href="#" class="nav-item">
-                                <i class="fa-solid fa-gear"></i> <span>Settings</span>
-                            </a>
-                        </div>
-                    </div>
-                    <div class="sidebar-footer">
-                        <div class="user-profile">
-                            <div class="user-avatar">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
-                            <div class="user-info">
-                                <h4>Admin User</h4>
-                                <p>System Administrator</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
-            initializeSidebar();
-        }
-
-        // Update active page in sidebar - MODIFIED FOR CLOUD CONNECTION MANAGER
-        function updateActivePage() {
-            // Remove active class from all nav items
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            // Add active class to Protocols (Cloud Connection Manager)
-            const protocolsLink = Array.from(navItems).find(item => 
-                item.textContent.includes('Protocols') || 
-                item.textContent.includes('MQTT / Cloud') ||
-                item.getAttribute('href') === 'mqtt-cloud.html'
-            );
-            
-            if (protocolsLink) {
-                protocolsLink.classList.add('active');
-            }
-        }
-
-        // Initialize sidebar functionality - SAME AS GENERAL CONFIGURATION
-        function initializeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarCollapseBtn = document.getElementById('sidebarCollapseBtn');
-            const sidebarOverlay = document.getElementById('sidebarOverlay');
-            
-            if (!sidebar) return;
-            
-            // Toggle sidebar collapse (expand/collapse within sidebar)
-            if (sidebarCollapseBtn) {
-                sidebarCollapseBtn.addEventListener('click', function(e) {
-                    e.stopPropagation(); // Prevent triggering parent click
-                    sidebar.classList.toggle('collapsed');
-                    
-                    // Toggle icon
-                    const icon = this.querySelector('i');
-                    if (sidebar.classList.contains('collapsed')) {
-                        icon.className = 'fa-solid fa-chevron-right';
-                    } else {
-                        icon.className = 'fa-solid fa-chevron-left';
-                    }
-                });
-            }
-            
-            // Close sidebar when clicking overlay (mobile)
-            if (sidebarOverlay) {
-                sidebarOverlay.addEventListener('click', function() {
-                    closeSidebar();
-                });
-            }
-            
-            // Close sidebar when clicking outside on desktop
-            document.addEventListener('click', function(event) {
-                if (window.innerWidth > 1024) {
-                    const isClickInsideSidebar = sidebar.contains(event.target);
-                    const isClickOnHeaderLogo = event.target.closest('#headerLogo');
-                    
-                    if (!isClickInsideSidebar && !isClickOnHeaderLogo && sidebar.classList.contains('active')) {
-                        closeSidebar();
-                    }
-                }
-            });
-            
-            // Close sidebar on escape key
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && sidebar.classList.contains('active')) {
-                    closeSidebar();
-                }
-            });
-        }
-
-        // Toggle sidebar open/close - SAME AS GENERAL CONFIGURATION
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
-            
-            if (sidebar) {
-                sidebar.classList.toggle('active');
-                
-                // Toggle the hamburger icon to X when sidebar is open
-                if (headerLogoIcon) {
-                    if (sidebar.classList.contains('active')) {
-                        headerLogoIcon.className = 'fa-solid fa-times ml-2 text-slate-400 text-sm';
-                    } else {
-                        headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
-                    }
-                }
-                
-                // Update overlay
-                const overlay = document.getElementById('sidebarOverlay');
-                if (overlay) {
-                    if (sidebar.classList.contains('active')) {
-                        overlay.style.display = 'block';
-                    } else {
-                        overlay.style.display = 'none';
-                    }
-                }
-            }
-        }
-
-        // Close sidebar - SAME AS GENERAL CONFIGURATION
-        function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
-            
-            if (sidebar) {
-                sidebar.classList.remove('active');
-                
-                // Reset hamburger icon
-                if (headerLogoIcon) {
-                    headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
-                }
-                
-                // Hide overlay
-                const overlay = document.getElementById('sidebarOverlay');
-                if (overlay) {
-                    overlay.style.display = 'none';
-                }
-            }
-        }
-
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
-            // Load sidebar first - USING SAME METHOD AS GENERAL CONFIGURATION
             loadSidebar();
             
-            // Header logo click to toggle sidebar - SAME AS GENERAL CONFIGURATION
+            // Header logo click to toggle sidebar
             const headerLogo = document.getElementById('headerLogo');
             if (headerLogo) {
                 headerLogo.addEventListener('click', toggleSidebar);
             }
             
-            // Initialize Cloud Connection Manager functionality
-            initializeApp();
+            // Initialize Cloud Connection Manager
             loadConnections();
             renderConnectionTypes();
             
@@ -1625,17 +1185,152 @@
             }, 100);
         });
 
-        // Handle responsive behavior - SAME AS GENERAL CONFIGURATION
-        function handleResponsive() {
-            const sidebar = document.getElementById('sidebar');
+        // Sidebar Functions
+        async function loadSidebar() {
+            try {
+                const response = await fetch('sidebar.html');
+                if (!response.ok) throw new Error(`Failed to load sidebar: ${response.status}`);
+                
+                const html = await response.text();
+                document.getElementById('sidebar-container').innerHTML = html;
+                
+                updateActivePage();
+                initializeSidebar();
+                
+            } catch (error) {
+                console.error('Error loading sidebar:', error);
+                createFallbackSidebar();
+            }
+        }
+
+        function createFallbackSidebar() {
+            const fallbackHTML = `
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-logo">
+                        <div class="logo-text">
+                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
+                        </div>
+                    </div>
+                    <div class="sidebar-nav">
+                        <div class="nav-section">
+                            <div class="section-title">Configuration</div>
+                            <a href="general-configuration.html" class="nav-item">
+                                <i class="fa-solid fa-sliders"></i> <span>General Configuration</span>
+                            </a>
+                            <a href="device-management.html" class="nav-item">
+                                <i class="fa-solid fa-microchip"></i> <span>Device management</span>
+                            </a>
+                            <a href="mqtt-cloud.html" class="nav-item active">
+                                <i class="fa-solid fa-plug"></i> <span>Protocols</span>
+                            </a>
+                        </div>
+                        <div class="nav-section">
+                            <div class="section-title">Monitoring</div>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-chart-line"></i> <span>Dashboard</span>
+                            </a>
+                            <a href="#" class="nav-item">
+                                <i class="fa-solid fa-bell"></i> <span>Alerts</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <div class="user-profile">
+                            <div class="user-avatar">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="user-info">
+                                <h4>Admin User</h4>
+                                <p>System Administrator</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
             
-            if (window.innerWidth <= 1024) {
-                // On mobile, ensure sidebar is hidden by default
-                if (sidebar && sidebar.classList.contains('active')) {
-                    sidebar.classList.remove('active');
+            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
+            initializeSidebar();
+        }
+
+        function updateActivePage() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            const protocolsLink = Array.from(navItems).find(item => 
+                item.textContent.includes('Protocols') || 
+                item.getAttribute('href') === 'mqtt-cloud.html'
+            );
+            
+            if (protocolsLink) {
+                protocolsLink.classList.add('active');
+            }
+        }
+
+        function initializeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            if (!sidebar) return;
+            
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', function() {
+                    closeSidebar();
+                });
+            }
+            
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth > 1024) {
+                    const isClickInsideSidebar = sidebar.contains(event.target);
+                    const isClickOnHeaderLogo = event.target.closest('#headerLogo');
+                    
+                    if (!isClickInsideSidebar && !isClickOnHeaderLogo && sidebar.classList.contains('active')) {
+                        closeSidebar();
+                    }
                 }
-            } else {
-                // On desktop, ensure overlay is hidden
+            });
+            
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && sidebar.classList.contains('active')) {
+                    closeSidebar();
+                }
+            });
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
+            
+            if (sidebar) {
+                sidebar.classList.toggle('active');
+                
+                if (headerLogoIcon) {
+                    if (sidebar.classList.contains('active')) {
+                        headerLogoIcon.className = 'fa-solid fa-times ml-2 text-slate-400 text-sm';
+                    } else {
+                        headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
+                    }
+                }
+                
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    overlay.style.display = sidebar.classList.contains('active') ? 'block' : 'none';
+                }
+            }
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const headerLogoIcon = document.querySelector('#headerLogo i.fa-bars');
+            
+            if (sidebar) {
+                sidebar.classList.remove('active');
+                
+                if (headerLogoIcon) {
+                    headerLogoIcon.className = 'fa-solid fa-bars ml-2 text-slate-400 text-sm';
+                }
+                
                 const overlay = document.getElementById('sidebarOverlay');
                 if (overlay) {
                     overlay.style.display = 'none';
@@ -1643,64 +1338,22 @@
             }
         }
 
-        // =============================================
-        // CLOUD CONNECTION MANAGER FUNCTIONALITY
-        // =============================================
-        
-        function initializeApp() {
-            // Setup event listeners
-            setupEventListeners();
-            setupToggles();
+        function handleResponsive() {
+            const sidebar = document.getElementById('sidebar');
             
-            // Initialize tab states
-            updatePayloadPreview();
+            if (window.innerWidth <= 1024) {
+                if (sidebar && sidebar.classList.contains('active')) {
+                    sidebar.classList.remove('active');
+                }
+            } else {
+                const overlay = document.getElementById('sidebarOverlay');
+                if (overlay) {
+                    overlay.style.display = 'none';
+                }
+            }
         }
 
-        function setupEventListeners() {
-            // Enhanced publishing options listeners
-            document.querySelectorAll('input[name="publish-trigger"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    const intervalSettings = document.getElementById('interval-settings');
-                    if (this.value === 'periodic') {
-                        if (intervalSettings) intervalSettings.style.display = 'block';
-                    } else {
-                        if (intervalSettings) intervalSettings.style.display = 'none';
-                    }
-                });
-            });
-            
-            // Payload format change
-            document.querySelectorAll('input[name="payload-format"]').forEach(radio => {
-                radio.addEventListener('change', function() {
-                    updatePayloadPreview();
-                });
-            });
-        }
-        
-        function setupToggles() {
-            // Setup all toggle switches
-            document.querySelectorAll('.toggle-switch input').forEach(toggle => {
-                toggle.addEventListener('change', function() {
-                    const label = this.nextElementSibling;
-                    if (this.checked) {
-                        label.style.backgroundColor = '#10B981';
-                    } else {
-                        label.style.backgroundColor = '#CBD5E1';
-                    }
-                });
-            });
-        }
-
-        // Modal Functions
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
-
-        function showModal(modalId) {
-            document.getElementById(modalId).classList.add('active');
-        }
-
-        // Connection Manager Functions (for left panel only)
+        // Cloud Connection Manager Functions
         function showConnectionManager() {
             showModal('connectionManagerModal');
             showConnectionTypeSelection();
@@ -1751,7 +1404,6 @@
             document.getElementById('connectionTypeSelection').classList.add('hidden');
             document.getElementById('connectionFormContainer').classList.remove('hidden');
             
-            // Load form from external file
             await renderConnectionForm(type);
         }
 
@@ -1760,24 +1412,19 @@
             const connectionConfig = config.connectionTypes[type];
             
             try {
-                // Try to load form from external file
                 const response = await fetch(connectionConfig.formFile);
                 if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
                 
                 const html = await response.text();
                 formContent.innerHTML = html;
                 
-                // Initialize dynamic elements in the loaded form
-                initializeTemplateFields();
+                initializeForm(type);
+                
             } catch (error) {
                 console.error('Error loading form:', error);
-                // Use fallback form
                 formContent.innerHTML = createFallbackForm(type);
-                
-                // Still initialize dynamic elements
                 initializeTemplateFields();
                 
-                // Add back button
                 const backButton = document.createElement('button');
                 backButton.onclick = showConnectionTypeSelection;
                 backButton.className = 'mt-4 compact-button border border-slate-300 text-slate-700 hover:bg-slate-50';
@@ -1790,76 +1437,15 @@
             if (type === 'mqtt') {
                 return `
                     <div class="form-section">
-                        <h5 class="form-section-title">Broker Configuration</h5>
+                        <h5 class="form-section-title">Connection Configuration</h5>
                         <div class="space-y-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Server Host</label>
-                                <input type="text" id="field-host" class="w-full compact-input" placeholder="broker.example.com">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
-                                    <input type="number" id="field-port" class="w-full compact-input" value="8883">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
-                                    <select id="field-protocol" class="w-full compact-select">
-                                        <option value="mqtt">MQTT</option>
-                                        <option value="mqtts" selected>MQTTS (SSL)</option>
-                                        <option value="ws">WebSocket</option>
-                                        <option value="wss">WebSocket Secure</option>
-                                    </select>
-                                </div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
+                                <input type="text" id="field-name" class="w-full compact-input" placeholder="${config.connectionTypes[type]?.defaultName || 'New Connection'}">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
-                                <input type="text" id="field-clientId" class="w-full compact-input" placeholder="univa-gw-01">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-section">
-                        <h5 class="form-section-title">Authentication</h5>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
-                                <input type="text" id="field-username" class="w-full compact-input" placeholder="Username">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
-                                <div class="form-input-group">
-                                    <input type="password" id="field-password" class="flex-1 compact-input" placeholder="Password">
-                                    <button type="button" onclick="generatePassword('field-password')" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
-                                        <i class="fa-solid fa-key"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-section">
-                        <h5 class="form-section-title">MQTT Settings</h5>
-                        <div class="space-y-4">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">QoS Level</label>
-                                    <select id="field-qos" class="w-full compact-select">
-                                        <option value="0">0 - At most once</option>
-                                        <option value="1" selected>1 - At least once</option>
-                                        <option value="2">2 - Exactly once</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive (seconds)</label>
-                                    <input type="number" id="field-keepAlive" class="w-full compact-input" value="60">
-                                </div>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-medium text-slate-700">Clean Session</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="field-cleanSession" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Host / Endpoint</label>
+                                <input type="text" id="field-host" class="w-full compact-input" placeholder="example.com">
                             </div>
                         </div>
                     </div>
@@ -1877,35 +1463,71 @@
                                 <label class="block text-xs font-medium text-slate-700 mb-1">Host / Endpoint</label>
                                 <input type="text" id="field-host" class="w-full compact-input" placeholder="example.com">
                             </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
-                                <input type="number" id="field-port" class="w-full compact-input" value="443">
-                            </div>
                         </div>
-                    </div>
-                    <div class="text-center py-8 text-slate-500">
-                        <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
-                        <p>Detailed configuration form for ${config.connectionTypes[type]?.name} is not available</p>
-                        <p class="text-xs mt-1">Using basic configuration options</p>
                     </div>
                 `;
             }
         }
 
+        function initializeForm(type) {
+            if (type === 'mqtt') {
+                initializeMqttFormTabs();
+            } else if (type === 'http') {
+                initializeHttpFormTabs();
+            } else {
+                initializeTemplateFields();
+            }
+        }
+
+        function initializeMqttFormTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const tabName = this.textContent.toLowerCase().includes('connection') ? 'connection' :
+                                  this.textContent.toLowerCase().includes('topics') ? 'topics' :
+                                  this.textContent.toLowerCase().includes('publishing') ? 'publishing' : 'advanced';
+                    
+                    switchMqttTab(tabName);
+                });
+            });
+            
+            if (typeof initializeMqttForm === 'function') {
+                initializeMqttForm();
+            }
+            
+            setupToggleSwitches();
+        }
+
+        function initializeHttpFormTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const tabName = this.textContent.toLowerCase().includes('connection') ? 'connection' :
+                                  this.textContent.toLowerCase().includes('payload') ? 'payload' :
+                                  this.textContent.toLowerCase().includes('publishing') ? 'publishing' : 'advanced';
+                    
+                    switchHttpTab(tabName);
+                });
+            });
+            
+            if (typeof initializeHttpForm === 'function') {
+                initializeHttpForm();
+            }
+            
+            setupToggleSwitches();
+        }
+
         function initializeTemplateFields() {
-            // Setup toggle switches in loaded template
             document.querySelectorAll('.toggle-switch input').forEach(toggle => {
                 toggle.addEventListener('change', function() {
                     const label = this.nextElementSibling;
                     label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
                 });
                 
-                // Set initial color
                 const label = toggle.nextElementSibling;
                 label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
             });
             
-            // Setup key-value item listeners
             document.querySelectorAll('.key-value-list').forEach(list => {
                 const addButton = list.querySelector('button');
                 if (addButton) {
@@ -1914,35 +1536,23 @@
                     };
                 }
                 
-                // Setup delete buttons
                 list.querySelectorAll('.key-value-item button').forEach(btn => {
                     btn.onclick = function() {
                         removeKeyValueItem(this);
                     };
                 });
             });
-            
-            // Setup file upload handlers
-            document.querySelectorAll('.file-upload input[type="file"]').forEach(input => {
-                input.onchange = function() {
-                    const fieldId = this.id;
-                    const fileName = this.files[0]?.name || 'No file selected';
-                    const nameSpan = document.getElementById(`${fieldId}-name`);
-                    if (nameSpan) {
-                        nameSpan.textContent = fileName;
-                    }
-                };
-            });
-            
-            // Setup generate password buttons
-            document.querySelectorAll('button[onclick^="generatePassword"]').forEach(btn => {
-                const match = btn.getAttribute('onclick').match(/generatePassword\('([^']+)'\)/);
-                if (match) {
-                    const fieldId = match[1];
-                    btn.onclick = function() {
-                        generatePassword(fieldId);
-                    };
-                }
+        }
+
+        function setupToggleSwitches() {
+            document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+                toggle.addEventListener('change', function() {
+                    const label = this.nextElementSibling;
+                    label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
+                });
+                
+                const label = toggle.nextElementSibling;
+                label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
             });
         }
 
@@ -1956,13 +1566,9 @@
             const connectionConfig = config.connectionTypes[selectedConnectionType];
             const formData = collectFormDataFromTemplate();
             
-            // Create connection ID
             const connectionId = `${selectedConnectionType}-${Date.now()}`;
-            
-            // Get connection name from form or use default
             const name = formData.name || connectionConfig.defaultName;
             
-            // Create connection object
             connections[connectionId] = {
                 id: connectionId,
                 type: selectedConnectionType,
@@ -1972,16 +1578,12 @@
                 stats: {...config.defaultStats}
             };
             
-            // Add to UI
             addConnectionToList(connectionId, connections[connectionId]);
             
-            // Close modal
             closeModal('connectionManagerModal');
             
-            // Show notification
             showNotification(`${connectionConfig.name} added successfully`, 'success');
             
-            // Select the new connection
             selectConnection(connectionId);
         }
 
@@ -1989,13 +1591,8 @@
             const formData = {};
             const formContent = document.getElementById('formContent');
             
-            if (!formContent) {
-                console.error('Form content not found');
-                return formData;
-            }
+            if (!formContent) return formData;
             
-            // Collect all input fields from the template
-            // Text inputs
             formContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
                 const id = input.id;
                 if (id.startsWith('field-')) {
@@ -2004,7 +1601,6 @@
                 }
             });
             
-            // Selects
             formContent.querySelectorAll('select').forEach(select => {
                 const id = select.id;
                 if (id.startsWith('field-')) {
@@ -2013,7 +1609,6 @@
                 }
             });
             
-            // Checkboxes (toggles)
             formContent.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(checkbox => {
                 const id = checkbox.id;
                 if (id.startsWith('field-')) {
@@ -2022,7 +1617,6 @@
                 }
             });
             
-            // Radio buttons
             formContent.querySelectorAll('input[type="radio"]').forEach(radio => {
                 const name = radio.name;
                 if (name.startsWith('field-')) {
@@ -2033,7 +1627,6 @@
                 }
             });
             
-            // Collect key-value pairs
             const keyValueData = {};
             formContent.querySelectorAll('.key-value-item').forEach(item => {
                 const inputs = item.querySelectorAll('input[type="text"]');
@@ -2046,7 +1639,6 @@
                 }
             });
             
-            // Add key-value data if exists
             if (Object.keys(keyValueData).length > 0) {
                 formData.headers = keyValueData;
             }
@@ -2055,7 +1647,6 @@
         }
 
         function loadConnections() {
-            // Load default connections
             Object.values(config.defaultConnections).forEach(conn => {
                 connections[conn.id] = conn;
                 addConnectionToList(conn.id, conn);
@@ -2063,7 +1654,6 @@
             
             updateConnectionCount();
             
-            // Select first connection if none selected
             if (Object.keys(connections).length > 0 && !selectedConnectionId) {
                 const firstId = Object.keys(connections)[0];
                 selectConnection(firstId);
@@ -2074,13 +1664,11 @@
             const list = document.getElementById('connectionsList');
             const connectionConfig = config.connectionTypes[conn.type];
             
-            // Check if already exists
             if (document.querySelector(`[data-connection-id="${id}"]`)) {
                 updateConnectionItem(id, conn);
                 return;
             }
             
-            // Remove placeholder if exists
             const placeholder = list.querySelector('.text-center');
             if (placeholder) {
                 placeholder.remove();
@@ -2149,35 +1737,23 @@
                 const port = conn.config.port || (protocol.includes('mqtts') ? 8883 : 1883);
                 return `${protocol}${conn.config.host}:${port}`;
             }
-            if (conn.type === 'websocket' && conn.config.host) {
-                const protocol = conn.config.protocol || 'ws://';
-                const port = conn.config.port || (protocol.includes('wss') ? 443 : 80);
-                return `${protocol}${conn.config.host}:${port}${conn.config.path || ''}`;
+            if (conn.type === 'http' && conn.config.url) {
+                return conn.config.url;
             }
-            if (conn.type === 'ftp' && conn.config.host) {
-                return `ftp://${conn.config.host}:${conn.config.port || 21}`;
-            }
-            if (conn.type === 'udp' && conn.config.remoteHost) {
-                return `udp://${conn.config.remoteHost}:${conn.config.remotePort}`;
-            }
-            if (conn.config.url) return conn.config.url;
             if (conn.config.endpoint) return conn.config.endpoint;
             if (conn.config.hostname) return conn.config.hostname;
             return `${config.connectionTypes[conn.type]?.name} Connection`;
         }
 
-        // Enhanced Connection Selection Function
         function selectConnection(id) {
             selectedConnectionId = id;
             const conn = connections[id];
             
             if (!conn) {
-                // No connection selected - show empty state
                 showEmptyConnectionState();
                 return;
             }
             
-            // Update UI in left panel
             document.querySelectorAll('[data-connection-id]').forEach(el => {
                 el.classList.remove('border-blue-200', 'bg-blue-50');
                 el.classList.add('border-slate-200');
@@ -2189,7 +1765,6 @@
                 selectedEl.classList.remove('border-slate-200');
             }
             
-            // Update main configuration area with the ACTUAL connection form
             updateConfigurationForConnection(conn);
         }
 
@@ -2201,7 +1776,6 @@
             document.getElementById('statLastSent').textContent = 'Never';
             document.getElementById('statLatency').textContent = '0 ms';
             
-            // Update diagnostics
             document.getElementById('diagnosticStatus').className = 'status-indicator offline';
             document.getElementById('diagnosticStatus').textContent = 'Disconnected';
             document.getElementById('diagnosticLastMessage').textContent = 'Never';
@@ -2210,7 +1784,6 @@
             document.getElementById('diagnosticLastError').textContent = 'None';
             document.getElementById('diagnosticLatency').textContent = '0 ms';
             
-            // Clear downlink commands
             document.getElementById('downlinkCommands').innerHTML = `
                 <tr>
                     <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
@@ -2219,7 +1792,6 @@
                 </tr>
             `;
             
-            // Show empty state in tab content
             document.getElementById('tab-content-connection').innerHTML = `
                 <div class="text-center py-12 text-slate-400">
                     <i class="fa-solid fa-plug text-3xl mb-3"></i>
@@ -2228,12 +1800,10 @@
                 </div>
             `;
             
-            // Hide other tabs
             document.getElementById('tab-content-topics').style.display = 'none';
             document.getElementById('tab-content-publishing').style.display = 'none';
             document.getElementById('tab-content-advanced').style.display = 'none';
             
-            // Update tab buttons
             document.querySelectorAll('.tab-button').forEach(tab => {
                 if (tab.id === 'tab-connection') {
                     tab.style.display = 'block';
@@ -2245,21 +1815,17 @@
             });
         }
 
-        // Enhanced Connection Configuration Function
         async function updateConfigurationForConnection(conn) {
             const connectionConfig = config.connectionTypes[conn.type];
             
-            // Update header information
             document.getElementById('connectionName').textContent = conn.name;
             document.getElementById('connectionDescription').textContent = `${connectionConfig.name} - ${connectionConfig.description}`;
             
-            // Update stats
             document.getElementById('statMessages').textContent = conn.stats.messages.toLocaleString();
             document.getElementById('statErrors').textContent = conn.stats.errors;
             document.getElementById('statLastSent').textContent = conn.stats.lastActive;
             document.getElementById('statLatency').textContent = conn.stats.latency + ' ms';
             
-            // Update diagnostics
             document.getElementById('diagnosticStatus').className = conn.enabled ? 'status-indicator online' : 'status-indicator offline';
             document.getElementById('diagnosticStatus').textContent = conn.enabled ? 'Connected' : 'Disconnected';
             document.getElementById('diagnosticLastMessage').textContent = conn.stats.lastActive;
@@ -2268,7 +1834,6 @@
             document.getElementById('diagnosticLastError').textContent = conn.stats.errors > 0 ? `${conn.stats.errors} errors` : 'None';
             document.getElementById('diagnosticLatency').textContent = conn.stats.latency + ' ms';
             
-            // Update downlink commands if connected
             if (conn.enabled) {
                 document.getElementById('downlinkCommands').innerHTML = `
                     <tr class="border-t border-slate-100">
@@ -2285,26 +1850,16 @@
                             <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Failed</span>
                         </td>
                     </tr>
-                    <tr class="border-t border-slate-100">
-                        <td class="p-2">10:38:55</td>
-                        <td class="p-2 font-mono">GetStatus</td>
-                        <td class="p-2">
-                            <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
-                        </td>
-                    </tr>
                 `;
             }
             
-            // Clear the tab contents
             const tabContent = document.getElementById('tab-content-connection');
             tabContent.innerHTML = '<div class="text-center py-8"><i class="fa-solid fa-spinner fa-spin text-primary text-xl"></i><p class="text-xs text-slate-500 mt-2">Loading configuration...</p></div>';
             
-            // Hide other tabs initially
             document.getElementById('tab-content-topics').style.display = 'none';
             document.getElementById('tab-content-publishing').style.display = 'none';
             document.getElementById('tab-content-advanced').style.display = 'none';
             
-            // Update tab buttons based on connection type
             document.querySelectorAll('.tab-button').forEach(tab => {
                 if (tab.id === 'tab-connection') {
                     tab.style.display = 'block';
@@ -2315,23 +1870,19 @@
                 }
             });
             
-            // Load the specific connection form for editing
             await loadConnectionEditForm(conn);
         }
 
-        // Enhanced Connection Edit Form Loading
         async function loadConnectionEditForm(conn) {
             const connectionConfig = config.connectionTypes[conn.type];
             const tabContent = document.getElementById('tab-content-connection');
             
             try {
-                // Try to load form from external file
                 const response = await fetch(connectionConfig.formFile);
                 if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
                 
                 const html = await response.text();
                 
-                // Create the edit form container
                 tabContent.innerHTML = `
                     <div class="space-y-6">
                         <div class="flex justify-between items-center mb-4">
@@ -2345,7 +1896,6 @@
                             </div>
                         </div>
                         
-                        <!-- Connection Name -->
                         <div class="form-section">
                             <h5 class="form-section-title">Connection Information</h5>
                             <div class="space-y-4">
@@ -2359,12 +1909,10 @@
                             </div>
                         </div>
                         
-                        <!-- The actual connection form -->
                         <div id="edit-form-content">
                             ${html}
                         </div>
                         
-                        <!-- Action Buttons -->
                         <div class="pt-4 border-t border-slate-200">
                             <div class="flex justify-between items-center">
                                 <div class="flex space-x-2">
@@ -2383,82 +1931,29 @@
                     </div>
                 `;
                 
-                // Populate form with existing configuration
                 populateFormWithData(conn);
                 
-                // Initialize dynamic elements
-                initializeEditFormFields();
+                initializeForm(conn.type);
                 
             } catch (error) {
                 console.error('Error loading form:', error);
-                // Use fallback form for editing
                 tabContent.innerHTML = `
-                    <div class="space-y-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <h4 class="text-sm font-semibold text-slate-900">${connectionConfig.name} Configuration</h4>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs text-slate-700">Enabled</span>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="connection-enabled" ${conn.enabled ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Connection Name -->
-                        <div class="form-section">
-                            <h5 class="form-section-title">Connection Information</h5>
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
-                                    <input type="text" id="edit-connection-name" 
-                                           class="w-full compact-input"
-                                           value="${conn.name}"
-                                           placeholder="Enter connection name">
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Fallback form -->
-                        <div id="edit-form-content">
-                            ${createFallbackForm(conn.type)}
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="pt-4 border-t border-slate-200">
-                            <div class="flex justify-between items-center">
-                                <div class="flex space-x-2">
-                                    <button onclick="testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
-                                        <i class="fa-solid fa-bolt mr-1"></i> Test Connection
-                                    </button>
-                                    <button onclick="deleteConnection('${conn.id}')" class="compact-button border border-red-300 text-red-700 hover:bg-red-50 flex items-center">
-                                        <i class="fa-solid fa-trash mr-1"></i> Delete
-                                    </button>
-                                </div>
-                                <button onclick="saveConnection('${conn.id}')" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
-                                    <i class="fa-solid fa-save mr-1"></i> Save Changes
-                                </button>
-                            </div>
-                        </div>
+                    <div class="text-center py-8 text-slate-400">
+                        <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
+                        <p class="text-sm">Failed to load configuration form</p>
+                        <p class="text-xs mt-1">${error.message}</p>
                     </div>
                 `;
-                
-                // Populate form with existing configuration
-                populateFormWithData(conn);
-                initializeEditFormFields();
             }
         }
 
         function populateFormWithData(conn) {
-            // Populate connection name
             const nameInput = document.getElementById('edit-connection-name');
             if (nameInput) nameInput.value = conn.name;
             
-            // Populate connection enabled
             const enabledCheckbox = document.getElementById('connection-enabled');
             if (enabledCheckbox) enabledCheckbox.checked = conn.enabled;
             
-            // Populate all form fields from connection config
             Object.entries(conn.config).forEach(([fieldName, value]) => {
                 const fieldId = `field-${fieldName}`;
                 const element = document.getElementById(fieldId);
@@ -2476,11 +1971,9 @@
                 }
             });
             
-            // Special handling for key-value lists (like headers)
             if (conn.config.headers && typeof conn.config.headers === 'object') {
                 const keyValueLists = document.querySelectorAll('.key-value-list');
                 keyValueLists.forEach(list => {
-                    // Clear existing items except the add button
                     const items = list.querySelectorAll('.key-value-item');
                     items.forEach(item => {
                         if (!item.querySelector('button[onclick*="addKeyValueItem"]')) {
@@ -2488,10 +1981,9 @@
                         }
                     });
                     
-                    // Add items from config
-                    Object.entries(conn.config.headers).forEach(([key, value]) => {
-                        const addButton = list.querySelector('button[onclick*="addKeyValueItem"]');
-                        if (addButton) {
+                    const addButton = list.querySelector('button[onclick*="addKeyValueItem"]');
+                    if (addButton) {
+                        Object.entries(conn.config.headers).forEach(([key, value]) => {
                             const newItem = document.createElement('div');
                             newItem.className = 'key-value-item';
                             newItem.innerHTML = `
@@ -2502,106 +1994,42 @@
                                 </button>
                             `;
                             list.insertBefore(newItem, addButton.parentNode);
-                        }
-                    });
+                        });
+                    }
                 });
             }
-        }
-
-        function initializeEditFormFields() {
-            // Setup toggle switches
-            document.querySelectorAll('.toggle-switch input').forEach(toggle => {
-                toggle.addEventListener('change', function() {
-                    const label = this.nextElementSibling;
-                    label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
-                });
-                
-                // Set initial color
-                const label = toggle.nextElementSibling;
-                label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
-            });
-            
-            // Setup key-value item listeners
-            document.querySelectorAll('.key-value-list').forEach(list => {
-                const addButton = list.querySelector('button[onclick*="addKeyValueItem"]');
-                if (addButton) {
-                    addButton.onclick = function() {
-                        addKeyValueItem(this);
-                    };
-                }
-                
-                // Setup delete buttons
-                list.querySelectorAll('.key-value-item button').forEach(btn => {
-                    if (btn.innerHTML.includes('fa-trash')) {
-                        btn.onclick = function() {
-                            removeKeyValueItem(this);
-                        };
-                    }
-                });
-            });
-            
-            // Setup file upload handlers
-            document.querySelectorAll('.file-upload input[type="file"]').forEach(input => {
-                input.onchange = function() {
-                    const fieldId = this.id;
-                    const fileName = this.files[0]?.name || 'No file selected';
-                    const nameSpan = document.getElementById(`${fieldId}-name`);
-                    if (nameSpan) {
-                        nameSpan.textContent = fileName;
-                    }
-                };
-            });
-            
-            // Setup generate password buttons
-            document.querySelectorAll('button[onclick^="generatePassword"]').forEach(btn => {
-                const match = btn.getAttribute('onclick').match(/generatePassword\('([^']+)'\)/);
-                if (match) {
-                    const fieldId = match[1];
-                    btn.onclick = function() {
-                        generatePassword(fieldId);
-                    };
-                }
-            });
         }
 
         function saveConnection(connectionId) {
             const conn = connections[connectionId];
             if (!conn) return;
             
-            // Update connection name
             const nameInput = document.getElementById('edit-connection-name');
             if (nameInput) {
                 conn.name = nameInput.value;
             }
             
-            // Update enabled status
             const enabledCheckbox = document.getElementById('connection-enabled');
             if (enabledCheckbox) {
                 conn.enabled = enabledCheckbox.checked;
             }
             
-            // Collect form data
             const formData = collectFormDataFromEditForm();
             
-            // Update connection config
             conn.config = {...conn.config, ...formData};
             
-            // Update UI
             updateConnectionItem(connectionId, conn);
             updateConfigurationForConnection(conn);
             
-            // Show notification
             showNotification(`${conn.name} updated successfully`, 'success');
         }
 
         function collectFormDataFromEditForm() {
             const formData = {};
             
-            // Collect all input fields from the edit form
             const editFormContent = document.getElementById('edit-form-content');
             if (!editFormContent) return formData;
             
-            // Text inputs, numbers, passwords
             editFormContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
                 const id = input.id;
                 if (id.startsWith('field-')) {
@@ -2610,7 +2038,6 @@
                 }
             });
             
-            // Selects
             editFormContent.querySelectorAll('select').forEach(select => {
                 const id = select.id;
                 if (id.startsWith('field-')) {
@@ -2619,7 +2046,6 @@
                 }
             });
             
-            // Checkboxes (toggles)
             editFormContent.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(checkbox => {
                 const id = checkbox.id;
                 if (id.startsWith('field-')) {
@@ -2628,7 +2054,6 @@
                 }
             });
             
-            // Radio buttons
             editFormContent.querySelectorAll('input[type="radio"]').forEach(radio => {
                 const name = radio.name;
                 if (name.startsWith('field-')) {
@@ -2639,7 +2064,6 @@
                 }
             });
             
-            // Collect key-value pairs
             const keyValueData = {};
             editFormContent.querySelectorAll('.key-value-item').forEach(item => {
                 const inputs = item.querySelectorAll('input[type="text"]');
@@ -2652,7 +2076,6 @@
                 }
             });
             
-            // Add key-value data if exists
             if (Object.keys(keyValueData).length > 0) {
                 formData.headers = keyValueData;
             }
@@ -2668,16 +2091,13 @@
             const connName = connections[connectionId]?.name || 'Connection';
             delete connections[connectionId];
             
-            // Remove from UI
             const connectionElement = document.querySelector(`[data-connection-id="${connectionId}"]`);
             if (connectionElement) {
                 connectionElement.remove();
             }
             
-            // Update count
             updateConnectionCount();
             
-            // If this was the selected connection, clear the right panel
             if (selectedConnectionId === connectionId) {
                 selectedConnectionId = null;
                 showEmptyConnectionState();
@@ -2702,11 +2122,7 @@
             }
         }
 
-        // Helper functions
-        function generateRandomId(length = 6) {
-            return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
-        }
-
+        // Helper Functions
         function showNotification(message, type = 'info') {
             const colors = {
                 success: 'bg-green-100 border-green-200 text-green-800',
@@ -2727,6 +2143,14 @@
             document.body.appendChild(notification);
             
             setTimeout(() => notification.remove(), 3000);
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
         }
 
         // Key-Value List Functions
@@ -2755,12 +2179,6 @@
             }
         }
 
-        // File Upload Functions
-        function handleFileUpload(input, fieldId) {
-            const fileName = input.files[0]?.name || 'No file selected';
-            document.getElementById(`${fieldId}-name`).textContent = fileName;
-        }
-
         function generatePassword(fieldId) {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
             let password = '';
@@ -2773,118 +2191,73 @@
             }
         }
 
-        // Enhanced Publishing Rules Functions
-        function addPublishingRule() {
-            const container = document.getElementById('publishing-rules-container');
-            
-            // Remove placeholder if exists
-            const placeholder = container.querySelector('.text-center');
-            if (placeholder) {
-                placeholder.remove();
-            }
-            
-            const ruleId = `rule-${Date.now()}`;
-            const ruleHtml = `
-                <div id="${ruleId}" class="p-3 bg-white rounded border border-slate-200">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-xs font-medium text-slate-700">Publishing Rule</span>
-                        <button onclick="removePublishingRule('${ruleId}')" class="text-xs text-red-600 hover:text-red-700">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2">
-                        <div>
-                            <label class="block text-xs text-slate-600 mb-1">Tag</label>
-                            <select class="w-full compact-select">
-                                <option value="">Select Tag</option>
-                                <option value="Hoist_Load">Hoist_Load</option>
-                                <option value="Boom_Angle">Boom_Angle</option>
-                                <option value="WindSpeed">WindSpeed</option>
-                                <option value="Motor_Temp">Motor_Temp</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-600 mb-1">Condition</label>
-                            <select class="w-full compact-select">
-                                <option value="gt">Greater Than</option>
-                                <option value="lt">Less Than</option>
-                                <option value="eq">Equals</option>
-                                <option value="change">On Change</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-600 mb-1">Value</label>
-                            <input type="text" class="w-full compact-input" placeholder="Threshold">
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <label class="flex items-center">
-                            <input type="checkbox" class="mr-2">
-                            <span class="text-xs text-slate-600">Publish only when condition is met</span>
-                        </label>
-                    </div>
-                </div>
-            `;
-            
-            container.insertAdjacentHTML('beforeend', ruleHtml);
-        }
-
-        function removePublishingRule(ruleId) {
-            const rule = document.getElementById(ruleId);
-            if (rule) {
-                rule.remove();
-            }
-            
-            // Show placeholder if no rules left
-            const container = document.getElementById('publishing-rules-container');
-            if (container.children.length === 0) {
-                container.innerHTML = '<div class="text-xs text-slate-400 text-center py-2">No rules defined yet</div>';
-            }
-        }
-
-        // Enhanced Tab Switching Function
+        // Tab Switching Functions
         function switchTab(tabName) {
             const conn = connections[selectedConnectionId];
             
-            if (conn && conn.type === 'mqtt' && tabName !== 'connection') {
-                // For MQTT connections, show the specific tabs
-                document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
-                    tab.style.display = 'none';
-                });
-                
-                document.querySelectorAll('.tab-button').forEach(button => {
-                    button.classList.remove('active');
-                });
-                
-                document.getElementById(`tab-content-${tabName}`).style.display = 'block';
-                document.getElementById(`tab-${tabName}`).classList.add('active');
-            } else {
-                // For non-MQTT or no connection selected, show connection tab
-                document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
-                    tab.style.display = 'none';
-                });
-                
-                document.querySelectorAll('.tab-button').forEach(button => {
-                    button.classList.remove('active');
-                });
-                
-                document.getElementById('tab-content-connection').style.display = 'block';
-                document.getElementById('tab-connection').classList.add('active');
-                
-                // If we have a non-MQTT connection selected, reload its edit form
-                if (conn && conn.type !== 'mqtt' && tabName === 'connection') {
-                    loadConnectionEditForm(conn);
-                }
-            }
+            document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            document.getElementById(`tab-content-${tabName}`).style.display = 'block';
+            document.getElementById(`tab-${tabName}`).classList.add('active');
         }
 
-        // EXISTING FUNCTIONS FROM ORIGINAL MQTT PAGE
+        // MQTT and HTTP Tab Functions
+        function switchMqttTab(tabName) {
+            document.querySelectorAll('.mqtt-tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            const tabContent = document.getElementById(`mqtt-${tabName}-content`);
+            if (tabContent) {
+                tabContent.style.display = 'block';
+            }
+            
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => {
+                if (button.textContent.toLowerCase().includes(tabName)) {
+                    button.classList.add('active');
+                }
+            });
+        }
+
+        function switchHttpTab(tabName) {
+            document.querySelectorAll('.http-tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            const tabContent = document.getElementById(`http-${tabName}-content`);
+            if (tabContent) {
+                tabContent.style.display = 'block';
+            }
+            
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => {
+                if (button.textContent.toLowerCase().includes(tabName)) {
+                    button.classList.add('active');
+                }
+            });
+        }
+
+        // Existing Functions
         function showAddTagModal() {
             document.getElementById('addTagModal').classList.add('active');
         }
         
         function addSelectedTags() {
-            // In a real app, this would add the selected tags to the table
             const modal = document.getElementById('addTagModal');
             const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
             
@@ -2892,7 +2265,6 @@
                 showNotification(`${checkboxes.length} tags added successfully!`, 'success');
                 closeModal('addTagModal');
                 
-                // Reset checkboxes
                 modal.querySelectorAll('input[type="checkbox"]').forEach(cb => {
                     cb.checked = false;
                 });
@@ -2906,10 +2278,8 @@
             
             if (selected.length > 0) {
                 if (confirm(`Remove ${selected.length} selected tags?`)) {
-                    // In a real app, this would remove the selected rows
                     showNotification(`${selected.length} tags removed successfully!`, 'success');
                     
-                    // Uncheck all checkboxes
                     document.querySelectorAll('.tag-table input[type="checkbox"]').forEach(cb => {
                         cb.checked = false;
                     });
@@ -2922,10 +2292,6 @@
         function saveBrokerSettings() {
             const currentConn = connections[selectedConnectionId];
             if (currentConn && currentConn.type === 'mqtt') {
-                // Update connection config with form values
-                currentConn.config.host = document.getElementById('server-url')?.value;
-                currentConn.config.port = document.getElementById('server-port')?.value;
-                
                 showNotification('Broker settings saved successfully!', 'success');
                 updateConnectionItem(selectedConnectionId, currentConn);
             } else {
@@ -2963,7 +2329,6 @@
             showNotification(`Testing ${currentConn.name} connection...`, 'info');
             
             setTimeout(() => {
-                // Update stats
                 currentConn.stats.messages += Math.floor(Math.random() * 100);
                 currentConn.stats.lastActive = 'Just now';
                 currentConn.stats.latency = Math.floor(Math.random() * 200);
@@ -2972,15 +2337,10 @@
                 updateConnectionItem(selectedConnectionId, currentConn);
                 updateConfigurationForConnection(currentConn);
                 
-                // Show test results modal
                 showModal('testResultsModal');
                 
                 showNotification(`Connection test for ${currentConn.name} successful!`, 'success');
             }, 1500);
-        }
-        
-        function viewLogs() {
-            alert('Opening connection logs...');
         }
         
         function resetToDefaults() {
@@ -3006,35 +2366,6 @@
         function uploadCertificate() {
             alert('Certificate upload functionality would be implemented here.');
             closeModal('uploadCertModal');
-        }
-        
-        function updatePayloadPreview() {
-            const format = document.querySelector('input[name="payload-format"]:checked');
-            const preview = document.getElementById('json-preview');
-            
-            if (!format || !preview) return;
-            
-            switch(format.value) {
-                case 'json':
-                    preview.textContent = `{
-  "device_id": "CRN001",
-  "timestamp": 1736004933,
-  "Hoist_Load": 18.5,
-  "Boom_Angle": 45,
-  "WindSpeed": 12
-}`;
-                    break;
-                case 'key-value':
-                    preview.textContent = `device_id=CRN001
-timestamp=1736004933
-Hoist_Load=18.5
-Boom_Angle=45
-WindSpeed=12`;
-                    break;
-                case 'raw':
-                    preview.textContent = 'Raw binary data preview not available';
-                    break;
-            }
         }
     </script>
 </body>

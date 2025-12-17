@@ -1,161 +1,830 @@
+<!-- HTTP FORM WITH TABS -->
 <div class="space-y-6">
-    <div class="form-section">
-        <h5 class="form-section-title">Endpoint Configuration</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Endpoint URL</label>
-                <input type="text" id="field-url" 
-                       class="w-full compact-input"
-                       value="https://api.company.com/v1/data"
-                       placeholder="https://example.com/api/endpoint"
-                       required>
-                <p class="help-text">Full URL including protocol (http:// or https://)</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">HTTP Method</label>
-                <select id="field-method" class="w-full compact-select" required>
-                    <option value="POST" selected>POST (Create/Submit data)</option>
-                    <option value="PUT">PUT (Update resource)</option>
-                    <option value="PATCH">PATCH (Partial update)</option>
-                    <option value="GET">GET (Retrieve data)</option>
-                </select>
-                <p class="help-text">HTTP method for requests</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Content Type</label>
-                <select id="field-contentType" class="w-full compact-select">
-                    <option value="application/json" selected>application/json</option>
-                    <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
-                    <option value="text/plain">text/plain</option>
-                    <option value="application/xml">application/xml</option>
-                </select>
-                <p class="help-text">Content-Type header for HTTP requests</p>
-            </div>
-        </div>
+    <!-- Tab Navigation for HTTP Form -->
+    <div class="flex border-b border-slate-200 mb-4">
+        <button class="tab-button active" onclick="switchHttpTab('connection')">Connection</button>
+        <button class="tab-button" onclick="switchHttpTab('payload')">Payload Format</button>
+        <button class="tab-button" onclick="switchHttpTab('publishing')">Data Publishing</button>
+        <button class="tab-button" onclick="switchHttpTab('advanced')">Advanced</button>
     </div>
     
-    <div class="form-section">
-        <h5 class="form-section-title">Push Settings</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Push Interval</label>
-                <select id="field-interval" class="w-full compact-select">
-                    <option value="0">Immediate (no batching)</option>
-                    <option value="10">10 seconds</option>
-                    <option value="30">30 seconds</option>
-                    <option value="60">1 minute</option>
-                    <option value="300" selected>5 minutes</option>
-                    <option value="900">15 minutes</option>
-                    <option value="3600">1 hour</option>
-                </select>
-                <p class="help-text">How often to send batched data</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
-                <input type="number" id="field-batchSize" 
-                       class="w-full compact-input"
-                       value="100"
-                       min="1"
-                       max="10000">
-                <p class="help-text">Maximum number of messages to batch before sending</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Request Timeout</label>
-                <div class="flex items-center gap-2">
-                    <input type="number" id="field-timeout" 
-                           class="w-full compact-input"
-                           value="30"
-                           min="1"
-                           max="300">
-                    <span class="text-xs text-slate-500">seconds</span>
-                </div>
-                <p class="help-text">Timeout for HTTP requests</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Retry Attempts</label>
-                <input type="number" id="field-retryCount" 
-                       class="w-full compact-input"
-                       value="3"
-                       min="0"
-                       max="10">
-                <p class="help-text">Number of retries on failure</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="form-section">
-        <h5 class="form-section-title">Authentication</h5>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Authentication Type</label>
-                <select id="field-authType" class="w-full compact-select">
-                    <option value="none">None</option>
-                    <option value="basic">Basic Authentication</option>
-                    <option value="bearer" selected>Bearer Token</option>
-                    <option value="apiKey">API Key</option>
-                    <option value="oauth2">OAuth 2.0</option>
-                </select>
-                <p class="help-text">Select authentication method</p>
-            </div>
-            
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">API Key / Token</label>
-                <div class="form-input-group">
-                    <input type="password" id="field-apiKey"
-                           class="w-full compact-input"
-                           placeholder="Enter API key or token">
-                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-apiKey')">
-                        Generate
-                    </button>
-                </div>
-                <p class="help-text">Authentication token or API key</p>
-            </div>
-            
-            <div class="flex items-center justify-between">
+    <!-- CONNECTION TAB CONTENT -->
+    <div id="http-connection-content" class="http-tab-content active">
+        <div class="form-section">
+            <h5 class="form-section-title">Endpoint Configuration</h5>
+            <div class="space-y-4">
                 <div>
-                    <span class="text-xs font-medium text-slate-700">Enable Compression</span>
-                    <p class="help-text">Compress data with gzip before sending</p>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Endpoint URL</label>
+                    <input type="text" id="field-url" 
+                           class="w-full compact-input"
+                           value="https://api.company.com/v1/data"
+                           placeholder="https://example.com/api/endpoint"
+                           required>
+                    <p class="help-text">Full URL including protocol (http:// or https://)</p>
                 </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="field-compression" checked>
-                    <span class="toggle-slider"></span>
-                </label>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">HTTP Method</label>
+                    <select id="field-method" class="w-full compact-select" required>
+                        <option value="POST" selected>POST (Create/Submit data)</option>
+                        <option value="PUT">PUT (Update resource)</option>
+                        <option value="PATCH">PATCH (Partial update)</option>
+                        <option value="GET">GET (Retrieve data)</option>
+                    </select>
+                    <p class="help-text">HTTP method for requests</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Content Type</label>
+                    <select id="field-contentType" class="w-full compact-select">
+                        <option value="application/json" selected>application/json</option>
+                        <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+                        <option value="text/plain">text/plain</option>
+                        <option value="application/xml">application/xml</option>
+                    </select>
+                    <p class="help-text">Content-Type header for HTTP requests</p>
+                </div>
             </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Authentication</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Authentication Type</label>
+                    <select id="field-authType" class="w-full compact-select">
+                        <option value="none">None</option>
+                        <option value="basic">Basic Authentication</option>
+                        <option value="bearer" selected>Bearer Token</option>
+                        <option value="apiKey">API Key</option>
+                        <option value="oauth2">OAuth 2.0</option>
+                    </select>
+                    <p class="help-text">Select authentication method</p>
+                </div>
+                
+                <div id="basic-auth-fields" style="display: none;">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                            <input type="text" id="field-username" class="w-full compact-input" placeholder="Username">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                            <div class="form-input-group">
+                                <input type="password" id="field-password" class="w-full compact-input" placeholder="Password">
+                                <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-password')">
+                                    Generate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="token-auth-fields">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Bearer Token / API Key</label>
+                        <div class="form-input-group">
+                            <input type="password" id="field-apiKey"
+                                   class="w-full compact-input"
+                                   placeholder="Enter API key or token">
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-apiKey')">
+                                Generate
+                            </button>
+                        </div>
+                        <p class="help-text">Authentication token or API key</p>
+                    </div>
+                </div>
+                
+                <div id="oauth2-fields" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">OAuth 2.0 Client ID</label>
+                        <input type="text" id="field-oauth-clientId" class="w-full compact-input" placeholder="Client ID">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">OAuth 2.0 Client Secret</label>
+                        <div class="form-input-group">
+                            <input type="password" id="field-oauth-secret" class="w-full compact-input" placeholder="Client Secret">
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-oauth-secret')">
+                                Generate
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Token URL</label>
+                        <input type="text" id="field-oauth-tokenUrl" class="w-full compact-input" placeholder="https://auth.example.com/token">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Custom Headers</h5>
+            <div class="space-y-4">
+                <div>
+                    <div class="key-value-list">
+                        <div class="key-value-item">
+                            <input type="text" value="X-Client-ID" placeholder="Header Name" class="compact-input">
+                            <input type="text" value="univa-gateway" placeholder="Header Value" class="compact-input">
+                            <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="key-value-item">
+                            <input type="text" value="X-Version" placeholder="Header Name" class="compact-input">
+                            <input type="text" value="2.4.1" placeholder="Header Value" class="compact-input">
+                            <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="p-2 text-center">
+                            <button type="button" class="text-xs text-primary hover:text-primaryHover" onclick="addKeyValueItem(this)">
+                                <i class="fa-solid fa-plus mr-1"></i>Add Header
+                            </button>
+                        </div>
+                    </div>
+                    <p class="help-text">Custom HTTP headers to include in requests</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveHttpConnectionSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Connection
+            </button>
         </div>
     </div>
     
-    <div class="form-section">
-        <h5 class="form-section-title">Custom Headers</h5>
-        <div class="space-y-4">
-            <div>
-                <div class="key-value-list">
-                    <div class="key-value-item">
-                        <input type="text" value="X-Client-ID" placeholder="Header Name" class="compact-input">
-                        <input type="text" value="univa-gateway" placeholder="Header Value" class="compact-input">
-                        <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+    <!-- PAYLOAD FORMAT TAB CONTENT -->
+    <div id="http-payload-content" class="http-tab-content" style="display: none;">
+        <div class="form-section">
+            <h5 class="form-section-title">Data Format</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Payload Format</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="json" checked>
+                            <span class="text-xs">JSON (Recommended)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="form">
+                            <span class="text-xs">Form Data (x-www-form-urlencoded)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="xml">
+                            <span class="text-xs">XML</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-payloadFormat" value="custom">
+                            <span class="text-xs">Custom Template</span>
+                        </label>
                     </div>
-                    <div class="key-value-item">
-                        <input type="text" value="X-Version" placeholder="Header Name" class="compact-input">
-                        <input type="text" value="2.4.1" placeholder="Header Value" class="compact-input">
-                        <button type="button" class="text-red-600 hover:text-red-700" onclick="removeKeyValueItem(this)">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                </div>
+                
+                <div id="json-format-options" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">JSON Structure</label>
+                        <textarea id="field-jsonTemplate" 
+                                  class="w-full compact-input font-mono text-xs h-32"
+                                  placeholder='{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":[%DATA%]}'>{
+  "timestamp": "%TIMESTAMP%",
+  "device": "%DEVICE_ID%",
+  "gateway": "%GATEWAY_ID%",
+  "data": [
+    %DATA%
+  ]
+}</textarea>
+                        <p class="help-text">Use %TAG_NAME% for tag values, %TIMESTAMP% for timestamp, %DEVICE_ID% for device ID</p>
                     </div>
-                    <div class="p-2 text-center">
-                        <button type="button" class="text-xs text-primary hover:text-primaryHover" onclick="addKeyValueItem(this)">
-                            <i class="fa-solid fa-plus mr-1"></i>Add Header
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Timestamp Format</label>
+                        <select id="field-timestampFormat" class="w-full compact-select">
+                            <option value="epoch" selected>Unix Epoch (seconds)</option>
+                            <option value="epochms">Unix Epoch (milliseconds)</option>
+                            <option value="iso8601">ISO 8601 (2024-01-01T12:00:00Z)</option>
+                            <option value="custom">Custom Format</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="xml-format-options" class="space-y-4" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">XML Template</label>
+                        <textarea id="field-xmlTemplate" 
+                                  class="w-full compact-input font-mono text-xs h-32"
+                                  placeholder='<data><timestamp>%TIMESTAMP%</timestamp><device>%DEVICE_ID%</device><values>%DATA%</values></data>'><telemetry>
+  <timestamp>%TIMESTAMP%</timestamp>
+  <device>%DEVICE_ID%</device>
+  <gateway>%GATEWAY_ID%</gateway>
+  <values>
+    %DATA%
+  </values>
+</telemetry></textarea>
+                    </div>
+                </div>
+                
+                <div id="custom-format-options" class="space-y-4" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Custom Template</label>
+                        <textarea id="field-customTemplate" 
+                                  class="w-full compact-input font-mono text-xs h-32"
+                                  placeholder='Enter your custom template format'>timestamp=%TIMESTAMP%
+device=%DEVICE_ID%
+data=%DATA%</textarea>
+                        <p class="help-text">Define your own template format with variables</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Content Type</label>
+                        <input type="text" id="field-customContentType" 
+                               class="w-full compact-input"
+                               placeholder="application/custom-format">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Data Transformation</h5>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable Data Compression</span>
+                        <p class="help-text">Compress payload with gzip before sending</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-compression" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Encrypt Payload</span>
+                        <p class="help-text">Encrypt sensitive data before transmission</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-encryption">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Data Filtering</label>
+                    <textarea id="field-dataFilter" 
+                              class="w-full compact-input font-mono text-xs h-16"
+                              placeholder='Filter expressions (e.g., tag.value > 0 AND tag.quality == "GOOD")'>tag.value > 0 AND tag.quality == "GOOD"</textarea>
+                    <p class="help-text">Only send data matching these conditions</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveHttpPayloadSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Payload Format
+            </button>
+        </div>
+    </div>
+    
+    <!-- DATA PUBLISHING TAB CONTENT -->
+    <div id="http-publishing-content" class="http-tab-content" style="display: none;">
+        <div class="form-section">
+            <h5 class="form-section-title">Publishing Strategy</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Publishing Mode</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="field-publishMode" value="batch" checked>
+                            <span class="text-xs">Batch Mode (Send data in batches)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-publishMode" value="realTime">
+                            <span class="text-xs">Real-time Mode (Send immediately)</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="field-publishMode" value="conditional">
+                            <span class="text-xs">Conditional Mode (Send on events)</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="batch-settings" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Batch Interval</label>
+                        <select id="field-batchInterval" class="w-full compact-select">
+                            <option value="0">Immediate (no batching)</option>
+                            <option value="10">10 seconds</option>
+                            <option value="30">30 seconds</option>
+                            <option value="60">1 minute</option>
+                            <option value="300" selected>5 minutes</option>
+                            <option value="900">15 minutes</option>
+                            <option value="3600">1 hour</option>
+                        </select>
+                        <p class="help-text">How often to send batched data</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
+                        <input type="number" id="field-batchSize" 
+                               class="w-full compact-input"
+                               value="100"
+                               min="1"
+                               max="10000">
+                        <p class="help-text">Maximum number of messages to batch before sending</p>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-medium text-slate-700">Aggregate Data</span>
+                            <p class="help-text">Aggregate multiple tag values into single message</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="field-aggregateData" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="conditional-settings" class="space-y-4" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Trigger Conditions</label>
+                        <textarea id="field-triggerConditions" 
+                                  class="w-full compact-input font-mono text-xs h-24"
+                                  placeholder='Enter trigger conditions (e.g., Hoist_Load > 100 OR WindSpeed > 20)'>Hoist_Load > 100 OR WindSpeed > 20 OR Boom_Angle < 10</textarea>
+                        <p class="help-text">Send data only when these conditions are met</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Minimum Interval</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-minInterval" 
+                                   class="w-full compact-input"
+                                   value="60"
+                                   min="1"
+                                   max="3600">
+                            <span class="text-xs text-slate-500">seconds</span>
+                        </div>
+                        <p class="help-text">Minimum time between conditional sends</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Tag Selection</h5>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-medium text-slate-700">Select Tags to Publish</span>
+                    <div class="flex gap-2">
+                        <button type="button" 
+                                onclick="showAddTagModal()"
+                                class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Tags
+                        </button>
+                        <button type="button"
+                                onclick="removeSelectedHttpTags()"
+                                class="compact-button border border-red-300 text-red-700 hover:bg-red-50 text-xs">
+                            <i class="fa-solid fa-trash mr-1"></i> Remove Selected
                         </button>
                     </div>
                 </div>
-                <p class="help-text">Custom HTTP headers to include in requests</p>
+                
+                <div class="border border-slate-200 rounded overflow-hidden">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="p-2 text-left"><input type="checkbox" id="http-select-all-tags" onchange="toggleAllHttpTags()"></th>
+                                <th class="p-2 text-left">Tag Name</th>
+                                <th class="p-2 text-left">Publish Rate</th>
+                                <th class="p-2 text-left">Priority</th>
+                                <th class="p-2 text-left">Enabled</th>
+                            </tr>
+                        </thead>
+                        <tbody id="http-tags-table">
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="http-tag-select"></td>
+                                <td class="p-2 font-mono">Hoist_Load</td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                        <option value="30000">30 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="high">High</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="http-tag-select"></td>
+                                <td class="p-2 font-mono">Boom_Angle</td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="onChange">On Change</option>
+                                        <option value="1000" selected>1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                        <option value="30000">30 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="high" selected>High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="http-tag-select"></td>
+                                <td class="p-2 font-mono">WindSpeed</td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                        <option value="30000">30 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs">
+                                        <option value="high">High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low" selected>Low</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="text-xs text-slate-500">
+                    <p><i class="fa-solid fa-info-circle mr-1"></i> Total tags selected: <span id="http-selected-tags-count">3</span></p>
+                </div>
             </div>
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveHttpPublishingSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Publishing
+            </button>
+        </div>
+    </div>
+    
+    <!-- ADVANCED TAB CONTENT -->
+    <div id="http-advanced-content" class="http-tab-content" style="display: none;">
+        <div class="form-section">
+            <h5 class="form-section-title">Connection Settings</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Request Timeout</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="field-timeout" 
+                               class="w-full compact-input"
+                               value="30"
+                               min="1"
+                               max="300">
+                        <span class="text-xs text-slate-500">seconds</span>
+                    </div>
+                    <p class="help-text">Timeout for HTTP requests</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Retry Attempts</label>
+                    <input type="number" id="field-retryCount" 
+                           class="w-full compact-input"
+                           value="3"
+                           min="0"
+                           max="10">
+                    <p class="help-text">Number of retries on failure</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Retry Delay</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="field-retryDelay" 
+                               class="w-full compact-input"
+                               value="5"
+                               min="1"
+                               max="60">
+                        <span class="text-xs text-slate-500">seconds</span>
+                    </div>
+                    <p class="help-text">Delay between retry attempts</p>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">SSL/TLS Verification</span>
+                        <p class="help-text">Verify SSL/TLS certificates (disable for self-signed)</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-sslVerify" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Proxy Settings</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Proxy Server</label>
+                    <input type="text" id="field-proxyServer" 
+                           class="w-full compact-input"
+                           placeholder="proxy.example.com:8080">
+                    <p class="help-text">Leave empty to use direct connection</p>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Proxy Authentication</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                            <input type="text" id="field-proxyUsername" class="w-full compact-input" placeholder="Proxy username">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                            <input type="password" id="field-proxyPassword" class="w-full compact-input" placeholder="Proxy password">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Rate Limiting</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Max Requests per Minute</label>
+                    <input type="number" id="field-rateLimit" 
+                           class="w-full compact-input"
+                           value="60"
+                           min="1"
+                           max="1000">
+                    <p class="help-text">Limit number of requests to prevent overwhelming server</p>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Throttle Requests</span>
+                        <p class="help-text">Automatically throttle requests to stay within limits</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-throttle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Store & Forward</h5>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable Store & Forward</span>
+                        <p class="help-text">Store data when connection is lost, send when restored</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-storeForward" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div id="store-forward-options" class="space-y-4 ml-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Storage Size</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-maxStorage" 
+                                   class="w-full compact-input"
+                                   value="1000"
+                                   min="10"
+                                   max="100000">
+                            <span class="text-xs text-slate-500">messages</span>
+                        </div>
+                        <p class="help-text">Maximum number of messages to store offline</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-retentionPeriod" 
+                                   class="w-full compact-input"
+                                   value="24"
+                                   min="1"
+                                   max="720">
+                            <span class="text-xs text-slate-500">hours</span>
+                        </div>
+                        <p class="help-text">How long to keep stored messages</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="saveHttpAdvancedSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                <i class="fa-solid fa-save mr-1"></i> Save Advanced
+            </button>
         </div>
     </div>
 </div>
+
+<script>
+    // Initialize HTTP form when loaded
+    function initializeHttpForm() {
+        // Setup authentication type change
+        const authTypeSelect = document.getElementById('field-authType');
+        const basicAuthFields = document.getElementById('basic-auth-fields');
+        const tokenAuthFields = document.getElementById('token-auth-fields');
+        const oauth2Fields = document.getElementById('oauth2-fields');
+        
+        if (authTypeSelect) {
+            authTypeSelect.addEventListener('change', function() {
+                const authType = this.value;
+                
+                // Show/hide appropriate auth fields
+                if (basicAuthFields) basicAuthFields.style.display = authType === 'basic' ? 'block' : 'none';
+                if (tokenAuthFields) tokenAuthFields.style.display = authType === 'bearer' || authType === 'apiKey' ? 'block' : 'none';
+                if (oauth2Fields) oauth2Fields.style.display = authType === 'oauth2' ? 'block' : 'none';
+            });
+            
+            // Trigger initial state
+            authTypeSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Setup payload format change
+        const payloadRadios = document.querySelectorAll('input[name="field-payloadFormat"]');
+        const jsonOptions = document.getElementById('json-format-options');
+        const xmlOptions = document.getElementById('xml-format-options');
+        const customOptions = document.getElementById('custom-format-options');
+        
+        payloadRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                const format = this.value;
+                
+                if (jsonOptions) jsonOptions.style.display = format === 'json' ? 'block' : 'none';
+                if (xmlOptions) xmlOptions.style.display = format === 'xml' ? 'block' : 'none';
+                if (customOptions) customOptions.style.display = format === 'custom' ? 'block' : 'none';
+            });
+        });
+        
+        // Setup publishing mode change
+        const publishRadios = document.querySelectorAll('input[name="field-publishMode"]');
+        const batchSettings = document.getElementById('batch-settings');
+        const conditionalSettings = document.getElementById('conditional-settings');
+        
+        publishRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                const mode = this.value;
+                
+                if (batchSettings) batchSettings.style.display = mode === 'batch' ? 'block' : 'none';
+                if (conditionalSettings) conditionalSettings.style.display = mode === 'conditional' ? 'block' : 'none';
+            });
+        });
+        
+        // Setup store & forward toggle
+        const storeForwardToggle = document.getElementById('field-storeForward');
+        const storeForwardOptions = document.getElementById('store-forward-options');
+        
+        if (storeForwardToggle && storeForwardOptions) {
+            storeForwardToggle.addEventListener('change', function() {
+                storeForwardOptions.style.display = this.checked ? 'block' : 'none';
+            });
+            
+            // Trigger initial state
+            storeForwardToggle.dispatchEvent(new Event('change'));
+        }
+        
+        // Setup toggle switches
+        document.querySelectorAll('.toggle-switch input').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const label = this.nextElementSibling;
+                label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
+            });
+            
+            // Set initial color
+            const label = toggle.nextElementSibling;
+            label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
+        });
+        
+        // Initialize tag selection
+        updateHttpSelectedTagsCount();
+    }
+    
+    // Tab switching for HTTP form
+    function switchHttpTab(tabName) {
+        // Hide all tab contents
+        document.querySelectorAll('.http-tab-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        
+        // Remove active class from all tab buttons
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        
+        // Show selected tab content
+        const tabContent = document.getElementById(`http-${tabName}-content`);
+        if (tabContent) {
+            tabContent.style.display = 'block';
+        }
+        
+        // Activate tab button
+        const tabButtons = document.querySelectorAll('.tab-button');
+        tabButtons.forEach(button => {
+            if (button.textContent.toLowerCase().includes(tabName)) {
+                button.classList.add('active');
+            }
+        });
+    }
+    
+    // Tag management functions for HTTP form
+    function toggleAllHttpTags() {
+        const selectAll = document.getElementById('http-select-all-tags');
+        const checkboxes = document.querySelectorAll('.http-tag-select');
+        checkboxes.forEach(cb => {
+            cb.checked = selectAll.checked;
+        });
+        updateHttpSelectedTagsCount();
+    }
+    
+    function updateHttpSelectedTagsCount() {
+        const checkboxes = document.querySelectorAll('.http-tag-select:checked');
+        const countElement = document.getElementById('http-selected-tags-count');
+        if (countElement) {
+            countElement.textContent = checkboxes.length;
+        }
+    }
+    
+    function removeSelectedHttpTags() {
+        const selected = document.querySelectorAll('.http-tag-select:checked');
+        if (selected.length === 0) {
+            alert('Please select tags to remove.');
+            return;
+        }
+        
+        if (confirm(`Remove ${selected.length} selected tag(s)?`)) {
+            selected.forEach(checkbox => {
+                const row = checkbox.closest('tr');
+                row.remove();
+            });
+            updateHttpSelectedTagsCount();
+            alert(`${selected.length} tag(s) removed successfully.`);
+        }
+    }
+    
+    // Add event listeners to tag checkboxes
+    document.addEventListener('DOMContentLoaded', function() {
+        // This will run when the HTTP form is loaded
+        initializeHttpForm();
+        
+        // Add click events to tag checkboxes
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('http-tag-select')) {
+                updateHttpSelectedTagsCount();
+            }
+        });
+    });
+    
+    // Save functions for each tab
+    function saveHttpConnectionSettings() {
+        alert('HTTP Connection settings saved!');
+    }
+    
+    function saveHttpPayloadSettings() {
+        alert('HTTP Payload Format settings saved!');
+    }
+    
+    function saveHttpPublishingSettings() {
+        alert('HTTP Publishing settings saved!');
+    }
+    
+    function saveHttpAdvancedSettings() {
+        alert('HTTP Advanced settings saved!');
+    }
+</script>
