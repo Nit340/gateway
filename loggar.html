@@ -126,46 +126,6 @@
             transform: translateX(20px);
         }
         
-        /* Log Level Badges */
-        .log-badge {
-            font-size: 10px;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .log-badge.critical {
-            background: #FEE2E2;
-            color: #DC2626;
-            border: 1px solid #FECACA;
-        }
-        
-        .log-badge.error {
-            background: #FEE2E2;
-            color: #EF4444;
-            border: 1px solid #FECACA;
-        }
-        
-        .log-badge.warning {
-            background: #FEF3C7;
-            color: #D97706;
-            border: 1px solid #FDE68A;
-        }
-        
-        .log-badge.info {
-            background: #DBEAFE;
-            color: #1E40AF;
-            border: 1px solid #BFDBFE;
-        }
-        
-        .log-badge.debug {
-            background: #F3F4F6;
-            color: #4B5563;
-            border: 1px solid #E5E7EB;
-        }
-        
         /* Card Styles */
         .config-card {
             background: white;
@@ -209,38 +169,6 @@
             overflow-y: auto;
         }
         
-        /* Live Log Viewer Styles */
-        .log-line {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            padding: 4px 8px;
-            border-bottom: 1px solid #F1F5F9;
-        }
-        
-        .log-line:hover {
-            background: #F8FAFC;
-        }
-        
-        .log-time {
-            color: #64748B;
-            min-width: 90px;
-        }
-        
-        .log-level {
-            min-width: 70px;
-            text-align: center;
-        }
-        
-        .log-module {
-            color: #7C3AED;
-            min-width: 100px;
-        }
-        
-        .log-message {
-            flex: 1;
-            color: #1E293B;
-        }
-        
         /* Progress Bar */
         .storage-progress {
             height: 8px;
@@ -267,6 +195,45 @@
         .storage-progress-fill.high {
             background: #EF4444;
         }
+        
+        /* Log Category Modal Styles */
+        .config-item {
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+        
+        .config-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .config-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1E293B;
+            margin-bottom: 6px;
+        }
+        
+        .config-value {
+            font-size: 14px;
+            color: #475569;
+        }
+        
+        .config-description {
+            font-size: 12px;
+            color: #64748B;
+            margin-top: 4px;
+        }
+        
+        .config-group {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -274,90 +241,37 @@
     <!-- Sidebar will be inserted here by JavaScript -->
     <div id="sidebar-container"></div>
 
-    <!-- Live Log Viewer Modal -->
-    <div class="modal-overlay" id="liveLogsModal">
-        <div class="modal">
+    <!-- Log Category Configuration Modal -->
+    <div class="modal-overlay" id="logConfigModal">
+        <div class="modal" style="max-width: 700px;">
             <div class="p-6">
                 <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-xl font-semibold text-slate-800 flex items-center">
-                        <i class="fa-solid fa-terminal mr-3 text-primary"></i>
-                        Live Log Viewer
-                    </h2>
-                    <div class="flex items-center space-x-3">
-                        <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="pauseLogsBtn">
-                            <i class="fa-solid fa-pause mr-2"></i> Pause
-                        </button>
-                        <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" id="clearLogsBtn">
-                            <i class="fa-solid fa-trash mr-2"></i> Clear
-                        </button>
-                        <button class="text-slate-400 hover:text-slate-600" id="closeLiveLogsModal">
-                            <i class="fa-solid fa-xmark text-lg"></i>
-                        </button>
+                    <div>
+                        <h2 class="text-xl font-semibold text-slate-800" id="logConfigTitle">
+                            Log Configuration
+                        </h2>
+                        <p class="text-sm text-slate-500 mt-1" id="logConfigSubtitle">
+                            Configure log settings for this category
+                        </p>
                     </div>
+                    <button class="text-slate-400 hover:text-slate-600" id="closeLogConfigModal">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
                 </div>
                 
-                <!-- Log Controls -->
-                <div class="bg-slate-50 p-4 rounded-lg mb-4">
-                    <div class="flex items-center space-x-4">
-                        <div class="flex-1">
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Filter by Level</label>
-                            <div class="flex flex-wrap gap-2">
-                                <label class="flex items-center space-x-1 cursor-pointer">
-                                    <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="filterCritical">
-                                    <span class="log-badge critical text-xs">CRITICAL</span>
-                                </label>
-                                <label class="flex items-center space-x-1 cursor-pointer">
-                                    <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="filterError">
-                                    <span class="log-badge error text-xs">ERROR</span>
-                                </label>
-                                <label class="flex items-center space-x-1 cursor-pointer">
-                                    <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="filterWarning">
-                                    <span class="log-badge warning text-xs">WARN</span>
-                                </label>
-                                <label class="flex items-center space-x-1 cursor-pointer">
-                                    <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="filterInfo">
-                                    <span class="log-badge info text-xs">INFO</span>
-                                </label>
-                                <label class="flex items-center space-x-1 cursor-pointer">
-                                    <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="filterDebug">
-                                    <span class="log-badge debug text-xs">DEBUG</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Search</label>
-                            <input type="text" placeholder="Search logs..." class="compact-input text-sm w-48" id="logSearch">
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Log Viewer -->
-                <div class="bg-slate-900 rounded-lg p-4 font-mono text-sm">
-                    <div class="text-slate-400 mb-2 text-xs flex justify-between">
-                        <span>Live log stream (showing last 1000 lines)</span>
-                        <span id="logCount">0 logs</span>
-                    </div>
-                    <div class="h-[500px] overflow-y-auto bg-black rounded p-4" id="logViewer">
-                        <!-- Log lines will be populated here -->
-                        <div class="text-slate-500 italic">Connecting to log stream...</div>
-                    </div>
+                <!-- Configuration Options -->
+                <div id="configContainer">
+                    <!-- Configuration will be dynamically populated -->
                 </div>
                 
                 <!-- Footer -->
-                <div class="mt-4 flex justify-between items-center text-sm text-slate-500">
-                    <div>
-                        <i class="fa-solid fa-circle-info mr-1"></i>
-                        Logs are streamed via WebSocket from /var/log/live
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <button class="text-primary hover:text-primaryHover font-medium" id="exportLogsBtn">
-                            <i class="fa-solid fa-download mr-1"></i> Export
-                        </button>
-                        <div class="h-4 w-px bg-slate-300"></div>
-                        <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="closeModalBtn">
-                            Close
-                        </button>
-                    </div>
+                <div class="pt-6 border-t border-slate-200 flex justify-end space-x-3">
+                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelConfigBtn">
+                        Cancel
+                    </button>
+                    <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="saveConfigBtn">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
+                    </button>
                 </div>
             </div>
         </div>
@@ -410,14 +324,6 @@
                                 Configure system-level, hardware-level, and runtime logging for debugging gateway issues
                             </p>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="viewLiveLogsBtn">
-                                <i class="fa-solid fa-terminal mr-2 text-sm"></i> View Live Logs
-                            </button>
-                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="downloadLogsBtn">
-                                <i class="fa-solid fa-download mr-2 text-sm"></i> Download Logs
-                            </button>
-                        </div>
                     </div>
                     
                     <!-- Info Box -->
@@ -428,15 +334,11 @@
                             </div>
                             <div class="ml-3">
                                 <h3 class="text-sm font-medium text-blue-800">
-                                    Device-Level vs Application-Level Logging
+                                    Configure each logging category individually
                                 </h3>
                                 <div class="mt-1 text-sm text-blue-700">
                                     <p>
-                                        This page configures <strong>system-level, hardware-level, and runtime logging</strong> for debugging gateway issues. 
-                                        This includes CPU events, network failures, CAN/Modbus communication, sensor data issues, process crashes, and firmware errors.
-                                    </p>
-                                    <p class="mt-1">
-                                        For application-level logs (data flow, rules engine, CraneIQ), see the separate "Logging & Analytics" section.
+                                        Click the <strong>Configure</strong> button on any log category to set log level, format, interval, and other specific settings for that category.
                                     </p>
                                 </div>
                             </div>
@@ -535,7 +437,7 @@
                                 <i class="fa-solid fa-sliders mr-3 text-primary"></i>
                                 Logging Master Control
                             </h2>
-                            <p class="text-sm text-slate-600 mt-1">Master controls for the entire logging system</p>
+                            <p class="text-sm text-slate-600 mt-1">Global controls for the entire logging system</p>
                         </div>
                         
                         <div class="space-y-6">
@@ -552,16 +454,16 @@
                                     </label>
                                 </div>
                                 
-                                <!-- Log Level -->
+                                <!-- Global Log Level -->
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-900 mb-1">Log Level</label>
-                                    <p class="text-xs text-slate-500 mb-2">Determines verbosity</p>
-                                    <select class="w-full compact-select" id="logLevel">
-                                        <option value="critical">CRITICAL (system crash, corruption)</option>
-                                        <option value="error">ERROR (Modbus timeout, CAN errors, app failures)</option>
-                                        <option value="warning">WARN (high CPU, storage warnings, unstable connection)</option>
-                                        <option value="info" selected>INFO (normal operation logs)</option>
-                                        <option value="debug">DEBUG (deep debugging - high volume)</option>
+                                    <label class="block text-sm font-medium text-slate-900 mb-1">Global Log Level</label>
+                                    <p class="text-xs text-slate-500 mb-2">Default level for all categories</p>
+                                    <select class="w-full compact-select" id="globalLogLevel">
+                                        <option value="critical">CRITICAL</option>
+                                        <option value="error">ERROR</option>
+                                        <option value="warning">WARNING</option>
+                                        <option value="info" selected>INFO</option>
+                                        <option value="debug">DEBUG</option>
                                     </select>
                                 </div>
                             </div>
@@ -597,92 +499,173 @@
                         <div class="config-card-header">
                             <h2 class="text-lg font-semibold text-slate-800 flex items-center">
                                 <i class="fa-solid fa-list-check mr-3 text-primary"></i>
-                                Log Categories
+                                Log Categories Configuration
                             </h2>
-                            <p class="text-sm text-slate-600 mt-1">Select which subsystems to log</p>
+                            <p class="text-sm text-slate-600 mt-1">Configure individual logging categories. Each category can have its own settings.</p>
                         </div>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <!-- System Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" checked id="systemLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">System Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Kernel, watchdog, crash reports</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="systemLogs">
+                                        <span class="font-medium text-slate-900 ml-2">System Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">INFO</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Kernel, watchdog, crash reports</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 1s
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('system')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- Network Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" checked id="networkLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">Network Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Ethernet, Wi-Fi, 4G, packet drops</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="networkLogs">
+                                        <span class="font-medium text-slate-900 ml-2">Network Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">DEBUG</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Ethernet, Wi-Fi, 4G, packet drops</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 5s
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('network')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- CAN Bus Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" checked id="canLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">CAN Bus Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">RX/TX errors, invalid frames</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="canLogs">
+                                        <span class="font-medium text-slate-900 ml-2">CAN Bus Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">WARN</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">RX/TX errors, invalid frames</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 100ms
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('can')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- Modbus Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" checked id="modbusLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">Modbus Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Read/write errors, poll failures</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="modbusLogs">
+                                        <span class="font-medium text-slate-900 ml-2">Modbus Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">ERROR</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Read/write errors, poll failures</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 500ms
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('modbus')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- MQTT Internal Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" checked id="mqttLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">MQTT Internal Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Connection, publish/subscribe errors</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="mqttLogs">
+                                        <span class="font-medium text-slate-900 ml-2">MQTT Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">INFO</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Connection, publish/subscribe errors</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 2s
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('mqtt')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- Security Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" checked id="securityLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">Security Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">SSH, login attempts, unauthorized access</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="securityLogs">
+                                        <span class="font-medium text-slate-900 ml-2">Security Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">CRITICAL</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">SSH, login attempts, unauthorized access</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: Real-time
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('security')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- Sensor/GPIO Driver Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" id="sensorLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">Sensor/GPIO Driver Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Hardware sensor communication</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="sensorLogs">
+                                        <span class="font-medium text-slate-900 ml-2">Sensor Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Hardware sensor communication</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 10s
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('sensor')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- Rule Engine Diagnostic Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" id="ruleEngineLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">Rule Engine Diagnostic Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Low-level rule execution details</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="ruleEngineLogs">
+                                        <span class="font-medium text-slate-900 ml-2">Rule Engine Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Low-level rule execution details</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 1s
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('ruleEngine')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                             
                             <!-- Debug Logs -->
-                            <label class="flex items-start space-x-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
-                                <input type="checkbox" class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" id="debugLogs">
-                                <div>
-                                    <div class="font-medium text-slate-900">Debug Logs</div>
-                                    <div class="text-xs text-slate-500 mt-1">Very high volume - developers only</div>
+                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="debugLogs">
+                                        <span class="font-medium text-slate-900 ml-2">Debug Logs</span>
+                                    </div>
+                                    <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
                                 </div>
-                            </label>
+                                <div class="text-xs text-slate-500 mb-3">Very high volume - developers only</div>
+                                <div class="text-xs text-slate-500 mb-3">
+                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 100ms
+                                </div>
+                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('debug')">
+                                    <i class="fa-solid fa-gear mr-2"></i> Configure
+                                </button>
+                            </div>
                         </div>
                         
                         <!-- Quick Actions -->
@@ -692,6 +675,9 @@
                             </button>
                             <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" id="deselectAllLogs">
                                 Deselect All
+                            </button>
+                            <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="applyGlobalSettings()">
+                                Apply Global to All
                             </button>
                         </div>
                     </section>
@@ -758,9 +744,10 @@
                                     <div class="font-medium text-slate-900">WebSocket Streaming</div>
                                     <div class="text-sm text-slate-500">Enable live log viewer in Web UI</div>
                                 </div>
-                                <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="enableWebSocket">
-                                    <i class="fa-solid fa-play mr-2"></i> Enable Streaming
-                                </button>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="webSocketStreaming" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
                             </div>
                         </div>
                     </section>
@@ -820,67 +807,6 @@
                             </div>
                         </div>
                     </section>
-
-                    <!-- Section 5: Manual Tools -->
-                    <section class="config-card">
-                        <div class="config-card-header">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-screwdriver-wrench mr-3 text-primary"></i>
-                                Manual Tools
-                            </h2>
-                            <p class="text-sm text-slate-600 mt-1">Manual log management tools</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <!-- View Live Logs -->
-                            <div class="p-4 border border-slate-200 rounded-lg">
-                                <div class="flex items-center mb-3">
-                                    <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
-                                        <i class="fa-solid fa-terminal text-blue-600"></i>
-                                    </div>
-                                    <div>
-                                        <div class="font-medium text-slate-900">View Live Logs</div>
-                                        <div class="text-xs text-slate-500">Real-time tail window</div>
-                                    </div>
-                                </div>
-                                <button class="w-full compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 mt-2" id="openLiveLogsBtn">
-                                    Open Live Viewer
-                                </button>
-                            </div>
-                            
-                            <!-- Download Logs -->
-                            <div class="p-4 border border-slate-200 rounded-lg">
-                                <div class="flex items-center mb-3">
-                                    <div class="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center mr-3">
-                                        <i class="fa-solid fa-download text-green-600"></i>
-                                    </div>
-                                    <div>
-                                        <div class="font-medium text-slate-900">Download Logs</div>
-                                        <div class="text-xs text-slate-500">ZIP export of all logs</div>
-                                    </div>
-                                </div>
-                                <button class="w-full compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 mt-2" id="downloadAllLogsBtn">
-                                    Download Now
-                                </button>
-                            </div>
-                            
-                            <!-- Clear All Logs -->
-                            <div class="p-4 border border-slate-200 rounded-lg">
-                                <div class="flex items-center mb-3">
-                                    <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center mr-3">
-                                        <i class="fa-solid fa-trash text-red-600"></i>
-                                    </div>
-                                    <div>
-                                        <div class="font-medium text-slate-900">Clear All Logs</div>
-                                        <div class="text-xs text-slate-500">Free storage space</div>
-                                    </div>
-                                </div>
-                                <button class="w-full compact-button border border-red-300 text-red-600 hover:bg-red-50 mt-2" id="clearAllLogsBtn">
-                                    Clear Logs
-                                </button>
-                            </div>
-                        </div>
-                    </section>
                 </div>
             </div>
         </main>
@@ -909,7 +835,7 @@
                         Cancel
                     </button>
                     <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Logging Configuration
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save All Configurations
                     </button>
                 </div>
             </div>
@@ -917,7 +843,7 @@
     </div> <!-- End of main content container -->
 
     <script>
-        // SIDEBAR LOADING
+        // SIDEBAR LOADING - RESTORED TO ORIGINAL IMPLEMENTATION
         async function loadSidebar() {
             try {
                 const response = await fetch('sidebar.html');
@@ -1031,34 +957,272 @@
             }
         }
 
-        // Logging Application Code
-        let liveLogInterval = null;
-        let isLiveLogPaused = false;
-        let logLines = [];
+        // Log Category Configuration Data
+        const logConfigs = {
+            system: {
+                title: "System Logs Configuration",
+                subtitle: "Configure kernel, watchdog, crash reports, and system events",
+                enabled: true,
+                config: {
+                    logLevel: "INFO",
+                    logFormat: "TIMESTAMP LEVEL MODULE MESSAGE",
+                    logInterval: "1000",
+                    maxFileSize: "10",
+                    retentionDays: "30",
+                    includeTimestamps: true,
+                    includeProcessId: true,
+                    includeThreadId: false,
+                    bufferSize: "1024",
+                    flushInterval: "5000"
+                }
+            },
+            network: {
+                title: "Network Logs Configuration",
+                subtitle: "Configure Ethernet, Wi-Fi, 4G, packet drops, and connectivity logs",
+                enabled: true,
+                config: {
+                    logLevel: "DEBUG",
+                    logFormat: "TIMESTAMP INTERFACE PROTOCOL SOURCE DESTINATION",
+                    logInterval: "5000",
+                    maxFileSize: "15",
+                    retentionDays: "14",
+                    includeTimestamps: true,
+                    includePacketData: false,
+                    includeInterfaceStats: true,
+                    bufferSize: "2048",
+                    flushInterval: "10000"
+                }
+            },
+            can: {
+                title: "CAN Bus Logs Configuration",
+                subtitle: "Configure CAN bus communication, errors, and diagnostic messages",
+                enabled: true,
+                config: {
+                    logLevel: "WARN",
+                    logFormat: "TIMESTAMP CAN_ID DIRECTION DATA LENGTH",
+                    logInterval: "100",
+                    maxFileSize: "20",
+                    retentionDays: "7",
+                    includeTimestamps: true,
+                    includeRawData: false,
+                    includeErrorFrames: true,
+                    bufferSize: "4096",
+                    flushInterval: "2000"
+                }
+            },
+            modbus: {
+                title: "Modbus Logs Configuration",
+                subtitle: "Configure Modbus RTU/TCP communication and protocol errors",
+                enabled: true,
+                config: {
+                    logLevel: "ERROR",
+                    logFormat: "TIMESTAMP DEVICE FUNCTION REGISTER VALUE",
+                    logInterval: "500",
+                    maxFileSize: "12",
+                    retentionDays: "14",
+                    includeTimestamps: true,
+                    includeRawBytes: false,
+                    includeSlaveResponses: true,
+                    bufferSize: "1024",
+                    flushInterval: "5000"
+                }
+            },
+            mqtt: {
+                title: "MQTT Logs Configuration",
+                subtitle: "Configure MQTT broker connections and publish/subscribe operations",
+                enabled: true,
+                config: {
+                    logLevel: "INFO",
+                    logFormat: "TIMESTAMP TOPIC QOS PAYLOAD",
+                    logInterval: "2000",
+                    maxFileSize: "8",
+                    retentionDays: "30",
+                    includeTimestamps: true,
+                    includePayload: false,
+                    includeQoSDetails: true,
+                    bufferSize: "512",
+                    flushInterval: "3000"
+                }
+            },
+            security: {
+                title: "Security Logs Configuration",
+                subtitle: "Configure authentication, access control, and security events",
+                enabled: true,
+                config: {
+                    logLevel: "CRITICAL",
+                    logFormat: "TIMESTAMP SOURCE EVENT USER RESULT",
+                    logInterval: "0",
+                    maxFileSize: "5",
+                    retentionDays: "90",
+                    includeTimestamps: true,
+                    includeIPAddress: true,
+                    includeUserAgent: false,
+                    bufferSize: "256",
+                    flushInterval: "1000"
+                }
+            },
+            sensor: {
+                title: "Sensor/GPIO Logs Configuration",
+                subtitle: "Configure hardware sensor communication and GPIO operations",
+                enabled: false,
+                config: {
+                    logLevel: "INFO",
+                    logFormat: "TIMESTAMP SENSOR TYPE VALUE UNIT",
+                    logInterval: "10000",
+                    maxFileSize: "10",
+                    retentionDays: "7",
+                    includeTimestamps: true,
+                    includeRawReadings: false,
+                    includeCalibrationData: true,
+                    bufferSize: "512",
+                    flushInterval: "5000"
+                }
+            },
+            ruleEngine: {
+                title: "Rule Engine Logs Configuration",
+                subtitle: "Configure rule execution, condition evaluation, and action triggers",
+                enabled: false,
+                config: {
+                    logLevel: "DEBUG",
+                    logFormat: "TIMESTAMP RULE CONDITION ACTION RESULT",
+                    logInterval: "1000",
+                    maxFileSize: "15",
+                    retentionDays: "14",
+                    includeTimestamps: true,
+                    includeVariableValues: false,
+                    includeExecutionTime: true,
+                    bufferSize: "1024",
+                    flushInterval: "3000"
+                }
+            },
+            debug: {
+                title: "Debug Logs Configuration",
+                subtitle: "Configure detailed debugging information (development only)",
+                enabled: false,
+                config: {
+                    logLevel: "TRACE",
+                    logFormat: "TIMESTAMP FILE FUNCTION LINE MESSAGE",
+                    logInterval: "100",
+                    maxFileSize: "50",
+                    retentionDays: "3",
+                    includeTimestamps: true,
+                    includeStackTraces: true,
+                    includeMemoryInfo: true,
+                    bufferSize: "8192",
+                    flushInterval: "1000"
+                }
+            }
+        };
 
-        // Sample log data
-        const sampleLogs = [
-            { time: '14:23:45', level: 'INFO', module: 'System', message: 'Gateway boot complete, firmware v2.1.4' },
-            { time: '14:23:46', level: 'INFO', module: 'Network', message: 'Ethernet link up on eth0, 100Mbps full duplex' },
-            { time: '14:23:47', level: 'INFO', module: 'CAN', message: 'CAN bus initialized, 500kbps, listening on can0' },
-            { time: '14:23:48', level: 'INFO', module: 'Modbus', message: 'Modbus TCP server started on port 502' },
-            { time: '14:24:10', level: 'WARNING', module: 'CAN', message: 'CAN error frame detected on can0, error count: 2' },
-            { time: '14:24:15', level: 'ERROR', module: 'Modbus', message: 'Timeout reading from device LoadCell_1 at address 40001' },
-            { time: '14:24:20', level: 'INFO', module: 'Network', message: 'Wi-Fi connection established to "Site-WiFi", RSSI: -65dBm' },
-            { time: '14:24:30', level: 'CRITICAL', module: 'System', message: 'Watchdog triggered, system stability issue detected' },
-            { time: '14:24:35', level: 'DEBUG', module: 'MQTT', message: 'Publishing telemetry: {"temp": 42.5, "load": 12.3}' },
-            { time: '14:24:40', level: 'INFO', module: 'Security', message: 'SSH login successful from 192.168.1.100' },
-            { time: '14:25:00', level: 'WARNING', module: 'System', message: 'CPU usage above threshold: 85%' },
-            { time: '14:25:10', level: 'ERROR', module: 'Network', message: 'DNS resolution failed for api.cloud-server.com' },
-            { time: '14:25:15', level: 'INFO', module: 'CAN', message: 'Received J1939 message: PGN 61444 from address 0x32' },
-            { time: '14:25:20', level: 'DEBUG', module: 'Modbus', message: 'Poll cycle complete: 12 registers read, 2 coils written' },
-            { time: '14:25:25', level: 'INFO', module: 'System', message: 'Memory usage: 156MB/512MB (30%)' },
-            { time: '14:25:30', level: 'WARNING', module: 'Network', message: '4G signal weak: RSSI -105dBm, searching for better cell' },
-            { time: '14:25:35', level: 'INFO', module: 'MQTT', message: 'Connected to broker mqtt.broker.com:8883' },
-            { time: '14:25:40', level: 'ERROR', module: 'CAN', message: 'CAN bus off error detected, resetting controller' },
-            { time: '14:25:45', level: 'INFO', module: 'Security', message: 'Failed login attempt from 192.168.1.150' },
-            { time: '14:25:50', level: 'DEBUG', module: 'Sensor', message: 'GPIO pin 17 state changed to HIGH' },
-        ];
+        // Helper functions for category-specific options
+        function getCategorySpecificOption(category) {
+            const options = {
+                'network': 'Include Packet Data',
+                'can': 'Include Raw Frame Data',
+                'modbus': 'Include Raw Bytes',
+                'mqtt': 'Include Payload Data',
+                'sensor': 'Include Raw Readings',
+                'debug': 'Include Stack Traces',
+                'system': 'Include Process Info',
+                'security': 'Include IP Address',
+                'ruleEngine': 'Include Variable Values',
+                'default': 'Include Detailed Data'
+            };
+            return options[category] || options['default'];
+        }
+
+        function getCategorySpecificDescription(category) {
+            const descriptions = {
+                'network': 'Include full packet payload in logs (increases size)',
+                'can': 'Include complete CAN frame data including raw bytes',
+                'modbus': 'Include raw Modbus request/response bytes',
+                'mqtt': 'Include MQTT message payload content',
+                'sensor': 'Include unprocessed sensor readings',
+                'debug': 'Include complete stack traces for debugging',
+                'system': 'Include process ID and thread information',
+                'security': 'Log source IP addresses for security events',
+                'ruleEngine': 'Include rule variable values during execution',
+                'default': 'Include detailed data in logs'
+            };
+            return descriptions[category] || descriptions['default'];
+        }
+
+        function getCategorySpecificValue(category) {
+            const config = logConfigs[category]?.config;
+            if (!config) return '';
+            
+            const values = {
+                'network': config.includePacketData,
+                'can': config.includeRawData,
+                'modbus': config.includeRawBytes,
+                'mqtt': config.includePayload,
+                'sensor': config.includeRawReadings,
+                'debug': config.includeStackTraces,
+                'system': config.includeProcessId || config.includeThreadId,
+                'security': config.includeIPAddress,
+                'ruleEngine': config.includeVariableValues,
+                'default': false
+            };
+            
+            const value = values[category] || values['default'];
+            return value ? 'checked' : '';
+        }
+
+        function getDebugOptionName(category) {
+            const options = {
+                'network': 'Include Interface Statistics',
+                'can': 'Include Error Frames',
+                'modbus': 'Include Slave Responses',
+                'mqtt': 'Include QoS Details',
+                'sensor': 'Include Calibration Data',
+                'debug': 'Include Memory Info',
+                'system': 'Include Thread IDs',
+                'security': 'Include User Agent',
+                'ruleEngine': 'Include Execution Time',
+                'default': 'Include Debug Information'
+            };
+            return options[category] || options['default'];
+        }
+
+        function getDebugOptionDescription(category) {
+            const descriptions = {
+                'network': 'Include network interface statistics and counters',
+                'can': 'Log all CAN error frames and bus errors',
+                'modbus': 'Include detailed Modbus slave responses',
+                'mqtt': 'Include MQTT Quality of Service level details',
+                'sensor': 'Include sensor calibration and accuracy data',
+                'debug': 'Include memory usage and allocation information',
+                'system': 'Include thread identification in logs',
+                'security': 'Include user agent/browser information',
+                'ruleEngine': 'Include rule execution timing information',
+                'default': 'Include additional debugging information'
+            };
+            return descriptions[category] || descriptions['default'];
+        }
+
+        function getDebugOptionValue(category) {
+            const config = logConfigs[category]?.config;
+            if (!config) return '';
+            
+            const values = {
+                'network': config.includeInterfaceStats,
+                'can': config.includeErrorFrames,
+                'modbus': config.includeSlaveResponses,
+                'mqtt': config.includeQoSDetails,
+                'sensor': config.includeCalibrationData,
+                'debug': config.includeMemoryInfo,
+                'system': config.includeThreadId,
+                'security': config.includeUserAgent,
+                'ruleEngine': config.includeExecutionTime,
+                'default': false
+            };
+            
+            const value = values[category] || values['default'];
+            return value ? 'checked' : '';
+        }
+
+        // Current editing category
+        let currentEditingCategory = null;
 
         // Initialize application
         function initApp() {
@@ -1087,156 +1251,338 @@
             }
         }
 
-        // Generate a random log entry
-        function generateRandomLog() {
-            const levels = ['INFO', 'WARNING', 'ERROR', 'DEBUG'];
-            const modules = ['System', 'Network', 'CAN', 'Modbus', 'MQTT', 'Security', 'Sensor'];
-            const messages = [
-                'Normal operation',
-                'Signal strength: -75dBm',
-                'CAN frame received',
-                'Modbus poll complete',
-                'MQTT publish successful',
-                'Login attempt detected',
-                'Temperature reading: 24.5°C',
-                'Memory usage stable',
-                'Network packet sent',
-                'Watchdog check passed'
-            ];
+        // Open log configuration modal
+        function openLogConfigModal(categoryId) {
+            currentEditingCategory = categoryId;
+            const config = logConfigs[categoryId];
+            if (!config) return;
             
-            const now = new Date();
-            const time = now.toTimeString().split(' ')[0];
-            const level = levels[Math.floor(Math.random() * levels.length)];
-            const module = modules[Math.floor(Math.random() * modules.length)];
-            const message = messages[Math.floor(Math.random() * messages.length)];
+            // Update modal title
+            document.getElementById('logConfigTitle').textContent = config.title;
+            document.getElementById('logConfigSubtitle').textContent = config.subtitle;
             
-            return { time, level, module, message };
-        }
-
-        // Add a log line to the viewer
-        function addLogLine(log) {
-            const logViewer = document.getElementById('logViewer');
-            if (!logViewer) return;
+            // Build configuration form
+            const container = document.getElementById('configContainer');
+            container.innerHTML = '';
             
-            // Check filters
-            const filters = {
-                critical: document.getElementById('filterCritical')?.checked,
-                error: document.getElementById('filterError')?.checked,
-                warning: document.getElementById('filterWarning')?.checked,
-                info: document.getElementById('filterInfo')?.checked,
-                debug: document.getElementById('filterDebug')?.checked
-            };
-            
-            const levelMap = {
-                'CRITICAL': 'critical',
-                'ERROR': 'error',
-                'WARNING': 'warning',
-                'INFO': 'info',
-                'DEBUG': 'debug'
-            };
-            
-            if (!filters[levelMap[log.level]]) {
-                return;
-            }
-            
-            // Check search filter
-            const searchTerm = document.getElementById('logSearch')?.value.toLowerCase();
-            if (searchTerm) {
-                const logText = `${log.time} ${log.level} ${log.module} ${log.message}`.toLowerCase();
-                if (!logText.includes(searchTerm)) {
-                    return;
-                }
-            }
-            
-            // Create log line element
-            const logLine = document.createElement('div');
-            logLine.className = 'log-line flex';
-            
-            // Determine color based on log level
-            let levelColor = 'text-slate-400';
-            let badgeClass = 'log-badge ';
-            
-            switch(log.level) {
-                case 'CRITICAL':
-                    levelColor = 'text-red-400';
-                    badgeClass += 'critical';
-                    break;
-                case 'ERROR':
-                    levelColor = 'text-red-300';
-                    badgeClass += 'error';
-                    break;
-                case 'WARNING':
-                    levelColor = 'text-yellow-400';
-                    badgeClass += 'warning';
-                    break;
-                case 'INFO':
-                    levelColor = 'text-blue-400';
-                    badgeClass += 'info';
-                    break;
-                case 'DEBUG':
-                    levelColor = 'text-slate-500';
-                    badgeClass += 'debug';
-                    break;
-            }
-            
-            logLine.innerHTML = `
-                <div class="log-time ${levelColor}">${log.time}</div>
-                <div class="log-level mx-2">
-                    <span class="${badgeClass}">${log.level}</span>
+            // Enabled toggle
+            const enabledDiv = document.createElement('div');
+            enabledDiv.className = 'config-item';
+            enabledDiv.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="config-label">Enable Logging</div>
+                        <div class="config-description">Turn logging on/off for this category</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="modalEnabled" ${config.enabled ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <div class="log-module text-purple-400">${log.module}</div>
-                <div class="log-message ml-4 text-slate-300">${log.message}</div>
+            `;
+            container.appendChild(enabledDiv);
+            
+            // Basic Settings Group
+            const basicGroup = document.createElement('div');
+            basicGroup.className = 'config-group';
+            basicGroup.innerHTML = `
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Basic Settings</h3>
             `;
             
-            logViewer.appendChild(logLine);
-            logLines.push(logLine);
+            // Log Level
+            const levelOptions = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'TRACE'];
+            basicGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Log Level</div>
+                    <select class="w-full compact-select" id="modalLogLevel">
+                        ${levelOptions.map(level => 
+                            `<option value="${level}" ${config.config.logLevel === level ? 'selected' : ''}>${level}</option>`
+                        ).join('')}
+                    </select>
+                    <div class="config-description">Minimum severity level to log</div>
+                </div>
+            `;
             
-            // Keep only last 50 lines
-            if (logLines.length > 50) {
-                const oldest = logLines.shift();
-                if (oldest && oldest.parentNode) {
-                    oldest.parentNode.removeChild(oldest);
-                }
-            }
+            // Log Format (FIXED - No redundant timestamp option)
+            const formatOptions = [
+                {value: 'TIMESTAMP LEVEL MODULE MESSAGE', label: 'Standard (Timestamp + Level + Module + Message)'},
+                {value: 'TIMESTAMP LEVEL MESSAGE', label: 'Basic (Timestamp + Level + Message)'},
+                {value: 'TIMESTAMP MESSAGE', label: 'Simple (Timestamp + Message)'},
+                {value: 'LEVEL MODULE MESSAGE', label: 'Compact (Level + Module + Message - No Timestamp)'},
+                {value: 'MODULE MESSAGE', label: 'Minimal (Module + Message)'}
+            ];
             
-            // Update count
-            const logCount = document.getElementById('logCount');
-            if (logCount) {
-                const count = parseInt(logCount.textContent) || 0;
-                logCount.textContent = `${count + 1} logs`;
-            }
+            basicGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Log Format</div>
+                    <select class="w-full compact-select" id="modalLogFormat">
+                        ${formatOptions.map(format => 
+                            `<option value="${format.value}" ${config.config.logFormat === format.value ? 'selected' : ''}>
+                                ${format.label}
+                            </option>`
+                        ).join('')}
+                    </select>
+                    <div class="config-description">Structure of each log entry</div>
+                </div>
+            `;
             
-            // Auto-scroll to bottom
-            logViewer.scrollTop = logViewer.scrollHeight;
+            // Log Interval
+            basicGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Log Interval (ms)</div>
+                    <div class="flex items-center space-x-3">
+                        <input type="number" min="0" max="60000" value="${config.config.logInterval}" class="compact-input flex-1" id="modalLogInterval">
+                        <span class="text-sm text-slate-600">ms (0 = real-time)</span>
+                    </div>
+                    <div class="config-description">How often to write logs (0 = immediate)</div>
+                </div>
+            `;
+            
+            container.appendChild(basicGroup);
+            
+            // Advanced Settings Group
+            const advancedGroup = document.createElement('div');
+            advancedGroup.className = 'config-group';
+            advancedGroup.innerHTML = `
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Advanced Settings</h3>
+            `;
+            
+            // Max File Size
+            advancedGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Max File Size</div>
+                    <div class="flex items-center space-x-3">
+                        <input type="number" min="1" max="100" value="${config.config.maxFileSize}" class="compact-input flex-1" id="modalMaxFileSize">
+                        <span class="text-sm text-slate-600">MB</span>
+                    </div>
+                    <div class="config-description">Maximum size of individual log files</div>
+                </div>
+            `;
+            
+            // Retention Days
+            advancedGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Retention Period</div>
+                    <div class="flex items-center space-x-3">
+                        <input type="number" min="1" max="365" value="${config.config.retentionDays}" class="compact-input flex-1" id="modalRetentionDays">
+                        <span class="text-sm text-slate-600">days</span>
+                    </div>
+                    <div class="config-description">How long to keep logs before deletion</div>
+                </div>
+            `;
+            
+            // Buffer Size
+            advancedGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Buffer Size</div>
+                    <div class="flex items-center space-x-3">
+                        <input type="number" min="128" max="16384" value="${config.config.bufferSize}" class="compact-input flex-1" id="modalBufferSize">
+                        <span class="text-sm text-slate-600">KB</span>
+                    </div>
+                    <div class="config-description">Memory buffer for log entries before writing to disk</div>
+                </div>
+            `;
+            
+            // Flush Interval
+            advancedGroup.innerHTML += `
+                <div class="config-item">
+                    <div class="config-label">Flush Interval</div>
+                    <div class="flex items-center space-x-3">
+                        <input type="number" min="100" max="30000" value="${config.config.flushInterval}" class="compact-input flex-1" id="modalFlushInterval">
+                        <span class="text-sm text-slate-600">ms</span>
+                    </div>
+                    <div class="config-description">How often to flush buffer to disk</div>
+                </div>
+            `;
+            
+            container.appendChild(advancedGroup);
+            
+            // Category-Specific Options Group (FIXED - No redundant timestamp option)
+            const optionsGroup = document.createElement('div');
+            optionsGroup.className = 'config-group';
+            optionsGroup.innerHTML = `
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Additional Information</h3>
+                <div class="space-y-3">
+                    <!-- Category-specific detailed data option -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="config-label">${getCategorySpecificOption(categoryId)}</div>
+                            <div class="config-description">${getCategorySpecificDescription(categoryId)}</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="modalIncludeDetailedData" ${getCategorySpecificValue(categoryId)}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    
+                    <!-- Category-specific debug option -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="config-label">${getDebugOptionName(categoryId)}</div>
+                            <div class="config-description">${getDebugOptionDescription(categoryId)}</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="modalIncludeDebugInfo" ${getDebugOptionValue(categoryId)}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            container.appendChild(optionsGroup);
+            
+            // Show modal
+            document.getElementById('logConfigModal').classList.add('active');
         }
 
-        // Start live log simulation
-        function startLiveLogs() {
-            if (liveLogInterval) clearInterval(liveLogInterval);
-            
-            // Clear existing logs
-            const logViewer = document.getElementById('logViewer');
-            if (logViewer) {
-                logViewer.innerHTML = '';
-                logLines = [];
-            }
-            
-            // Add initial sample logs
-            sampleLogs.forEach(log => addLogLine(log));
-            
-            // Start adding new logs periodically
-            liveLogInterval = setInterval(() => {
-                if (!isLiveLogPaused) {
-                    addLogLine(generateRandomLog());
-                }
-            }, 2000);
+        // Close log configuration modal
+        function closeLogConfigModal() {
+            document.getElementById('logConfigModal').classList.remove('active');
+            currentEditingCategory = null;
         }
 
-        // Stop live log simulation
-        function stopLiveLogs() {
-            if (liveLogInterval) {
-                clearInterval(liveLogInterval);
-                liveLogInterval = null;
+        // Save configuration from modal
+        function saveLogConfig() {
+            if (!currentEditingCategory) return;
+            
+            const config = logConfigs[currentEditingCategory];
+            if (!config) return;
+            
+            // Update configuration
+            config.enabled = document.getElementById('modalEnabled').checked;
+            config.config.logLevel = document.getElementById('modalLogLevel').value;
+            config.config.logFormat = document.getElementById('modalLogFormat').value;
+            config.config.logInterval = document.getElementById('modalLogInterval').value;
+            config.config.maxFileSize = document.getElementById('modalMaxFileSize').value;
+            config.config.retentionDays = document.getElementById('modalRetentionDays').value;
+            config.config.bufferSize = document.getElementById('modalBufferSize').value;
+            config.config.flushInterval = document.getElementById('modalFlushInterval').value;
+            
+            // Update category-specific options
+            const detailedDataChecked = document.getElementById('modalIncludeDetailedData')?.checked;
+            const debugInfoChecked = document.getElementById('modalIncludeDebugInfo')?.checked;
+            
+            // Update the specific config properties based on category
+            switch(currentEditingCategory) {
+                case 'network':
+                    config.config.includePacketData = detailedDataChecked;
+                    config.config.includeInterfaceStats = debugInfoChecked;
+                    break;
+                case 'can':
+                    config.config.includeRawData = detailedDataChecked;
+                    config.config.includeErrorFrames = debugInfoChecked;
+                    break;
+                case 'modbus':
+                    config.config.includeRawBytes = detailedDataChecked;
+                    config.config.includeSlaveResponses = debugInfoChecked;
+                    break;
+                case 'mqtt':
+                    config.config.includePayload = detailedDataChecked;
+                    config.config.includeQoSDetails = debugInfoChecked;
+                    break;
+                case 'sensor':
+                    config.config.includeRawReadings = detailedDataChecked;
+                    config.config.includeCalibrationData = debugInfoChecked;
+                    break;
+                case 'debug':
+                    config.config.includeStackTraces = detailedDataChecked;
+                    config.config.includeMemoryInfo = debugInfoChecked;
+                    break;
+                case 'system':
+                    config.config.includeProcessId = detailedDataChecked;
+                    config.config.includeThreadId = debugInfoChecked;
+                    break;
+                case 'security':
+                    config.config.includeIPAddress = detailedDataChecked;
+                    config.config.includeUserAgent = debugInfoChecked;
+                    break;
+                case 'ruleEngine':
+                    config.config.includeVariableValues = detailedDataChecked;
+                    config.config.includeExecutionTime = debugInfoChecked;
+                    break;
+            }
+            
+            // Update the checkbox on main page
+            const mainCheckbox = document.getElementById(`${currentEditingCategory}Logs`);
+            if (mainCheckbox) {
+                mainCheckbox.checked = config.enabled;
+            }
+            
+            // Update badge on main page
+            updateCategoryBadge(currentEditingCategory);
+            
+            // Update interval display
+            updateIntervalDisplay(currentEditingCategory);
+            
+            alert(`Configuration saved for ${config.title}`);
+            closeLogConfigModal();
+        }
+
+        // Update category badge
+        function updateCategoryBadge(categoryId) {
+            const config = logConfigs[categoryId];
+            if (!config) return;
+            
+            const badge = document.querySelector(`[onclick="openLogConfigModal('${categoryId}')"]`).closest('.p-3').querySelector('span.bg-');
+            if (badge) {
+                const level = config.config.logLevel;
+                let bgColor = 'gray';
+                let text = 'OFF';
+                
+                if (config.enabled) {
+                    switch(level) {
+                        case 'CRITICAL': bgColor = 'purple'; text = 'CRITICAL'; break;
+                        case 'ERROR': bgColor = 'red'; text = 'ERROR'; break;
+                        case 'WARNING': bgColor = 'yellow'; text = 'WARN'; break;
+                        case 'INFO': bgColor = 'blue'; text = 'INFO'; break;
+                        case 'DEBUG': bgColor = 'green'; text = 'DEBUG'; break;
+                        case 'TRACE': bgColor = 'gray'; text = 'TRACE'; break;
+                    }
+                }
+                
+                badge.className = `text-xs bg-${bgColor}-100 text-${bgColor}-800 px-2 py-1 rounded`;
+                badge.textContent = text;
+            }
+        }
+
+        // Update interval display
+        function updateIntervalDisplay(categoryId) {
+            const config = logConfigs[categoryId];
+            if (!config) return;
+            
+            const intervalDisplay = document.querySelector(`[onclick="openLogConfigModal('${categoryId}')"]`).closest('.p-3').querySelector('.text-xs:last-of-type');
+            if (intervalDisplay) {
+                const interval = config.config.logInterval;
+                if (interval === '0') {
+                    intervalDisplay.innerHTML = '<i class="fa-solid fa-clock mr-1"></i> Interval: Real-time';
+                } else {
+                    intervalDisplay.innerHTML = `<i class="fa-solid fa-clock mr-1"></i> Interval: ${formatInterval(interval)}`;
+                }
+            }
+        }
+
+        // Format interval for display
+        function formatInterval(ms) {
+            const num = parseInt(ms);
+            if (num >= 1000) {
+                return `${num/1000}s`;
+            }
+            return `${ms}ms`;
+        }
+
+        // Apply global settings to all categories
+        function applyGlobalSettings() {
+            if (confirm('Apply global log level to all categories? This will override individual settings.')) {
+                const globalLevel = document.getElementById('globalLogLevel').value;
+                
+                Object.keys(logConfigs).forEach(categoryId => {
+                    const config = logConfigs[categoryId];
+                    if (config && config.enabled) {
+                        config.config.logLevel = globalLevel.toUpperCase();
+                        updateCategoryBadge(categoryId);
+                    }
+                });
+                
+                alert('Global settings applied to all enabled categories.');
             }
         }
 
@@ -1247,8 +1593,8 @@
                 console.log('Logging enabled:', this.checked);
             });
             
-            document.getElementById('logLevel').addEventListener('change', function() {
-                console.log('Log level changed to:', this.value);
+            document.getElementById('globalLogLevel').addEventListener('change', function() {
+                console.log('Global log level changed to:', this.value);
             });
             
             document.getElementById('maxStorage').addEventListener('input', updateStorageProgress);
@@ -1266,80 +1612,10 @@
                 });
             });
             
-            // Manual tools
-            document.getElementById('openLiveLogsBtn').addEventListener('click', openLiveLogsModal);
-            document.getElementById('viewLiveLogsBtn').addEventListener('click', openLiveLogsModal);
-            
-            document.getElementById('downloadAllLogsBtn').addEventListener('click', function() {
-                alert('Downloading all logs... This may take a moment.');
-                setTimeout(() => {
-                    alert('Log download complete! A ZIP file has been generated.');
-                }, 1500);
-            });
-            
-            document.getElementById('downloadLogsBtn').addEventListener('click', function() {
-                alert('Preparing log download...');
-                setTimeout(() => {
-                    alert('Logs downloaded successfully!');
-                }, 1000);
-            });
-            
-            document.getElementById('clearAllLogsBtn').addEventListener('click', function() {
-                if (confirm('Are you sure you want to clear ALL logs? This action cannot be undone.')) {
-                    alert('Clearing all logs...');
-                    setTimeout(() => {
-                        alert('All logs have been cleared. Storage has been freed.');
-                        updateStorageProgress();
-                    }, 1000);
-                }
-            });
-            
-            // Live log modal controls
-            document.getElementById('closeLiveLogsModal').addEventListener('click', closeLiveLogsModal);
-            document.getElementById('closeModalBtn').addEventListener('click', closeLiveLogsModal);
-            
-            document.getElementById('pauseLogsBtn').addEventListener('click', function() {
-                isLiveLogPaused = !isLiveLogPaused;
-                const icon = this.querySelector('i');
-                if (isLiveLogPaused) {
-                    icon.className = 'fa-solid fa-play mr-2';
-                    this.innerHTML = '<i class="fa-solid fa-play mr-2"></i> Resume';
-                } else {
-                    icon.className = 'fa-solid fa-pause mr-2';
-                    this.innerHTML = '<i class="fa-solid fa-pause mr-2"></i> Pause';
-                }
-            });
-            
-            document.getElementById('clearLogsBtn').addEventListener('click', function() {
-                const logViewer = document.getElementById('logViewer');
-                if (logViewer) {
-                    logViewer.innerHTML = '';
-                    logLines = [];
-                    document.getElementById('logCount').textContent = '0 logs';
-                }
-            });
-            
-            document.getElementById('exportLogsBtn').addEventListener('click', function() {
-                alert('Exporting visible logs...');
-                setTimeout(() => {
-                    alert('Logs exported to CSV file.');
-                }, 500);
-            });
-            
-            // Live log filters
-            document.querySelectorAll('#liveLogsModal input[type="checkbox"]').forEach(cb => {
-                cb.addEventListener('change', startLiveLogs);
-            });
-            
-            document.getElementById('logSearch').addEventListener('input', startLiveLogs);
-            
-            // WebSocket streaming
-            document.getElementById('enableWebSocket').addEventListener('click', function() {
-                alert('WebSocket streaming enabled! Live logs are now available.');
-                this.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Streaming Active';
-                this.classList.remove('bg-primary', 'hover:bg-primaryHover');
-                this.classList.add('bg-green-600', 'hover:bg-green-700');
-            });
+            // Configuration modal controls
+            document.getElementById('closeLogConfigModal').addEventListener('click', closeLogConfigModal);
+            document.getElementById('cancelConfigBtn').addEventListener('click', closeLogConfigModal);
+            document.getElementById('saveConfigBtn').addEventListener('click', saveLogConfig);
             
             // Footer buttons
             document.getElementById('testLoggingBtn').addEventListener('click', function() {
@@ -1371,16 +1647,9 @@
             });
             
             // Save buttons
-            document.getElementById('header-save-btn').addEventListener('click', saveConfiguration);
-            document.getElementById('footer-save-btn').addEventListener('click', saveConfiguration);
+            document.getElementById('footer-save-btn').addEventListener('click', saveAllConfigurations);
             
             // Cancel buttons
-            document.getElementById('cancel-btn').addEventListener('click', function() {
-                if (confirm('Discard all unsaved changes?')) {
-                    location.reload();
-                }
-            });
-            
             document.getElementById('footer-cancel-btn').addEventListener('click', function() {
                 if (confirm('Discard all unsaved changes?')) {
                     location.reload();
@@ -1397,79 +1666,52 @@
             });
         }
 
-        // Open live logs modal
-        function openLiveLogsModal() {
-            document.getElementById('liveLogsModal').classList.add('active');
-            startLiveLogs();
-        }
-
-        // Close live logs modal
-        function closeLiveLogsModal() {
-            document.getElementById('liveLogsModal').classList.remove('active');
-            stopLiveLogs();
-        }
-
-        // Save configuration
-        function saveConfiguration() {
-            const btns = [document.getElementById('header-save-btn'), document.getElementById('footer-save-btn')];
-            btns.forEach(btn => {
-                if (btn) {
-                    const original = btn.innerHTML;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
-                    btn.disabled = true;
+        // Save all configurations
+        function saveAllConfigurations() {
+            const btn = document.getElementById('footer-save-btn');
+            if (btn) {
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
+                btn.disabled = true;
+                
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                    btn.disabled = false;
                     
-                    setTimeout(() => {
-                        btn.innerHTML = original;
-                        btn.disabled = false;
-                    }, 1000);
-                }
-            });
-            
-            // Collect configuration
-            const config = {
-                enabled: document.getElementById('enableLogging').checked,
-                logLevel: document.getElementById('logLevel').value,
-                maxStorage: document.getElementById('maxStorage').value,
-                rotationMode: document.getElementById('rotationMode').value,
-                
-                categories: {
-                    system: document.getElementById('systemLogs').checked,
-                    network: document.getElementById('networkLogs').checked,
-                    can: document.getElementById('canLogs').checked,
-                    modbus: document.getElementById('modbusLogs').checked,
-                    mqtt: document.getElementById('mqttLogs').checked,
-                    security: document.getElementById('securityLogs').checked,
-                    sensor: document.getElementById('sensorLogs').checked,
-                    ruleEngine: document.getElementById('ruleEngineLogs').checked,
-                    debug: document.getElementById('debugLogs').checked
-                },
-                
-                destinations: {
-                    local: document.getElementById('localStorage').checked,
-                    usb: document.getElementById('usbStorage').checked,
-                    cloud: document.getElementById('cloudEndpoint').value,
-                    syslog: document.getElementById('syslogServer').value,
-                    mqttTopic: document.getElementById('mqttTopic').value
-                },
-                
-                rotation: {
-                    maxFileSize: document.getElementById('maxFileSize').value,
-                    maxFiles: document.getElementById('maxLogFiles').value,
-                    compress: document.getElementById('compressLogs').checked,
-                    deleteOldest: document.getElementById('deleteOldest').checked
-                }
-            };
-            
-            console.log('Saving configuration:', config);
-            
-            setTimeout(() => {
-                alert('Logging configuration saved successfully!\n\nChanges will take effect after the logging service restarts.');
-            }, 1000);
+                    // Collect all configurations
+                    const allConfig = {
+                        global: {
+                            enabled: document.getElementById('enableLogging').checked,
+                            logLevel: document.getElementById('globalLogLevel').value,
+                            maxStorage: document.getElementById('maxStorage').value,
+                            rotationMode: document.getElementById('rotationMode').value,
+                        },
+                        categories: logConfigs,
+                        destinations: {
+                            local: document.getElementById('localStorage').checked,
+                            usb: document.getElementById('usbStorage').checked,
+                            cloud: document.getElementById('cloudEndpoint').value,
+                            syslog: document.getElementById('syslogServer').value,
+                            mqttTopic: document.getElementById('mqttTopic').value,
+                            webSocket: document.getElementById('webSocketStreaming').checked
+                        },
+                        rotation: {
+                            maxFileSize: document.getElementById('maxFileSize').value,
+                            maxFiles: document.getElementById('maxLogFiles').value,
+                            compress: document.getElementById('compressLogs').checked,
+                            deleteOldest: document.getElementById('deleteOldest').checked
+                        }
+                    };
+                    
+                    console.log('Saving all configurations:', allConfig);
+                    alert('All logging configurations saved successfully!\n\nChanges will take effect after the logging service restarts.');
+                }, 1000);
+            }
         }
 
         // Initialize when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
-            // Load sidebar first
+            // Load sidebar first (restored your original approach)
             loadSidebar();
             
             // Then initialize the app

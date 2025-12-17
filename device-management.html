@@ -706,41 +706,131 @@
         </div>
     </div>
 
-  
-<div class="main-content-with-sidebar">
-    <!-- NEW HEADER: Univa Gateway Tag Mapping Header -->
-    <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <!-- Left: Logo & Breadcrumb -->
-            <div class="flex items-center space-x-4">
-                <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
-                    <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
-                    <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
-                    <span class="text-slate-900 font-medium" id="page-title">CraneIQ</span> <!-- Or whatever specific page title is needed -->
+    <!-- Assign Devices to Group Modal -->
+    <div class="modal-overlay" id="assignDevicesModal">
+        <div class="modal p-6" style="max-width: 600px;">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800">Assign Devices to Group</h2>
+                <button class="text-slate-400 hover:text-slate-600" id="closeAssignModal">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6">
+                <!-- Group Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Select Group</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 group-item" data-group-id="1">
+                            <div class="w-3 h-3 rounded-full bg-blue-500 mr-3"></div>
+                            <div>
+                                <div class="font-medium text-sm text-slate-900">Crane 01</div>
+                                <div class="text-xs text-slate-500">3 devices</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 group-item" data-group-id="2">
+                            <div class="w-3 h-3 rounded-full bg-green-500 mr-3"></div>
+                            <div>
+                                <div class="font-medium text-sm text-slate-900">Crane 02</div>
+                                <div class="text-xs text-slate-500">2 devices</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 group-item" data-group-id="3">
+                            <div class="w-3 h-3 rounded-full bg-purple-500 mr-3"></div>
+                            <div>
+                                <div class="font-medium text-sm text-slate-900">Safety Sensors</div>
+                                <div class="text-xs text-slate-500">5 devices</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 group-item" data-group-id="4">
+                            <div class="w-3 h-3 rounded-full bg-orange-500 mr-3"></div>
+                            <div>
+                                <div class="font-medium text-sm text-slate-900">Motors & Brakes</div>
+                                <div class="text-xs text-slate-500">4 devices</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Device Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Select Devices to Assign</label>
+                    <div class="space-y-2 max-h-60 overflow-y-auto p-1">
+                        <!-- Devices will be populated by JavaScript -->
+                        <div id="assignDevicesList">
+                            <!-- Dynamic content -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="border-t border-slate-200 pt-4">
+                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Quick Actions</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="selectAllBtn">
+                            Select All
+                        </button>
+                        <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="deselectAllBtn">
+                            Deselect All
+                        </button>
+                        <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="selectOnlineBtn">
+                            Select Online Only
+                        </button>
+                        <button class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="selectByTypeBtn">
+                            Select by Type
+                        </button>
+                    </div>
                 </div>
             </div>
-
-            <!-- Right: Controls -->
-            <div class="flex items-center space-x-4">
-                <div class="relative hidden sm:block">
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <i class="fa-solid fa-server text-slate-400 text-sm"></i>
-                    </div>
-                    <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
-                        <option>Univa-GW-01</option>
-                        <option>Univa-GW-02</option>
-                        <option>Univa-GW-03</option>
-                    </select>
+            
+            <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between">
+                <div class="text-sm text-slate-600">
+                    <span id="selectedDevicesCount">0</span> devices selected
                 </div>
-                <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
-                <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-                    <i class="fa-solid fa-circle-question mr-2"></i> Help
-                </button>
-                
+                <div class="flex space-x-3">
+                    <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelAssignBtn">
+                        Cancel
+                    </button>
+                    <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="assignDevicesBtn">
+                        Assign to Group
+                    </button>
+                </div>
             </div>
         </div>
-    </header>
+    </div>
 
+    <div class="main-content-with-sidebar">
+        <!-- NEW HEADER: Univa Gateway Tag Mapping Header -->
+        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <!-- Left: Logo & Breadcrumb -->
+                <div class="flex items-center space-x-4">
+                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
+                        <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
+                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                        <span class="text-slate-900 font-medium" id="page-title">CraneIQ</span>
+                    </div>
+                </div>
+
+                <!-- Right: Controls -->
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden sm:block">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                        </div>
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
+                            <option>Univa-GW-01</option>
+                            <option>Univa-GW-02</option>
+                            <option>Univa-GW-03</option>
+                        </select>
+                    </div>
+                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-circle-question mr-2"></i> Help
+                    </button>
+                </div>
+            </div>
+        </header>
 
         <main class="flex-grow">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1075,6 +1165,8 @@
         let groups = [];
         let selectedDeviceId = null;
         let selectedColor = 'blue';
+        let selectedGroupId = null;
+        let selectedDevicesForAssignment = new Set();
 
         // Device data
         const deviceData = [
@@ -1526,7 +1618,7 @@
                         <span class="w-3 h-3 rounded-full bg-${group.color}-500"></span>
                     </div>
                     <div class="text-xs text-slate-500 mb-3">${group.deviceCount} devices</div>
-                    <button class="text-xs text-primary hover:text-primaryHover" onclick="assignDevicesToGroup(${group.id})">
+                    <button class="text-xs text-primary hover:text-primaryHover" onclick="openAssignDevicesModal(${group.id})">
                         Assign Devices →
                     </button>
                 `;
@@ -1672,12 +1764,123 @@
             closeAllDropdowns();
         }
 
-        // Assign devices to group
-        function assignDevicesToGroup(groupId) {
-            const group = groups.find(g => g.id === groupId);
+        // Open assign devices modal
+        function openAssignDevicesModal(groupId) {
+            selectedGroupId = groupId;
+            selectedDevicesForAssignment.clear();
+            
+            // Highlight selected group
+            document.querySelectorAll('.group-item').forEach(item => {
+                item.classList.remove('border-primary', 'bg-blue-50');
+                if (parseInt(item.dataset.groupId) === groupId) {
+                    item.classList.add('border-primary', 'bg-blue-50');
+                }
+            });
+            
+            // Render devices list
+            renderAssignDevicesList();
+            
+            // Show modal
+            document.getElementById('assignDevicesModal').classList.add('active');
+        }
+
+        // Render devices list for assignment
+        function renderAssignDevicesList() {
+            const container = document.getElementById('assignDevicesList');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            if (devices.length === 0) {
+                container.innerHTML = '<div class="text-center text-slate-500 py-4">No devices available</div>';
+                return;
+            }
+            
+            devices.forEach(device => {
+                const isSelected = selectedDevicesForAssignment.has(device.id);
+                
+                const deviceElement = document.createElement('label');
+                deviceElement.className = `flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 ${isSelected ? 'border-primary bg-blue-50' : 'border-slate-300'}`;
+                deviceElement.innerHTML = `
+                    <input type="checkbox" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" ${isSelected ? 'checked' : ''} value="${device.id}" onchange="toggleDeviceSelection('${device.id}', this.checked)">
+                    <div class="ml-3 flex-1">
+                        <div class="flex justify-between">
+                            <div class="font-medium text-sm text-slate-900">${device.name}</div>
+                            <div class="text-xs text-slate-500">${device.type}</div>
+                        </div>
+                        <div class="flex justify-between mt-1">
+                            <div class="text-xs text-slate-600">${device.address}</div>
+                            <div class="text-xs ${device.status === 'Online' ? 'text-green-600' : 'text-red-600'}">${device.status}</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(deviceElement);
+            });
+            
+            updateSelectedDevicesCount();
+        }
+
+        // Toggle device selection
+        function toggleDeviceSelection(deviceId, isSelected) {
+            if (isSelected) {
+                selectedDevicesForAssignment.add(deviceId);
+            } else {
+                selectedDevicesForAssignment.delete(deviceId);
+            }
+            updateSelectedDevicesCount();
+        }
+
+        // Update selected devices count
+        function updateSelectedDevicesCount() {
+            const countElement = document.getElementById('selectedDevicesCount');
+            if (countElement) {
+                countElement.textContent = selectedDevicesForAssignment.size;
+            }
+        }
+
+        // Assign selected devices to group
+        function assignDevicesToGroup() {
+            if (!selectedGroupId) {
+                alert('Please select a group first.');
+                return;
+            }
+            
+            if (selectedDevicesForAssignment.size === 0) {
+                alert('Please select at least one device to assign.');
+                return;
+            }
+            
+            const group = groups.find(g => g.id === selectedGroupId);
             if (!group) return;
             
-            alert(`Assign devices to ${group.name} group. In a real application, this would open a device selection dialog.`);
+            let assignedCount = 0;
+            
+            selectedDevicesForAssignment.forEach(deviceId => {
+                const device = devices.find(d => d.id === deviceId);
+                if (device) {
+                    device.group = group.name;
+                    assignedCount++;
+                }
+            });
+            
+            // Update device counts in groups
+            updateGroupDeviceCounts();
+            
+            // Re-render tables
+            renderDevicesTable();
+            renderGroups();
+            
+            // Close modal
+            document.getElementById('assignDevicesModal').classList.remove('active');
+            
+            alert(`Successfully assigned ${assignedCount} device(s) to ${group.name}.`);
+        }
+
+        // Update device counts in groups
+        function updateGroupDeviceCounts() {
+            groups.forEach(group => {
+                group.deviceCount = devices.filter(d => d.group === group.name).length;
+            });
         }
 
         // Add new group
@@ -1729,6 +1932,7 @@
             
             groups.push(newGroup);
             renderGroups();
+            updateGroupDeviceCounts();
             
             // Update group filter
             const groupFilter = document.getElementById('groupFilter');
@@ -1750,336 +1954,6 @@
             document.getElementById('addGroupModal').classList.remove('active');
             
             alert(`Group "${newGroup.name}" created successfully.`);
-        }
-
-        // File handling functions
-        function handleFiles(files) {
-            if (files.length > 0) {
-                const file = files[0];
-                
-                // Validate file type
-                if (!file.name.endsWith('.csv')) {
-                    alert('Please select a CSV file.');
-                    return;
-                }
-                
-                readFile(file);
-            }
-        }
-
-        function handleFileSelect(e) {
-            const files = e.target.files;
-            if (files.length > 0) {
-                const file = files[0];
-                
-                // Validate file type
-                if (!file.name.endsWith('.csv')) {
-                    alert('Please select a CSV file.');
-                    return;
-                }
-                
-                readFile(file);
-            }
-        }
-
-        function readFile(file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                processFile(content, file.name);
-            };
-            
-            reader.onerror = function() {
-                alert('Error reading file. Please try again.');
-            };
-            
-            reader.readAsText(file);
-        }
-
-        function processFile(content, filename) {
-            // Validate CSV content
-            if (!content.trim()) {
-                alert('The file is empty.');
-                return;
-            }
-            
-            // Show status
-            const importBtn = document.getElementById('importBtn');
-            importBtn.disabled = false;
-            importBtn.innerHTML = `<i class="fa-solid fa-upload mr-2"></i> Import from ${filename}`;
-            
-            // Store the file content for later processing
-            importBtn.dataset.fileContent = content;
-            importBtn.dataset.fileName = filename;
-        }
-
-        // Scan functionality
-        function handleScanResults(deviceType, devicesFound) {
-            const autoAdd = document.getElementById('scan-auto-add').checked;
-            const overwrite = document.getElementById('scan-overwrite').checked;
-            
-            if (devicesFound.length === 0) {
-                alert(`No ${deviceType} devices found during scan.`);
-                return;
-            }
-            
-            let addedCount = 0;
-            let skippedCount = 0;
-            
-            devicesFound.forEach(device => {
-                // Check if device already exists
-                const existingIndex = devices.findIndex(d => 
-                    d.address === device.address && d.type === device.type
-                );
-                
-                if (existingIndex >= 0) {
-                    if (overwrite) {
-                        // Replace existing device
-                        devices[existingIndex] = device;
-                        addedCount++;
-                    } else {
-                        skippedCount++;
-                    }
-                } else if (autoAdd) {
-                    // Add new device
-                    devices.push(device);
-                    addedCount++;
-                }
-            });
-            
-            if (autoAdd) {
-                renderDevicesTable();
-                
-                // Show detailed results
-                let message = `Scan completed!\n\nFound: ${devicesFound.length} ${deviceType} device(s)`;
-                if (addedCount > 0) {
-                    message += `\nAdded: ${addedCount} device(s)`;
-                }
-                if (skippedCount > 0) {
-                    message += `\nSkipped: ${skippedCount} duplicate(s)`;
-                }
-                
-                alert(message);
-            } else {
-                // Show discovery without adding
-                let message = `Scan completed!\n\nFound ${devicesFound.length} ${deviceType} device(s):\n\n`;
-                devicesFound.forEach((device, index) => {
-                    message += `${index + 1}. ${device.name} (${device.address})\n`;
-                });
-                
-                if (confirm(message + "\n\nWould you like to add these devices?")) {
-                    devicesFound.forEach(device => {
-                        devices.push(device);
-                    });
-                    renderDevicesTable();
-                    alert(`Added ${devicesFound.length} devices.`);
-                }
-            }
-        }
-
-        // Simulate scanning for different device types
-        function simulateScan(deviceType) {
-            const scanRange = document.getElementById('scanRange').value;
-            
-            // Simulate different scan results based on device type
-            let devicesFound = [];
-            let scanDuration = 2000; // Default duration
-            
-            switch (deviceType) {
-                case 'modbus-rtu':
-                    scanDuration = 3000;
-                    devicesFound = [
-                        {
-                            id: `scanned-${Date.now()}-1`,
-                            name: 'Modbus-Slave-01',
-                            type: 'Modbus RTU',
-                            address: 'Slave 2',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '1.0.0',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'N/A (Wired)',
-                                firmwareVersion: '1.0.0'
-                            }
-                        },
-                        {
-                            id: `scanned-${Date.now()}-2`,
-                            name: 'Modbus-Slave-03',
-                            type: 'Modbus RTU',
-                            address: 'Slave 3',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '1.2.0',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'N/A (Wired)',
-                                firmwareVersion: '1.2.0'
-                            }
-                        }
-                    ];
-                    break;
-                    
-                case 'modbus-tcp':
-                    scanDuration = 4000;
-                    devicesFound = [
-                        {
-                            id: `scanned-${Date.now()}-3`,
-                            name: 'PLC-192.168.1.101',
-                            type: 'Modbus TCP',
-                            address: '192.168.1.101:502',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '2.1.0',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'N/A (Wired)',
-                                firmwareVersion: '2.1.0'
-                            }
-                        },
-                        {
-                            id: `scanned-${Date.now()}-4`,
-                            name: 'HMI-192.168.1.102',
-                            type: 'Modbus TCP',
-                            address: '192.168.1.102:502',
-                            status: 'Offline',
-                            lastPoll: 'Just now',
-                            firmware: '1.5.0',
-                            group: 'None',
-                            details: {
-                                status: 'Offline',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'N/A (Wired)',
-                                firmwareVersion: '1.5.0'
-                            }
-                        }
-                    ];
-                    break;
-                    
-                case 'canbus':
-                    scanDuration = 2500;
-                    devicesFound = [
-                        {
-                            id: `scanned-${Date.now()}-5`,
-                            name: 'CAN-Node-0x213',
-                            type: 'CAN',
-                            address: '0x213',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '3.0.1',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'Good',
-                                firmwareVersion: '3.0.1'
-                            }
-                        }
-                    ];
-                    break;
-                    
-                case 'wireless':
-                    scanDuration = 5000;
-                    devicesFound = [
-                        {
-                            id: `scanned-${Date.now()}-6`,
-                            name: 'Wireless-IO-0x0A',
-                            type: 'Wireless',
-                            address: 'RF:0x0A',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '2.3.0',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: '-68 dBm',
-                                firmwareVersion: '2.3.0'
-                            }
-                        },
-                        {
-                            id: `scanned-${Date.now()}-7`,
-                            name: 'Wireless-Sensor-0x0B',
-                            type: 'Wireless',
-                            address: 'RF:0x0B',
-                            status: 'Warning',
-                            lastPoll: 'Just now',
-                            firmware: '1.8.0',
-                            group: 'None',
-                            details: {
-                                status: 'Warning',
-                                lastResponse: 'Just now',
-                                retries: 2,
-                                signalStrength: '-85 dBm',
-                                firmwareVersion: '1.8.0'
-                            }
-                        }
-                    ];
-                    break;
-                    
-                case 'all':
-                    scanDuration = 6000;
-                    // Combine results from all types
-                    devicesFound = [
-                        {
-                            id: `scanned-${Date.now()}-8`,
-                            name: 'Modbus-Slave-04',
-                            type: 'Modbus RTU',
-                            address: 'Slave 4',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '1.1.0',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'N/A (Wired)',
-                                firmwareVersion: '1.1.0'
-                            }
-                        },
-                        {
-                            id: `scanned-${Date.now()}-9`,
-                            name: 'CAN-Node-0x214',
-                            type: 'CAN',
-                            address: '0x214',
-                            status: 'Online',
-                            lastPoll: 'Just now',
-                            firmware: '2.9.0',
-                            group: 'None',
-                            details: {
-                                status: 'Online',
-                                lastResponse: 'Just now',
-                                retries: 0,
-                                signalStrength: 'Good',
-                                firmwareVersion: '2.9.0'
-                            }
-                        }
-                    ];
-                    break;
-                    
-                default:
-                    devicesFound = [];
-            }
-            
-            // Adjust based on scan range
-            if (scanRange === 'Quick Scan (1-10)' && deviceType === 'modbus-rtu') {
-                devicesFound = devicesFound.slice(0, 1);
-            }
-            
-            return { devicesFound, scanDuration };
         }
 
         // Setup event listeners
@@ -2174,7 +2048,9 @@
                 };
                 
                 devices.push(newDevice);
+                updateGroupDeviceCounts();
                 renderDevicesTable();
+                renderGroups();
                 
                 // Close panel
                 document.getElementById('addDevicePanel').classList.remove('active');
@@ -2304,40 +2180,66 @@
                 document.getElementById('scanDeviceTypeModal').classList.remove('active');
             });
             
-            document.getElementById('startScanBtn').addEventListener('click', function() {
-                const selectedType = document.querySelector('input[name="scan-device-type"]:checked').value;
-                const typeMap = {
-                    'modbus-rtu': 'Modbus RTU',
-                    'modbus-tcp': 'Modbus TCP',
-                    'canbus': 'CAN',
-                    'wireless': 'Wireless',
-                    'all': 'All Types'
-                };
-                
-                const deviceType = typeMap[selectedType];
-                
-                // Close modal
-                document.getElementById('scanDeviceTypeModal').classList.remove('active');
-                
-                // Show scanning status on the original button
-                const scanBtn = document.getElementById('scanNetworksBtn');
-                const originalText = scanBtn.innerHTML;
-                scanBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Scanning for ${deviceType}...`;
-                scanBtn.disabled = true;
-                
-                // Simulate scan
-                const scanResults = simulateScan(selectedType);
-                
-                setTimeout(() => {
-                    // Restore button
-                    scanBtn.innerHTML = originalText;
-                    scanBtn.disabled = false;
-                    
-                    // Handle results
-                    handleScanResults(deviceType, scanResults.devicesFound);
-                }, scanResults.scanDuration);
+            // Assign Devices Modal
+            document.getElementById('closeAssignModal').addEventListener('click', function() {
+                document.getElementById('assignDevicesModal').classList.remove('active');
             });
             
+            document.getElementById('cancelAssignBtn').addEventListener('click', function() {
+                document.getElementById('assignDevicesModal').classList.remove('active');
+            });
+            
+            document.getElementById('assignDevicesBtn').addEventListener('click', assignDevicesToGroup);
+            
+            // Quick actions in assign modal
+            document.getElementById('selectAllBtn').addEventListener('click', function() {
+                devices.forEach(device => {
+                    selectedDevicesForAssignment.add(device.id);
+                });
+                renderAssignDevicesList();
+            });
+            
+            document.getElementById('deselectAllBtn').addEventListener('click', function() {
+                selectedDevicesForAssignment.clear();
+                renderAssignDevicesList();
+            });
+            
+            document.getElementById('selectOnlineBtn').addEventListener('click', function() {
+                devices.forEach(device => {
+                    if (device.status === 'Online') {
+                        selectedDevicesForAssignment.add(device.id);
+                    }
+                });
+                renderAssignDevicesList();
+            });
+            
+            document.getElementById('selectByTypeBtn').addEventListener('click', function() {
+                // In a real app, this would open a type selection dialog
+                const typeToSelect = prompt('Enter device type to select (e.g., Modbus RTU, CAN, Wireless):', 'Modbus RTU');
+                if (typeToSelect) {
+                    devices.forEach(device => {
+                        if (device.type === typeToSelect) {
+                            selectedDevicesForAssignment.add(device.id);
+                        }
+                    });
+                    renderAssignDevicesList();
+                }
+            });
+            
+            // Group selection in assign modal
+            document.querySelectorAll('.group-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const groupId = parseInt(this.dataset.groupId);
+                    selectedGroupId = groupId;
+                    
+                    // Highlight selected group
+                    document.querySelectorAll('.group-item').forEach(i => {
+                        i.classList.remove('border-primary', 'bg-blue-50');
+                    });
+                    this.classList.add('border-primary', 'bg-blue-50');
+                });
+            });
+
             // Other buttons
             document.getElementById('refreshBtn').addEventListener('click', function() {
                 this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Refreshing...';
@@ -2467,7 +2369,9 @@
                             devices = [...devices, ...importedDevices];
                         }
                         
+                        updateGroupDeviceCounts();
                         renderDevicesTable();
+                        renderGroups();
                         
                         // Update progress to complete
                         progressBar.style.width = '100%';
@@ -2557,6 +2461,67 @@
                     window.history.back();
                 }
             });
+        }
+
+        // File handling functions
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                
+                // Validate file type
+                if (!file.name.endsWith('.csv')) {
+                    alert('Please select a CSV file.');
+                    return;
+                }
+                
+                readFile(file);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                const file = files[0];
+                
+                // Validate file type
+                if (!file.name.endsWith('.csv')) {
+                    alert('Please select a CSV file.');
+                    return;
+                }
+                
+                readFile(file);
+            }
+        }
+
+        function readFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                processFile(content, file.name);
+            };
+            
+            reader.onerror = function() {
+                alert('Error reading file. Please try again.');
+            };
+            
+            reader.readAsText(file);
+        }
+
+        function processFile(content, filename) {
+            // Validate CSV content
+            if (!content.trim()) {
+                alert('The file is empty.');
+                return;
+            }
+            
+            // Show status
+            const importBtn = document.getElementById('importBtn');
+            importBtn.disabled = false;
+            importBtn.innerHTML = `<i class="fa-solid fa-upload mr-2"></i> Import from ${filename}`;
+            
+            // Store the file content for later processing
+            importBtn.dataset.fileContent = content;
+            importBtn.dataset.fileName = filename;
         }
 
         // Filter devices

@@ -688,74 +688,105 @@
                         </div>
                     </section>
 
-                    <!-- SECTION E: System Preferences -->
-                    <section id="section-preferences" class="bg-white rounded-xl shadow-sm border border-border p-6">
-                        <div class="flex items-center justify-between mb-6">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-gear mr-2 text-primary"></i> 
-                                <span class="mr-2">System Preferences</span>
-                                <span class="text-xs font-normal text-slate-500">SECTION E</span>
-                            </h2>
-                            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                                Enhances usability in crane cabins
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Default Logging Level</label>
-                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                                    <option>Debug</option>
-                                    <option>Info</option>
-                                    <option>Warning</option>
-                                    <option>Error</option>
-                                    <option>Critical</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Auto-Update Time</label>
-                                <input type="time" value="02:00" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
-                            </div>
-                            
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-slate-700 mb-3">Theme</label>
-                                <div class="flex items-center space-x-6">
-                                    <label class="flex items-center">
-                                        <input type="radio" name="theme" value="light" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                                        <span class="ml-2 text-sm text-slate-700">Light</span>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="radio" name="theme" value="dark" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                                        <span class="ml-2 text-sm text-slate-700">Dark</span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-slate-700 mb-3">Require Confirmation For</label>
-                                <div class="space-y-3">
-                                    <label class="flex items-center">
-                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">Reboot</span>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" checked class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">Factory Reset</span>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary">
-                                        <span class="ml-2 text-sm text-slate-700">Network Reset</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
                 </div>
             </div>
+                    <!-- Footer with Action Buttons -->
+        <footer class="mt-8 pb-8">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
+                <div class="text-sm text-slate-500">
+                    <p><i class="fa-solid fa-circle-info mr-1"></i> Fields marked with <span class="text-red-500">*</span> are required for gateway operation.</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button type="button" id="refresh-btn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                        <i class="fa-solid fa-rotate mr-2"></i> Refresh
+                    </button>
+                    <button type="button" id="save-btn" class="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-sm">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+        </footer>
         </main>
     </div> <!-- End of main content container -->
 
     <script>
+        // Handle Refresh button
+document.getElementById('refresh-btn').addEventListener('click', function() {
+    if (confirm('Refresh page? Any unsaved changes will be lost.')) {
+        location.reload();
+    }
+});
+
+// Handle Save Changes button
+document.getElementById('save-btn').addEventListener('click', function() {
+    const saveBtn = this;
+    const originalText = saveBtn.innerHTML;
+    
+    // Show loading state
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+    saveBtn.disabled = true;
+    
+    // Simulate API call
+    setTimeout(() => {
+        // Show success message
+        saveBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved Successfully!';
+        saveBtn.classList.remove('bg-primary', 'hover:bg-primaryHover');
+        saveBtn.classList.add('bg-success', 'hover:bg-emerald-600');
+        
+        // Revert after 2 seconds
+        setTimeout(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.classList.remove('bg-success', 'hover:bg-emerald-600');
+            saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
+            saveBtn.disabled = false;
+        }, 2000);
+        
+        // Show notification
+        showNotification('Configuration saved successfully!', 'success');
+    }, 1500);
+});
+
+// Notification function
+function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 transform translate-x-full`;
+    
+    if (type === 'success') {
+        notification.className += ' bg-emerald-50 border border-emerald-200 text-emerald-800';
+    } else if (type === 'error') {
+        notification.className += ' bg-red-50 border border-red-200 text-red-800';
+    }
+    
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'} mr-3"></i>
+            <span class="font-medium">${message}</span>
+            <button class="ml-4 text-slate-400 hover:text-slate-600" onclick="this.parentElement.parentElement.remove()">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 10);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }
+    }, 5000);
+}
         // Fetch and insert sidebar from sidebar.html
         async function loadSidebar() {
             try {

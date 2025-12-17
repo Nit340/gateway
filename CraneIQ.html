@@ -555,7 +555,7 @@
                         </div>
                     </section>
 
-                    <!-- SECTION 3: Datalogger Configuration -->
+                                        <!-- SECTION 3: IoT Gateway Data Buffer -->
                     <section id="datalogger-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-3">
@@ -563,120 +563,378 @@
                                     <i class="fa-solid fa-database text-purple-600"></i>
                                 </div>
                                 <div>
-                                    <h3 class="text-lg font-semibold text-slate-800">Datalogger Settings</h3>
-                                    <p class="text-xs text-slate-500">Configure crane event logging and data retention</p>
+                                    <h3 class="text-lg font-semibold text-slate-800">IoT Gateway Data Buffer</h3>
+                                    <p class="text-xs text-slate-500">Configure individual data loggers for network outage buffering</p>
                                 </div>
                             </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" checked class="sr-only peer">
-                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
+                            <button id="add-datalogger-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors flex items-center gap-2">
+                                <i class="fa-solid fa-plus"></i> Add Datalogger
+                            </button>
                         </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Left Column -->
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Log Interval</label>
-                                    <select class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                        <option>100ms (High Precision)</option>
-                                        <option>500ms (Standard)</option>
-                                        <option>1 second</option>
-                                        <option>5 seconds</option>
-                                        <option>10 seconds</option>
-                                        <option>30 seconds</option>
-                                        <option>1 minute (Power Saving)</option>
-                                    </select>
+
+                        <!-- Add Datalogger Modal -->
+                        <div id="add-datalogger-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                                <div class="px-6 py-4 border-b border-slate-200">
+                                    <h3 class="text-lg font-semibold text-slate-800">Add New Datalogger</h3>
+                                    <p class="text-xs text-slate-500 mt-1">Configure data point logging for network outages</p>
                                 </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Buffer Size</label>
-                                    <select class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                        <option>10 MB</option>
-                                        <option>50 MB</option>
-                                        <option>100 MB (Recommended)</option>
-                                        <option>500 MB</option>
-                                        <option>1 GB</option>
-                                        <option>5 GB</option>
-                                    </select>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Log Format</label>
-                                    <div class="flex space-x-4">
-                                        <label class="inline-flex items-center">
-                                            <input type="radio" name="logFormat" checked class="form-radio text-blue-600 border-slate-300 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">CSV</span>
-                                        </label>
-                                        <label class="inline-flex items-center">
-                                            <input type="radio" name="logFormat" class="form-radio text-blue-600 border-slate-300 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">JSON</span>
-                                        </label>
-                                        <label class="inline-flex items-center">
-                                            <input type="radio" name="logFormat" class="form-radio text-blue-600 border-slate-300 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Binary</span>
-                                        </label>
+                                <div class="px-6 py-4 space-y-4">
+                                    <!-- Step 1: Select Device -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">1. Select Device</label>
+                                        <select id="logger-device-select" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                            <option value="">-- Select a device --</option>
+                                            <option value="load_cell">Load Cell System (LC-001)</option>
+                                            <option value="anti_collision">Anti-Collision System (ACS-001)</option>
+                                            <option value="emergency_stop">Emergency Stop Module (ESM-001)</option>
+                                            <option value="hoist_motor">Hoist Motor Drive (HM-001)</option>
+                                            <option value="trolley_motor">Trolley Motor Drive (TM-001)</option>
+                                            <option value="bridge_motor">Bridge Motor Drive (BM-001)</option>
+                                            <option value="encoder_x">X-Axis Encoder (ENC-X-01)</option>
+                                            <option value="encoder_y">Y-Axis Encoder (ENC-Y-01)</option>
+                                            <option value="encoder_z">Z-Axis Encoder (ENC-Z-01)</option>
+                                            <option value="main_brake">Main Hoist Brake (BRK-H-01)</option>
+                                            <option value="trolley_brake">Trolley Brake (BRK-T-01)</option>
+                                            <option value="weather_station">Weather Station (WS-001)</option>
+                                            <option value="vibration_sensor">Vibration Sensor (VS-001)</option>
+                                            <option value="temperature_sensor">Temperature Sensor Array (TS-001)</option>
+                                            <option value="wind_sensor">Wind Speed Sensor (WIND-001)</option>
+                                        </select>
                                     </div>
+
+                                    <!-- Step 2: Select Tag from Device -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">2. Select Data Tag</label>
+                                        <select id="logger-tag-select" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500" disabled>
+                                            <option value="">-- First select a device --</option>
+                                        </select>
+                                        <div id="tag-description" class="text-xs text-slate-500 mt-2 hidden">
+                                            <i class="fa-solid fa-circle-info text-blue-500 mr-1"></i>
+                                            <span id="tag-desc-text"></span>
+                                            <span id="tag-address" class="ml-2 font-mono text-slate-600"></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 3: Priority -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">3. Set Priority</label>
+                                        <div class="grid grid-cols-4 gap-2">
+                                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="logger-priority" value="critical" class="h-4 w-4 text-red-600 border-slate-300 focus:ring-red-500">
+                                                <div class="mt-2 text-center">
+                                                    <span class="text-sm font-medium text-slate-700">Critical</span>
+                                                    <div class="w-6 h-1 bg-red-500 rounded-full mx-auto mt-1"></div>
+                                                </div>
+                                            </label>
+                                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="logger-priority" value="high" class="h-4 w-4 text-orange-600 border-slate-300 focus:ring-orange-500">
+                                                <div class="mt-2 text-center">
+                                                    <span class="text-sm font-medium text-slate-700">High</span>
+                                                    <div class="w-6 h-1 bg-orange-500 rounded-full mx-auto mt-1"></div>
+                                                </div>
+                                            </label>
+                                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="logger-priority" value="medium" checked class="h-4 w-4 text-yellow-600 border-slate-300 focus:ring-yellow-500">
+                                                <div class="mt-2 text-center">
+                                                    <span class="text-sm font-medium text-slate-700">Medium</span>
+                                                    <div class="w-6 h-1 bg-yellow-500 rounded-full mx-auto mt-1"></div>
+                                                </div>
+                                            </label>
+                                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+                                                <input type="radio" name="logger-priority" value="low" class="h-4 w-4 text-slate-600 border-slate-300 focus:ring-slate-500">
+                                                <div class="mt-2 text-center">
+                                                    <span class="text-sm font-medium text-slate-700">Low</span>
+                                                    <div class="w-6 h-1 bg-slate-500 rounded-full mx-auto mt-1"></div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 4: Logging Condition -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">4. Logging Condition</label>
+                                        
+                                        <!-- Condition Selection -->
+                                        <div class="grid grid-cols-2 gap-3 mb-4">
+                                            <label class="flex flex-col p-4 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                                <input type="radio" name="logger-condition" value="always" class="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500">
+                                                <div class="mt-2">
+                                                    <span class="text-sm font-medium text-slate-700">Always Log</span>
+                                                    <p class="text-xs text-slate-500 mt-1">Continuous logging at sampling rate</p>
+                                                </div>
+                                            </label>
+                                            <label class="flex flex-col p-4 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                                <input type="radio" name="logger-condition" value="on_change" class="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500">
+                                                <div class="mt-2">
+                                                    <span class="text-sm font-medium text-slate-700">On Change</span>
+                                                    <p class="text-xs text-slate-500 mt-1">Log when value changes</p>
+                                                </div>
+                                            </label>
+                                            <label class="flex flex-col p-4 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                                <input type="radio" name="logger-condition" value="threshold" class="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500">
+                                                <div class="mt-2">
+                                                    <span class="text-sm font-medium text-slate-700">Threshold</span>
+                                                    <p class="text-xs text-slate-500 mt-1">Log when exceeds limits</p>
+                                                </div>
+                                            </label>
+                                            <label class="flex flex-col p-4 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                                <input type="radio" name="logger-condition" value="periodic" checked class="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500">
+                                                <div class="mt-2">
+                                                    <span class="text-sm font-medium text-slate-700">Periodic</span>
+                                                    <p class="text-xs text-slate-500 mt-1">Log at fixed intervals</p>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <!-- Condition Configuration -->
+                                        <div id="condition-config" class="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-4">
+                                            <!-- Always Log Configuration -->
+                                            <div id="always-config" class="condition-panel">
+                                                <div class="flex items-start gap-3">
+                                                    <i class="fa-solid fa-play-circle text-blue-500 mt-0.5"></i>
+                                                    <div>
+                                                        <h5 class="text-sm font-medium text-slate-700">Continuous Logging</h5>
+                                                        <p class="text-xs text-slate-500">Data will be logged continuously at the selected sampling rate</p>
+                                                        <div class="mt-2 text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">
+                                                            <i class="fa-solid fa-info-circle text-blue-500 mr-1"></i>
+                                                            Recommended for critical safety data that must not be missed
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- On Change Configuration -->
+                                            <div id="on-change-config" class="condition-panel hidden">
+                                                <div class="space-y-3">
+                                                    <div class="flex items-start gap-3">
+                                                        <i class="fa-solid fa-arrows-rotate text-blue-500 mt-0.5"></i>
+                                                        <div>
+                                                            <h5 class="text-sm font-medium text-slate-700">Change Detection</h5>
+                                                            <p class="text-xs text-slate-500">Log when the value changes by specified amount</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Change Type</label>
+                                                            <select class="w-full text-xs border-slate-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                                <option>Absolute Change</option>
+                                                                <option>Percentage Change</option>
+                                                                <option>Any Change</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Change Amount</label>
+                                                            <div class="flex items-center gap-2">
+                                                                <input type="text" class="w-20 text-xs border-slate-300 rounded shadow-sm" placeholder="e.g., 5" value="5">
+                                                                <span class="text-xs text-slate-500" id="change-unit">units</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">
+                                                        <i class="fa-solid fa-lightbulb text-yellow-500 mr-1"></i>
+                                                        Good for status flags, discrete values, and infrequent changes
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Threshold Configuration -->
+                                            <div id="threshold-config" class="condition-panel hidden">
+                                                <div class="space-y-3">
+                                                    <div class="flex items-start gap-3">
+                                                        <i class="fa-solid fa-chart-line text-blue-500 mt-0.5"></i>
+                                                        <div>
+                                                            <h5 class="text-sm font-medium text-slate-700">Threshold Settings</h5>
+                                                            <p class="text-xs text-slate-500">Log when value crosses threshold limits</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Condition</label>
+                                                            <select class="w-full text-xs border-slate-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                                <option>Greater than (>)</option>
+                                                                <option>Less than (<)</option>
+                                                                <option>Greater or equal (>=)</option>
+                                                                <option>Less or equal (<=)</option>
+                                                                <option>Between range</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Threshold Value</label>
+                                                            <div class="flex items-center gap-2">
+                                                                <input type="text" class="w-20 text-xs border-slate-300 rounded shadow-sm" placeholder="Value" value="80">
+                                                                <span class="text-xs text-slate-500" id="threshold-unit">%</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div id="range-config" class="hidden grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Min Value</label>
+                                                            <input type="text" class="w-full text-xs border-slate-300 rounded shadow-sm" placeholder="Minimum">
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Max Value</label>
+                                                            <input type="text" class="w-full text-xs border-slate-300 rounded shadow-sm" placeholder="Maximum">
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">
+                                                        <i class="fa-solid fa-bell text-red-500 mr-1"></i>
+                                                        Ideal for alarms, warnings, and safety limit monitoring
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Periodic Configuration -->
+                                            <div id="periodic-config" class="condition-panel">
+                                                <div class="space-y-3">
+                                                    <div class="flex items-start gap-3">
+                                                        <i class="fa-solid fa-clock text-blue-500 mt-0.5"></i>
+                                                        <div>
+                                                            <h5 class="text-sm font-medium text-slate-700">Periodic Sampling</h5>
+                                                            <p class="text-xs text-slate-500">Log data at regular time intervals</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Interval</label>
+                                                            <input type="number" min="1" value="10" class="w-full text-xs border-slate-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-slate-600 mb-1">Time Unit</label>
+                                                            <select class="w-full text-xs border-slate-300 rounded shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                                <option>Seconds</option>
+                                                                <option>Minutes</option>
+                                                                <option>Hours</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-xs text-slate-600 bg-white p-2 rounded border border-slate-200">
+                                                        <i class="fa-solid fa-wave-square text-green-500 mr-1"></i>
+                                                        Best for trending, monitoring, and periodic data collection
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 5: Storage Configuration -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">5. Storage Allocation</label>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-600 mb-1">Max Storage</label>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="text" id="logger-storage-size" value="100" class="w-20 text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                    <select id="logger-storage-unit" class="flex-1 text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                        <option value="mb">MB</option>
+                                                        <option value="gb">GB</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-600 mb-1">Estimated Duration</label>
+                                                <div class="text-sm font-medium text-slate-800" id="estimated-duration">~48 hours</div>
+                                                <div class="text-xs text-slate-500">Based on sampling rate</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Step 6: Sampling Rate -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">6. Sampling Rate</label>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-600 mb-1">Interval</label>
+                                                <select id="sampling-rate" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                    <option value="1000">1 second</option>
+                                                    <option value="5000" selected>5 seconds</option>
+                                                    <option value="10000">10 seconds</option>
+                                                    <option value="30000">30 seconds</option>
+                                                    <option value="60000">1 minute</option>
+                                                    <option value="300000">5 minutes</option>
+                                                    <option value="600000">10 minutes</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-600 mb-1">Data Format</label>
+                                                <select id="data-format" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                                    <option value="raw">Raw binary</option>
+                                                    <option value="compressed" selected>Compressed</option>
+                                                    <option value="csv">CSV text</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                                    <button id="cancel-datalogger" class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white border border-slate-300 hover:border-slate-400 rounded-md transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button id="save-datalogger" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors">
+                                        Create Datalogger
+                                    </button>
                                 </div>
                             </div>
-                            
-                            <!-- Right Column -->
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Upload Rules</label>
-                                    <select class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                        <option>Immediate (Real-time)</option>
-                                        <option>Batch (Every 15 minutes)</option>
-                                        <option>Batch (Every 1 hour)</option>
-                                        <option>Batch (Every 6 hours)</option>
-                                        <option>Batch (Every 24 hours)</option>
-                                        <option>Delayed (Low priority)</option>
-                                        <option>Manual Only</option>
-                                    </select>
+                        </div>
+
+                        <!-- Configured Loggers List -->
+                        <div class="space-y-4">
+                            <!-- Summary Stats -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                    <div class="text-xs text-blue-600 mb-1">Active Loggers</div>
+                                    <div class="text-xl font-bold text-blue-700" id="active-loggers-count">0</div>
+                                </div>
+                                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                                    <div class="text-xs text-green-600 mb-1">Total Storage</div>
+                                    <div class="text-xl font-bold text-green-700" id="total-storage">0 MB</div>
+                                </div>
+                                <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                                    <div class="text-xs text-purple-600 mb-1">Data Rate</div>
+                                    <div class="text-xl font-bold text-purple-700" id="total-data-rate">0 MB/h</div>
+                                </div>
+                                <div class="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                                    <div class="text-xs text-amber-600 mb-1">Buffer Health</div>
+                                    <div class="text-xl font-bold text-amber-700" id="buffer-health">Good</div>
+                                </div>
+                            </div>
+
+                            <!-- Loggers Table -->
+                            <div class="border border-slate-200 rounded-lg overflow-hidden">
+                                <div class="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                                    <h4 class="text-sm font-semibold text-slate-700">Configured Data Loggers</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Individual data point loggers for network outage buffering</p>
                                 </div>
                                 
-                                <!-- Trigger Events -->
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Trigger Events</label>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <label class="flex items-center">
-                                            <input type="checkbox" checked class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Load exceed</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" checked class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Motion start/stop</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" checked class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Zone breach</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" checked class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Near collision</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Temperature alert</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Vibration alert</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Brake event</span>
-                                        </label>
-                                        <label class="flex items-center">
-                                            <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                            <span class="ml-2 text-sm text-slate-700">Maintenance event</span>
-                                        </label>
-                                    </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-slate-200">
+                                        <thead class="bg-slate-50">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Device</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tag</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Priority</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Condition</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Storage</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Sampling</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="loggers-table-body" class="bg-white divide-y divide-slate-200">
+                                            <!-- Loggers will be dynamically loaded here -->
+                                            <tr id="no-loggers-row">
+                                                <td colspan="8" class="px-4 py-8 text-center">
+                                                    <i class="fa-solid fa-database text-3xl text-slate-300 mb-3"></i>
+                                                    <p class="text-sm text-slate-500">No dataloggers configured yet</p>
+                                                    <p class="text-xs text-slate-400 mt-1">Click "Add Datalogger" to create your first logger</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
                     </section>
-
                     <!-- SECTION 4: Safety Systems (ACS & Zoning) -->
                     <section id="safety-configuration" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         
@@ -927,7 +1185,7 @@
                                 </div>
                                 <div>
                                     <h3 class="text-lg font-semibold text-slate-800">Health & Load Intelligence</h3>
-                                    <p class="text-xs text-slate-500">Load monitoring, wear detection, and predictive maintenance</p>
+                                    <p class="text-xs text-slate-500">Load monitoring, wear detection</p>
                                 </div>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
@@ -1083,323 +1341,132 @@
                                 </div>
                             </div>
 
-                            <!-- Predictive Maintenance -->
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-5">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h4 class="font-medium text-slate-800">Predictive Maintenance</h4>
-                                    <i class="fa-solid fa-chart-line text-purple-600"></i>
-                                </div>
-                                
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-600 mb-2">Next Service</label>
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <div class="text-sm font-medium text-slate-800">15 Days</div>
-                                                <div class="text-xs text-slate-500">Based on usage</div>
-                                            </div>
-                                            <i class="fa-solid fa-calendar-clock text-blue-500"></i>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="pt-3 border-t border-slate-200">
-                                        <div class="flex items-center justify-between text-sm">
-                                            <span class="text-slate-600">Data Collection</span>
-                                            <label class="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" checked class="sr-only peer">
-                                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                            </label>
-                                        </div>
-                                        <p class="text-xs text-slate-500 mt-1">Upload usage data to cloud</p>
-                                    </div>
-                                    
-                                    <div class="pt-3 border-t border-slate-200">
-                                        <div class="flex items-center justify-between text-sm">
-                                            <span class="text-slate-600">Maintenance Rules</span>
-                                            <button class="text-blue-600 text-xs hover:text-blue-700 hover:underline">Configure</button>
-                                        </div>
-                                        <p class="text-xs text-slate-500 mt-1">Set automated alerts</p>
-                                    </div>
-                                </div>
-                            </div>
+                            
                         </div>
                     </section>
-
                     <!-- SECTION 6: Rule Engine Integration - VIEW ONLY -->
                     <section id="rule-engine-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                        <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                    <i class="fa-solid fa-sitemap text-indigo-600"></i>
+                                <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                    <i class="fa-solid fa-sitemap text-indigo-600 text-sm"></i>
                                 </div>
                                 <div>
-                                    <h3 class="text-lg font-semibold text-slate-800">Rule Engine Integration</h3>
-                                    <p class="text-xs text-slate-500">View existing safety rules mapped to parameters and actions</p>
+                                    <h3 class="text-md font-semibold text-slate-800">Rule Engine Integration</h3>
+                                    <p class="text-xs text-slate-500">Auto-generated safety rules from configurations</p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-xs text-slate-500">View Only</span>
-                                <i class="fa-solid fa-eye text-blue-500"></i>
+                                <span class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">View Only</span>
+                                <i class="fa-solid fa-eye text-blue-500 text-sm"></i>
                             </div>
                         </div>
                         
-                        <div class="space-y-6">
-                            <!-- Info Box -->
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <div class="flex items-start gap-3">
-                                    <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
-                                    <div>
-                                        <h4 class="text-sm font-medium text-blue-800 mb-1">Rule Configuration</h4>
-                                        <p class="text-xs text-blue-600">
-                                            Rules are created automatically based on your safety parameter configurations. 
-                                            To modify rules, update the corresponding safety parameters in their respective sections.
-                                        </p>
-                                    </div>
+                        <!-- Info Box -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                            <div class="flex items-start gap-2">
+                                <i class="fa-solid fa-circle-info text-blue-500 text-sm mt-0.5"></i>
+                                <div>
+                                    <h4 class="text-sm font-medium text-blue-800 mb-1">Auto-Generated Rules</h4>
+                                    <p class="text-xs text-blue-600">
+                                        Rules are automatically created from your safety configurations. To modify rules, update the corresponding safety parameters.
+                                    </p>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Existing Rules List -->
-                            <div>
-                                <div class="flex items-center justify-between mb-3">
-                                    <h4 class="font-medium text-slate-700">Active Rules (6)</h4>
-                                    <span class="text-xs text-slate-500">Auto-generated from safety configurations</span>
+                        <!-- Rules Summary -->
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-medium text-slate-700">Active Rules (6)</h4>
+                                <span class="text-xs text-slate-500">Auto-generated from safety configurations</span>
+                            </div>
+                            
+                            <!-- Rules Grid -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <!-- Rule 1 -->
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <i class="fa-solid fa-weight-hanging text-blue-500 text-xs"></i>
+                                        <div class="text-sm font-medium text-slate-800">Load Limiter Rule</div>
+                                        <span class="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">Auto</span>
+                                    </div>
+                                    <div class="text-xs text-slate-600 mb-1">IF Load > 90% THEN Trigger Alarm</div>
+                                    <div class="text-xs text-slate-500">Source: Load Limiter Configuration</div>
                                 </div>
-                                <div class="space-y-3">
-                                    <!-- Rule Item 1: Load Limiter Rule -->
-                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition group">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <i class="fa-solid fa-weight-hanging text-blue-500 text-xs"></i>
-                                                <div class="text-sm font-medium text-slate-800">Load Limiter Rule</div>
-                                                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">Auto</span>
-                                            </div>
-                                            <div class="text-sm text-slate-600 mb-1">IF Load > 90% THEN Trigger Audible Alarm</div>
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-xs text-slate-500">Source: Load Limiter Configuration</span>
-                                                <span class="text-xs text-slate-500">Priority: <span class="font-medium text-yellow-600">High</span></span>
-                                            </div>
-                                        </div>
-                                        <a href="#load-limiter-section" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" title="Go to Load Limiter">
-                                            <i class="fa-solid fa-arrow-right"></i>
-                                        </a>
+                                
+                                <!-- Rule 2 -->
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <i class="fa-solid fa-temperature-high text-red-500 text-xs"></i>
+                                        <div class="text-sm font-medium text-slate-800">Motor Temperature</div>
+                                        <span class="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded">Auto</span>
                                     </div>
-                                    
-                                    <!-- Rule Item 2: Temperature Rule -->
-                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition group">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <i class="fa-solid fa-temperature-high text-red-500 text-xs"></i>
-                                                <div class="text-sm font-medium text-slate-800">Motor Temperature Rule</div>
-                                                <span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full">Auto</span>
-                                            </div>
-                                            <div class="text-sm text-slate-600 mb-1">IF Motor Temperature >= 75°C THEN Send Email Alert</div>
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-xs text-slate-500">Source: Health & Load Intelligence</span>
-                                                <span class="text-xs text-slate-500">Priority: <span class="font-medium text-yellow-600">Medium</span></span>
-                                            </div>
-                                        </div>
-                                        <a href="#health-monitoring" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" title="Go to Health Monitoring">
-                                            <i class="fa-solid fa-arrow-right"></i>
-                                        </a>
+                                    <div class="text-xs text-slate-600 mb-1">IF Temp >= 75°C THEN Send Alert</div>
+                                    <div class="text-xs text-slate-500">Source: Health Monitoring</div>
+                                </div>
+                                
+                                <!-- Rule 3 -->
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <i class="fa-solid fa-draw-polygon text-green-500 text-xs"></i>
+                                        <div class="text-sm font-medium text-slate-800">Zone Violation</div>
+                                        <span class="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Auto</span>
                                     </div>
-                                    
-                                    <!-- Rule Item 3: Zone Violation Rule -->
-                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition group">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <i class="fa-solid fa-draw-polygon text-green-500 text-xs"></i>
-                                                <div class="text-sm font-medium text-slate-800">Zone Violation Rule</div>
-                                                <span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">Auto</span>
-                                            </div>
-                                            <div class="text-sm text-slate-600 mb-1">IF Zone Violation == True THEN Stop Crane Motion</div>
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-xs text-slate-500">Source: Zoning Configuration</span>
-                                                <span class="text-xs text-slate-500">Priority: <span class="font-medium text-red-600">Critical</span></span>
-                                            </div>
-                                        </div>
-                                        <a href="#safety-configuration" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" title="Go to Zone Control">
-                                            <i class="fa-solid fa-arrow-right"></i>
-                                        </a>
+                                    <div class="text-xs text-slate-600 mb-1">IF Zone Violation THEN Stop Motion</div>
+                                    <div class="text-xs text-slate-500">Source: Zoning Configuration</div>
+                                </div>
+                                
+                                <!-- Rule 4 -->
+                                <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <i class="fa-solid fa-shield-halved text-purple-500 text-xs"></i>
+                                        <div class="text-sm font-medium text-slate-800">Anti-Collision</div>
+                                        <span class="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">Auto</span>
                                     </div>
-                                    
-                                    <!-- Rule Item 4: Collision Rule -->
-                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition group">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <i class="fa-solid fa-shield-halved text-purple-500 text-xs"></i>
-                                                <div class="text-sm font-medium text-slate-800">Anti-Collision Rule</div>
-                                                <span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">Auto</span>
-                                            </div>
-                                            <div class="text-sm text-slate-600 mb-1">IF Collision Distance <= 2.0m THEN Emergency Stop</div>
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-xs text-slate-500">Source: Anti-Collision System</span>
-                                                <span class="text-xs text-slate-500">Priority: <span class="font-medium text-red-600">Critical</span></span>
-                                            </div>
-                                        </div>
-                                        <a href="#safety-configuration" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" title="Go to Anti-Collision">
-                                            <i class="fa-solid fa-arrow-right"></i>
-                                        </a>
-                                    </div>
-                                    
-                                    <!-- Rule Item 5: Brake Wear Rule -->
-                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition group">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <i class="fa-solid fa-stop-circle text-orange-500 text-xs"></i>
-                                                <div class="text-sm font-medium text-slate-800">Brake Wear Rule</div>
-                                                <span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">Auto</span>
-                                            </div>
-                                            <div class="text-sm text-slate-600 mb-1">IF Brake Wear > 75% THEN Send Maintenance Alert</div>
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-xs text-slate-500">Source: Brake Monitoring</span>
-                                                <span class="text-xs text-slate-500">Priority: <span class="font-medium text-yellow-600">Medium</span></span>
-                                            </div>
-                                        </div>
-                                        <a href="#health-monitoring" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" title="Go to Brake Monitoring">
-                                            <i class="fa-solid fa-arrow-right"></i>
-                                        </a>
-                                    </div>
-                                    
-                                    <!-- Rule Item 6: Vibration Rule -->
-                                    <div class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition group">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <i class="fa-solid fa-wave-square text-emerald-500 text-xs"></i>
-                                                <div class="text-sm font-medium text-slate-800">Vibration Rule</div>
-                                                <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">Auto</span>
-                                            </div>
-                                            <div class="text-sm text-slate-600 mb-1">IF Vibration Level > 4.2mm/s THEN Slow Down Crane</div>
-                                            <div class="flex items-center gap-3">
-                                                <span class="text-xs text-slate-500">Source: Motor Health Monitoring</span>
-                                                <span class="text-xs text-slate-500">Priority: <span class="font-medium text-yellow-600">High</span></span>
-                                            </div>
-                                        </div>
-                                        <a href="#health-monitoring" class="text-blue-600 hover:text-blue-700 p-2 rounded hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity" title="Go to Motor Health">
-                                            <i class="fa-solid fa-arrow-right"></i>
-                                        </a>
-                                    </div>
+                                    <div class="text-xs text-slate-600 mb-1">IF Distance <= 2.0m THEN Emergency Stop</div>
+                                    <div class="text-xs text-slate-500">Source: Anti-Collision System</div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Rule Sources Legend -->
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                                <h4 class="text-sm font-medium text-slate-700 mb-3">Rule Sources</h4>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <a href="#load-limiter-section" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-3 h-3 rounded bg-blue-500"></div>
-                                            <span class="text-sm text-slate-700">Load Limiter Rules</span>
-                                        </div>
-                                        <span class="text-xs text-slate-500">2 rules</span>
-                                    </a>
-                                    <a href="#safety-configuration" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-3 h-3 rounded bg-green-500"></div>
-                                            <span class="text-sm text-slate-700">Zone Control Rules</span>
-                                        </div>
-                                        <span class="text-xs text-slate-500">3 rules</span>
-                                    </a>
-                                    <a href="#safety-configuration" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-3 h-3 rounded bg-red-500"></div>
-                                            <span class="text-sm text-slate-700">Anti-Collision Rules</span>
-                                        </div>
-                                        <span class="text-xs text-slate-500">2 rules</span>
-                                    </a>
-                                    <a href="#health-monitoring" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-3 h-3 rounded bg-emerald-500"></div>
-                                            <span class="text-sm text-slate-700">Health Monitoring Rules</span>
-                                        </div>
-                                        <span class="text-xs text-slate-500">4 rules</span>
-                                    </a>
-                                </div>
-                            </div>
-
-                            <!-- How Rules Work -->
-                            <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                                <h4 class="text-sm font-medium text-slate-700 mb-3">How Rules Are Generated</h4>
-                                <div class="space-y-2 text-sm text-slate-600">
-                                    <div class="flex items-start gap-2">
-                                        <i class="fa-solid fa-check-circle text-green-500 mt-0.5"></i>
-                                        <span>Rules are automatically created when you configure safety parameters</span>
+                        <!-- Rule Sources -->
+                        <div class="bg-slate-50 rounded-lg border border-slate-200 p-3">
+                            <h4 class="text-sm font-medium text-slate-700 mb-2">Rule Sources</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <a href="#load-limiter-section" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded bg-blue-500"></div>
+                                        <span class="text-slate-700">Load Limiter</span>
                                     </div>
-                                    <div class="flex items-start gap-2">
-                                        <i class="fa-solid fa-check-circle text-green-500 mt-0.5"></i>
-                                        <span>Each safety threshold creates a corresponding rule</span>
+                                    <span class="text-slate-500">2 rules</span>
+                                </a>
+                                <a href="#safety-configuration" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded bg-green-500"></div>
+                                        <span class="text-slate-700">Zone Control</span>
                                     </div>
-                                    <div class="flex items-start gap-2">
-                                        <i class="fa-solid fa-check-circle text-green-500 mt-0.5"></i>
-                                        <span>Priority is determined by the criticality of the safety parameter</span>
+                                    <span class="text-slate-500">3 rules</span>
+                                </a>
+                                <a href="#safety-configuration" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded bg-red-500"></div>
+                                        <span class="text-slate-700">Anti-Collision</span>
                                     </div>
-                                    <div class="flex items-start gap-2">
-                                        <i class="fa-solid fa-check-circle text-green-500 mt-0.5"></i>
-                                        <span>To modify a rule, update the corresponding safety parameter</span>
+                                    <span class="text-slate-500">2 rules</span>
+                                </a>
+                                <a href="#health-monitoring" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded bg-emerald-500"></div>
+                                        <span class="text-slate-700">Health Monitor</span>
                                     </div>
-                                </div>
+                                    <span class="text-slate-500">4 rules</span>
+                                </a>
                             </div>
                         </div>
                     </section>
 
-                    <!-- SECTION 7: Advanced Settings -->
-                    <section id="advanced-settings" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                        <h3 class="text-lg font-semibold text-slate-800 mb-6">Advanced Settings</h3>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Communication Settings -->
-                            <div class="space-y-4">
-                                <h4 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Communication</h4>
-                                <div class="space-y-3">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-600 mb-1">Update Interval</label>
-                                        <select class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                            <option>100ms (High Precision)</option>
-                                            <option>500ms (Balanced)</option>
-                                            <option>1s (Power Saving)</option>
-                                            <option>5s (Diagnostic)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-600 mb-1">Data Retention</label>
-                                        <select class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                            <option>7 Days</option>
-                                            <option>30 Days</option>
-                                            <option>90 Days</option>
-                                            <option>1 Year</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Alerts & Notifications -->
-                            <div class="space-y-4">
-                                <h4 class="text-sm font-semibold text-slate-700 uppercase tracking-wider">Alerts & Notifications</h4>
-                                <div class="space-y-3">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-slate-600">Email Alerts</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" checked class="sr-only peer">
-                                            <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-slate-600">SMS Notifications</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" class="sr-only peer">
-                                            <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-slate-600">Audible Alarms</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" checked class="sr-only peer">
-                                            <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+                   
                 </div>
             </div>
         </main>
@@ -1429,6 +1496,536 @@
     <div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
     <script>
+        // Datalogger Configuration
+function initializeDatalogger() {
+    let dataloggers = [];
+    
+    // Device and tag database
+    const deviceDatabase = {
+        load_cell: {
+            name: "Load Cell System",
+            id: "LC-001",
+            tags: [
+                { id: "load_actual", name: "Load_Actual", address: "%MW100", description: "Actual load weight", type: "Float32", unit: "kg" },
+                { id: "load_percent", name: "Load_Percent", address: "%MW102", description: "Load percentage of SWL", type: "Float32", unit: "%" },
+                { id: "load_status", name: "Load_Status", address: "%MX10.0", description: "Load limiter status", type: "UInt16", unit: "" }
+            ]
+        },
+        anti_collision: {
+            name: "Anti-Collision System",
+            id: "ACS-001",
+            tags: [
+                { id: "acs_distance", name: "ACS_Distance", address: "%MW200", description: "Minimum distance to object", type: "Float32", unit: "m" },
+                { id: "acs_status", name: "ACS_Status", address: "%MX20.0", description: "ACS operational status", type: "UInt16", unit: "" }
+            ]
+        },
+        hoist_motor: {
+            name: "Hoist Motor Drive",
+            id: "HM-001",
+            tags: [
+                { id: "motor_temp", name: "Motor_Temperature", address: "%MW300", description: "Motor winding temperature", type: "Float32", unit: "°C" },
+                { id: "motor_current", name: "Motor_Current", address: "%MW302", description: "Motor current draw", type: "Float32", unit: "A" }
+            ]
+        },
+        encoder_x: {
+            name: "X-Axis Encoder",
+            id: "ENC-X-01",
+            tags: [
+                { id: "pos_x", name: "Position_X", address: "%MW400", description: "Bridge travel position", type: "Float32", unit: "m" }
+            ]
+        },
+        main_brake: {
+            name: "Main Hoist Brake",
+            id: "BRK-H-01",
+            tags: [
+                { id: "brake_status", name: "Brake_Status", address: "%MX40.0", description: "Brake engagement status", type: "Boolean", unit: "" }
+            ]
+        },
+        weather_station: {
+            name: "Weather Station",
+            id: "WS-001",
+            tags: [
+                { id: "wind_speed", name: "Wind_Speed", address: "%MW600", description: "Wind speed measurement", type: "Float32", unit: "m/s" }
+            ]
+        }
+    };
+
+    // Priority colors
+    const priorityColors = {
+        critical: { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-200' },
+        high: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200' },
+        medium: { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-200' },
+        low: { bg: 'bg-slate-100', text: 'text-slate-800', border: 'border-slate-200' }
+    };
+
+    // Condition display names
+    const conditionDisplay = {
+        always: "Always Log",
+        on_change: "On Change",
+        threshold: "Threshold",
+        periodic: "Periodic"
+    };
+
+    // Initialize modal functionality
+    function initializeModal() {
+        const modal = document.getElementById('add-datalogger-modal');
+        const addBtn = document.getElementById('add-datalogger-btn');
+        const cancelBtn = document.getElementById('cancel-datalogger');
+        const saveBtn = document.getElementById('save-datalogger');
+        const deviceSelect = document.getElementById('logger-device-select');
+        const tagSelect = document.getElementById('logger-tag-select');
+        
+        // Open modal
+        addBtn.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+        });
+        
+        // Close modal
+        cancelBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            resetModal();
+        });
+        
+        // Close modal on background click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+                resetModal();
+            }
+        });
+        
+        // Device selection change
+        deviceSelect.addEventListener('change', () => {
+            const deviceId = deviceSelect.value;
+            
+            // Clear and enable tag select
+            tagSelect.innerHTML = '<option value="">-- Select a data tag --</option>';
+            tagSelect.disabled = !deviceId;
+            
+            if (deviceId && deviceDatabase[deviceId]) {
+                const device = deviceDatabase[deviceId];
+                
+                // Add device tags to select
+                device.tags.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag.id;
+                    option.textContent = `${tag.name} (${tag.address})`;
+                    tagSelect.appendChild(option);
+                });
+                
+                // Enable tag selection
+                tagSelect.disabled = false;
+            }
+        });
+        
+        // Tag selection change
+        tagSelect.addEventListener('change', () => {
+            const deviceId = deviceSelect.value;
+            const tagId = tagSelect.value;
+            const descDiv = document.getElementById('tag-description');
+            
+            if (deviceId && tagId && deviceDatabase[deviceId]) {
+                const device = deviceDatabase[deviceId];
+                const tag = device.tags.find(t => t.id === tagId);
+                
+                if (tag) {
+                    document.getElementById('tag-desc-text').textContent = tag.description;
+                    document.getElementById('tag-address').textContent = `Address: ${tag.address}`;
+                    descDiv.classList.remove('hidden');
+                    
+                    // Update units in condition panels
+                    document.getElementById('change-unit').textContent = tag.unit || 'units';
+                    document.getElementById('threshold-unit').textContent = tag.unit || 'units';
+                    
+                    // Auto-set priority based on device type
+                    if (deviceId.includes('load') || deviceId.includes('anti') || deviceId.includes('emergency')) {
+                        document.querySelector('input[name="logger-priority"][value="critical"]').checked = true;
+                    } else if (deviceId.includes('motor') || deviceId.includes('brake')) {
+                        document.querySelector('input[name="logger-priority"][value="high"]').checked = true;
+                    } else if (deviceId.includes('encoder') || deviceId.includes('position')) {
+                        document.querySelector('input[name="logger-priority"][value="medium"]').checked = true;
+                    } else {
+                        document.querySelector('input[name="logger-priority"][value="low"]').checked = true;
+                    }
+                }
+            } else {
+                descDiv.classList.add('hidden');
+            }
+        });
+        
+        // Logging Condition Radio Buttons
+        const conditionRadios = document.querySelectorAll('input[name="logger-condition"]');
+        conditionRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                const selectedCondition = radio.value;
+                
+                // Hide all condition panels
+                document.querySelectorAll('.condition-panel').forEach(panel => {
+                    panel.classList.add('hidden');
+                });
+                
+                // Show selected condition panel
+                const selectedPanel = document.getElementById(`${selectedCondition}-config`);
+                if (selectedPanel) {
+                    selectedPanel.classList.remove('hidden');
+                }
+            });
+        });
+        
+        // Threshold condition type change
+        const thresholdConditionSelect = document.querySelector('#threshold-config select');
+        if (thresholdConditionSelect) {
+            thresholdConditionSelect.addEventListener('change', function() {
+                const rangeConfig = document.getElementById('range-config');
+                if (this.value === 'Between range') {
+                    rangeConfig.classList.remove('hidden');
+                } else {
+                    rangeConfig.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Storage calculation
+        const storageSizeInput = document.getElementById('logger-storage-size');
+        const storageUnitSelect = document.getElementById('logger-storage-unit');
+        const samplingRateSelect = document.getElementById('sampling-rate');
+        
+        function updateEstimate() {
+            const size = parseFloat(storageSizeInput.value) || 100;
+            const unit = storageUnitSelect.value;
+            const sampling = parseInt(samplingRateSelect.value) || 5000;
+            
+            // Convert to MB
+            const storageMB = unit === 'gb' ? size * 1024 : size;
+            
+            // Simple estimation: 4 bytes per sample (Float32)
+            const bytesPerSample = 4;
+            const samplesPerHour = (3600000 / sampling); // milliseconds in hour / sampling rate
+            const mbPerHour = (bytesPerSample * samplesPerHour) / (1024 * 1024);
+            
+            const estimatedHours = storageMB / mbPerHour;
+            
+            document.getElementById('estimated-duration').textContent = 
+                estimatedHours >= 8760 ? '>1 year' : 
+                estimatedHours >= 720 ? `${Math.round(estimatedHours/24)} days` :
+                estimatedHours >= 24 ? `${Math.round(estimatedHours/24)} days` :
+                `${Math.round(estimatedHours)} hours`;
+        }
+        
+        storageSizeInput.addEventListener('input', updateEstimate);
+        storageUnitSelect.addEventListener('change', updateEstimate);
+        samplingRateSelect.addEventListener('change', updateEstimate);
+        
+        // Initialize estimate
+        updateEstimate();
+        
+        // Save datalogger
+        saveBtn.addEventListener('click', () => {
+            const deviceId = deviceSelect.value;
+            const tagId = tagSelect.value;
+            const priority = document.querySelector('input[name="logger-priority"]:checked').value;
+            const condition = document.querySelector('input[name="logger-condition"]:checked').value;
+            const storageSize = storageSizeInput.value;
+            const storageUnit = storageUnitSelect.value;
+            const samplingRate = parseInt(samplingRateSelect.value);
+            const dataFormat = document.getElementById('data-format').value;
+            
+            if (!deviceId || !tagId) {
+                alert('Please select both device and tag');
+                return;
+            }
+            
+            if (!deviceDatabase[deviceId]) {
+                alert('Invalid device selected');
+                return;
+            }
+            
+            const device = deviceDatabase[deviceId];
+            const tag = device.tags.find(t => t.id === tagId);
+            
+            if (!tag) {
+                alert('Invalid tag selected');
+                return;
+            }
+            
+            // Get condition details
+            let conditionDetails = '';
+            if (condition === 'on_change') {
+                const changeType = document.querySelector('#on-change-config select').value;
+                const changeAmount = document.querySelector('#on-change-config input[type="text"]').value;
+                conditionDetails = `${changeType}: ${changeAmount} ${tag.unit}`;
+            } else if (condition === 'threshold') {
+                const thresholdType = document.querySelector('#threshold-config select').value;
+                const thresholdValue = document.querySelector('#threshold-config input[type="text"]').value;
+                conditionDetails = `${thresholdType} ${thresholdValue} ${tag.unit}`;
+            } else if (condition === 'periodic') {
+                const interval = document.querySelector('#periodic-config input[type="number"]').value;
+                const timeUnit = document.querySelector('#periodic-config select').value;
+                conditionDetails = `Every ${interval} ${timeUnit}`;
+            } else {
+                conditionDetails = 'Continuous';
+            }
+            
+            // Create new logger
+            const loggerId = Date.now(); // Unique ID
+            
+            const newLogger = {
+                id: loggerId,
+                device: {
+                    id: deviceId,
+                    name: device.name,
+                    deviceId: device.id
+                },
+                tag: {
+                    id: tagId,
+                    name: tag.name,
+                    address: tag.address,
+                    description: tag.description,
+                    type: tag.type,
+                    unit: tag.unit
+                },
+                priority: priority,
+                condition: condition,
+                conditionDetails: conditionDetails,
+                storage: {
+                    size: storageSize,
+                    unit: storageUnit,
+                    totalMB: storageUnit === 'gb' ? storageSize * 1024 : storageSize * 1
+                },
+                sampling: {
+                    rate: samplingRate,
+                    display: samplingRate >= 60000 ? `${samplingRate/60000} min` : 
+                             samplingRate >= 1000 ? `${samplingRate/1000} sec` : 
+                             `${samplingRate} ms`
+                },
+                dataFormat: dataFormat,
+                status: 'active',
+                created: new Date().toISOString(),
+                dataRate: (4 * (3600000 / samplingRate)) / (1024 * 1024) // MB/hour
+            };
+            
+            dataloggers.push(newLogger);
+            renderLoggersTable();
+            updateSummary();
+            
+            modal.classList.add('hidden');
+            resetModal();
+            
+            showNotification(`Datalogger for ${tag.name} added successfully`, 'success');
+        });
+    }
+    
+    // Reset modal form
+    function resetModal() {
+        document.getElementById('logger-device-select').value = '';
+        document.getElementById('logger-tag-select').innerHTML = '<option value="">-- First select a device --</option>';
+        document.getElementById('logger-tag-select').disabled = true;
+        document.getElementById('tag-description').classList.add('hidden');
+        document.querySelector('input[name="logger-priority"][value="medium"]').checked = true;
+        document.querySelector('input[name="logger-condition"][value="periodic"]').checked = true;
+        
+        // Reset condition panels
+        document.querySelectorAll('.condition-panel').forEach(panel => {
+            panel.classList.add('hidden');
+        });
+        document.getElementById('periodic-config').classList.remove('hidden');
+        document.getElementById('range-config').classList.add('hidden');
+        
+        // Reset form values
+        document.getElementById('logger-storage-size').value = '100';
+        document.getElementById('logger-storage-unit').value = 'mb';
+        document.getElementById('sampling-rate').value = '5000';
+        document.getElementById('data-format').value = 'compressed';
+        
+        // Reset condition inputs
+        document.querySelector('#on-change-config input[type="text"]').value = '5';
+        document.querySelector('#threshold-config input[type="text"]').value = '80';
+        document.querySelector('#periodic-config input[type="number"]').value = '10';
+        
+        updateEstimate();
+    }
+    
+    // Helper function for updateEstimate in resetModal
+    function updateEstimate() {
+        const storageSizeInput = document.getElementById('logger-storage-size');
+        const storageUnitSelect = document.getElementById('logger-storage-unit');
+        const samplingRateSelect = document.getElementById('sampling-rate');
+        
+        const size = parseFloat(storageSizeInput.value) || 100;
+        const unit = storageUnitSelect.value;
+        const sampling = parseInt(samplingRateSelect.value) || 5000;
+        
+        const storageMB = unit === 'gb' ? size * 1024 : size;
+        const bytesPerSample = 4;
+        const samplesPerHour = (3600000 / sampling);
+        const mbPerHour = (bytesPerSample * samplesPerHour) / (1024 * 1024);
+        const estimatedHours = storageMB / mbPerHour;
+        
+        document.getElementById('estimated-duration').textContent = 
+            estimatedHours >= 8760 ? '>1 year' : 
+            estimatedHours >= 720 ? `${Math.round(estimatedHours/24)} days` :
+            estimatedHours >= 24 ? `${Math.round(estimatedHours/24)} days` :
+            `${Math.round(estimatedHours)} hours`;
+    }
+    
+    // Render loggers table
+    function renderLoggersTable() {
+        const tableBody = document.getElementById('loggers-table-body');
+        const noLoggersRow = document.getElementById('no-loggers-row');
+        
+        if (dataloggers.length === 0) {
+            noLoggersRow.classList.remove('hidden');
+            return;
+        }
+        
+        noLoggersRow.classList.add('hidden');
+        tableBody.innerHTML = '';
+        
+        dataloggers.forEach((logger, index) => {
+            const priority = priorityColors[logger.priority];
+            
+            const row = document.createElement('tr');
+            row.className = `hover:bg-slate-50 ${priority.bg.replace('100', '50')}`;
+            
+            row.innerHTML = `
+                <td class="px-4 py-3">
+                    <div class="font-medium text-slate-900">${logger.device.name}</div>
+                    <div class="text-xs text-slate-500">${logger.device.deviceId}</div>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="font-medium text-slate-900">${logger.tag.name}</div>
+                    <div class="text-xs text-slate-500">${logger.tag.address} • ${logger.tag.type}</div>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 text-xs font-medium rounded-full ${priority.bg} ${priority.text}">
+                        ${logger.priority.charAt(0).toUpperCase() + logger.priority.slice(1)}
+                    </span>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="text-sm font-medium text-slate-900">${conditionDisplay[logger.condition] || logger.condition}</div>
+                    <div class="text-xs text-slate-500">${logger.conditionDetails}</div>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="text-sm font-medium text-slate-900">${logger.storage.size} ${logger.storage.unit.toUpperCase()}</div>
+                    <div class="text-xs text-slate-500">~${Math.round((logger.storage.totalMB / logger.dataRate))} hours</div>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="text-sm text-slate-900">${logger.sampling.display}</div>
+                    <div class="text-xs text-slate-500">${logger.dataFormat}</div>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 text-xs font-medium ${logger.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'} rounded-full">
+                        ${logger.status === 'active' ? 'Active' : 'Paused'}
+                    </span>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                        <button class="edit-logger text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50"
+                                data-id="${logger.id}" title="Edit">
+                            <i class="fa-solid fa-pen text-xs"></i>
+                        </button>
+                        <button class="delete-logger text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50"
+                                data-id="${logger.id}" title="Delete">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                        <button class="toggle-logger text-slate-600 hover:text-slate-800 p-1 rounded hover:bg-slate-100"
+                                data-id="${logger.id}" title="${logger.status === 'active' ? 'Pause' : 'Activate'}">
+                            <i class="fa-solid fa-power-off text-xs ${logger.status === 'active' ? 'text-green-600' : 'text-slate-400'}"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+        
+        attachLoggerEventListeners();
+    }
+    
+    // Attach event listeners to logger actions
+    function attachLoggerEventListeners() {
+        // Edit buttons
+        document.querySelectorAll('.edit-logger').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const loggerId = parseInt(this.dataset.id);
+                const logger = dataloggers.find(l => l.id === loggerId);
+                if (logger) {
+                    showNotification(`Edit feature coming soon for ${logger.tag.name}`, 'info');
+                }
+            });
+        });
+        
+        // Delete buttons
+        document.querySelectorAll('.delete-logger').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const loggerId = parseInt(this.dataset.id);
+                const logger = dataloggers.find(l => l.id === loggerId);
+                if (logger && confirm(`Delete datalogger for "${logger.tag.name}" from "${logger.device.name}"?`)) {
+                    dataloggers = dataloggers.filter(l => l.id !== loggerId);
+                    renderLoggersTable();
+                    updateSummary();
+                    showNotification(`Datalogger "${logger.tag.name}" deleted`, 'success');
+                }
+            });
+        });
+        
+        // Toggle buttons
+        document.querySelectorAll('.toggle-logger').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const loggerId = parseInt(this.dataset.id);
+                const logger = dataloggers.find(l => l.id === loggerId);
+                if (logger) {
+                    logger.status = logger.status === 'active' ? 'paused' : 'active';
+                    renderLoggersTable();
+                    updateSummary();
+                    showNotification(`Datalogger "${logger.tag.name}" ${logger.status === 'active' ? 'activated' : 'paused'}`, 'info');
+                }
+            });
+        });
+    }
+    
+    // Update summary statistics
+    function updateSummary() {
+        const activeLoggers = dataloggers.filter(l => l.status === 'active');
+        const totalStorageMB = activeLoggers.reduce((sum, logger) => sum + logger.storage.totalMB, 0);
+        const totalDataRate = activeLoggers.reduce((sum, logger) => sum + logger.dataRate, 0);
+        
+        // Update counters
+        document.getElementById('active-loggers-count').textContent = activeLoggers.length;
+        document.getElementById('total-storage').textContent = 
+            totalStorageMB >= 1024 ? `${(totalStorageMB/1024).toFixed(1)} GB` : `${totalStorageMB} MB`;
+        document.getElementById('total-data-rate').textContent = `${totalDataRate.toFixed(2)} MB/h`;
+        
+        // Calculate buffer health
+        let bufferHealth = 'Good';
+        let healthColor = 'text-green-700';
+        
+        if (totalDataRate > 10) {
+            bufferHealth = 'High Load';
+            healthColor = 'text-amber-700';
+        } else if (totalStorageMB > 4096) {
+            bufferHealth = 'Large Storage';
+            healthColor = 'text-blue-700';
+        } else if (activeLoggers.length === 0) {
+            bufferHealth = 'No Loggers';
+            healthColor = 'text-slate-700';
+        } else if (totalDataRate > 20) {
+            bufferHealth = 'Very High';
+            healthColor = 'text-red-700';
+        }
+        
+        document.getElementById('buffer-health').textContent = bufferHealth;
+        document.getElementById('buffer-health').className = `text-xl font-bold ${healthColor}`;
+    }
+    
+    // Initialize
+    initializeModal();
+    renderLoggersTable();
+    updateSummary();
+}
+
+// Add this to your DOMContentLoaded event listener
+initializeDatalogger();
         // Fetch and insert sidebar from sidebar.html
         async function loadSidebar() {
             try {

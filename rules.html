@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rules Engine & Alerts - Univa Gateway</title>
+    <title>Rules Engine - Univa Gateway</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
@@ -499,60 +499,6 @@
         .quick-template:hover i {
             color: #2563EB;
         }
-        
-        /* Notification Type Selector */
-        .notification-type {
-            border: 2px solid #E2E8F0;
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            background: white;
-        }
-        
-        .notification-type:hover {
-            border-color: #2563EB;
-            background: #EFF6FF;
-            transform: translateY(-2px);
-        }
-        
-        .notification-type.selected {
-            border-color: #2563EB;
-            background: #EFF6FF;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
-        }
-        
-        .notification-type.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .notification-icon {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            color: #64748B;
-        }
-        
-        .notification-type.selected .notification-icon,
-        .notification-type:hover .notification-icon {
-            color: #2563EB;
-        }
-        
-        .notification-badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #10B981;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -586,7 +532,7 @@
                     <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
                         <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
                         <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
-                        <span class="text-slate-900 font-medium" id="page-title">RuleEngine</span> <!-- Updated page title -->
+                        <span class="text-slate-900 font-medium" id="page-title">Rules & Alert Triggers</span>
                     </div>
                 </div>
 
@@ -596,7 +542,7 @@
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fa-solid fa-server text-slate-400 text-sm"></i>
                         </div>
-                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors"> <!-- Updated styling -->
+                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
                             <option>Univa-GW-01</option>
                             <option>Univa-GW-02</option>
                             <option>Univa-GW-03</option>
@@ -615,12 +561,12 @@
             <!-- Page Title & Actions -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 class="text-2xl font-bold text-slate-900">Rules Engine & Alerts</h1>
-                    <p class="text-slate-500 text-sm mt-1">Configure automated logic and select notification templates for alerts.</p>
+                    <h1 class="text-2xl font-bold text-slate-900">Rules Engine</h1>
+                    <p class="text-slate-500 text-sm mt-1">Define conditions that trigger alerts when met.</p>
                 </div>
                 <div class="flex gap-2">
-                    <button class="inline-flex items-center px-4 py-2 text-primary border border-primary text-sm font-medium rounded-lg hover:bg-blue-50 transition" onclick="redirectToNotifications()">
-                        <i class="fa-solid fa-bell mr-2"></i> Manage Notifications
+                    <button class="inline-flex items-center px-4 py-2 text-primary border border-primary text-sm font-medium rounded-lg hover:bg-blue-50 transition" onclick="redirectToAlerts()">
+                        <i class="fa-solid fa-bell mr-2"></i> Manage Alerts
                     </button>
                     <button class="inline-flex items-center px-4 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primaryHover transition shadow-sm" onclick="startCreatingNewRule()">
                         <i class="fa-solid fa-plus mr-2"></i> Create New Rule
@@ -693,7 +639,7 @@
                                 
                                 <button class="flex items-center gap-2 bg-white pl-4 z-10" onclick="goToStep(3)">
                                     <div id="step-3-indicator" class="w-8 h-8 rounded-full bg-white border-2 border-border text-slate-500 flex items-center justify-center text-sm font-semibold shadow-sm ring-4 ring-white">3</div>
-                                    <span class="text-sm font-medium text-slate-500">Actions</span>
+                                    <span class="text-sm font-medium text-slate-500">Alerts</span>
                                 </button>
                             </div>
                         </div>
@@ -736,64 +682,6 @@
         let sortOrder = 'asc';
         let isCreatingNewRule = false;
         
-        // Available notification TYPES (not individual notifications)
-        const availableNotificationTypes = [
-            { 
-                id: 'type-alert', 
-                name: 'Alert Notification', 
-                icon: 'fa-triangle-exclamation',
-                description: 'Standard alert notifications for threshold breaches',
-                channels: ['dashboard', 'email', 'sms'],
-                severity: 'alert',
-                defaultTemplate: '[ALERT] {device}: {tag} is {value}{unit} at {timestamp}'
-            },
-            { 
-                id: 'type-warning', 
-                name: 'Warning Notification', 
-                icon: 'fa-exclamation-circle',
-                description: 'Warning notifications for approaching limits',
-                channels: ['dashboard', 'email'],
-                severity: 'warning',
-                defaultTemplate: '[WARNING] {device}: {tag} is approaching limit ({value}{unit}) at {timestamp}'
-            },
-            { 
-                id: 'type-critical', 
-                name: 'Critical Alert', 
-                icon: 'fa-skull-crossbones',
-                description: 'Critical alerts for emergency situations',
-                channels: ['dashboard', 'email', 'sms', 'phone'],
-                severity: 'critical',
-                defaultTemplate: '[CRITICAL] {device}: {tag} CRITICAL level reached ({value}{unit}) at {timestamp}'
-            },
-            { 
-                id: 'type-info', 
-                name: 'Info Notification', 
-                icon: 'fa-circle-info',
-                description: 'Informational notifications and status updates',
-                channels: ['dashboard', 'email'],
-                severity: 'info',
-                defaultTemplate: '[INFO] {device}: {tag} is {value}{unit} at {timestamp}'
-            },
-            { 
-                id: 'type-device-status', 
-                name: 'Device Status', 
-                icon: 'fa-plug-circle-exclamation',
-                description: 'Notifications for device connectivity changes',
-                channels: ['dashboard', 'email'],
-                severity: 'alert',
-                defaultTemplate: '[DEVICE] {device} is {value} at {timestamp}'
-            },
-            { 
-                id: 'type-maintenance', 
-                name: 'Maintenance Alert', 
-                icon: 'fa-screwdriver-wrench',
-                description: 'Maintenance schedule and reminders',
-                channels: ['dashboard', 'email'],
-                severity: 'info',
-                defaultTemplate: '[MAINTENANCE] {device} requires attention at {timestamp}'
-            }
-        ];
-        
         // Quick start templates
         const quickTemplates = [
             { id: 'temp-template', name: 'Temperature Monitor', icon: 'fa-thermometer-half', description: 'Monitor temperature thresholds', device: 'Motor_Drive_01', tag: 'temperature_celsius', condition: '>', value: 80, duration: 30 },
@@ -815,8 +703,7 @@
             value: 80,
             unit: '°C',
             duration: 30,
-            selectedNotificationTypes: ['type-alert'], // SELECT notification types, not create them
-            messageTemplate: '{device} {tag} is {value}{unit} at {timestamp}',
+            selectedAlerts: [], // Just store alert IDs
             createdDate: new Date().toISOString().split('T')[0],
             lastModified: new Date().toISOString().split('T')[0],
             triggerCount: 0
@@ -854,15 +741,15 @@
                                 <i class="fa-solid fa-microchip"></i> Device management
                             </a>
                             <a href="rules-engine.html" class="nav-item active">
-                                <i class="fa-solid fa-robot"></i> Rules Engine & Alerts
+                                <i class="fa-solid fa-robot"></i> Rules Engine
                                 <span class="nav-item-count" id="rules-count">4</span>
                             </a>
                             <a href="protocol-mapping.html" class="nav-item">
                                 <i class="fa-solid fa-exchange-alt"></i> Protocol Mapping
                             </a>
-                            <a href="notifications.html" class="nav-item">
-                                <i class="fa-solid fa-bell"></i> Notifications
-                                <span class="nav-item-count">${availableNotificationTypes.length}</span>
+                            <a href="alerts.html" class="nav-item">
+                                <i class="fa-solid fa-bell"></i> Alerts
+                                <span class="nav-item-count">6</span>
                             </a>
                         </div>
                     </div>
@@ -1083,7 +970,7 @@
                     triggerCount: 12,
                     device: 'Motor_Drive_01',
                     tag: 'temperature_celsius',
-                    notificationTypes: ['type-alert', 'type-critical']
+                    selectedAlerts: ['alert-001', 'alert-002']
                 },
                 {
                     id: 'RULE-2025-002',
@@ -1095,7 +982,7 @@
                     triggerCount: 3,
                     device: 'All Devices',
                     tag: 'status',
-                    notificationTypes: ['type-device-status']
+                    selectedAlerts: ['alert-002']
                 },
                 {
                     id: 'RULE-2025-003',
@@ -1107,7 +994,7 @@
                     triggerCount: 0,
                     device: 'System',
                     tag: 'time',
-                    notificationTypes: ['type-info']
+                    selectedAlerts: ['alert-005']
                 },
                 {
                     id: 'RULE-2025-004',
@@ -1119,7 +1006,7 @@
                     triggerCount: 5,
                     device: 'Pump_Station_A',
                     tag: 'vibration_level',
-                    notificationTypes: ['type-warning']
+                    selectedAlerts: ['alert-003']
                 }
             ];
             
@@ -1138,44 +1025,48 @@
                 }
             });
             
-            container.innerHTML = sortedRules.map(rule => `
-                <div class="rule-card p-3 rounded-lg border ${rule.id === selectedRule?.id ? 'border-primary bg-blue-50' : 'border-border bg-white'} cursor-pointer transition-all hover:shadow-md group" onclick="selectRule('${rule.id}')">
-                    <div class="flex justify-between items-start mb-1">
-                        <div>
-                            <span class="font-semibold text-slate-800 text-sm">${rule.name}</span>
-                            <span class="text-xs text-slate-400 ml-2">${rule.id}</span>
-                        </div>
-                        <span class="${rule.enabled ? 'badge-success' : 'badge-disabled'}">
-                            ${rule.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
-                    </div>
-                    <div class="text-xs text-slate-500 mb-2">
-                        <i class="fa-solid ${rule.type === 'tag' ? 'fa-tag text-primary' : rule.type === 'device' ? 'fa-plug text-warning' : 'fa-calendar text-secondary'} mr-1"></i> 
-                        ${rule.description}
-                    </div>
-                    <div class="text-xs text-slate-500 mb-2">
-                        <i class="fa-solid fa-microchip mr-1"></i> ${rule.device} • ${rule.tag}
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs text-slate-400">
-                                <i class="fa-regular fa-clock mr-1"></i> ${rule.lastTriggered}
-                            </span>
-                            <span class="text-xs text-slate-400">
-                                <i class="fa-solid fa-bell mr-1"></i> ${rule.notificationTypes ? rule.notificationTypes.length : 0} notification types
+            container.innerHTML = sortedRules.map(rule => {
+                const alertCount = rule.selectedAlerts ? rule.selectedAlerts.length : 0;
+                
+                return `
+                    <div class="rule-card p-3 rounded-lg border ${rule.id === selectedRule?.id ? 'border-primary bg-blue-50' : 'border-border bg-white'} cursor-pointer transition-all hover:shadow-md group" onclick="selectRule('${rule.id}')">
+                        <div class="flex justify-between items-start mb-1">
+                            <div>
+                                <span class="font-semibold text-slate-800 text-sm">${rule.name}</span>
+                                <span class="text-xs text-slate-400 ml-2">${rule.id}</span>
+                            </div>
+                            <span class="${rule.enabled ? 'badge-success' : 'badge-disabled'}">
+                                ${rule.enabled ? 'Enabled' : 'Disabled'}
                             </span>
                         </div>
-                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button class="text-slate-400 hover:text-primary" onclick="event.stopPropagation(); toggleRuleStatus('${rule.id}')">
-                                <i class="fa-solid fa-power-off text-xs"></i>
-                            </button>
-                            <button class="text-slate-400 hover:text-danger" onclick="event.stopPropagation(); deleteRule('${rule.id}')">
-                                <i class="fa-solid fa-trash text-xs"></i>
-                            </button>
+                        <div class="text-xs text-slate-500 mb-2">
+                            <i class="fa-solid ${rule.type === 'tag' ? 'fa-tag text-primary' : rule.type === 'device' ? 'fa-plug text-warning' : 'fa-calendar text-secondary'} mr-1"></i> 
+                            ${rule.description}
+                        </div>
+                        <div class="text-xs text-slate-500 mb-2">
+                            <i class="fa-solid fa-microchip mr-1"></i> ${rule.device} • ${rule.tag}
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs text-slate-400">
+                                    <i class="fa-regular fa-clock mr-1"></i> ${rule.lastTriggered}
+                                </span>
+                                <span class="text-xs text-slate-400">
+                                    <i class="fa-solid fa-bell mr-1"></i> ${alertCount} alert(s)
+                                </span>
+                            </div>
+                            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button class="text-slate-400 hover:text-primary" onclick="event.stopPropagation(); toggleRuleStatus('${rule.id}')">
+                                    <i class="fa-solid fa-power-off text-xs"></i>
+                                </button>
+                                <button class="text-slate-400 hover:text-danger" onclick="event.stopPropagation(); deleteRule('${rule.id}')">
+                                    <i class="fa-solid fa-trash text-xs"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
             
             // Update rules count in sidebar
             const rulesCount = document.getElementById('rules-count');
@@ -1208,11 +1099,9 @@
         }
 
         function loadRuleData(ruleId) {
-            // Simulate loading rule data from API
             const rule = rules.find(r => r.id === ruleId);
             if (!rule) return;
             
-            // Build currentRuleData from rule object
             currentRuleData = {
                 id: rule.id,
                 name: rule.name,
@@ -1224,9 +1113,8 @@
                 value: extractValueFromDescription(rule.description),
                 unit: extractUnitFromTag(rule.tag),
                 duration: extractDurationFromDescription(rule.description),
-                selectedNotificationTypes: rule.notificationTypes || ['type-alert'],
-                messageTemplate: getDefaultMessageTemplate(rule),
-                createdDate: '2025-01-15',
+                selectedAlerts: rule.selectedAlerts || [],
+                createdDate: rule.createdDate || '2025-01-15',
                 lastModified: new Date().toISOString().split('T')[0],
                 triggerCount: rule.triggerCount || 0
             };
@@ -1242,13 +1130,11 @@
         }
 
         function extractValueFromDescription(desc) {
-            // Extract numeric value from description
             const match = desc.match(/(\d+(\.\d+)?)/);
             return match ? parseFloat(match[1]) : 80;
         }
 
         function extractDurationFromDescription(desc) {
-            // Extract duration from description
             const match = desc.match(/for (\d+)s/);
             return match ? parseInt(match[1]) : 30;
         }
@@ -1264,13 +1150,6 @@
                 'time': ''
             };
             return units[tag] || '';
-        }
-
-        function getDefaultMessageTemplate(rule) {
-            // Get template based on notification type
-            const notificationType = rule.notificationTypes && rule.notificationTypes[0];
-            const type = availableNotificationTypes.find(t => t.id === notificationType);
-            return type ? type.defaultTemplate : '{device} {tag} is {value}{unit} at {timestamp}';
         }
 
         function toggleRuleStatus(ruleId) {
@@ -1301,7 +1180,7 @@
                         
                         if (selectedRule && selectedRule.id === ruleId) {
                             selectedRule = null;
-                            startCreatingNewRule(); // Switch to create mode after deletion
+                            startCreatingNewRule();
                         }
                     }
                 }
@@ -1344,8 +1223,7 @@
                 value: 80,
                 unit: '°C',
                 duration: 30,
-                selectedNotificationTypes: ['type-alert'],
-                messageTemplate: '{device} {tag} is {value}{unit} at {timestamp}',
+                selectedAlerts: [],
                 createdDate: new Date().toISOString().split('T')[0],
                 lastModified: new Date().toISOString().split('T')[0],
                 triggerCount: 0
@@ -1368,18 +1246,15 @@
             const editorCard = document.getElementById('rule-editor-card');
             const editorHeader = document.getElementById('rule-editor-header');
             const editorTitle = document.getElementById('rule-editor-title');
-            const wizardFooter = document.getElementById('wizard-footer');
             
             if (isCreateMode) {
                 editorCard.classList.add('create-mode');
                 editorTitle.textContent = 'Create New Rule';
                 document.getElementById('rule-id-display').textContent = 'RULE-NEW';
                 document.getElementById('rule-status-toggle').checked = true;
-                wizardFooter.classList.remove('hidden');
             } else {
                 editorCard.classList.remove('create-mode');
                 editorTitle.textContent = selectedRule ? `Edit Rule: ${selectedRule.name}` : 'Create New Rule';
-                wizardFooter.classList.remove('hidden');
             }
         }
 
@@ -1394,7 +1269,7 @@
                         <i class="fa-solid fa-wand-magic-sparkles"></i>
                     </div>
                     <h3 class="text-xl font-semibold text-slate-800 mb-2">Create New Rule</h3>
-                    <p class="text-slate-500 mb-6 max-w-md">Start with a quick template or build from scratch. Rules monitor conditions and trigger notifications.</p>
+                    <p class="text-slate-500 mb-6 max-w-md">Start with a quick template or build from scratch. Rules monitor conditions and trigger alerts.</p>
                     
                     <div class="w-full max-w-2xl">
                         <!-- Quick Start Section -->
@@ -1466,8 +1341,7 @@
                 value: template.value,
                 unit: extractUnitFromTag(template.tag),
                 duration: template.duration,
-                selectedNotificationTypes: getDefaultNotificationTypesForTemplate(templateId),
-                messageTemplate: getMessageTemplateForTemplate(templateId),
+                selectedAlerts: getDefaultAlertsForTemplate(templateId),
                 createdDate: new Date().toISOString().split('T')[0],
                 lastModified: new Date().toISOString().split('T')[0],
                 triggerCount: 0
@@ -1480,28 +1354,16 @@
             goToStep(2);
         }
 
-        function getDefaultNotificationTypesForTemplate(templateId) {
+        function getDefaultAlertsForTemplate(templateId) {
             const mapping = {
-                'temp-template': ['type-alert'],
-                'device-template': ['type-device-status'],
-                'vibration-template': ['type-warning'],
-                'pressure-template': ['type-alert'],
-                'current-template': ['type-alert'],
-                'schedule-template': ['type-info']
+                'temp-template': ['alert-001'],
+                'device-template': ['alert-002'],
+                'vibration-template': ['alert-003'],
+                'pressure-template': ['alert-004'],
+                'current-template': ['alert-001'],
+                'schedule-template': ['alert-005']
             };
-            return mapping[templateId] || ['type-alert'];
-        }
-
-        function getMessageTemplateForTemplate(templateId) {
-            const templates = {
-                'temp-template': '[ALERT] {device} temperature is {value}°C at {timestamp}. Threshold exceeded.',
-                'device-template': '[DEVICE] {device} is {value} since {timestamp}.',
-                'vibration-template': '[WARNING] {device} vibration level is {value} mm/s at {timestamp}.',
-                'pressure-template': '[ALERT] {device} pressure is {value} bar at {timestamp}.',
-                'current-template': '[ALERT] {device} current is {value} A at {timestamp}.',
-                'schedule-template': '[INFO] Scheduled alert for {device} at {timestamp}.'
-            };
-            return templates[templateId] || '{device} {tag} is {value}{unit} at {timestamp}';
+            return mapping[templateId] || ['alert-001'];
         }
 
         function startFromScratch() {
@@ -1537,8 +1399,7 @@
                 value: extractValueFromDescription(rule.description),
                 unit: extractUnitFromTag(rule.tag),
                 duration: extractDurationFromDescription(rule.description),
-                selectedNotificationTypes: [...(rule.notificationTypes || ['type-alert'])],
-                messageTemplate: getDefaultMessageTemplate(rule),
+                selectedAlerts: [...(rule.selectedAlerts || [])],
                 createdDate: new Date().toISOString().split('T')[0],
                 lastModified: new Date().toISOString().split('T')[0],
                 triggerCount: 0
@@ -1727,7 +1588,7 @@
                         </button>
                         ` : ''}
                         <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-sm transition-colors" onclick="goToStep(3)">
-                            Next: Actions <i class="fa-solid fa-arrow-right ml-2"></i>
+                            Next: Alerts <i class="fa-solid fa-arrow-right ml-2"></i>
                         </button>
                     </div>
                 </section>
@@ -1737,76 +1598,23 @@
         function getActionsStepHTML() {
             return `
                 <section id="actions-config" class="wizard-step active">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                            <i class="fa-solid fa-paper-plane text-success"></i> Actions & Notifications
-                        </h3>
-                        <button class="text-sm text-primary hover:underline" onclick="redirectToNotifications()">
-                            <i class="fa-solid fa-external-link mr-1"></i> Manage Notification Types
-                        </button>
-                    </div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-paper-plane text-success"></i> Alert Selection
+                    </h3>
 
                     <div class="bg-slate-50 rounded-lg border border-border p-5 space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Select Notification Types</label>
-                            <p class="text-sm text-slate-500 mb-3">Choose which types of notifications to send when this rule triggers. Manage notification types in the Notifications section.</p>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Select Alerts to Trigger</label>
+                            <p class="text-sm text-slate-500 mb-3">Choose which alerts should be triggered when this rule conditions are met.</p>
                             
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="notification-types-container">
-                                ${getNotificationTypesHTML()}
+                            <!-- Simple alert selection - just checkboxes -->
+                            <div class="space-y-3 max-h-96 overflow-y-auto p-2" id="alerts-container">
+                                ${getAvailableAlertsHTML()}
                             </div>
                             
                             <div class="mt-3 flex items-center gap-2 text-sm text-slate-500">
                                 <i class="fa-solid fa-circle-info"></i>
-                                <span>Selected notification types determine the format, channels, and recipients of alerts.</span>
-                            </div>
-                        </div>
-
-                        <div class="border-t border-border pt-4">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Message Customization</label>
-                            <div class="space-y-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Message Template</label>
-                                    <textarea id="message-textarea" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 border h-24" placeholder="Custom message template..."></textarea>
-                                    <div class="text-xs text-slate-500 mt-1 flex gap-3 flex-wrap">
-                                        <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('value')">{value}</code> Current value</span>
-                                        <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('timestamp')">{timestamp}</code> Time</span>
-                                        <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('device')">{device}</code> Device name</span>
-                                        <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('tag')">{tag}</code> Tag name</span>
-                                        <span class="flex items-center gap-1"><code class="bg-slate-100 px-1 py-0.5 rounded cursor-pointer hover:bg-slate-200" onclick="insertTemplate('unit')">{unit}</code> Unit</span>
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-                                    <select id="priority-select" class="w-full rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-2 px-3 bg-white border">
-                                        <option value="low">Low</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="high">High</option>
-                                        <option value="critical">Critical</option>
-                                    </select>
-                                    <p class="text-xs text-slate-500 mt-1">Priority is automatically set based on selected notification types.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Escalation Settings -->
-                        <div class="border-t border-border pt-4">
-                            <label class="block text-sm font-medium text-slate-700 mb-2">Escalation Policy</label>
-                            <div class="space-y-3">
-                                <div class="flex items-center gap-3">
-                                    <span class="text-sm text-slate-600">If not acknowledged within</span>
-                                    <input type="number" id="escalation-input" class="w-20 rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1.5 px-2 border" value="5" min="1" max="60">
-                                    <span class="text-sm text-slate-600">minutes</span>
-                                    <select id="escalation-action" class="rounded-lg border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary text-sm py-1.5 px-2 border">
-                                        <option value="repeat">Repeat Notification</option>
-                                        <option value="escalate">Escalate to Supervisor</option>
-                                        <option value="additional">Send Additional Notifications</option>
-                                    </select>
-                                </div>
-                                <div class="text-xs text-slate-500">
-                                    <i class="fa-solid fa-circle-info mr-1"></i>
-                                    Escalation policies are configured per notification type.
-                                </div>
+                                <span>Selected alerts will be triggered immediately when rule conditions are met.</span>
                             </div>
                         </div>
                     </div>
@@ -1828,109 +1636,63 @@
             `;
         }
 
-        function getNotificationTypesHTML() {
-            return availableNotificationTypes.map(type => {
-                const isSelected = currentRuleData.selectedNotificationTypes && 
-                                   currentRuleData.selectedNotificationTypes.includes(type.id);
-                
-                const severityColors = {
-                    alert: 'bg-red-100 text-red-800 border-red-200',
-                    warning: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-                    critical: 'bg-purple-100 text-purple-800 border-purple-200',
-                    info: 'bg-blue-100 text-blue-800 border-blue-200'
-                };
-                
-                const severityText = {
-                    alert: 'Alert',
-                    warning: 'Warning',
-                    critical: 'Critical',
-                    info: 'Info'
-                };
-                
+        function getAvailableAlertsHTML() {
+            // Load alerts from localStorage or use defaults
+            const availableAlerts = JSON.parse(localStorage.getItem('univa_alerts')) || [
+                { id: 'alert-001', name: 'High Temperature Alert', enabled: true, description: 'Triggers when temperature exceeds limits' },
+                { id: 'alert-002', name: 'Device Offline Alert', enabled: true, description: 'Triggers when device goes offline' },
+                { id: 'alert-003', name: 'Vibration Warning', enabled: true, description: 'Triggers on high vibration levels' },
+                { id: 'alert-004', name: 'Pressure Critical', enabled: true, description: 'Triggers on critical pressure levels' },
+                { id: 'alert-005', name: 'Maintenance Reminder', enabled: false, description: 'Scheduled maintenance alerts' },
+                { id: 'alert-006', name: 'Energy Consumption Alert', enabled: true, description: 'High energy usage detection' }
+            ];
+            
+            // Ensure currentRuleData has alerts array
+            if (!currentRuleData.selectedAlerts) {
+                currentRuleData.selectedAlerts = [];
+            }
+            
+            return availableAlerts.map(alert => {
+                const isSelected = currentRuleData.selectedAlerts.includes(alert.id);
                 return `
-                    <div class="notification-type relative ${isSelected ? 'selected' : ''}" onclick="toggleNotificationType('${type.id}')">
-                        <div class="text-center">
-                            <div class="notification-icon">
-                                <i class="fa-solid ${type.icon}"></i>
-                            </div>
-                            <h4 class="font-semibold text-slate-800 mb-2">${type.name}</h4>
-                            <p class="text-xs text-slate-500 mb-3">${type.description}</p>
-                            <div class="text-xs ${severityColors[type.severity]} px-2 py-1 rounded-full inline-block border">
-                                ${severityText[type.severity]}
-                            </div>
+                    <div class="flex items-start gap-3 p-3 bg-white border border-border rounded-lg hover:bg-slate-50 transition-colors">
+                        <div class="flex items-center h-5">
+                            <input 
+                                type="checkbox" 
+                                id="alert-${alert.id}"
+                                ${isSelected ? 'checked' : ''}
+                                ${alert.enabled ? '' : 'disabled'}
+                                class="rounded border-slate-300 text-primary focus:ring-primary"
+                                onchange="toggleAlertSelection('${alert.id}')"
+                            >
                         </div>
-                        ${isSelected ? '<div class="notification-badge"><i class="fa-solid fa-check"></i></div>' : ''}
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between">
+                                <label for="alert-${alert.id}" class="font-medium text-slate-800 cursor-pointer">
+                                    ${alert.name}
+                                </label>
+                                <span class="text-xs px-2 py-1 rounded ${alert.enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}">
+                                    ${alert.enabled ? 'Active' : 'Disabled'}
+                                </span>
+                            </div>
+                            <p class="text-sm text-slate-500 mt-1">${alert.description}</p>
+                        </div>
                     </div>
                 `;
             }).join('');
         }
 
-        function toggleNotificationType(typeId) {
-            if (!currentRuleData.selectedNotificationTypes) {
-                currentRuleData.selectedNotificationTypes = [];
+        function toggleAlertSelection(alertId) {
+            if (!currentRuleData.selectedAlerts) {
+                currentRuleData.selectedAlerts = [];
             }
             
-            const index = currentRuleData.selectedNotificationTypes.indexOf(typeId);
+            const index = currentRuleData.selectedAlerts.indexOf(alertId);
             if (index > -1) {
-                currentRuleData.selectedNotificationTypes.splice(index, 1);
+                currentRuleData.selectedAlerts.splice(index, 1);
             } else {
-                currentRuleData.selectedNotificationTypes.push(typeId);
+                currentRuleData.selectedAlerts.push(alertId);
             }
-            
-            // Update the UI
-            updateNotificationTypesSelection();
-            
-            // Auto-update priority based on selected types
-            updatePriorityBasedOnNotificationTypes();
-            
-            // Auto-update message template if first type selected
-            if (currentRuleData.selectedNotificationTypes.length === 1) {
-                const selectedType = availableNotificationTypes.find(t => t.id === currentRuleData.selectedNotificationTypes[0]);
-                if (selectedType) {
-                    currentRuleData.messageTemplate = selectedType.defaultTemplate;
-                    const textarea = document.getElementById('message-textarea');
-                    if (textarea) {
-                        textarea.value = selectedType.defaultTemplate;
-                    }
-                }
-            }
-        }
-
-        function updateNotificationTypesSelection() {
-            const container = document.getElementById('notification-types-container');
-            if (!container) return;
-            
-            container.innerHTML = getNotificationTypesHTML();
-        }
-
-        function updatePriorityBasedOnNotificationTypes() {
-            const prioritySelect = document.getElementById('priority-select');
-            if (!prioritySelect) return;
-            
-            const selectedTypes = currentRuleData.selectedNotificationTypes || [];
-            
-            // Determine highest severity from selected types
-            let highestSeverity = 'low';
-            
-            selectedTypes.forEach(typeId => {
-                const type = availableNotificationTypes.find(t => t.id === typeId);
-                if (type) {
-                    const severityOrder = { 'critical': 4, 'alert': 3, 'warning': 2, 'info': 1 };
-                    if (severityOrder[type.severity] > severityOrder[highestSeverity] || highestSeverity === 'low') {
-                        highestSeverity = type.severity;
-                    }
-                }
-            });
-            
-            // Map severity to priority
-            const severityToPriority = {
-                'critical': 'critical',
-                'alert': 'high',
-                'warning': 'medium',
-                'info': 'low'
-            };
-            
-            prioritySelect.value = severityToPriority[highestSeverity] || 'medium';
         }
 
         function updateRuleEditorUI() {
@@ -1979,18 +1741,6 @@
             
             const durationInput = document.getElementById('duration-input');
             if (durationInput) durationInput.value = currentRuleData.duration;
-            
-            const prioritySelect = document.getElementById('priority-select');
-            if (prioritySelect) {
-                // Set priority based on selected notification types
-                updatePriorityBasedOnNotificationTypes();
-            }
-            
-            const messageTextarea = document.getElementById('message-textarea');
-            if (messageTextarea) messageTextarea.value = currentRuleData.messageTemplate || '';
-            
-            const escalationInput = document.getElementById('escalation-input');
-            if (escalationInput) escalationInput.value = currentRuleData.escalation || 5;
             
             // Update logic preview
             updateLogicPreview();
@@ -2043,57 +1793,75 @@
                 const value = currentRuleData.value;
                 const unit = currentRuleData.unit || '';
                 const duration = currentRuleData.duration;
-                const notificationCount = currentRuleData.selectedNotificationTypes ? currentRuleData.selectedNotificationTypes.length : 0;
-                
-                // Get notification type names
-                const notificationNames = currentRuleData.selectedNotificationTypes
-                    .map(id => availableNotificationTypes.find(t => t.id === id)?.name)
-                    .filter(name => name)
-                    .join(', ');
+                const alertCount = currentRuleData.selectedAlerts ? currentRuleData.selectedAlerts.length : 0;
                 
                 preview.innerHTML = `
                     <strong>When:</strong> <code class="bg-slate-100 px-1">${device}.${tag}</code> ${condition} <strong>${value}${unit}</strong> for <strong>${duration} seconds</strong><br>
-                    <strong>Then:</strong> Send <strong>${notificationCount} notification type${notificationCount !== 1 ? 's' : ''}</strong>
-                    ${notificationNames ? `<br><span class="text-xs">(${notificationNames})</span>` : ''}
+                    <strong>Then:</strong> Trigger <strong>${alertCount} alert${alertCount !== 1 ? 's' : ''}</strong>
                 `;
             }
         }
 
-        function insertTemplate(template) {
-            const textarea = document.getElementById('message-textarea');
-            if (textarea) {
-                const cursorPos = textarea.selectionStart;
-                const text = textarea.value;
-                const templateText = `{${template}}`;
-                
-                textarea.value = text.substring(0, cursorPos) + templateText + text.substring(cursorPos);
-                textarea.focus();
-                textarea.setSelectionRange(cursorPos + templateText.length, cursorPos + templateText.length);
-            }
-        }
-
         // ========== BUTTON ACTION FUNCTIONS ==========
-        function redirectToNotifications() {
-            // Redirect to notifications management page
-            window.location.href = 'notifications.html';
+        function redirectToAlerts() {
+            // Redirect to alerts management page
+            window.location.href = 'alerts.html';
         }
 
-        function resetForm() {
-            showConfirmation(
-                'Reset Form',
-                'Are you sure you want to reset all changes? Unsaved changes will be lost.',
-                () => {
-                    if (selectedRule) {
-                        loadRuleData(selectedRule.id);
-                    } else {
-                        startCreatingNewRule();
-                    }
-                    showToast('Form reset successfully', 'success');
-                }
+        function testRule() {
+            if (!currentRuleData.selectedAlerts || currentRuleData.selectedAlerts.length === 0) {
+                showToast('Please select alerts to trigger first', 'error');
+                return;
+            }
+            
+            // Get alert names for display
+            const availableAlerts = JSON.parse(localStorage.getItem('univa_alerts')) || [];
+            const selectedAlertNames = currentRuleData.selectedAlerts.map(id => {
+                const alert = availableAlerts.find(a => a.id === id);
+                return alert ? alert.name : id;
+            });
+            
+            showModal(
+                'Test Rule',
+                `
+                <div class="space-y-4">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h4 class="font-medium text-green-800 mb-2">Rule Test Successful</h4>
+                        <p class="text-sm text-green-700">This rule would trigger the following alerts:</p>
+                    </div>
+                    
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 mb-2">Rule Conditions:</h5>
+                        <div class="bg-slate-50 border border-slate-200 rounded p-3 text-sm">
+                            IF ${currentRuleData.device}.${currentRuleData.tag} ${currentRuleData.condition} ${currentRuleData.value}${currentRuleData.unit} for ${currentRuleData.duration}s
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h5 class="text-sm font-medium text-slate-700 mb-2">Alerts to Trigger:</h5>
+                        <div class="space-y-2">
+                            ${selectedAlertNames.map(name => `
+                                <div class="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded p-2">
+                                    <i class="fa-solid fa-bell text-blue-500"></i>
+                                    <span class="text-sm">${name}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div class="text-xs text-slate-500">
+                        <i class="fa-solid fa-circle-info mr-1"></i>
+                        Alerts will be triggered through their configured channels (email, SMS, dashboard, etc.)
+                    </div>
+                </div>
+                `,
+                [
+                    { text: 'Close', onclick: 'closeModal()', className: 'px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors' }
+                ]
             );
         }
 
-        function saveChanges() {
+        function saveRule() {
             // If in create mode, get rule name from input
             if (isCreatingNewRule) {
                 const nameInput = document.getElementById('rule-name-input');
@@ -2115,8 +1883,17 @@
             const condition = document.getElementById('condition-select')?.value;
             const value = document.getElementById('value-input')?.value;
             const duration = document.getElementById('duration-input')?.value;
-            const messageTemplate = document.getElementById('message-textarea')?.value;
-            const priority = document.getElementById('priority-select')?.value;
+            
+            // Validate required fields
+            if (!currentRuleData.name) {
+                showToast('Please enter a rule name', 'error');
+                return;
+            }
+            
+            if (!currentRuleData.selectedAlerts || currentRuleData.selectedAlerts.length === 0) {
+                showToast('Please select at least one alert to trigger', 'error');
+                return;
+            }
             
             // Update current rule data
             currentRuleData.enabled = ruleStatus;
@@ -2126,32 +1903,9 @@
             currentRuleData.condition = condition || '>';
             currentRuleData.value = value || 80;
             currentRuleData.duration = parseInt(duration) || 30;
-            currentRuleData.messageTemplate = messageTemplate || '';
             currentRuleData.lastModified = new Date().toISOString().split('T')[0];
             
-            // Update selected rule in list or create new
-            if (selectedRule) {
-                const rule = rules.find(r => r.id === selectedRule.id);
-                if (rule) {
-                    rule.name = currentRuleData.name;
-                    rule.enabled = currentRuleData.enabled;
-                    rule.type = currentRuleData.triggerType;
-                    rule.device = currentRuleData.device;
-                    rule.tag = currentRuleData.tag;
-                    rule.notificationTypes = currentRuleData.selectedNotificationTypes;
-                    rule.lastModified = currentRuleData.lastModified;
-                    rule.description = `${currentRuleData.device}.${currentRuleData.tag} ${currentRuleData.condition} ${currentRuleData.value}${currentRuleData.unit} for ${currentRuleData.duration}s`;
-                    renderRulesList();
-                }
-            }
-            
-            showToast('Changes saved successfully', 'success');
-        }
-
-        function saveRule() {
-            saveChanges();
-            
-            // If this is a new rule, add it to the list
+            // Create or update rule
             if (isCreatingNewRule) {
                 const newId = 'RULE-' + Date.now().toString().slice(-6);
                 const newRule = {
@@ -2164,7 +1918,7 @@
                     triggerCount: 0,
                     device: currentRuleData.device,
                     tag: currentRuleData.tag,
-                    notificationTypes: currentRuleData.selectedNotificationTypes,
+                    selectedAlerts: currentRuleData.selectedAlerts,
                     createdDate: currentRuleData.createdDate,
                     lastModified: currentRuleData.lastModified
                 };
@@ -2172,7 +1926,7 @@
                 rules.push(newRule);
                 renderRulesList();
                 
-                // Switch to edit mode for the newly created rule
+                // Switch to edit mode
                 isCreatingNewRule = false;
                 selectedRule = newRule;
                 currentRuleData.id = newId;
@@ -2180,8 +1934,30 @@
                 
                 showToast(`Rule "${currentRuleData.name}" created successfully`, 'success');
             } else {
+                // Update existing rule
+                const rule = rules.find(r => r.id === selectedRule.id);
+                if (rule) {
+                    rule.name = currentRuleData.name;
+                    rule.enabled = currentRuleData.enabled;
+                    rule.type = currentRuleData.triggerType;
+                    rule.device = currentRuleData.device;
+                    rule.tag = currentRuleData.tag;
+                    rule.selectedAlerts = currentRuleData.selectedAlerts;
+                    rule.lastModified = currentRuleData.lastModified;
+                    rule.description = `${currentRuleData.device}.${currentRuleData.tag} ${currentRuleData.condition} ${currentRuleData.value}${currentRuleData.unit} for ${currentRuleData.duration}s`;
+                    renderRulesList();
+                }
                 showToast('Rule saved successfully', 'success');
             }
+        }
+
+        // ========== HELPER FUNCTIONS ==========
+        function showFilterModal() {
+            showToast('Filter functionality coming soon', 'info');
+        }
+
+        function showImportModal() {
+            showToast('Import functionality coming soon', 'info');
         }
 
         // ========== INITIALIZATION ==========
@@ -2229,7 +2005,7 @@
             // Ctrl+S to save
             if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
-                saveChanges();
+                saveRule();
             }
             
             // Ctrl+N for new rule
