@@ -1742,19 +1742,19 @@
             switch(protocol) {
                 case 'modbus':
                     fields = `
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Register Count</label>
-                                <input type="number" min="1" max="125" value="1" class="w-full compact-input" id="mappingRegisterCount">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Byte Order</label>
-                                <select class="w-full compact-select bg-white" id="mappingByteOrder">
-                                    <option value="12">Big Endian (1-2)</option>
-                                    <option value="21">Little Endian (2-1)</option>
-                                </select>
-                            </div>
-                        </div>
+                         <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Register Count</label>
+                <input type="number" min="1" max="125" value="1" class="w-full compact-input" id="mappingRegisterCount">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Byte Order</label>
+                <select class="w-full compact-select bg-white" id="mappingByteOrder">
+                    <option value="0">0-based (ABCD)</option>
+                    <option value="1">1-based (BADC)</option>
+                </select>
+            </div>
+        </div>
                     `;
                     break;
                     

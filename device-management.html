@@ -391,53 +391,68 @@
             <!-- Protocol Specific Configuration -->
             <div id="protocolConfigs">
                 <!-- Modbus RTU Configuration -->
-                <div id="modbus-rtu-config" class="protocol-config active">
-                    <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus RTU Settings</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
-                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
-                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="baudRate">
-                                    <option>9600</option>
-                                    <option>19200</option>
-                                    <option>38400</option>
-                                    <option>57600</option>
-                                    <option>115200</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
-                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="parity">
-                                    <option>None</option>
-                                    <option>Even</option>
-                                    <option>Odd</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Stop Bits</label>
-                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="stopBits">
-                                    <option>1</option>
-                                    <option>2</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
-                                <input type="number" min="100" step="100" value="500" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
-                            <input type="number" min="50" step="50" value="200" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="timeout">
-                        </div>
-                        
-                    </div>
-                </div>
+                <!-- Modbus RTU Configuration -->
+<div id="modbus-rtu-config" class="protocol-config active">
+    <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus RTU Settings</h3>
+    <div class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
+            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
+        </div>
+        
+        <!-- NEW: Data Bits Field -->
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
+                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="baudRate">
+                    <option>9600</option>
+                    <option>19200</option>
+                    <option>38400</option>
+                    <option>57600</option>
+                    <option>115200</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Data Bits</label>
+                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="dataBits">
+                    <option>8</option>
+                    <option>7</option>
+                    <option>6</option>
+                    <option>5</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
+                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="parity">
+                    <option>None</option>
+                    <option>Even</option>
+                    <option>Odd</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Stop Bits</label>
+                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="stopBits">
+                    <option>1</option>
+                    <option>2</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                <input type="number" min="100" step="100" value="500" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
+                <input type="number" min="50" step="50" value="200" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="timeout">
+            </div>
+        </div>
+    </div>
+</div>
                 
                 <!-- Modbus TCP Configuration -->
                 <div id="modbus-tcp-config" class="protocol-config">

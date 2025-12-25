@@ -172,25 +172,38 @@
                     <input type="text" id="field-baseTopic" 
                            class="w-full compact-input"
                            value="factory/crane/001"
-                           placeholder="factory/crane/001">
+                           placeholder="factory/crane/001"
+                           onchange="updateAllTopicOptions()">
                     <p class="help-text">Root topic for all published messages</p>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Telemetry Topic</label>
-                        <input type="text" id="field-telemetryTopic" 
-                               class="w-full compact-input"
-                               value="telemetry"
-                               placeholder="telemetry">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="field-telemetryTopic" 
+                                   class="w-full compact-input"
+                                   value="telemetry"
+                                   placeholder="telemetry"
+                                   onchange="updateAllTopicOptions()">
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="addCustomTopic('telemetry')">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
                         <p class="help-text">Sub-topic for telemetry data</p>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Topic</label>
-                        <input type="text" id="field-alarmTopic" 
-                               class="w-full compact-input"
-                               value="alarms"
-                               placeholder="alarms">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="field-alarmTopic" 
+                                   class="w-full compact-input"
+                                   value="alarms"
+                                   placeholder="alarms"
+                                   onchange="updateAllTopicOptions()">
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="addCustomTopic('alarm')">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
                         <p class="help-text">Sub-topic for alarm notifications</p>
                     </div>
                 </div>
@@ -198,10 +211,16 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Event Topic</label>
-                        <input type="text" id="field-eventTopic" 
-                               class="w-full compact-input"
-                               value="events"
-                               placeholder="events">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="field-eventTopic" 
+                                   class="w-full compact-input"
+                                   value="events"
+                                   placeholder="events"
+                                   onchange="updateAllTopicOptions()">
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="addCustomTopic('event')">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
                         <p class="help-text">Sub-topic for system events</p>
                     </div>
                     <div>
@@ -209,9 +228,38 @@
                         <input type="text" id="field-commandTopic" 
                                class="w-full compact-input"
                                value="commands"
-                               placeholder="commands">
+                               placeholder="commands"
+                               onchange="updateAllTopicOptions()">
                         <p class="help-text">Sub-topic for receiving commands</p>
                     </div>
+                </div>
+                
+                <!-- Custom Topics Section -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs font-medium text-slate-700">Custom Topics</label>
+                        <button type="button" 
+                                onclick="addNewCustomTopic()"
+                                class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Custom Topic
+                        </button>
+                    </div>
+                    <div id="custom-topics-container" class="space-y-2">
+                        <!-- Custom topics will be added here dynamically -->
+                        <div class="custom-topic-item">
+                            <div class="flex items-center gap-2">
+                                <input type="text" 
+                                       class="w-full compact-input"
+                                       value="status"
+                                       placeholder="status"
+                                       onchange="updateAllTopicOptions()">
+                                <button type="button" class="compact-button border border-red-300 text-red-700 hover:bg-red-50" onclick="removeCustomTopic(this)">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="help-text">Additional custom topics for publishing</p>
                 </div>
             </div>
         </div>
@@ -220,47 +268,22 @@
             <h5 class="form-section-title">Message Format</h5>
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Payload Format</label>
-                    <div class="radio-group">
-                        <label class="radio-option">
-                            <input type="radio" name="field-payloadFormat" value="json" checked>
-                            <span class="text-xs">JSON</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="field-payloadFormat" value="csv">
-                            <span class="text-xs">CSV</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="field-payloadFormat" value="keyvalue">
-                            <span class="text-xs">Key-Value Pairs</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="field-payloadFormat" value="binary">
-                            <span class="text-xs">Binary</span>
-                        </label>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Topic-specific Format</label>
+                    <div class="space-y-4">
+                        <!-- Topic Format Mappings -->
+                        <div id="topic-format-mappings">
+                            <!-- Format mappings will be populated here dynamically -->
+                        </div>
                     </div>
+                    <p class="help-text">Configure different message formats for different topics</p>
                 </div>
                 
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">JSON Template</label>
-                    <textarea id="field-jsonTemplate" 
-                              class="w-full compact-input font-mono text-xs h-32"
-                              placeholder='{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}'>{
-  "timestamp": "%TIMESTAMP%",
-  "device": "%DEVICE_ID%",
-  "data": %DATA%
-}</textarea>
-                    <p class="help-text">Use %TAG_NAME% for tag values, %TIMESTAMP% for timestamp, %DEVICE_ID% for device ID</p>
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Timestamp Format</label>
-                    <select id="field-timestampFormat" class="w-full compact-select">
-                        <option value="epoch" selected>Unix Epoch (seconds)</option>
-                        <option value="epochms">Unix Epoch (milliseconds)</option>
-                        <option value="iso">ISO 8601</option>
-                        <option value="custom">Custom Format</option>
-                    </select>
+                <!-- Format Templates -->
+                <div id="format-templates-container">
+                    <!-- Templates will be shown here based on topic selection -->
+                    <div class="p-4 border border-slate-200 rounded bg-slate-50">
+                        <p class="text-xs text-slate-500 text-center">Select a topic to configure its message format</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -278,7 +301,7 @@
             <h5 class="form-section-title">Tag Selection</h5>
             <div class="space-y-4">
                 <div class="flex justify-between items-center">
-                    <span class="text-xs font-medium text-slate-700">Select Tags to Publish</span>
+                    <span class="text-xs font-medium text-slate-700" id="tag-selection-title">Select Tags to Publish</span>
                     <div class="flex gap-2">
                         <button type="button" 
                                 onclick="showAddTagModal()"
@@ -293,112 +316,71 @@
                     </div>
                 </div>
                 
-                <div class="border border-slate-200 rounded overflow-hidden">
+                <!-- DEFAULT TAG TABLE (For On Value Change mode) -->
+                <div id="tag-table-onchange" class="border border-slate-200 rounded overflow-hidden">
                     <table class="w-full text-xs">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags" onchange="toggleAllTags()"></th>
+                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags-onchange" onchange="toggleAllTags('onchange')"></th>
                                 <th class="p-2 text-left">Tag Name</th>
                                 <th class="p-2 text-left">Topic</th>
                                 <th class="p-2 text-left">Publish Rate</th>
                                 <th class="p-2 text-left">QoS</th>
+                                <th class="p-2 text-left">Format</th>
                                 <th class="p-2 text-left">Enabled</th>
                             </tr>
                         </thead>
-                        <tbody id="mqtt-tags-table">
-                            <tr class="border-t border-slate-100">
-                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
-                                <td class="p-2 font-mono">Hoist_Load</td>
-                                <td class="p-2">
-                                    <input type="text" class="w-full compact-input text-xs" value="factory/crane/001/load">
-                                </td>
-                                <td class="p-2">
-                                    <select class="w-full compact-select text-xs">
-                                        <option value="onChange" selected>On Change</option>
-                                        <option value="100">100 ms</option>
-                                        <option value="500">500 ms</option>
-                                        <option value="1000">1 sec</option>
-                                        <option value="5000">5 sec</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <select class="w-full compact-select text-xs">
-                                        <option value="0">0</option>
-                                        <option value="1" selected>1</option>
-                                        <option value="2">2</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </td>
+                        <tbody id="mqtt-tags-table-onchange">
+                            <!-- Rows will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- PERIODIC TAG TABLE (For Periodic Interval mode) -->
+                <div id="tag-table-periodic" class="border border-slate-200 rounded overflow-hidden" style="display: none;">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags-periodic" onchange="toggleAllTags('periodic')"></th>
+                                <th class="p-2 text-left">Tag Name</th>
+                                <th class="p-2 text-left">Topic</th>
+                                <th class="p-2 text-left">Data Type</th>
+                                <th class="p-2 text-left">Priority</th>
+                                <th class="p-2 text-left">Format</th>
+                                <th class="p-2 text-left">Include in Batch</th>
+                                <th class="p-2 text-left">Enabled</th>
                             </tr>
-                            <tr class="border-t border-slate-100">
-                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
-                                <td class="p-2 font-mono">Boom_Angle</td>
-                                <td class="p-2">
-                                    <input type="text" class="w-full compact-input text-xs" value="factory/crane/001/angle">
-                                </td>
-                                <td class="p-2">
-                                    <select class="w-full compact-select text-xs">
-                                        <option value="onChange">On Change</option>
-                                        <option value="100">100 ms</option>
-                                        <option value="500" selected>500 ms</option>
-                                        <option value="1000">1 sec</option>
-                                        <option value="5000">5 sec</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <select class="w-full compact-select text-xs">
-                                        <option value="0">0</option>
-                                        <option value="1" selected>1</option>
-                                        <option value="2">2</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </td>
+                        </thead>
+                        <tbody id="mqtt-tags-table-periodic">
+                            <!-- Rows will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- EVENT TAG TABLE (For Event Based mode) -->
+                <div id="tag-table-event" class="border border-slate-200 rounded overflow-hidden" style="display: none;">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags-event" onchange="toggleAllTags('event')"></th>
+                                <th class="p-2 text-left">Event Name</th>
+                                <th class="p-2 text-left">Topic</th>
+                                <th class="p-2 text-left">Event Type</th>
+                                <th class="p-2 text-left">Severity</th>
+                                <th class="p-2 text-left">Format</th>
+                                <th class="p-2 text-left">Trigger Condition</th>
+                                <th class="p-2 text-left">Enabled</th>
                             </tr>
-                            <tr class="border-t border-slate-100">
-                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
-                                <td class="p-2 font-mono">WindSpeed</td>
-                                <td class="p-2">
-                                    <input type="text" class="w-full compact-input text-xs" value="factory/crane/001/wind">
-                                </td>
-                                <td class="p-2">
-                                    <select class="w-full compact-select text-xs">
-                                        <option value="onChange" selected>On Change</option>
-                                        <option value="100">100 ms</option>
-                                        <option value="500">500 ms</option>
-                                        <option value="1000">1 sec</option>
-                                        <option value="5000">5 sec</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <select class="w-full compact-select text-xs">
-                                        <option value="0">0</option>
-                                        <option value="1">1</option>
-                                        <option value="2" selected>2</option>
-                                    </select>
-                                </td>
-                                <td class="p-2">
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </td>
-                            </tr>
+                        </thead>
+                        <tbody id="mqtt-tags-table-event">
+                            <!-- Rows will be populated dynamically -->
                         </tbody>
                     </table>
                 </div>
                 
                 <div class="text-xs text-slate-500">
-                    <p><i class="fa-solid fa-info-circle mr-1"></i> Total tags selected: <span id="selected-tags-count">3</span></p>
+                    <p><i class="fa-solid fa-info-circle mr-1"></i> Total items selected: <span id="selected-tags-count">0</span></p>
+                    <p class="mt-1"><i class="fa-solid fa-lightbulb mr-1"></i> Topics and formats are configured in the "Topics & Format" tab</p>
                 </div>
             </div>
         </div>
@@ -421,6 +403,64 @@
                             <input type="radio" name="field-publishMode" value="event">
                             <span class="text-xs">Event Based</span>
                         </label>
+                    </div>
+                    <p class="help-text" id="publish-mode-help">Publish individual tag values when they change</p>
+                </div>
+                
+                <div id="periodic-options" class="space-y-2" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Publish Interval</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-publish-interval" 
+                                   class="w-full compact-input"
+                                   value="1000"
+                                   min="100"
+                                   max="60000">
+                            <span class="text-xs text-slate-500">milliseconds</span>
+                        </div>
+                        <p class="help-text">How often to publish batched data (100-60000 ms)</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Batch Threshold</label>
+                        <input type="number" id="field-batch-threshold" 
+                               class="w-full compact-input"
+                               value="50"
+                               min="1"
+                               max="1000">
+                        <p class="help-text">Maximum number of data points per batch</p>
+                    </div>
+                </div>
+                
+                <div id="event-options" class="space-y-2" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Event Triggers</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-option">
+                                <input type="checkbox" name="field-event-triggers" value="alarm" checked>
+                                <span class="text-xs">Alarm Events</span>
+                            </label>
+                            <label class="checkbox-option">
+                                <input type="checkbox" name="field-event-triggers" value="threshold">
+                                <span class="text-xs">Threshold Breaches</span>
+                            </label>
+                            <label class="checkbox-option">
+                                <input type="checkbox" name="field-event-triggers" value="state">
+                                <span class="text-xs">State Changes</span>
+                            </label>
+                            <label class="checkbox-option">
+                                <input type="checkbox" name="field-event-triggers" value="custom">
+                                <span class="text-xs">Custom Events</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Event Severity Filter</label>
+                        <select id="field-event-severity" class="w-full compact-select">
+                            <option value="all">All Severities</option>
+                            <option value="high">High Only</option>
+                            <option value="medium">Medium & High</option>
+                            <option value="low" selected>Low, Medium & High</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -472,7 +512,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive (seconds)</label>
-                        <input type="number" id="field-mqtt-keep-alive" 
+                        <input type="number" id="field-advanced-keep-alive" 
                                class="w-full compact-input"
                                value="60"
                                min="5"
@@ -480,7 +520,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Reconnect Interval (seconds)</label>
-                        <input type="number" id="field-mqtt-reconnect-interval" 
+                        <input type="number" id="field-advanced-reconnect-interval" 
                                class="w-full compact-input"
                                value="5"
                                min="1"
@@ -491,7 +531,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Connect Timeout (seconds)</label>
-                        <input type="number" id="field-connect-timeout" 
+                        <input type="number" id="field-advanced-connect-timeout" 
                                class="w-full compact-input"
                                value="30"
                                min="1"
@@ -499,7 +539,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">Max Retries</label>
-                        <input type="number" id="field-max-retries" 
+                        <input type="number" id="field-advanced-max-retries" 
                                class="w-full compact-input"
                                value="5"
                                min="0"
@@ -513,7 +553,7 @@
                         <p class="help-text">Automatically reconnect on connection loss</p>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="field-mqtt-auto-reconnect" checked>
+                        <input type="checkbox" id="field-advanced-auto-reconnect" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -524,7 +564,18 @@
                         <p class="help-text">Store messages when offline and send when reconnected</p>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="field-store-forward">
+                        <input type="checkbox" id="field-advanced-store-forward">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Validate Certificates</span>
+                        <p class="help-text">Validate SSL/TLS certificates (recommended)</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-advanced-validate-certs" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -539,33 +590,55 @@
                     <div class="space-y-2">
                         <div class="file-upload">
                             <button type="button" 
-                                    onclick="document.getElementById('field-ca-cert').click()"
+                                    onclick="document.getElementById('field-advanced-ca-cert').click()"
                                     class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
                                 <i class="fa-solid fa-upload mr-1"></i> Upload CA Certificate
                             </button>
-                            <input type="file" id="field-ca-cert" style="display: none;" onchange="handleCertificateUpload(this, 'ca-cert-name')">
-                            <span id="ca-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
+                            <input type="file" id="field-advanced-ca-cert" style="display: none;" onchange="handleCertificateUpload(this, 'advanced-ca-cert-name')">
+                            <span id="advanced-ca-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
                         </div>
                         
                         <div class="file-upload">
                             <button type="button" 
-                                    onclick="document.getElementById('field-private-key').click()"
+                                    onclick="document.getElementById('field-advanced-private-key').click()"
                                     class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
                                 <i class="fa-solid fa-key mr-1"></i> Upload Private Key
                             </button>
-                            <input type="file" id="field-private-key" style="display: none;" onchange="handleCertificateUpload(this, 'private-key-name')">
-                            <span id="private-key-name" class="file-name text-xs text-slate-500">No file selected</span>
+                            <input type="file" id="field-advanced-private-key" style="display: none;" onchange="handleCertificateUpload(this, 'advanced-private-key-name')">
+                            <span id="advanced-private-key-name" class="file-name text-xs text-slate-500">No file selected</span>
                         </div>
                         
                         <div class="file-upload">
                             <button type="button" 
-                                    onclick="document.getElementById('field-client-cert').click()"
+                                    onclick="document.getElementById('field-advanced-client-cert').click()"
                                     class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
                                 <i class="fa-solid fa-certificate mr-1"></i> Upload Client Certificate
                             </button>
-                            <input type="file" id="field-client-cert" style="display: none;" onchange="handleCertificateUpload(this, 'client-cert-name')">
-                            <span id="client-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
+                            <input type="file" id="field-advanced-client-cert" style="display: none;" onchange="handleCertificateUpload(this, 'advanced-client-cert-name')">
+                            <span id="advanced-client-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
                         </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">SSL/TLS Version</label>
+                        <select id="field-advanced-tls-version" class="w-full compact-select">
+                            <option value="auto" selected>Auto Detect</option>
+                            <option value="tlsv1">TLS v1.0</option>
+                            <option value="tlsv1.1">TLS v1.1</option>
+                            <option value="tlsv1.2">TLS v1.2</option>
+                            <option value="tlsv1.3">TLS v1.3</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Cipher Suite</label>
+                        <select id="field-advanced-cipher-suite" class="w-full compact-select">
+                            <option value="default" selected>Default</option>
+                            <option value="high">High Security</option>
+                            <option value="compatible">Compatible</option>
+                            <option value="custom">Custom</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -580,31 +653,184 @@
                         <p class="help-text">Send a last will message if connection is lost</p>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="field-enable-lwt">
+                        <input type="checkbox" id="field-advanced-enable-lwt">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
                 
-                <div id="lwt-options" class="space-y-2 ml-4" style="display: none;">
+                <div id="advanced-lwt-options" class="space-y-2 ml-4" style="display: none;">
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">LWT Topic</label>
-                        <input type="text" id="field-lwt-topic" 
+                        <input type="text" id="field-advanced-lwt-topic" 
                                class="w-full compact-input"
                                value="factory/crane/001/status">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 mb-1">LWT Message</label>
-                        <textarea id="field-lwt-message" 
+                        <textarea id="field-advanced-lwt-message" 
                                   class="w-full compact-input font-mono text-xs h-16"
                                   placeholder='{"status":"offline","timestamp":"%TIMESTAMP%"}'>{"status":"offline","timestamp":"%TIMESTAMP%"}</textarea>
                     </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">LWT QoS</label>
+                            <select id="field-advanced-lwt-qos" class="w-full compact-select">
+                                <option value="0">0</option>
+                                <option value="1" selected>1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">LWT Retain</label>
+                            <div class="mt-1">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="field-advanced-lwt-retain">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Logging & Diagnostics</h5>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Log Level</label>
+                    <select id="field-advanced-log-level" class="w-full compact-select">
+                        <option value="error">Error Only</option>
+                        <option value="warn">Warnings</option>
+                        <option value="info" selected>Info (Recommended)</option>
+                        <option value="debug">Debug</option>
+                        <option value="trace">Trace (Verbose)</option>
+                    </select>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">LWT QoS</label>
-                        <select id="field-lwt-qos" class="w-full compact-select">
-                            <option value="0">0</option>
-                            <option value="1" selected>1</option>
-                            <option value="2">2</option>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Log Size</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-advanced-max-log-size" 
+                                   class="w-full compact-input"
+                                   value="10"
+                                   min="1"
+                                   max="100">
+                            <span class="text-xs text-slate-500">MB</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Log Retention</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-advanced-log-retention" 
+                                   class="w-full compact-input"
+                                   value="7"
+                                   min="1"
+                                   max="30">
+                            <span class="text-xs text-slate-500">days</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable Connection Logging</span>
+                        <p class="help-text">Log connection status changes</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-advanced-connection-logging" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable Message Logging</span>
+                        <p class="help-text">Log published messages (may impact performance)</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-advanced-message-logging">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <h5 class="form-section-title">Performance Settings</h5>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Inflight Messages</label>
+                        <input type="number" id="field-advanced-max-inflight" 
+                               class="w-full compact-input"
+                               value="10"
+                               min="1"
+                               max="100">
+                        <p class="help-text">Maximum number of messages in flight</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Message Queue Size</label>
+                        <input type="number" id="field-advanced-queue-size" 
+                               class="w-full compact-input"
+                               value="100"
+                               min="1"
+                               max="1000">
+                        <p class="help-text">Maximum messages in queue</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Buffer Size (KB)</label>
+                        <input type="number" id="field-advanced-buffer-size" 
+                               class="w-full compact-input"
+                               value="1024"
+                               min="64"
+                               max="8192">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Ping Timeout (seconds)</label>
+                        <input type="number" id="field-advanced-ping-timeout" 
+                               class="w-full compact-input"
+                               value="10"
+                               min="1"
+                               max="30">
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-medium text-slate-700">Enable Compression</span>
+                        <p class="help-text">Compress message payloads</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="field-advanced-enable-compression">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div id="compression-options" class="space-y-2 ml-4" style="display: none;">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Compression Level</label>
+                        <select id="field-advanced-compression-level" class="w-full compact-select">
+                            <option value="1">Fastest</option>
+                            <option value="3">Fast</option>
+                            <option value="6" selected>Balanced</option>
+                            <option value="9">Maximum</option>
                         </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Minimum Size for Compression</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="field-advanced-min-compress-size" 
+                                   class="w-full compact-input"
+                                   value="256"
+                                   min="64"
+                                   max="8192">
+                            <span class="text-xs text-slate-500">bytes</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -619,6 +845,10 @@
 </div>
 
 <script>
+    // Global variables
+    let mqttTopics = [];
+    let topicFormats = {};
+    
     // Initialize MQTT form when loaded
     function initializeMqttForm() {
         // Generate random ID for client ID
@@ -637,13 +867,674 @@
             });
         }
         
-        const lwtToggle = document.getElementById('field-enable-lwt');
-        const lwtOptions = document.getElementById('lwt-options');
+        // Advanced tab toggle switches
+        const lwtToggle = document.getElementById('field-advanced-enable-lwt');
+        const lwtOptions = document.getElementById('advanced-lwt-options');
         if (lwtToggle && lwtOptions) {
             lwtToggle.addEventListener('change', function() {
                 lwtOptions.style.display = this.checked ? 'block' : 'none';
             });
         }
+        
+        const compressionToggle = document.getElementById('field-advanced-enable-compression');
+        const compressionOptions = document.getElementById('compression-options');
+        if (compressionToggle && compressionOptions) {
+            compressionToggle.addEventListener('change', function() {
+                compressionOptions.style.display = this.checked ? 'block' : 'none';
+            });
+        }
+        
+        // Setup event listeners for publish mode radio buttons
+        const publishModeRadios = document.querySelectorAll('input[name="field-publishMode"]');
+        publishModeRadios.forEach(radio => {
+            radio.addEventListener('change', updatePublishMode);
+        });
+        
+        // Initialize topics and formats
+        initializeTopicsAndFormats();
+        
+        // Initialize publish mode
+        updatePublishMode();
+        
+        // Add event listeners to tag checkboxes for all tables
+        setupTagCheckboxListeners();
+    }
+    
+    // Initialize topics and formats
+    function initializeTopicsAndFormats() {
+        // Load default topics
+        updateTopicList();
+        
+        // Initialize topic format mappings
+        updateTopicFormatMappings();
+        
+        // Populate sample data in publishing tables
+        populateSamplePublishingData();
+    }
+    
+    // Update the list of available topics
+    function updateTopicList() {
+        const baseTopic = document.getElementById('field-baseTopic').value;
+        const topics = [];
+        
+        // Add standard topics
+        const standardTopics = [
+            { id: 'telemetry', value: document.getElementById('field-telemetryTopic').value },
+            { id: 'alarm', value: document.getElementById('field-alarmTopic').value },
+            { id: 'event', value: document.getElementById('field-eventTopic').value },
+            { id: 'command', value: document.getElementById('field-commandTopic').value }
+        ];
+        
+        standardTopics.forEach(topic => {
+            if (topic.value) {
+                const fullTopic = baseTopic ? `${baseTopic}/${topic.value}` : topic.value;
+                topics.push({
+                    id: topic.id,
+                    name: topic.value,
+                    fullTopic: fullTopic,
+                    type: 'standard'
+                });
+            }
+        });
+        
+        // Add custom topics
+        const customTopicInputs = document.querySelectorAll('#custom-topics-container input[type="text"]');
+        customTopicInputs.forEach((input, index) => {
+            if (input.value) {
+                const fullTopic = baseTopic ? `${baseTopic}/${input.value}` : input.value;
+                topics.push({
+                    id: `custom-${index}`,
+                    name: input.value,
+                    fullTopic: fullTopic,
+                    type: 'custom'
+                });
+            }
+        });
+        
+        mqttTopics = topics;
+        
+        // Update topic dropdowns in publishing tables
+        updateTopicDropdowns();
+        
+        // Update topic format mappings
+        updateTopicFormatMappings();
+    }
+    
+    // Update topic dropdowns in all publishing tables
+    function updateTopicDropdowns() {
+        // Get topic options HTML
+        const topicOptions = generateTopicOptions();
+        
+        // Update dropdowns in OnChange table
+        const onchangeDropdowns = document.querySelectorAll('#mqtt-tags-table-onchange select.topic-select');
+        onchangeDropdowns.forEach(dropdown => {
+            dropdown.innerHTML = topicOptions;
+        });
+        
+        // Update dropdowns in Periodic table
+        const periodicDropdowns = document.querySelectorAll('#mqtt-tags-table-periodic select.topic-select');
+        periodicDropdowns.forEach(dropdown => {
+            dropdown.innerHTML = topicOptions;
+        });
+        
+        // Update dropdowns in Event table
+        const eventDropdowns = document.querySelectorAll('#mqtt-tags-table-event select.topic-select');
+        eventDropdowns.forEach(dropdown => {
+            dropdown.innerHTML = topicOptions;
+        });
+    }
+    
+    // Generate HTML options for topic dropdowns
+    function generateTopicOptions() {
+        let options = '<option value="">-- Select Topic --</option>';
+        
+        mqttTopics.forEach(topic => {
+            options += `<option value="${topic.fullTopic}">${topic.name} (${topic.fullTopic})</option>`;
+        });
+        
+        // Add custom topic option
+        options += '<option value="custom">Custom Topic...</option>';
+        
+        return options;
+    }
+    
+    // Update all topic options when topics change
+    function updateAllTopicOptions() {
+        updateTopicList();
+    }
+    
+    // Add a custom topic
+    function addCustomTopic(type) {
+        const topicInput = document.getElementById(`field-${type}Topic`);
+        if (topicInput && topicInput.value) {
+            // Add to custom topics container if not already there
+            const existingTopics = Array.from(document.querySelectorAll('#custom-topics-container input')).map(input => input.value);
+            if (!existingTopics.includes(topicInput.value)) {
+                addCustomTopicItem(topicInput.value);
+            }
+        }
+        updateTopicList();
+    }
+    
+    // Add new custom topic
+    function addNewCustomTopic() {
+        const container = document.getElementById('custom-topics-container');
+        const div = document.createElement('div');
+        div.className = 'custom-topic-item';
+        div.innerHTML = `
+            <div class="flex items-center gap-2">
+                <input type="text" 
+                       class="w-full compact-input"
+                       placeholder="Enter topic name"
+                       onchange="updateAllTopicOptions()">
+                <button type="button" class="compact-button border border-red-300 text-red-700 hover:bg-red-50" onclick="removeCustomTopic(this)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(div);
+        updateTopicList();
+    }
+    
+    // Add custom topic item
+    function addCustomTopicItem(topicName) {
+        const container = document.getElementById('custom-topics-container');
+        const div = document.createElement('div');
+        div.className = 'custom-topic-item';
+        div.innerHTML = `
+            <div class="flex items-center gap-2">
+                <input type="text" 
+                       class="w-full compact-input"
+                       value="${topicName}"
+                       onchange="updateAllTopicOptions()">
+                <button type="button" class="compact-button border border-red-300 text-red-700 hover:bg-red-50" onclick="removeCustomTopic(this)">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+    
+    // Remove custom topic
+    function removeCustomTopic(button) {
+        const item = button.closest('.custom-topic-item');
+        item.remove();
+        updateTopicList();
+    }
+    
+    // Update topic format mappings
+    function updateTopicFormatMappings() {
+        const container = document.getElementById('topic-format-mappings');
+        container.innerHTML = '';
+        
+        if (mqttTopics.length === 0) {
+            container.innerHTML = '<p class="text-xs text-slate-500">No topics configured yet</p>';
+            return;
+        }
+        
+        mqttTopics.forEach((topic, index) => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between p-2 border border-slate-200 rounded';
+            div.innerHTML = `
+                <div>
+                    <span class="text-xs font-medium text-slate-700">${topic.name}</span>
+                    <p class="text-xs text-slate-500">${topic.fullTopic}</p>
+                </div>
+                <button type="button" 
+                        onclick="editTopicFormat('${topic.id}')"
+                        class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs">
+                    <i class="fa-solid fa-edit mr-1"></i> Edit Format
+                </button>
+            `;
+            container.appendChild(div);
+        });
+    }
+    
+    // Edit topic format
+    function editTopicFormat(topicId) {
+        const topic = mqttTopics.find(t => t.id === topicId);
+        if (!topic) return;
+        
+        // Load existing format or create default
+        const existingFormat = topicFormats[topicId] || getDefaultFormatForTopic(topic);
+        
+        const container = document.getElementById('format-templates-container');
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h6 class="text-sm font-medium text-slate-700">Format for: ${topic.name}</h6>
+                    <button type="button" 
+                            onclick="closeFormatEditor()"
+                            class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs">
+                        <i class="fa-solid fa-times mr-1"></i> Close
+                    </button>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Payload Format</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="format-${topicId}-payload" value="json" ${existingFormat.payloadFormat === 'json' ? 'checked' : ''}>
+                            <span class="text-xs">JSON</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="format-${topicId}-payload" value="csv" ${existingFormat.payloadFormat === 'csv' ? 'checked' : ''}>
+                            <span class="text-xs">CSV</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="format-${topicId}-payload" value="keyvalue" ${existingFormat.payloadFormat === 'keyvalue' ? 'checked' : ''}>
+                            <span class="text-xs">Key-Value Pairs</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="format-template-${topicId}">
+                    ${generateFormatTemplate(topicId, existingFormat)}
+                </div>
+                
+                <div class="flex justify-end">
+                    <button type="button" 
+                            onclick="saveTopicFormat('${topicId}')"
+                            class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
+                        <i class="fa-solid fa-save mr-1"></i> Save Format
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Add event listener for payload format change
+        const radios = document.querySelectorAll(`input[name="format-${topicId}-payload"]`);
+        radios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                updateFormatTemplate(topicId, this.value);
+            });
+        });
+    }
+    
+    // Get default format for topic
+    function getDefaultFormatForTopic(topic) {
+        let payloadFormat = 'json';
+        let template = '';
+        
+        if (topic.name.includes('alarm') || topic.name.includes('alert')) {
+            template = `{
+  "timestamp": "%TIMESTAMP%",
+  "device": "%DEVICE_ID%",
+  "alarm_id": "%ALARM_ID%",
+  "severity": "%SEVERITY%",
+  "message": "%MESSAGE%",
+  "value": %VALUE%
+}`;
+        } else if (topic.name.includes('event')) {
+            template = `{
+  "timestamp": "%TIMESTAMP%",
+  "device": "%DEVICE_ID%",
+  "event_type": "%EVENT_TYPE%",
+  "description": "%DESCRIPTION%",
+  "data": %DATA%
+}`;
+        } else {
+            template = `{
+  "timestamp": "%TIMESTAMP%",
+  "device": "%DEVICE_ID%",
+  "data": %DATA%
+}`;
+        }
+        
+        return {
+            payloadFormat: payloadFormat,
+            template: template,
+            topicId: topic.id
+        };
+    }
+    
+    // Generate format template
+    function generateFormatTemplate(topicId, format) {
+        const textareaHeight = format.payloadFormat === 'json' ? '32' : '24';
+        
+        if (format.payloadFormat === 'json') {
+            return `
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">JSON Template</label>
+                    <textarea id="format-template-textarea-${topicId}" 
+                              class="w-full compact-input font-mono text-xs h-${textareaHeight}"
+                              placeholder='{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}'>${format.template || ''}</textarea>
+                    <p class="help-text">Use placeholders like %TAG_NAME%, %TIMESTAMP%, %DEVICE_ID%</p>
+                </div>
+            `;
+        } else if (format.payloadFormat === 'csv') {
+            return `
+                <div class="space-y-2">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">CSV Headers</label>
+                        <input type="text" id="format-csv-headers-${topicId}" 
+                               class="w-full compact-input"
+                               value="${format.csvHeaders || 'timestamp,device_id,tag_name,tag_value,quality'}"
+                               placeholder="timestamp,device_id,tag_name,tag_value,quality">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">CSV Template</label>
+                        <textarea id="format-template-textarea-${topicId}" 
+                                  class="w-full compact-input font-mono text-xs h-${textareaHeight}"
+                                  placeholder="%TIMESTAMP%,%DEVICE_ID%,%TAG_NAME%,%TAG_VALUE%,%QUALITY%">${format.csvTemplate || ''}</textarea>
+                    </div>
+                </div>
+            `;
+        } else if (format.payloadFormat === 'keyvalue') {
+            return `
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Key-Value Template</label>
+                    <textarea id="format-template-textarea-${topicId}" 
+                              class="w-full compact-input font-mono text-xs h-${textareaHeight}"
+                              placeholder="timestamp=%TIMESTAMP%\ndevice=%DEVICE_ID%\ndata=%DATA%">${format.template || ''}</textarea>
+                    <p class="help-text">One key-value pair per line</p>
+                </div>
+            `;
+        }
+    }
+    
+    // Update format template when payload format changes
+    function updateFormatTemplate(topicId, payloadFormat) {
+        const existingFormat = topicFormats[topicId] || getDefaultFormatForTopic(mqttTopics.find(t => t.id === topicId));
+        existingFormat.payloadFormat = payloadFormat;
+        
+        const container = document.getElementById(`format-template-${topicId}`);
+        container.innerHTML = generateFormatTemplate(topicId, existingFormat);
+    }
+    
+    // Save topic format
+    function saveTopicFormat(topicId) {
+        const payloadFormat = document.querySelector(`input[name="format-${topicId}-payload"]:checked`).value;
+        const template = document.getElementById(`format-template-textarea-${topicId}`).value;
+        
+        topicFormats[topicId] = {
+            payloadFormat: payloadFormat,
+            template: template,
+            topicId: topicId
+        };
+        
+        if (payloadFormat === 'csv') {
+            topicFormats[topicId].csvHeaders = document.getElementById(`format-csv-headers-${topicId}`).value;
+        }
+        
+        alert(`Format saved for topic: ${mqttTopics.find(t => t.id === topicId).name}`);
+        closeFormatEditor();
+    }
+    
+    // Close format editor
+    function closeFormatEditor() {
+        const container = document.getElementById('format-templates-container');
+        container.innerHTML = `
+            <div class="p-4 border border-slate-200 rounded bg-slate-50">
+                <p class="text-xs text-slate-500 text-center">Select a topic to configure its message format</p>
+            </div>
+        `;
+    }
+    
+    // Populate sample publishing data
+    function populateSamplePublishingData() {
+        // Sample data for OnChange mode
+        const onchangeTable = document.getElementById('mqtt-tags-table-onchange');
+        const sampleOnChangeData = [
+            { name: 'Hoist_Load', defaultTopic: 'telemetry' },
+            { name: 'Boom_Angle', defaultTopic: 'telemetry' },
+            { name: 'WindSpeed', defaultTopic: 'alarm' }
+        ];
+        
+        sampleOnChangeData.forEach((tag, index) => {
+            const row = document.createElement('tr');
+            row.className = 'border-t border-slate-100';
+            row.innerHTML = `
+                <td class="p-2"><input type="checkbox" class="tag-select-onchange"></td>
+                <td class="p-2 font-mono">${tag.name}</td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs topic-select" onchange="updateFormatDropdown(this, 'onchange', ${index})">
+                        ${generateTopicOptions()}
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="onChange" ${index === 0 ? 'selected' : ''}>On Change</option>
+                        <option value="100">100 ms</option>
+                        <option value="500" ${index === 1 ? 'selected' : ''}>500 ms</option>
+                        <option value="1000">1 sec</option>
+                        <option value="5000">5 sec</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="0">0</option>
+                        <option value="1" ${index !== 2 ? 'selected' : ''}>1</option>
+                        <option value="2" ${index === 2 ? 'selected' : ''}>2</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs format-select" id="format-onchange-${index}">
+                        <option value="">-- Select Format --</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <label class="toggle-switch">
+                        <input type="checkbox" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+            `;
+            onchangeTable.appendChild(row);
+            
+            // Set default topic
+            setTimeout(() => {
+                const select = row.querySelector('.topic-select');
+                const topic = mqttTopics.find(t => t.name === tag.defaultTopic);
+                if (topic && select) {
+                    select.value = topic.fullTopic;
+                    updateFormatDropdown(select, 'onchange', index);
+                }
+            }, 100);
+        });
+        
+        // Sample data for Periodic mode
+        const periodicTable = document.getElementById('mqtt-tags-table-periodic');
+        const samplePeriodicData = [
+            { name: 'Temperature', defaultTopic: 'telemetry' },
+            { name: 'Pressure', defaultTopic: 'telemetry' }
+        ];
+        
+        samplePeriodicData.forEach((tag, index) => {
+            const row = document.createElement('tr');
+            row.className = 'border-t border-slate-100';
+            row.innerHTML = `
+                <td class="p-2"><input type="checkbox" class="tag-select-periodic"></td>
+                <td class="p-2 font-mono">${tag.name}</td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs topic-select" onchange="updateFormatDropdown(this, 'periodic', ${index})">
+                        ${generateTopicOptions()}
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="float" selected>Float</option>
+                        <option value="integer">Integer</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="string">String</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs format-select" id="format-periodic-${index}">
+                        <option value="">-- Select Format --</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <label class="toggle-switch">
+                        <input type="checkbox" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+                <td class="p-2">
+                    <label class="toggle-switch">
+                        <input type="checkbox" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+            `;
+            periodicTable.appendChild(row);
+        });
+        
+        // Sample data for Event mode
+        const eventTable = document.getElementById('mqtt-tags-table-event');
+        const sampleEventData = [
+            { name: 'Overload_Alert', defaultTopic: 'alarm', type: 'alarm', severity: 'high' },
+            { name: 'Wind_Alert', defaultTopic: 'alarm', type: 'warning', severity: 'medium' },
+            { name: 'Maintenance_Event', defaultTopic: 'event', type: 'info', severity: 'low' }
+        ];
+        
+        sampleEventData.forEach((event, index) => {
+            const row = document.createElement('tr');
+            row.className = 'border-t border-slate-100';
+            row.innerHTML = `
+                <td class="p-2"><input type="checkbox" class="tag-select-event"></td>
+                <td class="p-2 font-mono">${event.name}</td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs topic-select" onchange="updateFormatDropdown(this, 'event', ${index})">
+                        ${generateTopicOptions()}
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="alarm" ${event.type === 'alarm' ? 'selected' : ''}>Alarm</option>
+                        <option value="warning" ${event.type === 'warning' ? 'selected' : ''}>Warning</option>
+                        <option value="info" ${event.type === 'info' ? 'selected' : ''}>Info</option>
+                        <option value="emergency">Emergency</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="low" ${event.severity === 'low' ? 'selected' : ''}>Low</option>
+                        <option value="medium" ${event.severity === 'medium' ? 'selected' : ''}>Medium</option>
+                        <option value="high" ${event.severity === 'high' ? 'selected' : ''}>High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs format-select" id="format-event-${index}">
+                        <option value="">-- Select Format --</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <select class="w-full compact-select text-xs">
+                        <option value="threshold" ${index < 2 ? 'selected' : ''}>Threshold Breach</option>
+                        <option value="state" ${index === 2 ? 'selected' : ''}>State Change</option>
+                        <option value="rate">Rate of Change</option>
+                        <option value="custom">Custom Logic</option>
+                    </select>
+                </td>
+                <td class="p-2">
+                    <label class="toggle-switch">
+                        <input type="checkbox" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+            `;
+            eventTable.appendChild(row);
+        });
+        
+        updateSelectedTagsCount();
+    }
+    
+    // Update format dropdown based on selected topic
+    function updateFormatDropdown(select, mode, rowIndex) {
+        const selectedTopic = select.value;
+        const formatSelect = document.getElementById(`format-${mode}-${rowIndex}`);
+        
+        if (!formatSelect) return;
+        
+        // Clear existing options
+        formatSelect.innerHTML = '<option value="">-- Select Format --</option>';
+        
+        if (!selectedTopic || selectedTopic === 'custom') {
+            // Add default formats for custom topic
+            formatSelect.innerHTML += `
+                <option value="json">JSON Format</option>
+                <option value="csv">CSV Format</option>
+                <option value="keyvalue">Key-Value Format</option>
+            `;
+            return;
+        }
+        
+        // Find topic and its format
+        const topic = mqttTopics.find(t => t.fullTopic === selectedTopic);
+        if (topic && topicFormats[topic.id]) {
+            const format = topicFormats[topic.id];
+            formatSelect.innerHTML += `<option value="${topic.id}" selected>${format.payloadFormat.toUpperCase()} - ${topic.name}</option>`;
+        } else {
+            // Add default format options
+            formatSelect.innerHTML += `
+                <option value="json">JSON Format</option>
+                <option value="csv">CSV Format</option>
+                <option value="keyvalue">Key-Value Format</option>
+            `;
+        }
+    }
+    
+    // Setup event listeners for tag checkboxes
+    function setupTagCheckboxListeners() {
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('tag-select-onchange') || 
+                e.target.classList.contains('tag-select-periodic') || 
+                e.target.classList.contains('tag-select-event')) {
+                updateSelectedTagsCount();
+            }
+        });
+    }
+    
+    // Function to update UI based on selected publish mode
+    function updatePublishMode() {
+        const selectedMode = document.querySelector('input[name="field-publishMode"]:checked').value;
+        const helpText = document.getElementById('publish-mode-help');
+        const periodicOptions = document.getElementById('periodic-options');
+        const eventOptions = document.getElementById('event-options');
+        const titleElement = document.getElementById('tag-selection-title');
+        
+        // Update title based on mode
+        const titles = {
+            'onChange': 'Select Tags to Publish',
+            'periodic': 'Select Data Points for Periodic Publishing',
+            'event': 'Select Events to Monitor and Publish'
+        };
+        if (titleElement) {
+            titleElement.textContent = titles[selectedMode];
+        }
+        
+        // Update help text
+        const helpTexts = {
+            'onChange': 'Publish individual tag values when they change',
+            'periodic': 'Publish batched data at regular intervals',
+            'event': 'Publish only when specific events occur'
+        };
+        if (helpText) {
+            helpText.textContent = helpTexts[selectedMode];
+        }
+        
+        // Show/hide options sections
+        if (periodicOptions) {
+            periodicOptions.style.display = selectedMode === 'periodic' ? 'block' : 'none';
+        }
+        if (eventOptions) {
+            eventOptions.style.display = selectedMode === 'event' ? 'block' : 'none';
+        }
+        
+        // Show/hide tag tables
+        document.getElementById('tag-table-onchange').style.display = selectedMode === 'onChange' ? 'block' : 'none';
+        document.getElementById('tag-table-periodic').style.display = selectedMode === 'periodic' ? 'block' : 'none';
+        document.getElementById('tag-table-event').style.display = selectedMode === 'event' ? 'block' : 'none';
         
         // Update selected tags count
         updateSelectedTagsCount();
@@ -674,12 +1565,35 @@
                 button.classList.add('active');
             }
         });
+        
+        // When switching to Topics & Format tab, refresh topic list
+        if (tabName === 'topics') {
+            updateTopicList();
+        }
     }
     
     // Tag management functions
-    function toggleAllTags() {
-        const selectAll = document.getElementById('select-all-tags');
-        const checkboxes = document.querySelectorAll('.tag-select');
+    function toggleAllTags(mode) {
+        let selector = '';
+        let checkboxId = '';
+        
+        switch(mode) {
+            case 'onChange':
+                selector = '.tag-select-onchange';
+                checkboxId = 'select-all-tags-onchange';
+                break;
+            case 'periodic':
+                selector = '.tag-select-periodic';
+                checkboxId = 'select-all-tags-periodic';
+                break;
+            case 'event':
+                selector = '.tag-select-event';
+                checkboxId = 'select-all-tags-event';
+                break;
+        }
+        
+        const selectAll = document.getElementById(checkboxId);
+        const checkboxes = document.querySelectorAll(selector);
         checkboxes.forEach(cb => {
             cb.checked = selectAll.checked;
         });
@@ -687,40 +1601,63 @@
     }
     
     function updateSelectedTagsCount() {
-        const checkboxes = document.querySelectorAll('.tag-select:checked');
+        const selectedMode = document.querySelector('input[name="field-publishMode"]:checked').value;
+        let selector = '';
+        
+        switch(selectedMode) {
+            case 'onChange':
+                selector = '.tag-select-onchange:checked';
+                break;
+            case 'periodic':
+                selector = '.tag-select-periodic:checked';
+                break;
+            case 'event':
+                selector = '.tag-select-event:checked';
+                break;
+        }
+        
+        const checkboxes = document.querySelectorAll(selector);
         const countElement = document.getElementById('selected-tags-count');
         if (countElement) {
             countElement.textContent = checkboxes.length;
         }
     }
     
-    // Add event listeners to tag checkboxes
+    // Add event listeners when DOM is loaded
     document.addEventListener('DOMContentLoaded', function() {
-        // This will run when the MQTT form is loaded
         initializeMqttForm();
-        
-        // Add click events to tag checkboxes
-        document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('tag-select')) {
-                updateSelectedTagsCount();
-            }
-        });
     });
     
     function removeSelectedMqttTags() {
-        const selected = document.querySelectorAll('.tag-select:checked');
+        const selectedMode = document.querySelector('input[name="field-publishMode"]:checked').value;
+        let selector = '';
+        
+        switch(selectedMode) {
+            case 'onChange':
+                selector = '.tag-select-onchange:checked';
+                break;
+            case 'periodic':
+                selector = '.tag-select-periodic:checked';
+                break;
+            case 'event':
+                selector = '.tag-select-event:checked';
+                break;
+        }
+        
+        const selected = document.querySelectorAll(selector);
         if (selected.length === 0) {
-            alert('Please select tags to remove.');
+            alert('Please select items to remove.');
             return;
         }
         
-        if (confirm(`Remove ${selected.length} selected tag(s)?`)) {
+        const itemType = selectedMode === 'event' ? 'events' : 'tags';
+        if (confirm(`Remove ${selected.length} selected ${itemType}?`)) {
             selected.forEach(checkbox => {
                 const row = checkbox.closest('tr');
                 row.remove();
             });
             updateSelectedTagsCount();
-            alert(`${selected.length} tag(s) removed successfully.`);
+            alert(`${selected.length} ${itemType} removed successfully.`);
         }
     }
     
@@ -733,20 +1670,355 @@
         }
     }
     
+    // Generate random password
+    function generatePassword(fieldId) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+        let password = '';
+        for (let i = 0; i < 12; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        document.getElementById(fieldId).value = password;
+    }
+    
     // Save functions for each tab
     function saveMqttConnectionSettings() {
+        const settings = {
+            protocol: document.getElementById('field-protocol').value,
+            host: document.getElementById('field-host').value,
+            port: document.getElementById('field-port').value,
+            clientId: document.getElementById('field-clientId').value,
+            keepAlive: document.getElementById('field-keepAlive').value,
+            username: document.getElementById('field-username').value,
+            password: document.getElementById('field-password').value,
+            tls: document.getElementById('field-tls').checked,
+            qos: document.querySelector('input[name="field-qos"]:checked').value,
+            cleanSession: document.getElementById('field-cleanSession').checked,
+            retainMessages: document.getElementById('field-retainMessages').checked
+        };
+        
+        console.log('Saving MQTT Connection settings:', settings);
         alert('MQTT Connection settings saved!');
     }
     
     function saveMqttTopicSettings() {
+        const baseTopic = document.getElementById('field-baseTopic').value;
+        const settings = {
+            baseTopic: baseTopic,
+            telemetryTopic: document.getElementById('field-telemetryTopic').value,
+            alarmTopic: document.getElementById('field-alarmTopic').value,
+            eventTopic: document.getElementById('field-eventTopic').value,
+            commandTopic: document.getElementById('field-commandTopic').value,
+            customTopics: [],
+            topicFormats: topicFormats
+        };
+        
+        // Collect custom topics
+        const customTopicInputs = document.querySelectorAll('#custom-topics-container input[type="text"]');
+        customTopicInputs.forEach(input => {
+            if (input.value) {
+                settings.customTopics.push(input.value);
+            }
+        });
+        
+        console.log('Saving MQTT Topics & Format:', settings);
         alert('MQTT Topics & Format settings saved!');
     }
     
     function saveMqttPublishingSettings() {
+        const publishMode = document.querySelector('input[name="field-publishMode"]:checked').value;
+        
+        let items = [];
+        let tableId = '';
+        
+        switch(publishMode) {
+            case 'onChange':
+                tableId = 'mqtt-tags-table-onchange';
+                break;
+            case 'periodic':
+                tableId = 'mqtt-tags-table-periodic';
+                break;
+            case 'event':
+                tableId = 'mqtt-tags-table-event';
+                break;
+        }
+        
+        const rows = document.querySelectorAll(`#${tableId} tr`);
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length > 0) {
+                let item = {
+                    type: publishMode,
+                    enabled: cells[cells.length - 1].querySelector('input[type="checkbox"]')?.checked || false
+                };
+                
+                // Collect data based on mode
+                switch(publishMode) {
+                    case 'onChange':
+                        if (cells.length >= 7) {
+                            item.name = cells[1].textContent.trim();
+                            item.topic = cells[2].querySelector('select')?.value || '';
+                            item.publishRate = cells[3].querySelector('select')?.value || '';
+                            item.qos = cells[4].querySelector('select')?.value || '';
+                            item.format = cells[5].querySelector('select')?.value || '';
+                        }
+                        break;
+                    case 'periodic':
+                        if (cells.length >= 8) {
+                            item.name = cells[1].textContent.trim();
+                            item.topic = cells[2].querySelector('select')?.value || '';
+                            item.dataType = cells[3].querySelector('select')?.value || '';
+                            item.priority = cells[4].querySelector('select')?.value || '';
+                            item.format = cells[5].querySelector('select')?.value || '';
+                            item.includeInBatch = cells[6].querySelector('input[type="checkbox"]')?.checked || false;
+                        }
+                        break;
+                    case 'event':
+                        if (cells.length >= 8) {
+                            item.name = cells[1].textContent.trim();
+                            item.topic = cells[2].querySelector('select')?.value || '';
+                            item.eventType = cells[3].querySelector('select')?.value || '';
+                            item.severity = cells[4].querySelector('select')?.value || '';
+                            item.format = cells[5].querySelector('select')?.value || '';
+                            item.triggerCondition = cells[6].querySelector('select')?.value || '';
+                        }
+                        break;
+                }
+                
+                if (item.name) {
+                    items.push(item);
+                }
+            }
+        });
+        
+        const settings = {
+            publishMode: publishMode,
+            enableBatching: document.getElementById('field-enableBatching')?.checked || false,
+            batchSize: document.getElementById('field-batchSize')?.value || '',
+            batchTimeout: document.getElementById('field-batchTimeout')?.value || '',
+            items: items
+        };
+        
+        if (publishMode === 'periodic') {
+            settings.publishInterval = document.getElementById('field-publish-interval')?.value;
+            settings.batchThreshold = document.getElementById('field-batch-threshold')?.value;
+        } else if (publishMode === 'event') {
+            const eventTriggers = [];
+            document.querySelectorAll('input[name="field-event-triggers"]:checked').forEach(cb => {
+                eventTriggers.push(cb.value);
+            });
+            settings.eventTriggers = eventTriggers;
+            settings.eventSeverity = document.getElementById('field-event-severity')?.value;
+        }
+        
+        console.log('Saving MQTT Publishing settings:', settings);
         alert('MQTT Publishing settings saved!');
     }
     
     function saveMqttAdvancedSettings() {
+        const settings = {
+            // Connection Settings
+            keepAlive: document.getElementById('field-advanced-keep-alive')?.value,
+            reconnectInterval: document.getElementById('field-advanced-reconnect-interval')?.value,
+            connectTimeout: document.getElementById('field-advanced-connect-timeout')?.value,
+            maxRetries: document.getElementById('field-advanced-max-retries')?.value,
+            autoReconnect: document.getElementById('field-advanced-auto-reconnect')?.checked,
+            storeForward: document.getElementById('field-advanced-store-forward')?.checked,
+            validateCertificates: document.getElementById('field-advanced-validate-certs')?.checked,
+            
+            // TLS/SSL Settings
+            tlsVersion: document.getElementById('field-advanced-tls-version')?.value,
+            cipherSuite: document.getElementById('field-advanced-cipher-suite')?.value,
+            
+            // LWT Settings
+            enableLWT: document.getElementById('field-advanced-enable-lwt')?.checked,
+            lwtTopic: document.getElementById('field-advanced-lwt-topic')?.value,
+            lwtMessage: document.getElementById('field-advanced-lwt-message')?.value,
+            lwtQos: document.getElementById('field-advanced-lwt-qos')?.value,
+            lwtRetain: document.getElementById('field-advanced-lwt-retain')?.checked,
+            
+            // Logging Settings
+            logLevel: document.getElementById('field-advanced-log-level')?.value,
+            maxLogSize: document.getElementById('field-advanced-max-log-size')?.value,
+            logRetention: document.getElementById('field-advanced-log-retention')?.value,
+            connectionLogging: document.getElementById('field-advanced-connection-logging')?.checked,
+            messageLogging: document.getElementById('field-advanced-message-logging')?.checked,
+            
+            // Performance Settings
+            maxInflight: document.getElementById('field-advanced-max-inflight')?.value,
+            queueSize: document.getElementById('field-advanced-queue-size')?.value,
+            bufferSize: document.getElementById('field-advanced-buffer-size')?.value,
+            pingTimeout: document.getElementById('field-advanced-ping-timeout')?.value,
+            enableCompression: document.getElementById('field-advanced-enable-compression')?.checked,
+            compressionLevel: document.getElementById('field-advanced-compression-level')?.value,
+            minCompressSize: document.getElementById('field-advanced-min-compress-size')?.value
+        };
+        
+        // Certificate file names
+        settings.caCertFile = document.getElementById('advanced-ca-cert-name')?.textContent;
+        settings.privateKeyFile = document.getElementById('advanced-private-key-name')?.textContent;
+        settings.clientCertFile = document.getElementById('advanced-client-cert-name')?.textContent;
+        
+        console.log('Saving MQTT Advanced settings:', settings);
         alert('MQTT Advanced settings saved!');
+    }
+    
+    // Show add tag modal
+    function showAddTagModal() {
+        const publishMode = document.querySelector('input[name="field-publishMode"]:checked').value;
+        const modalTitle = publishMode === 'event' ? 'Add New Event' : 'Add New Tag';
+        
+        // Simple modal for demonstration
+        const itemName = prompt(`Enter ${publishMode === 'event' ? 'Event' : 'Tag'} Name:`);
+        if (itemName) {
+            // Add to appropriate table
+            addNewItemToTable(publishMode, itemName);
+        }
+    }
+    
+    // Add new item to table
+    function addNewItemToTable(mode, itemName) {
+        let tableId, rowHtml;
+        const rowIndex = document.querySelectorAll(`#mqtt-tags-table-${mode} tr`).length;
+        
+        switch(mode) {
+            case 'onChange':
+                rowHtml = `
+                    <tr class="border-t border-slate-100">
+                        <td class="p-2"><input type="checkbox" class="tag-select-onchange"></td>
+                        <td class="p-2 font-mono">${itemName}</td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs topic-select" onchange="updateFormatDropdown(this, 'onchange', ${rowIndex})">
+                                ${generateTopicOptions()}
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="onChange" selected>On Change</option>
+                                <option value="100">100 ms</option>
+                                <option value="500">500 ms</option>
+                                <option value="1000">1 sec</option>
+                                <option value="5000">5 sec</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="0">0</option>
+                                <option value="1" selected>1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs format-select" id="format-onchange-${rowIndex}">
+                                <option value="">-- Select Format --</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                `;
+                break;
+            case 'periodic':
+                rowHtml = `
+                    <tr class="border-t border-slate-100">
+                        <td class="p-2"><input type="checkbox" class="tag-select-periodic"></td>
+                        <td class="p-2 font-mono">${itemName}</td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs topic-select" onchange="updateFormatDropdown(this, 'periodic', ${rowIndex})">
+                                ${generateTopicOptions()}
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="float" selected>Float</option>
+                                <option value="integer">Integer</option>
+                                <option value="boolean">Boolean</option>
+                                <option value="string">String</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs format-select" id="format-periodic-${rowIndex}">
+                                <option value="">-- Select Format --</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                        <td class="p-2">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                `;
+                break;
+            case 'event':
+                rowHtml = `
+                    <tr class="border-t border-slate-100">
+                        <td class="p-2"><input type="checkbox" class="tag-select-event"></td>
+                        <td class="p-2 font-mono">${itemName}</td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs topic-select" onchange="updateFormatDropdown(this, 'event', ${rowIndex})">
+                                ${generateTopicOptions()}
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="alarm">Alarm</option>
+                                <option value="warning">Warning</option>
+                                <option value="info" selected>Info</option>
+                                <option value="emergency">Emergency</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="low" selected>Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs format-select" id="format-event-${rowIndex}">
+                                <option value="">-- Select Format --</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <select class="w-full compact-select text-xs">
+                                <option value="threshold" selected>Threshold Breach</option>
+                                <option value="state">State Change</option>
+                                <option value="rate">Rate of Change</option>
+                                <option value="custom">Custom Logic</option>
+                            </select>
+                        </td>
+                        <td class="p-2">
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                `;
+                break;
+        }
+        
+        const table = document.getElementById(`mqtt-tags-table-${mode}`);
+        table.insertAdjacentHTML('beforeend', rowHtml);
+        updateSelectedTagsCount();
     }
 </script>
