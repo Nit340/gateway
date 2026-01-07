@@ -1,0 +1,345 @@
+<!-- This is the main content only, to be loaded dynamically -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-slate-900">General Configuration</h1>
+        <p class="text-slate-500 text-sm mt-1">Establish gateway identity, network, time, and operational behavior. Required before activating any device, safety logic, or protocol communication.</p>
+    </div>
+
+    <div class="space-y-8">
+        
+        <!-- SECTION A: Gateway Identity -->
+        <section id="section-identity" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-regular fa-id-card mr-2 text-primary"></i> 
+                    <span class="mr-2">Gateway Identity</span>
+                    <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Required for ERP/Cloud Integration
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Gateway Name <span class="text-red-500">*</span></label>
+                    <input type="text" value="Univa-GW-01" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary placeholder-slate-400" placeholder="Enter gateway name">
+                    <p class="text-xs text-slate-500 mt-1">Human-readable ID used in cloud UI dashboards</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
+                    <div class="relative">
+                        <input type="text" value="GW2025-1190021" readonly class="w-full bg-slate-100 font-mono rounded-lg border-slate-200 border px-3 py-2 text-sm text-slate-600">
+                        <i class="fa-solid fa-lock absolute right-3 top-2.5 text-slate-400 text-xs"></i>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Deployment Site <span class="text-red-500">*</span></label>
+                    <input type="text" value="Chennai Port - Zone A" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Site name or description">
+                </div>
+                
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-3">Location Mode</label>
+                    <div class="flex items-center space-x-6">
+                        <label class="flex items-center">
+                            <input type="radio" name="location-mode" value="manual" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                            <span class="ml-2 text-sm text-slate-700">Manual Entry</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="location-mode" value="gps" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                            <span class="ml-2 text-sm text-slate-700">GPS Automatic</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 md:col-span-2">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Latitude</label>
+                        <input type="text" value="12.99123" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="0.000000">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Longitude</label>
+                        <input type="text" value="80.12312" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="0.000000">
+                    </div>
+                </div>
+                
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Asset/Crane ID</label>
+                    <input type="text" value="CRN-CT-12" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Optional asset identifier">
+                    <p class="text-xs text-slate-500 mt-1">Used by CraneIQ for zoning, map overlays, and anti-collision</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION B: Date, Time & Localization -->
+        <section id="section-time" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-regular fa-clock mr-2 text-primary"></i> 
+                    <span class="mr-2">Date, Time & Localization</span>
+                    <span class="text-xs font-normal text-slate-500">SECTION B</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Ensures correct event sequencing
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Timezone <span class="text-red-500">*</span></label>
+                    <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                        <option>Asia/Kolkata (GMT+05:30)</option>
+                        <option>UTC (GMT+00:00)</option>
+                        <option>America/New_York (GMT-05:00)</option>
+                        <option>Europe/London (GMT+00:00)</option>
+                        <option>Asia/Singapore (GMT+08:00)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">NTP Server <span class="text-red-500">*</span></label>
+                    <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                        <option>pool.ntp.org</option>
+                        <option>time.google.com</option>
+                        <option>time.windows.com</option>
+                        <option>time.apple.com</option>
+                        <option>Custom...</option>
+                    </select>
+                </div>
+                
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Set Time Manually (Fallback)</label>
+                    <div class="flex items-center space-x-4">
+                        <input type="date" value="2025-03-12" class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="time" value="14:53" class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <button class="text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors">
+                            <i class="fa-solid fa-rotate mr-2"></i> Sync Now
+                        </button>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Date Format</label>
+                    <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                        <option>DD/MM/YYYY</option>
+                        <option>MM/DD/YYYY</option>
+                        <option>YYYY-MM-DD</option>
+                        <option>DD Month YYYY</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Time Format</label>
+                    <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                        <option>24-Hour (14:30)</option>
+                        <option>12-Hour (2:30 PM)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Language</label>
+                    <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                        <option>English</option>
+                        <option>हिंदी (Hindi)</option>
+                        <option>Español (Spanish)</option>
+                        <option>Français (French)</option>
+                        <option>Deutsch (German)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION C: Network Configuration -->
+        <section id="section-network" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-network-wired mr-2 text-primary"></i> 
+                    <span class="mr-2">Network Configuration</span>
+                    <span class="text-xs font-normal text-slate-500">SECTION C</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Defines MQTT, Modbus TCP, OTA, and Cloud API connections
+                </div>
+            </div>
+            
+            <!-- Network Mode Selection -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-slate-700 mb-3">Network Mode</label>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="network-mode" value="ethernet" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                        <span class="ml-2 text-sm text-slate-700 flex items-center">
+                            <i class="fa-solid fa-ethernet mr-2"></i> Ethernet
+                        </span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="network-mode" value="wifi" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <span class="ml-2 text-sm text-slate-700 flex items-center">
+                            <i class="fa-solid fa-wifi mr-2"></i> WiFi
+                        </span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="network-mode" value="lte" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <span class="ml-2 text-sm text-slate-700 flex items-center">
+                            <i class="fa-solid fa-signal mr-2"></i> LTE/4G
+                        </span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Ethernet Configuration -->
+            <div id="ethernet-config" class="mb-6 space-y-4">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Ethernet Configuration</h3>
+                
+                <div class="flex items-center space-x-6 mb-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="ip-assignment" value="dhcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                        <span class="ml-2 text-sm text-slate-700">DHCP</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="ip-assignment" value="static" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <span class="ml-2 text-sm text-slate-700">Static IP</span>
+                    </label>
+                </div>
+                
+                <div id="static-ip-config" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                        <input type="text" value="192.168.1.50" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Subnet Mask</label>
+                        <input type="text" value="255.255.255.0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Gateway</label>
+                        <input type="text" value="192.168.1.1" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">DNS 1</label>
+                        <input type="text" value="8.8.8.8" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">DNS 2</label>
+                        <input type="text" value="8.8.4.4" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- WiFi Configuration -->
+            <div id="wifi-config" class="hidden mb-6 space-y-4">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">WiFi Configuration</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID</label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="WiFi network name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <input type="password" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="WiFi password">
+                    </div>
+                </div>
+                <!-- FIXED: WiFi Signal Strength - Now left-to-right (weakest on left, strongest on right) -->
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-slate-700">Signal Strength:</span>
+                    <div class="signal-strength">
+                        <div class="signal-bar none" style="height: 4px;"></div>
+                        <div class="signal-bar poor" style="height: 8px;"></div>
+                        <div class="signal-bar fair" style="height: 12px;"></div>
+                        <div class="signal-bar good" style="height: 16px;"></div>
+                        <div class="signal-bar excellent" style="height: 20px;"></div>
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 ml-2">Good</span>
+                    <button type="button" onclick="scanWiFi()" class="ml-2 text-xs text-primary hover:text-primaryHover">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Cellular/LTE Configuration -->
+            <div id="cellular-config" class="hidden mb-6 space-y-4">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Cellular/LTE Configuration</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">APN</label>
+                        <input type="text" value="internet" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <input type="password" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="flex items-center">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Signal Strength</label>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-mono">-67 dBm</span>
+                                <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full">Good</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MAC Address Display -->
+            <div class="border-t border-slate-200 pt-6">
+                <div class="p-4 border border-slate-200 rounded-lg bg-slate-50">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">MAC Address</label>
+                    <div class="font-mono text-slate-600">00:1A:2B:3C:4D:5E</div>
+                    <p class="text-xs text-slate-500 mt-1">Unique hardware identifier for network communication</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION D: System Heartbeat & Cloud Health - SIMPLIFIED -->
+        <section id="section-heartbeat" class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-heart-pulse mr-2 text-primary"></i> 
+                    <span class="mr-2">System Heartbeat & Cloud Health</span>
+                    <span class="text-xs font-normal text-slate-500">SECTION D</span>
+                </h2>
+                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                    Monitors gateway connectivity
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Heartbeat Interval</label>
+                    <div class="flex items-center">
+                        <input type="number" value="30" min="10" max="3600" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <span class="ml-2 text-sm text-slate-700">seconds</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">How often gateway reports to cloud</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Offline Threshold</label>
+                    <div class="flex items-center">
+                        <input type="number" value="120" min="30" max="3600" class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <span class="ml-2 text-sm text-slate-700">seconds</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">When to mark gateway as offline</p>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Footer with Action Buttons -->
+<footer class="mt-8 pb-8">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
+        <div class="text-sm text-slate-500">
+            <p><i class="fa-solid fa-circle-info mr-1"></i> Fields marked with <span class="text-red-500">*</span> are required for gateway operation.</p>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button type="button" id="refresh-btn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                <i class="fa-solid fa-rotate mr-2"></i> Refresh
+            </button>
+            <button type="button" id="save-btn" class="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-sm">
+                <i class="fa-solid fa-floppy-disk mr-2"></i> Save Changes
+            </button>
+        </div>
+    </div>
+</footer>
