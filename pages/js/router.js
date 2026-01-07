@@ -174,19 +174,25 @@ class Router {
             this.initDeviceManagement();
             break;
         case 'modbus-mapping':
-            this.initModbusMapping(); // Changed from initializeProtocolMapping()
+            this.initModbusMapping();
             break;
+        case 'mqtt-cloud':
+            this.initMqttCloud();
+            break;
+        
         // Add other pages as you create them
         default:
             console.log(`No specific initialization for page: ${page}`);
     }
 }
+initMqttCloud() {
+    if (typeof window.initMqttCloud === 'function') {
+        window.initMqttCloud();
+    }
+}
 initModbusMapping() {
-    // Call the global initialization function
     if (typeof window.initializeModbusMapping === 'function') {
         window.initializeModbusMapping();
-    } else {
-        console.log('initializeModbusMapping function not found - ensure modbus-mapping.js is loaded');
     }
 }
 

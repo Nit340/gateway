@@ -1,4 +1,4 @@
-<!-- modbus-mapping.html - Content only (loaded dynamically by router) -->
+<!-- modbus-mapping.html - This file contains ONLY the content -->
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-8">
         <div class="flex items-center justify-between">
@@ -7,10 +7,10 @@
                 <p class="text-slate-500 text-sm mt-1">Map device registers to tags for data processing</p>
             </div>
             <div class="flex items-center space-x-2">
-                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="importCSVBtn">
+                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" onclick="importCSV()">
                     <i class="fa-solid fa-file-import mr-2 text-sm"></i> Import CSV
                 </button>
-                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="exportCSVBtn">
+                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" onclick="exportCSV()">
                     <i class="fa-solid fa-file-export mr-2 text-sm"></i> Export CSV
                 </button>
             </div>
@@ -112,37 +112,42 @@
 </div>
 
 <!-- Footer with Action Buttons -->
-<footer class="mt-8 pb-8">
-    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
-        <div class="flex items-center space-x-4">
-            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="testDeviceBtn">
-                <i class="fa-solid fa-bolt mr-2 text-slate-400"></i> Test Device
-            </button>
-            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="validateAllBtn">
-                <i class="fa-solid fa-check-circle mr-2 text-slate-400"></i> Validate All
-            </button>
-        </div>
-        <div class="flex items-center space-x-3">
-            <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" id="resetBtn">
-                <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
-            </button>
-            <div class="h-6 w-px bg-slate-200 mx-1"></div>
-            <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center" id="rebootBtn">
-                <i class="fa-solid fa-power-off mr-2"></i> Reboot Gateway
-            </button>
-            <div class="h-6 w-px bg-slate-200 mx-1"></div>
-            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="cancelBtn">
-                Cancel
-            </button>
-            <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="saveBtn">
-                <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
-            </button>
+<footer id="footer" class="mt-8 pb-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
+            <div class="text-sm text-slate-500">
+                <p><i class="fa-solid fa-circle-info mr-1"></i> Fields marked with <span class="text-red-500">*</span> are required for gateway operation.</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button type="button" id="testDeviceBtn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center">
+                    <i class="fa-solid fa-bolt mr-2 text-slate-400"></i> Test Device
+                </button>
+                <button type="button" id="validateAllBtn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center">
+                    <i class="fa-solid fa-check-circle mr-2 text-slate-400"></i> Validate All
+                </button>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button type="button" class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
+                    <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
+                </button>
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                <button type="button" class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center">
+                    <i class="fa-solid fa-power-off mr-2"></i> Reboot Gateway
+                </button>
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                <button type="button" id="cancel-btn" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors">
+                    Cancel
+                </button>
+                <button type="button" id="save-btn" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
+                </button>
+            </div>
         </div>
     </div>
 </footer>
 
-<!-- Edit Mapping Modal (Will be appended to body when needed) -->
-<div id="editMappingModal" class="modal-overlay hidden">
+<!-- Edit Mapping Modal -->
+<div class="modal-overlay" id="editMappingModal">
     <div class="modal">
         <div class="p-5">
             <div class="flex items-center justify-between mb-5">
@@ -186,7 +191,7 @@
                 </div>
             </div>
             
-            <!-- Protocol-specific tabs -->
+            <!-- Protocol-specific tabs (Will be dynamically loaded based on device protocol) -->
             <div class="tab-container mb-5" id="protocolTabsContainer">
                 <!-- Tabs will be dynamically loaded here -->
             </div>
@@ -378,6 +383,36 @@
                             </div>
                         </div>
                         
+                        <!-- Validation (optional) -->
+                        <div class="collapse-section">
+                            <div class="flex items-center justify-between cursor-pointer" onclick="toggleSection('validation-section')">
+                                <h3 class="text-xs font-semibold text-slate-900">Validation & Alarms (Optional)</h3>
+                                <i class="fa-solid fa-chevron-down text-xs text-slate-400" id="validation-chevron"></i>
+                            </div>
+                            <div id="validation-section" class="mt-3 space-y-3 hidden">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Min Valid Value</label>
+                                        <input type="number" class="w-full compact-input" placeholder="Minimum" id="mappingMinValue">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Valid Value</label>
+                                        <input type="number" class="w-full compact-input" placeholder="Maximum" id="mappingMaxValue">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Warning Threshold</label>
+                                        <input type="number" class="w-full compact-input" placeholder="Warning level" id="mappingWarning">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Threshold</label>
+                                        <input type="number" class="w-full compact-input" placeholder="Alarm level" id="mappingAlarm">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Navigation buttons -->
                         <div class="mt-6 pt-4 border-t border-slate-200 flex justify-between">
                             <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="prevStep3Btn">
@@ -398,250 +433,312 @@
         </div>
     </div>
 </div>
-
-<!-- Inline CSS Styles for this page only -->
 <style>
-    .compact-table {
-        font-size: 12px;
-    }
-    
-    .compact-table th {
-        padding: 8px 12px;
-        font-size: 11px;
-        white-space: nowrap;
-    }
-    
-    .compact-table td {
-        padding: 8px 12px;
-        font-size: 12px;
-    }
-    
-    .compact-button {
-        padding: 6px 12px;
-        font-size: 13px;
-        border-radius: 6px;
-    }
-    
-    .compact-input {
-        padding: 6px 10px;
-        font-size: 13px;
-        border-radius: 6px;
-        border: 1px solid #E2E8F0;
-    }
-    
-    .compact-select {
-        padding: 6px 10px;
-        font-size: 13px;
-        border-radius: 6px;
-        border: 1px solid #E2E8F0;
-    }
-    
-    .protocol-badge {
-        font-size: 9px;
-        padding: 1px 6px;
-        border-radius: 8px;
-        font-weight: 600;
-        text-transform: uppercase;
-        white-space: nowrap;
-    }
-    
-    .protocol-badge.modbus {
-        background: #EFF6FF;
-        color: #2563EB;
-        border: 1px solid #BFDBFE;
-    }
-    
-    .protocol-badge.can {
-        background: #FEF3C7;
-        color: #D97706;
-        border: 1px solid #FDE68A;
-    }
-    
-    .protocol-badge.ethernet {
-        background: #F3E8FF;
-        color: #7C3AED;
-        border: 1px solid #E9D5FF;
-    }
-    
-    .protocol-badge.serial {
-        background: #DCFCE7;
-        color: #166534;
-        border: 1px solid #BBF7D0;
-    }
-    
-    .data-type-badge {
-        font-size: 9px;
-        padding: 1px 6px;
-        border-radius: 3px;
-        font-weight: 600;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    
-    .data-type-badge.int16 {
-        background: #DBEAFE;
-        color: #1E40AF;
-    }
-    
-    .data-type-badge.int32 {
-        background: #BFDBFE;
-        color: #1E3A8A;
-    }
-    
-    .data-type-badge.float32 {
-        background: #F3E8FF;
-        color: #5B21B6;
-    }
-    
-    .data-type-badge.uint16 {
-        background: #DCFCE7;
-        color: #166534;
-    }
-    
-    .data-type-badge.bool {
-        background: #FEF3C7;
-        color: #92400E;
-    }
-    
-    .device-badge {
-        font-size: 9px;
-        padding: 1px 6px;
-        border-radius: 8px;
-        font-weight: 600;
-        background: #F1F5F9;
-        color: #475569;
-        border: 1px solid #CBD5E1;
-        white-space: nowrap;
-    }
-    
-    .tag-card {
-        padding: 12px;
-        border-radius: 6px;
-        background: white;
-        border: 1px solid #E2E8F0;
-        font-size: 13px;
-        transition: all 0.2s;
-    }
-    
-    .tag-card:hover {
-        border-color: #2563EB;
-        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
-    }
-    
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0,0,0,0.5);
-        z-index: 1000;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .modal {
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-        width: 90%;
-        max-width: 550px;
-        max-height: 90vh;
-        overflow-y: auto;
-    }
-    
-    .dynamic-section {
-        display: none;
-    }
-    
-    .dynamic-section.active {
-        display: block;
-    }
-    
-    .tab-container {
-        border-bottom: 1px solid #E2E8F0;
-    }
-    
-    .tab {
-        padding: 8px 16px;
-        font-size: 12px;
-        font-weight: 500;
-        color: #64748B;
-        border-bottom: 2px solid transparent;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    
-    .tab:hover {
-        color: #2563EB;
-    }
-    
-    .tab.active {
-        color: #2563EB;
-        border-bottom-color: #2563EB;
-    }
-    
-    .step-indicator {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        margin-bottom: 16px;
-    }
-    
-    .step {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-    }
-    
-    .step-circle {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    
-    .step-circle.active {
-        background: #2563EB;
-        color: white;
-    }
-    
-    .step-circle.inactive {
-        background: #E2E8F0;
-        color: #64748B;
-    }
-    
-    .step-line {
-        height: 2px;
-        width: 40px;
-        background: #E2E8F0;
-    }
-    
-    .step-label {
-        font-size: 10px;
-        color: #64748B;
-        white-space: nowrap;
-    }
-    
-    .step-label.active {
-        color: #2563EB;
-        font-weight: 500;
-    }
-    
+    /* Protocol Mapping specific styles */
+.compact-table {
+    font-size: 12px;
+}
+
+.compact-table th {
+    padding: 8px 12px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.compact-table td {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+.protocol-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.protocol-badge.modbus {
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #BFDBFE;
+}
+
+.protocol-badge.can {
+    background: #FEF3C7;
+    color: #D97706;
+    border: 1px solid #FDE68A;
+}
+
+.protocol-badge.ethernet {
+    background: #F3E8FF;
+    color: #7C3AED;
+    border: 1px solid #E9D5FF;
+}
+
+.protocol-badge.serial {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1px solid #BBF7D0;
+}
+
+.data-type-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.data-type-badge.int16 {
+    background: #DBEAFE;
+    color: #1E40AF;
+}
+
+.data-type-badge.int32 {
+    background: #BFDBFE;
+    color: #1E3A8A;
+}
+
+.data-type-badge.float32 {
+    background: #F3E8FF;
+    color: #5B21B6;
+}
+
+.data-type-badge.uint16 {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.data-type-badge.bool {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.device-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 600;
+    background: #F1F5F9;
+    color: #475569;
+    border: 1px solid #CBD5E1;
+    white-space: nowrap;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+}
+
+.status-indicator.online::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10B981;
+    margin-right: 4px;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.offline::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #EF4444;
+    margin-right: 4px;
+}
+
+.status-indicator.warning::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #F59E0B;
+    margin-right: 4px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.tag-card {
+    padding: 12px;
+    border-radius: 6px;
+    background: white;
+    border: 1px solid #E2E8F0;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.tag-card:hover {
+    border-color: #2563EB;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+}
+
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    width: 90%;
+    max-width: 550px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.dynamic-section {
+    display: none;
+}
+
+.dynamic-section.active {
+    display: block;
+}
+
+.compact-input {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #E2E8F0;
+}
+
+.compact-input:focus {
+    outline: none;
+    border-color: #2563EB;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.compact-select {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #E2E8F0;
+}
+
+.compact-select:focus {
+    outline: none;
+    border-color: #2563EB;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.compact-button {
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 6px;
+}
+
+.tab-container {
+    border-bottom: 1px solid #E2E8F0;
+}
+
+.tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #64748B;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab:hover {
+    color: #2563EB;
+}
+
+.tab.active {
+    color: #2563EB;
+    border-bottom-color: #2563EB;
+}
+
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.step-circle {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.step-circle.active {
+    background: #2563EB;
+    color: white;
+}
+
+.step-circle.inactive {
+    background: #E2E8F0;
+    color: #64748B;
+}
+
+.step-line {
+    height: 2px;
+    width: 40px;
+    background: #E2E8F0;
+}
+
+.step-label {
+    font-size: 10px;
+    color: #64748B;
+    white-space: nowrap;
+}
+
+.step-label.active {
+    color: #2563EB;
+    font-weight: 500;
+}
+
+.selected-device-row {
+    background-color: #EFF6FF !important;
+    border-left: 2px solid #2563EB !important;
+}
+
+.tags-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+@media (min-width: 1536px) {
     .tags-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     }
-    
-    @media (min-width: 1536px) {
-        .tags-grid {
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        }
-    }
+}
 </style>
