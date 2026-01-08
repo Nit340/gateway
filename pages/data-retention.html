@@ -1,1530 +1,531 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Retention - Univa Gateway</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#2563EB',
-                        primaryHover: '#1D4ED8',
-                        secondary: '#475569',
-                        success: '#10B981',
-                        warning: '#F59E0B',
-                        danger: '#EF4444',
-                        surface: '#F8FAFC',
-                        card: '#FFFFFF',
-                        border: '#E2E8F0',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    }
-                }
-            }
-        };
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
-        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
-        .toggle-checkbox:checked { right: 0; border-color: #2563EB; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
-        .radio-checkbox:checked { background-color: #2563EB; border-color: #2563EB; }
-        
-        /* Sidebar Styles */
-        .sidebar {
-            width: 260px;
-            background: white;
-            border-right: 1px solid #E2E8F0;
-            height: 100vh;
-            overflow-y: auto;
-            position: fixed;
-            left: 0;
-            top: 0;
-            z-index: 40;
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s ease;
-        }
-        
-        .sidebar-logo {
-            height: 64px;
-            display: flex;
-            align-items: center;
-            padding: 0 20px;
-            border-bottom: 1px solid #E2E8F0;
-            background: white;
-        }
-        
-        .logo-text {
-            font-weight: 700;
-            font-size: 18px;
-            color: #2563EB;
-        }
-        
-        .sidebar-nav {
-            flex: 1;
-            padding: 16px 0;
-            overflow-y: auto;
-        }
-        
-        .nav-section {
-            margin-bottom: 24px;
-        }
-        
-        .section-title {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #64748B;
-            padding: 0 20px 8px;
-            margin-bottom: 4px;
-            border-bottom: 1px solid #F1F5F9;
-        }
-        
-        .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 8px 20px;
-            color: #475569;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
-            cursor: pointer;
-        }
-        
-        .nav-item:hover {
-            background: #F8FAFC;
-            color: #2563EB;
-        }
-        
-        .nav-item.active {
-            background: #EFF6FF;
-            color: #2563EB;
-            border-left-color: #2563EB;
-            font-weight: 600;
-        }
-        
-        .nav-item i {
-            width: 20px;
-            margin-right: 12px;
-            font-size: 14px;
-            text-align: center;
-        }
-        
-        .nav-item-count {
-            margin-left: auto;
-            background: #E2E8F0;
-            color: #475569;
-            font-size: 12px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-weight: 500;
-        }
-        
-        .sidebar-footer {
-            padding: 16px 20px;
-            border-top: 1px solid #E2E8F0;
-            background: white;
-        }
-        
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .user-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            background: #2563EB;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-        }
-        
-        .sidebar-toggle {
-            display: none;
-            position: fixed;
-            left: 260px;
-            top: 20px;
-            z-index: 100;
-            background: white;
-            border: 1px solid #E2E8F0;
-            border-left: none;
-            border-radius: 0 6px 6px 0;
-            padding: 10px 8px;
-            cursor: pointer;
-            color: #64748B;
-            transition: all 0.3s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        
-        .sidebar.collapsed {
-            transform: translateX(-260px);
-        }
-        
-        .sidebar.collapsed ~ .main-content-with-sidebar {
-            margin-left: 0;
-        }
-        
-        .sidebar.collapsed + .sidebar-toggle {
-            left: 0;
-        }
-        
-        .main-content-with-sidebar {
-            margin-left: 260px;
-            transition: margin-left 0.3s;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        @media (max-width: 1024px) {
-            .sidebar {
-                transform: translateX(-260px);
-            }
-            
-            .sidebar.active {
-                transform: translateX(0);
-                box-shadow: 0 0 20px rgba(0,0,0,0.1);
-            }
-            
-            .sidebar-toggle {
-                display: block;
-                left: 0;
-            }
-            
-            .sidebar.active + .sidebar-toggle {
-                left: 260px;
-            }
-            
-            .main-content-with-sidebar {
-                margin-left: 0;
-            }
-        }
-    </style>
-</head>
-<body class="min-h-screen bg-slate-50">
-    
-    <!-- Sidebar will be inserted here by JavaScript -->
-    <div id="sidebar-container"></div>
+<!-- This is the main content only, to be loaded dynamically -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-slate-900">Data Retention</h1>
+        <p class="text-slate-500 text-sm mt-1">Configure how long the gateway should store local data, what data types should be kept, how memory is allocated, and how old data is purged.</p>
+        <div class="mt-4 flex gap-2">
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <i class="fa-solid fa-check-circle"></i> Storage Healthy
+            </span>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <i class="fa-solid fa-database"></i> 1.35 GB / 4 GB Used
+            </span>
+        </div>
+    </div>
 
-    <!-- Main Content Container -->
-    <div class="main-content-with-sidebar">
-        <!-- Header -->
-        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                <!-- Left: Logo & Breadcrumb -->
-                <div class="flex items-center space-x-4">
-                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
-                        <span><i class="fa-solid fa-sliders mr-2"></i>Settings</span>
-                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
-                        <span class="text-slate-900 font-medium" id="page-title">Data Retention</span>
-                    </div>
+    <!-- Storage Summary -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Storage Summary Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
+                <i class="fa-solid fa-hard-drive mr-2 text-primary"></i>
+                Storage Summary
+            </h3>
+            
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600">Total Flash Capacity:</span>
+                    <span class="font-medium text-slate-900">4096 MB</span>
                 </div>
-
-                <!-- Right: Controls -->
-                <div class="flex items-center space-x-4">
-                    <div class="relative hidden sm:block">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600">Used Space:</span>
+                    <span class="font-medium text-slate-900">1380 MB</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600">Remaining Space:</span>
+                    <span class="font-medium text-slate-900">2716 MB</span>
+                </div>
+                
+                <div class="pt-4 border-t border-slate-100">
+                    <div class="mb-3">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Storage Usage</span>
+                            <span>33.7%</span>
                         </div>
-                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
-                            <option>Univa-GW-01</option>
-                            <option>Univa-GW-02</option>
-                            <option>Univa-GW-03</option>
-                        </select>
+                        <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-primary rounded-full" style="width: 33.7%"></div>
+                        </div>
                     </div>
-                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
-                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors" onclick="showHelpModal()">
-                        <i class="fa-solid fa-circle-question mr-2"></i> Help
-                    </button>
                     
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">High Usage Warning</label>
+                            <div class="flex items-center">
+                                <input type="number" id="highUsageWarning" value="85" min="50" max="95" 
+                                       class="w-16 rounded-lg border-slate-300 border px-2 py-1 text-sm">
+                                <span class="ml-1 text-sm text-slate-700">%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Critical Purge Trigger</label>
+                            <div class="flex items-center">
+                                <input type="number" id="criticalPurgeTrigger" value="95" min="75" max="99" 
+                                       class="w-16 rounded-lg border-slate-300 border px-2 py-1 text-sm">
+                                <span class="ml-1 text-sm text-slate-700">%</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </header>
+        </div>
 
-        <!-- Main Content -->
-        <main class="flex-grow">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div class="mb-8">
-                    <h1 class="text-2xl font-bold text-slate-900">Data Retention</h1>
-                    <p class="text-slate-500 text-sm mt-1">Configure how long the gateway should store local data, what data types should be kept, how memory is allocated, and how old data is purged.</p>
-                    <div class="mt-4 flex gap-2">
-                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <i class="fa-solid fa-check-circle"></i> Storage Healthy
-                        </span>
-                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            <i class="fa-solid fa-database"></i> 1.35 GB / 4 GB Used
-                        </span>
+        <!-- FIFO & Priority Status Card -->
+        <div class="bg-white rounded-xl shadow-sm border border-border p-6">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
+                <i class="fa-solid fa-rotate-right mr-2 text-primary"></i>
+                FIFO & Priority Management
+            </h3>
+            
+            <div class="space-y-4">
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-circle-info text-blue-500"></i>
+                        <span class="text-sm font-medium text-blue-800">FIFO Buffer Status</span>
                     </div>
+                    <p class="text-xs text-blue-700">Ring buffer is active. Oldest data will be purged first when storage limit is reached.</p>
                 </div>
-
-                <!-- Storage Summary -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    <!-- Storage Summary Card -->
-                    <div class="bg-white rounded-xl shadow-sm border border-border p-6">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
-                            <i class="fa-solid fa-hard-drive mr-2 text-primary"></i>
-                            Storage Summary
-                        </h3>
-                        
-                        <div class="space-y-4">
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-slate-600">Total Flash Capacity:</span>
-                                <span class="font-medium text-slate-900">4096 MB</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-slate-600">Used Space:</span>
-                                <span class="font-medium text-slate-900">1380 MB</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-slate-600">Remaining Space:</span>
-                                <span class="font-medium text-slate-900">2716 MB</span>
-                            </div>
-                            
-                            <div class="pt-4 border-t border-slate-100">
-                                <div class="mb-3">
-                                    <div class="flex justify-between text-sm mb-1">
-                                        <span>Storage Usage</span>
-                                        <span>33.7%</span>
-                                    </div>
-                                    <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
-                                        <div class="h-full bg-primary rounded-full" style="width: 33.7%"></div>
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">High Usage Warning</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="highUsageWarning" value="85" min="50" max="95" 
-                                                   class="w-16 rounded-lg border-slate-300 border px-2 py-1 text-sm">
-                                            <span class="ml-1 text-sm text-slate-700">%</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Critical Purge Trigger</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="criticalPurgeTrigger" value="95" min="75" max="99" 
-                                                   class="w-16 rounded-lg border-slate-300 border px-2 py-1 text-sm">
-                                            <span class="ml-1 text-sm text-slate-700">%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                
+                <div>
+                    <h4 class="text-xs font-semibold text-slate-700 mb-2">Priority Flags Status</h4>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-600">Critical Safety Logs</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <i class="fa-solid fa-shield-check mr-1"></i> Protected
+                            </span>
                         </div>
-                    </div>
-
-                    <!-- FIFO & Priority Status Card -->
-                    <div class="bg-white rounded-xl shadow-sm border border-border p-6">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
-                            <i class="fa-solid fa-rotate-right mr-2 text-primary"></i>
-                            FIFO & Priority Management
-                        </h3>
-                        
-                        <div class="space-y-4">
-                            <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <i class="fa-solid fa-circle-info text-blue-500"></i>
-                                    <span class="text-sm font-medium text-blue-800">FIFO Buffer Status</span>
-                                </div>
-                                <p class="text-xs text-blue-700">Ring buffer is active. Oldest data will be purged first when storage limit is reached.</p>
-                            </div>
-                            
-                            <div>
-                                <h4 class="text-xs font-semibold text-slate-700 mb-2">Priority Flags Status</h4>
-                                <div class="space-y-2">
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-slate-600">Critical Safety Logs</span>
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            <i class="fa-solid fa-shield-check mr-1"></i> Protected
-                                        </span>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-slate-600">Event Logs</span>
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                            <i class="fa-solid fa-clock-rotate-left mr-1"></i> High Priority
-                                        </span>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-slate-600">Telemetry Data</span>
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                                            <i class="fa-solid fa-chart-line mr-1"></i> Medium Priority
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="pt-2">
-                                <div class="flex items-center">
-                                    <i class="fa-solid fa-cloud-arrow-up text-slate-400 mr-2"></i>
-                                    <span class="text-xs text-slate-600">Cloud sync queue: <span class="font-medium">245 records pending</span></span>
-                                </div>
-                            </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-600">Event Logs</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <i class="fa-solid fa-clock-rotate-left mr-1"></i> High Priority
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-600">Telemetry Data</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                <i class="fa-solid fa-chart-line mr-1"></i> Medium Priority
+                            </span>
                         </div>
                     </div>
                 </div>
+                
+                <div class="pt-2">
+                    <div class="flex items-center">
+                        <i class="fa-solid fa-cloud-arrow-up text-slate-400 mr-2"></i>
+                        <span class="text-xs text-slate-600">Cloud sync queue: <span class="font-medium">245 records pending</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <!-- Data Retention Policy -->
-                <section id="section-retention" class="bg-white rounded-xl shadow-sm border border-border p-6 mb-8">
-                    <div class="flex items-center justify-between mb-6">
+    <!-- Data Retention Policy -->
+    <section id="section-retention" class="bg-white rounded-xl shadow-sm border border-border p-6 mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-hard-drive mr-2 text-primary"></i> 
+                    <span class="mr-2">Data Retention Policy</span>
+                    <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                </h2>
+                <button class="text-primary hover:text-primaryHover font-medium text-sm px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors ml-4" onclick="showStorageAnalytics()">
+                    <i class="fa-solid fa-chart-pie mr-1"></i> Analytics
+                </button>
+            </div>
+            <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                Storage Configuration & Policies
+            </div>
+        </div>
+
+        <!-- Data Categories Configuration -->
+        <div class="mb-8">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Data Categories Retention</h3>
+            
+            <div class="space-y-4">
+                <!-- Telemetry Data -->
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
                         <div class="flex items-center">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-hard-drive mr-2 text-primary"></i> 
-                                <span class="mr-2">Data Retention Policy</span>
-                                <span class="text-xs font-normal text-slate-500">SECTION A</span>
-                            </h2>
-                            <button class="text-primary hover:text-primaryHover font-medium text-sm px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors ml-4" onclick="showStorageAnalytics()">
-                                <i class="fa-solid fa-chart-pie mr-1"></i> Analytics
-                            </button>
+                            <i class="fa-solid fa-chart-line text-blue-500 mr-3"></i>
+                            <div>
+                                <h4 class="font-medium text-slate-900">Telemetry Data</h4>
+                                <p class="text-xs text-slate-500">Sensor values, crane movements</p>
+                            </div>
                         </div>
-                        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                            Storage Configuration & Policies
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" id="telemetryEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                            <label for="telemetryEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
                         </div>
                     </div>
-
-                    <!-- Data Categories Configuration -->
-                    <div class="mb-8">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Data Categories Retention</h3>
-                        
-                        <div class="space-y-4">
-                            <!-- Telemetry Data -->
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center">
-                                        <i class="fa-solid fa-chart-line text-blue-500 mr-3"></i>
-                                        <div>
-                                            <h4 class="font-medium text-slate-900">Telemetry Data</h4>
-                                            <p class="text-xs text-slate-500">Sensor values, crane movements</p>
-                                        </div>
-                                    </div>
-                                    <div class="relative inline-block w-10 align-middle select-none">
-                                        <input type="checkbox" id="telemetryEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
-                                        <label for="telemetryEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="telemetryRetention">
-                                            <option>7 days</option>
-                                            <option>14 days</option>
-                                            <option>30 days</option>
-                                            <option>60 days</option>
-                                            <option>90 days</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="telemetryMaxSize" value="500" min="100" max="2000" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                            <span class="ml-2 text-sm text-slate-700">MB</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="telemetryCompression">
-                                            <option>None</option>
-                                            <option>Daily</option>
-                                            <option selected>Weekly</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="telemetryPriority">
-                                            <option>High</option>
-                                            <option selected>Medium</option>
-                                            <option>Low</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="mt-3 flex items-center">
-                                    <input type="checkbox" id="telemetrySync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked>
-                                    <label for="telemetrySync" class="ml-2 text-sm text-slate-700">Sync Before Delete</label>
-                                </div>
-                            </div>
-
-                            <!-- Event Logs -->
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center">
-                                        <i class="fa-solid fa-calendar-day text-purple-500 mr-3"></i>
-                                        <div>
-                                            <h4 class="font-medium text-slate-900">Event Logs</h4>
-                                            <p class="text-xs text-slate-500">Overload, zone breach, safety events</p>
-                                        </div>
-                                    </div>
-                                    <div class="relative inline-block w-10 align-middle select-none">
-                                        <input type="checkbox" id="eventsEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
-                                        <label for="eventsEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="eventsRetention">
-                                            <option>7 days</option>
-                                            <option>14 days</option>
-                                            <option selected>30 days</option>
-                                            <option>60 days</option>
-                                            <option>90 days</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="eventsMaxSize" value="300" min="50" max="1000" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                            <span class="ml-2 text-sm text-slate-700">MB</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="eventsCompression">
-                                            <option>None</option>
-                                            <option selected>Daily</option>
-                                            <option>Weekly</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="eventsPriority">
-                                            <option selected>High</option>
-                                            <option>Medium</option>
-                                            <option>Low</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="mt-3 flex items-center">
-                                    <input type="checkbox" id="eventsSync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked>
-                                    <label for="eventsSync" class="ml-2 text-sm text-slate-700">Sync Before Delete</label>
-                                </div>
-                            </div>
-
-                            <!-- Alert Logs -->
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center">
-                                        <i class="fa-solid fa-bell text-red-500 mr-3"></i>
-                                        <div>
-                                            <h4 class="font-medium text-slate-900">Alert Logs</h4>
-                                            <p class="text-xs text-slate-500">Safety alarms, notifications</p>
-                                        </div>
-                                    </div>
-                                    <div class="relative inline-block w-10 align-middle select-none">
-                                        <input type="checkbox" id="alertsEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
-                                        <label for="alertsEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="alertsRetention">
-                                            <option>7 days</option>
-                                            <option>14 days</option>
-                                            <option>30 days</option>
-                                            <option selected>60 days</option>
-                                            <option>90 days</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="alertsMaxSize" value="200" min="50" max="500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                            <span class="ml-2 text-sm text-slate-700">MB</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="alertsCompression">
-                                            <option selected>None</option>
-                                            <option>Daily</option>
-                                            <option>Weekly</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="alertsPriority">
-                                            <option>High</option>
-                                            <option selected>Medium</option>
-                                            <option>Low</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="mt-3 flex items-center">
-                                    <input type="checkbox" id="alertsSync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked>
-                                    <label for="alertsSync" class="ml-2 text-sm text-slate-700">Sync Before Delete</label>
-                                </div>
-                            </div>
-
-                            <!-- CraneIQ Safety Logs -->
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 border-l-4 border-l-red-500">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center">
-                                        <i class="fa-solid fa-shield-halved text-red-500 mr-3"></i>
-                                        <div>
-                                            <h4 class="font-medium text-slate-900">CraneIQ Safety Logs</h4>
-                                            <p class="text-xs text-slate-500">Anti-collision, load limiter logs</p>
-                                        </div>
-                                    </div>
-                                    <div class="relative inline-block w-10 align-middle select-none">
-                                        <input type="checkbox" id="craneiqEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
-                                        <label for="craneiqEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="craneiqRetention">
-                                            <option>7 days</option>
-                                            <option>14 days</option>
-                                            <option>30 days</option>
-                                            <option>60 days</option>
-                                            <option selected>90 days</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="craneiqMaxSize" value="700" min="100" max="1500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                            <span class="ml-2 text-sm text-slate-700">MB</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="craneiqCompression">
-                                            <option>None</option>
-                                            <option selected>Daily</option>
-                                            <option>Weekly</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="craneiqPriority" disabled>
-                                            <option selected>Critical (Never purge without cloud sync)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="mt-3 flex items-center">
-                                    <input type="checkbox" id="craneiqSync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked disabled>
-                                    <label for="craneiqSync" class="ml-2 text-sm text-slate-700">Sync Before Delete (Always ON - non editable)</label>
-                                </div>
-                            </div>
-
-                            <!-- OTA History -->
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="flex items-center">
-                                        <i class="fa-solid fa-cloud-arrow-up text-green-500 mr-3"></i>
-                                        <div>
-                                            <h4 class="font-medium text-slate-900">OTA Update History</h4>
-                                            <p class="text-xs text-slate-500">Firmware update records</p>
-                                        </div>
-                                    </div>
-                                    <div class="relative inline-block w-10 align-middle select-none">
-                                        <input type="checkbox" id="otaEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
-                                        <label for="otaEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="otaRetention">
-                                            <option>30 days</option>
-                                            <option>60 days</option>
-                                            <option>90 days</option>
-                                            <option selected>120 days</option>
-                                            <option>180 days</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
-                                        <div class="flex items-center">
-                                            <input type="number" id="otaMaxSize" value="100" min="10" max="500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                            <span class="ml-2 text-sm text-slate-700">MB</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="otaCompression">
-                                            <option selected>None</option>
-                                            <option>Daily</option>
-                                            <option>Weekly</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
-                                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="otaPriority">
-                                            <option>High</option>
-                                            <option selected>Medium</option>
-                                            <option>Low</option>
-                                        </select>
-                                    </div>
-                                </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="telemetryRetention">
+                                <option>7 days</option>
+                                <option>14 days</option>
+                                <option>30 days</option>
+                                <option>60 days</option>
+                                <option>90 days</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
+                            <div class="flex items-center">
+                                <input type="number" id="telemetryMaxSize" value="500" min="100" max="2000" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                <span class="ml-2 text-sm text-slate-700">MB</span>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Offline Buffering Control -->
-                    <div class="mb-8">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Offline Buffering Control</h3>
-                        
-                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center">
-                                    <i class="fa-solid fa-wifi-slash text-slate-500 mr-3"></i>
-                                    <div>
-                                        <h4 class="font-medium text-slate-900">Offline Mode Buffering</h4>
-                                        <p class="text-xs text-slate-500">Buffer data during internet outages</p>
-                                    </div>
-                                </div>
-                                <div class="relative inline-block w-10 align-middle select-none">
-                                    <input type="checkbox" id="offlineBuffering" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
-                                    <label for="offlineBuffering" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Max Queue Size</label>
-                                    <div class="flex items-center">
-                                        <input type="number" id="maxQueueSize" value="100" min="10" max="500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                        <span class="ml-2 text-sm text-slate-700">MB</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Retry Interval</label>
-                                    <div class="flex items-center">
-                                        <input type="number" id="retryInterval" value="30" min="5" max="300" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                        <span class="ml-2 text-sm text-slate-700">seconds</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Max Retry Time</label>
-                                    <div class="flex items-center">
-                                        <input type="number" id="maxRetryTime" value="20" min="5" max="120" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                                        <span class="ml-2 text-sm text-slate-700">minutes</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-3">
-                                <div class="flex items-start gap-2">
-                                    <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
-                                    <div>
-                                        <p class="text-xs text-blue-700">When offline, data is buffered locally and synced automatically when connection is restored.</p>
-                                        <p class="text-xs text-blue-700 mt-1">Current buffer status: <span class="font-medium">Empty (0 records pending)</span></p>
-                                    </div>
-                                </div>
-                            </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="telemetryCompression">
+                                <option>None</option>
+                                <option>Daily</option>
+                                <option selected>Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="telemetryPriority">
+                                <option>High</option>
+                                <option selected>Medium</option>
+                                <option>Low</option>
+                            </select>
                         </div>
                     </div>
+                    <div class="mt-3 flex items-center">
+                        <input type="checkbox" id="telemetrySync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked>
+                        <label for="telemetrySync" class="ml-2 text-sm text-slate-700">Sync Before Delete</label>
+                    </div>
+                </div>
 
-                    <!-- Manual Actions -->
+                <!-- Event Logs -->
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-calendar-day text-purple-500 mr-3"></i>
+                            <div>
+                                <h4 class="font-medium text-slate-900">Event Logs</h4>
+                                <p class="text-xs text-slate-500">Overload, zone breach, safety events</p>
+                            </div>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" id="eventsEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                            <label for="eventsEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="eventsRetention">
+                                <option>7 days</option>
+                                <option>14 days</option>
+                                <option selected>30 days</option>
+                                <option>60 days</option>
+                                <option>90 days</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
+                            <div class="flex items-center">
+                                <input type="number" id="eventsMaxSize" value="300" min="50" max="1000" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                <span class="ml-2 text-sm text-slate-700">MB</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="eventsCompression">
+                                <option>None</option>
+                                <option selected>Daily</option>
+                                <option>Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="eventsPriority">
+                                <option selected>High</option>
+                                <option>Medium</option>
+                                <option>Low</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center">
+                        <input type="checkbox" id="eventsSync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked>
+                        <label for="eventsSync" class="ml-2 text-sm text-slate-700">Sync Before Delete</label>
+                    </div>
+                </div>
+
+                <!-- Alert Logs -->
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-bell text-red-500 mr-3"></i>
+                            <div>
+                                <h4 class="font-medium text-slate-900">Alert Logs</h4>
+                                <p class="text-xs text-slate-500">Safety alarms, notifications</p>
+                            </div>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" id="alertsEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                            <label for="alertsEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="alertsRetention">
+                                <option>7 days</option>
+                                <option>14 days</option>
+                                <option>30 days</option>
+                                <option selected>60 days</option>
+                                <option>90 days</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
+                            <div class="flex items-center">
+                                <input type="number" id="alertsMaxSize" value="200" min="50" max="500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                <span class="ml-2 text-sm text-slate-700">MB</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="alertsCompression">
+                                <option selected>None</option>
+                                <option>Daily</option>
+                                <option>Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="alertsPriority">
+                                <option>High</option>
+                                <option selected>Medium</option>
+                                <option>Low</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center">
+                        <input type="checkbox" id="alertsSync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked>
+                        <label for="alertsSync" class="ml-2 text-sm text-slate-700">Sync Before Delete</label>
+                    </div>
+                </div>
+
+                <!-- CraneIQ Safety Logs -->
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 border-l-4 border-l-red-500">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-shield-halved text-red-500 mr-3"></i>
+                            <div>
+                                <h4 class="font-medium text-slate-900">CraneIQ Safety Logs</h4>
+                                <p class="text-xs text-slate-500">Anti-collision, load limiter logs</p>
+                            </div>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" id="craneiqEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                            <label for="craneiqEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="craneiqRetention">
+                                <option>7 days</option>
+                                <option>14 days</option>
+                                <option>30 days</option>
+                                <option>60 days</option>
+                                <option selected>90 days</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
+                            <div class="flex items-center">
+                                <input type="number" id="craneiqMaxSize" value="700" min="100" max="1500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                <span class="ml-2 text-sm text-slate-700">MB</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="craneiqCompression">
+                                <option>None</option>
+                                <option selected>Daily</option>
+                                <option>Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="craneiqPriority" disabled>
+                                <option selected>Critical (Never purge without cloud sync)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center">
+                        <input type="checkbox" id="craneiqSync" class="h-4 w-4 text-primary rounded border-slate-300 focus:ring-primary" checked disabled>
+                        <label for="craneiqSync" class="ml-2 text-sm text-slate-700">Sync Before Delete (Always ON - non editable)</label>
+                    </div>
+                </div>
+
+                <!-- OTA History -->
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <i class="fa-solid fa-cloud-arrow-up text-green-500 mr-3"></i>
+                            <div>
+                                <h4 class="font-medium text-slate-900">OTA Update History</h4>
+                                <p class="text-xs text-slate-500">Firmware update records</p>
+                            </div>
+                        </div>
+                        <div class="relative inline-block w-10 align-middle select-none">
+                            <input type="checkbox" id="otaEnabled" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                            <label for="otaEnabled" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Retention Period</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="otaRetention">
+                                <option>30 days</option>
+                                <option>60 days</option>
+                                <option>90 days</option>
+                                <option selected>120 days</option>
+                                <option>180 days</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Max Size</label>
+                            <div class="flex items-center">
+                                <input type="number" id="otaMaxSize" value="100" min="10" max="500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                                <span class="ml-2 text-sm text-slate-700">MB</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Compression</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="otaCompression">
+                                <option selected>None</option>
+                                <option>Daily</option>
+                                <option>Weekly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Purge Priority</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="otaPriority">
+                                <option>High</option>
+                                <option selected>Medium</option>
+                                <option>Low</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Offline Buffering Control -->
+        <div class="mb-8">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Offline Buffering Control</h3>
+            
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <i class="fa-solid fa-wifi-slash text-slate-500 mr-3"></i>
+                        <div>
+                            <h4 class="font-medium text-slate-900">Offline Mode Buffering</h4>
+                            <p class="text-xs text-slate-500">Buffer data during internet outages</p>
+                        </div>
+                    </div>
+                    <div class="relative inline-block w-10 align-middle select-none">
+                        <input type="checkbox" id="offlineBuffering" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300" checked/>
+                        <label for="offlineBuffering" class="toggle-label block overflow-hidden h-5 rounded-full bg-slate-300 cursor-pointer"></label>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Manual Actions</h3>
-                        
-                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-3 rounded-lg shadow-sm transition-colors flex items-center justify-center" onclick="exportStoredData()">
-                                    <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export Stored Data
-                                </button>
-                                
-                                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-3 rounded-lg shadow-sm transition-colors flex items-center justify-center" onclick="clearNonCriticalData()">
-                                    <i class="fa-solid fa-trash mr-2 text-slate-400"></i> Clear Non-Critical Data
-                                </button>
-                                
-                                <button class="bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium text-sm px-4 py-3 rounded-lg shadow-sm transition-colors flex items-center justify-center" onclick="fullResetStorage()">
-                                    <i class="fa-solid fa-broom mr-2 text-red-400"></i> Full Reset Storage
-                                </button>
-                            </div>
-                            
-                            <div class="mt-4 text-xs text-slate-500 flex items-center">
-                                <i class="fa-solid fa-circle-exclamation mr-2 text-yellow-500"></i>
-                                Manual actions cannot be undone. Critical safety logs are always protected from manual deletion.
-                            </div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Queue Size</label>
+                        <div class="flex items-center">
+                            <input type="number" id="maxQueueSize" value="100" min="10" max="500" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                            <span class="ml-2 text-sm text-slate-700">MB</span>
                         </div>
                     </div>
-                </section>
-            </div>
-        </main>
-
-        <!-- Footer Actions -->
-        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="runDiagnostics()">
-                        <i class="fa-solid fa-stethoscope mr-2 text-slate-400"></i> Run Diagnostics
-                    </button>
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="exportLogsNow()">
-                        <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export Logs Now
-                    </button>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Retry Interval</label>
+                        <div class="flex items-center">
+                            <input type="number" id="retryInterval" value="30" min="5" max="300" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                            <span class="ml-2 text-sm text-slate-700">seconds</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Retry Time</label>
+                        <div class="flex items-center">
+                            <input type="number" id="maxRetryTime" value="20" min="5" max="120" class="w-24 rounded-lg border-slate-300 border px-3 py-2 text-sm">
+                            <span class="ml-2 text-sm text-slate-700">minutes</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" onclick="clearAllLogs()">
-                        <i class="fa-solid fa-trash mr-2"></i> Clear All Logs
-                    </button>
-                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                    <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center" onclick="purgeOldData()">
-                        <i class="fa-solid fa-broom mr-2"></i> Purge Old Data
-                    </button>
-                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
-                        Cancel
-                    </button>
-                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn" onclick="saveAllSettingsWithConfirmation()">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Retention Settings
-                    </button>
+                
+                <div class="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                    <div class="flex items-start gap-2">
+                        <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                        <div>
+                            <p class="text-xs text-blue-700">When offline, data is buffered locally and synced automatically when connection is restored.</p>
+                            <p class="text-xs text-blue-700 mt-1">Current buffer status: <span class="font-medium">Empty (0 records pending)</span></p>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </footer>
-    </div> <!-- End of main content container -->
+        </div>
 
-    <!-- Modal Container -->
-    <div id="modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;"></div>
-
-    <script>
-        // ==================== APPLICATION STATE ====================
-        let appState = {
-            unsavedChanges: false,
-            storageUsage: {
-                total: 4096,
-                used: 1380,
-                remaining: 2716
-            }
-        };
-
-        // ==================== FETCH SIDEBAR ====================
-        async function loadSidebar() {
-            try {
-                const response = await fetch('sidebar.html');
-                if (!response.ok) {
-                    throw new Error(`Failed to load sidebar: ${response.status}`);
-                }
-                
-                const html = await response.text();
-                document.getElementById('sidebar-container').innerHTML = html;
-                
-                // Update active page
-                updateActivePage();
-                
-                // Initialize sidebar functionality
-                initializeSidebar();
-                
-            } catch (error) {
-                console.error('Error loading sidebar:', error);
-                // Fallback sidebar
-                createFallbackSidebar();
-            }
-        }
-
-        // Create fallback sidebar if fetch fails
-        function createFallbackSidebar() {
-            const fallbackHTML = `
-                <div class="sidebar" id="sidebar">
-                    <div class="sidebar-logo">
-                        <div class="logo-text">
-                            <i class="fa-solid fa-network-wired mr-2"></i> Univa Gateway
-                        </div>
-                    </div>
-                    <div class="sidebar-nav">
-                        <div class="nav-section">
-                            <div class="section-title">Configuration</div>
-                            <a href="general-configuration.html" class="nav-item">
-                                <i class="fa-solid fa-sliders"></i> General Configuration
-                            </a>
-                            <a href="device-management.html" class="nav-item">
-                                <i class="fa-solid fa-microchip"></i> Device Management
-                            </a>
-                            <a href="data-retention.html" class="nav-item active">
-                                <i class="fa-solid fa-database"></i> Data Retention
-                            </a>
-                        </div>
-                    </div>
-                    <div class="sidebar-footer">
-                        <div class="user-profile">
-                            <div class="user-avatar">
-                                <i class="fa-solid fa-user"></i>
-                            </div>
-                            <div class="user-info">
-                                <h4 class="text-sm font-medium text-slate-900">Admin User</h4>
-                                <p class="text-xs text-slate-500">System Administrator</p>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Manual Actions -->
+        <div>
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 border-b pb-2">Manual Actions</h3>
+            
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-5">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-3 rounded-lg shadow-sm transition-colors flex items-center justify-center" onclick="exportStoredData()">
+                        <i class="fa-solid fa-file-export mr-2 text-slate-400"></i> Export Stored Data
+                    </button>
+                    
+                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-3 rounded-lg shadow-sm transition-colors flex items-center justify-center" onclick="clearNonCriticalData()">
+                        <i class="fa-solid fa-trash mr-2 text-slate-400"></i> Clear Non-Critical Data
+                    </button>
+                    
+                    <button class="bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium text-sm px-4 py-3 rounded-lg shadow-sm transition-colors flex items-center justify-center" onclick="fullResetStorage()">
+                        <i class="fa-solid fa-broom mr-2 text-red-400"></i> Full Reset Storage
+                    </button>
                 </div>
-                <div class="sidebar-toggle" id="sidebarToggle">
-                    <i class="fa-solid fa-bars"></i>
+                
+                <div class="mt-4 text-xs text-slate-500 flex items-center">
+                    <i class="fa-solid fa-circle-exclamation mr-2 text-yellow-500"></i>
+                    Manual actions cannot be undone. Critical safety logs are always protected from manual deletion.
                 </div>
-            `;
-            
-            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
-            initializeSidebar();
-        }
+            </div>
+        </div>
+    </section>
+</div>
 
-        // Update active page in sidebar
-        function updateActivePage() {
-            const navItems = document.querySelectorAll('.nav-item');
-            navItems.forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            const dataRetentionLink = Array.from(navItems).find(item => 
-                item.textContent.includes('Data Retention') || 
-                item.textContent.includes('Retention')
-            );
-            
-            if (dataRetentionLink) {
-                dataRetentionLink.classList.add('active');
-            }
-        }
-
-        // Initialize sidebar functionality
-        function initializeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            
-            if (!sidebar || !sidebarToggle) return;
-            
-            sidebarToggle.addEventListener('click', function() {
-                sidebar.classList.toggle('active');
-                const icon = this.querySelector('i');
-                icon.className = sidebar.classList.contains('active') ? 'fa-solid fa-times' : 'fa-solid fa-bars';
-            });
-            
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.add('active');
-                sidebarToggle.style.left = '260px';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
-            }
-            
-            window.addEventListener('resize', handleResponsive);
-        }
-
-        // Handle responsive behavior
-        function handleResponsive() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'block';
-                sidebarToggle.style.left = '0';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-            } else {
-                sidebar.classList.remove('collapsed');
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'none';
-                sidebarToggle.style.left = '260px';
-            }
-        }
-
-        // ==================== MODAL SYSTEM ====================
-        function showModal(options) {
-            const modalContainer = document.getElementById('modal-container');
-            
-            const {
-                title = 'Modal',
-                content = '',
-                buttons = [],
-                onClose = null
-            } = options;
-
-            const modal = document.createElement('div');
-            modal.className = 'bg-white rounded-xl shadow-lg border border-border p-6 max-w-md w-full mx-4';
-            
-            // Modal header
-            const modalHeader = document.createElement('div');
-            modalHeader.className = 'flex items-center justify-between mb-4';
-            
-            const titleElement = document.createElement('h3');
-            titleElement.className = 'text-lg font-semibold text-slate-900';
-            titleElement.textContent = title;
-            
-            const closeButton = document.createElement('button');
-            closeButton.className = 'text-slate-400 hover:text-slate-600';
-            closeButton.innerHTML = '<i class="fa-solid fa-times"></i>';
-            closeButton.addEventListener('click', () => {
-                modalContainer.style.display = 'none';
-                if (onClose) onClose();
-            });
-            
-            modalHeader.appendChild(titleElement);
-            modalHeader.appendChild(closeButton);
-            modal.appendChild(modalHeader);
-            
-            // Modal body
-            const modalBody = document.createElement('div');
-            modalBody.className = 'mb-6';
-            
-            if (typeof content === 'string') {
-                modalBody.innerHTML = content;
-            } else {
-                modalBody.appendChild(content);
-            }
-            
-            modal.appendChild(modalBody);
-            
-            // Modal footer
-            if (buttons.length > 0) {
-                const modalFooter = document.createElement('div');
-                modalFooter.className = 'flex justify-end space-x-3';
-                
-                buttons.forEach(button => {
-                    const btn = document.createElement('button');
-                    btn.className = button.primary ? 
-                        'bg-primary hover:bg-primaryHover text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors' :
-                        'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors';
-                    
-                    if (button.danger) {
-                        btn.classList.add('border-red-300', 'text-red-600', 'hover:bg-red-50');
-                    }
-                    
-                    btn.textContent = button.text;
-                    
-                    btn.addEventListener('click', () => {
-                        if (button.onClick) button.onClick();
-                        modalContainer.style.display = 'none';
-                    });
-                    
-                    modalFooter.appendChild(btn);
-                });
-                
-                modal.appendChild(modalFooter);
-            }
-            
-            modalContainer.innerHTML = '';
-            modalContainer.appendChild(modal);
-            modalContainer.style.display = 'flex';
-        }
-
-        // ==================== CONFIRMATION DIALOG ====================
-        function showConfirm(options) {
-            const {
-                title = 'Confirm Action',
-                message = 'Are you sure you want to proceed?',
-                confirmText = 'Confirm',
-                cancelText = 'Cancel',
-                onConfirm = null,
-                onCancel = null
-            } = options;
-
-            showModal({
-                title,
-                content: `<p class="text-slate-600">${message}</p>`,
-                buttons: [
-                    {
-                        text: cancelText,
-                        onClick: () => {
-                            if (onCancel) onCancel();
-                        }
-                    },
-                    {
-                        text: confirmText,
-                        primary: true,
-                        onClick: () => {
-                            if (onConfirm) onConfirm();
-                        }
-                    }
-                ],
-                onClose: onCancel
-            });
-        }
-
-        // ==================== ALERT DIALOG ====================
-        function showAlert(options) {
-            const {
-                title = 'Alert',
-                message = '',
-                buttonText = 'OK',
-                onClose = null
-            } = options;
-
-            showModal({
-                title,
-                content: `<p class="text-slate-600">${message}</p>`,
-                buttons: [{
-                    text: buttonText,
-                    primary: true,
-                    onClick: () => {
-                        if (onClose) onClose();
-                    }
-                }],
-                onClose
-            });
-        }
-
-        // ==================== STORAGE ANALYTICS MODAL ====================
-        function showStorageAnalytics() {
-            showModal({
-                title: 'Storage Analytics',
-                content: `
-                    <div class="space-y-4">
-                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                            <div class="flex justify-between mb-2">
-                                <h4 class="text-sm font-semibold text-slate-900">Storage Overview</h4>
-                                <span class="text-xs text-slate-500">Updated just now</span>
-                            </div>
-                            <div class="mb-3">
-                                <div class="flex justify-between text-sm mb-1">
-                                    <span>Usage</span>
-                                    <span>33.7% (1380MB / 4096MB)</span>
-                                </div>
-                                <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
-                                    <div class="h-full bg-primary rounded-full" style="width: 33.7%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <h4 class="text-sm font-semibold text-slate-900 mb-2">Storage by Category</h4>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="bg-blue-50 border border-blue-100 rounded p-3">
-                                    <div class="text-xs text-blue-700">Telemetry Data</div>
-                                    <div class="font-medium text-slate-900">320 MB</div>
-                                </div>
-                                <div class="bg-red-50 border border-red-100 rounded p-3">
-                                    <div class="text-xs text-red-700">CraneIQ Logs</div>
-                                    <div class="font-medium text-slate-900">450 MB</div>
-                                </div>
-                                <div class="bg-yellow-50 border border-yellow-100 rounded p-3">
-                                    <div class="text-xs text-yellow-700">Event Logs</div>
-                                    <div class="font-medium text-slate-900">280 MB</div>
-                                </div>
-                                <div class="bg-green-50 border border-green-100 rounded p-3">
-                                    <div class="text-xs text-green-700">Alert Logs</div>
-                                    <div class="font-medium text-slate-900">150 MB</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                            <h4 class="text-sm font-semibold text-slate-900 mb-2">Retention Forecast</h4>
-                            <p class="text-sm text-slate-600">Based on current usage trends, storage will be full in approximately 45 days.</p>
-                        </div>
-                    </div>
-                `,
-                buttons: [
-                    {
-                        text: 'Run Cleanup',
-                        onClick: () => {
-                            purgeOldData();
-                        }
-                    },
-                    {
-                        text: 'Close',
-                        primary: true,
-                        onClick: () => {}
-                    }
-                ]
-            });
-        }
-
-        // ==================== HELP MODAL ====================
-        function showHelpModal() {
-            showModal({
-                title: 'Data Retention Help',
-                content: `
-                    <div class="space-y-4">
-                        <div>
-                            <h4 class="text-sm font-semibold text-slate-900 mb-2">Purpose of This Page</h4>
-                            <p class="text-sm text-slate-600">Configure how long the gateway should store local data, what data types should be kept, how memory is allocated, and how old data is purged.</p>
-                        </div>
-                        
-                        <div>
-                            <h4 class="text-sm font-semibold text-slate-900 mb-2">Key Features</h4>
-                            <ul class="text-sm text-slate-600 list-disc pl-5 space-y-1">
-                                <li>Prevent storage exhaustion with FIFO rotation</li>
-                                <li>Preserve critical crane operational data</li>
-                                <li>Retain telemetry during cloud connectivity loss</li>
-                                <li>Configure independent retention per data category</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                            <div class="flex items-start gap-2">
-                                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
-                                <div>
-                                    <div class="text-sm font-medium text-blue-800">Need more help?</div>
-                                    <div class="text-xs text-blue-600 mt-1">Contact support at support@univa.com</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `,
-                buttons: [{
-                    text: 'Close',
-                    primary: true,
-                    onClick: () => {}
-                }]
-            });
-        }
-
-        // ==================== MANUAL ACTION FUNCTIONS ====================
-        function exportStoredData() {
-            showConfirm({
-                title: 'Export Stored Data',
-                message: 'Export all stored data to external storage? This may take several minutes.',
-                onConfirm: () => {
-                    showToast('Starting data export...', 'info');
-                    setTimeout(() => {
-                        showToast('Data export completed successfully', 'success');
-                    }, 3000);
-                }
-            });
-        }
-
-        function clearNonCriticalData() {
-            showConfirm({
-                title: 'Clear Non-Critical Data',
-                message: 'Clear all non-critical data (telemetry, events, alerts)? Critical safety logs will be preserved.',
-                onConfirm: () => {
-                    showToast('Clearing non-critical data...', 'warning');
-                    setTimeout(() => {
-                        showToast('Non-critical data cleared successfully', 'success');
-                    }, 2000);
-                }
-            });
-        }
-
-        function fullResetStorage() {
-            showConfirm({
-                title: 'Full Storage Reset',
-                message: 'Reset ALL storage including critical safety logs? This action is irreversible and requires administrator approval.',
-                confirmText: 'Reset All Data',
-                onConfirm: () => {
-                    const adminPassword = prompt('Enter administrator password to confirm full storage reset:');
-                    if (adminPassword === 'admin123') {
-                        showToast('Resetting all storage...', 'error');
-                        setTimeout(() => {
-                            showToast('Storage fully reset. System will restart.', 'success');
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 2000);
-                        }, 3000);
-                    } else {
-                        showToast('Administrator password incorrect. Reset cancelled.', 'error');
-                    }
-                }
-            });
-        }
-
-        // ==================== OTHER ACTION FUNCTIONS ====================
-        function runDiagnostics() {
-            showToast('Running system diagnostics...', 'info');
-            setTimeout(() => {
-                showToast('Diagnostics completed successfully', 'success');
-            }, 2000);
-        }
-
-        function exportLogsNow() {
-            showConfirm({
-                title: 'Export Logs',
-                message: 'Export all logs now? This may take several minutes.',
-                onConfirm: () => {
-                    showToast('Starting log export...', 'info');
-                    setTimeout(() => {
-                        showToast('Log export completed successfully', 'success');
-                    }, 3000);
-                }
-            });
-        }
-
-        function clearAllLogs() {
-            showConfirm({
-                title: 'Clear All Logs',
-                message: 'Clear all log files? This action cannot be undone.',
-                onConfirm: () => {
-                    showToast('Clearing all logs...', 'warning');
-                    setTimeout(() => {
-                        showToast('All logs cleared successfully', 'success');
-                        markUnsavedChanges();
-                    }, 2000);
-                }
-            });
-        }
-
-        function purgeOldData() {
-            showConfirm({
-                title: 'Purge Old Data',
-                message: 'Purge data older than retention policy? This will permanently delete old data.',
-                onConfirm: () => {
-                    showToast('Purging old data...', 'warning');
-                    setTimeout(() => {
-                        showToast('Old data purged successfully', 'success');
-                        markUnsavedChanges();
-                    }, 2000);
-                }
-            });
-        }
-
-        // ==================== TOAST NOTIFICATION ====================
-        function showToast(message, type = 'info', duration = 3000) {
-            // Create toast element
-            const toast = document.createElement('div');
-            toast.className = `fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 transform transition-transform duration-300 translate-x-full ${
-                type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
-                type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
-                type === 'warning' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                'bg-blue-100 text-blue-800 border border-blue-200'
-            }`;
-            
-            const icon = type === 'success' ? 'fa-check-circle' :
-                        type === 'error' ? 'fa-exclamation-circle' :
-                        type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
-            
-            toast.innerHTML = `
-                <div class="flex items-center">
-                    <i class="fa-solid ${icon} mr-2"></i>
-                    <span class="text-sm font-medium">${message}</span>
-                </div>
-            `;
-            
-            document.body.appendChild(toast);
-            
-            // Show toast
-            setTimeout(() => {
-                toast.classList.remove('translate-x-full');
-                toast.classList.add('translate-x-0');
-            }, 10);
-            
-            // Hide and remove toast
-            setTimeout(() => {
-                toast.classList.remove('translate-x-0');
-                toast.classList.add('translate-x-full');
-                
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        toast.parentNode.removeChild(toast);
-                    }
-                }, 300);
-            }, duration);
-        }
-
-        // ==================== SETTINGS MANAGEMENT ====================
-        function saveAllSettings() {
-            const settings = {
-                storageSummary: {
-                    highUsageWarning: document.getElementById('highUsageWarning').value,
-                    criticalPurgeTrigger: document.getElementById('criticalPurgeTrigger').value
-                },
-                dataCategories: {
-                    telemetry: {
-                        enabled: document.getElementById('telemetryEnabled').checked,
-                        retention: document.getElementById('telemetryRetention').value,
-                        maxSize: document.getElementById('telemetryMaxSize').value,
-                        compression: document.getElementById('telemetryCompression').value,
-                        purgePriority: document.getElementById('telemetryPriority').value,
-                        syncBeforeDelete: document.getElementById('telemetrySync').checked
-                    },
-                    events: {
-                        enabled: document.getElementById('eventsEnabled').checked,
-                        retention: document.getElementById('eventsRetention').value,
-                        maxSize: document.getElementById('eventsMaxSize').value,
-                        compression: document.getElementById('eventsCompression').value,
-                        purgePriority: document.getElementById('eventsPriority').value,
-                        syncBeforeDelete: document.getElementById('eventsSync').checked
-                    },
-                    alerts: {
-                        enabled: document.getElementById('alertsEnabled').checked,
-                        retention: document.getElementById('alertsRetention').value,
-                        maxSize: document.getElementById('alertsMaxSize').value,
-                        compression: document.getElementById('alertsCompression').value,
-                        purgePriority: document.getElementById('alertsPriority').value,
-                        syncBeforeDelete: document.getElementById('alertsSync').checked
-                    },
-                    craneiq: {
-                        enabled: document.getElementById('craneiqEnabled').checked,
-                        retention: document.getElementById('craneiqRetention').value,
-                        maxSize: document.getElementById('craneiqMaxSize').value,
-                        compression: document.getElementById('craneiqCompression').value,
-                        purgePriority: 'critical',
-                        syncBeforeDelete: true
-                    },
-                    ota: {
-                        enabled: document.getElementById('otaEnabled').checked,
-                        retention: document.getElementById('otaRetention').value,
-                        maxSize: document.getElementById('otaMaxSize').value,
-                        compression: document.getElementById('otaCompression').value,
-                        purgePriority: document.getElementById('otaPriority').value
-                    }
-                },
-                offlineBuffering: {
-                    enabled: document.getElementById('offlineBuffering').checked,
-                    maxQueueSize: document.getElementById('maxQueueSize').value,
-                    retryInterval: document.getElementById('retryInterval').value,
-                    maxRetryTime: document.getElementById('maxRetryTime').value
-                }
-            };
-            
-            const saveBtn = document.getElementById('header-save-btn');
-            const footerSaveBtn = document.getElementById('footer-save-btn');
-            const originalText = saveBtn.innerHTML;
-            const originalFooterText = footerSaveBtn.innerHTML;
-            
-            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-            footerSaveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-            saveBtn.disabled = true;
-            footerSaveBtn.disabled = true;
-            
-            setTimeout(() => {
-                saveBtn.innerHTML = originalText;
-                footerSaveBtn.innerHTML = originalFooterText;
-                saveBtn.disabled = false;
-                footerSaveBtn.disabled = false;
-                
-                appState.unsavedChanges = false;
-                showToast('All retention settings saved successfully', 'success');
-                
-                console.log('Saved settings:', settings);
-            }, 1500);
-        }
-
-        function saveAllSettingsWithConfirmation() {
-            if (appState.unsavedChanges) {
-                showConfirm({
-                    title: 'Save Changes',
-                    message: 'Save all data retention settings?',
-                    onConfirm: () => {
-                        saveAllSettings();
-                    }
-                });
-            } else {
-                showAlert({
-                    title: 'No Changes',
-                    message: 'No settings have been modified.',
-                    onClose: () => {}
-                });
-            }
-        }
-
-        function markUnsavedChanges() {
-            appState.unsavedChanges = true;
-            
-            const saveBtn = document.getElementById('header-save-btn');
-            const footerSaveBtn = document.getElementById('footer-save-btn');
-            
-            if (saveBtn && !saveBtn.disabled) {
-                saveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
-                footerSaveBtn.classList.add('bg-orange-500', 'hover:bg-orange-600');
-            }
-        }
-
-        // ==================== EVENT LISTENERS ====================
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load sidebar
-            loadSidebar();
-            
-            // Initialize toggle switches
-            document.querySelectorAll('.toggle-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', markUnsavedChanges);
-            });
-            
-            // Initialize all input listeners
-            document.querySelectorAll('input, select, textarea').forEach(element => {
-                element.addEventListener('change', markUnsavedChanges);
-            });
-            
-            // Cancel buttons
-            document.getElementById('cancel-btn').addEventListener('click', function() {
-                if (appState.unsavedChanges) {
-                    showConfirm({
-                        title: 'Discard Changes',
-                        message: 'Discard all unsaved retention settings?',
-                        onConfirm: () => {
-                            window.location.reload();
-                        }
-                    });
-                } else {
-                    window.location.reload();
-                }
-            });
-            
-            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
-                if (appState.unsavedChanges) {
-                    showConfirm({
-                        title: 'Discard Changes',
-                        message: 'Discard all unsaved retention settings?',
-                        onConfirm: () => {
-                            window.location.reload();
-                        }
-                    });
-                } else {
-                    window.location.reload();
-                }
-            });
-            
-            // Gateway select
-            const gatewaySelect = document.getElementById('gateway-select');
-            if (gatewaySelect) {
-                gatewaySelect.addEventListener('change', function() {
-                    if (appState.unsavedChanges) {
-                        showConfirm({
-                            title: 'Switch Gateway',
-                            message: 'Switch to another gateway? Unsaved retention settings will be lost.',
-                            onConfirm: () => {
-                                window.location.reload();
-                            },
-                            onCancel: () => {
-                                this.value = 'Univa-GW-01';
-                            }
-                        });
-                    } else {
-                        window.location.reload();
-                    }
-                });
-            }
-            
-            // Handle sidebar click outside
-            document.addEventListener('click', handleSidebarClickOutside);
-            
-            // Initial responsive setup
-            setTimeout(() => {
-                if (window.innerWidth <= 1024) {
-                    document.getElementById('sidebar')?.classList.add('active');
-                }
-            }, 100);
-        });
-
-        // Close sidebar when clicking outside on mobile
-        function handleSidebarClickOutside(event) {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            const isMobile = window.innerWidth <= 1024;
-            
-            if (isMobile && sidebar.classList.contains('active')) {
-                const isClickInsideSidebar = sidebar.contains(event.target);
-                const isClickOnToggle = sidebarToggle.contains(event.target);
-                
-                if (!isClickInsideSidebar && !isClickOnToggle) {
-                    sidebar.classList.remove('active');
-                    sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-                    sidebarToggle.style.left = '0';
-                }
-            }
-        }
-    </script>
-</body>
-</html>
+<!-- Footer Actions -->
+<footer class="mt-8 pb-8">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
+        <div class="text-sm text-slate-500">
+            <p><i class="fa-solid fa-circle-info mr-1"></i> Configure data retention policies for optimal storage management.</p>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button type="button" onclick="runDiagnostics()" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                <i class="fa-solid fa-stethoscope mr-2"></i> Run Diagnostics
+            </button>
+            <button type="button" onclick="exportLogsNow()" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                <i class="fa-solid fa-file-export mr-2"></i> Export Logs
+            </button>
+            <button type="button" onclick="purgeOldData()" class="px-5 py-2.5 text-sm font-medium text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                <i class="fa-solid fa-broom mr-2"></i> Purge Old Data
+            </button>
+            <div class="h-6 w-px bg-slate-200"></div>
+            <button type="button" id="save-btn" class="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-sm">
+                <i class="fa-solid fa-floppy-disk mr-2"></i> Save Retention Settings
+            </button>
+        </div>
+    </div>
+</footer>

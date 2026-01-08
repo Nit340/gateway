@@ -1,1722 +1,756 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Device-Level Logging - Univa Gateway</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        window.FontAwesomeConfig = { autoReplaceSvg: 'nest' };
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#2563EB',
-                        primaryHover: '#1D4ED8',
-                        secondary: '#475569',
-                        success: '#10B981',
-                        warning: '#F59E0B',
-                        danger: '#EF4444',
-                        info: '#3B82F6',
-                        surface: '#F8FAFC',
-                        card: '#FFFFFF',
-                        border: '#E2E8F0',
-                        logCritical: '#DC2626',
-                        logError: '#EF4444',
-                        logWarning: '#F59E0B',
-                        logInfo: '#3B82F6',
-                        logDebug: '#6B7280',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    }
-                }
-            }
-        };
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
-        body { font-family: 'Inter', sans-serif; background-color: #F1F5F9; color: #1E293B; }
+<!-- This is the main content only, to be loaded dynamically -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">Device-Level Logging</h1>
+                <p class="text-slate-500 text-sm mt-1">
+                    Configure system-level, hardware-level, and runtime logging for debugging gateway issues
+                </p>
+            </div>
+        </div>
         
-        .compact-input {
-            padding: 8px 12px;
-            font-size: 14px;
-            border-radius: 6px;
-            border: 1px solid #E2E8F0;
-            transition: all 0.2s;
-        }
-        
-        .compact-input:focus {
-            outline: none;
-            border-color: #2563EB;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-        
-        .compact-select {
-            padding: 8px 12px;
-            font-size: 14px;
-            border-radius: 6px;
-            border: 1px solid #E2E8F0;
-            background-color: white;
-        }
-        
-        .compact-select:focus {
-            outline: none;
-            border-color: #2563EB;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-        
-        .compact-button {
-            padding: 8px 16px;
-            font-size: 14px;
-            border-radius: 6px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        
-        /* Toggle Switch */
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 44px;
-            height: 24px;
-        }
-        
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #CBD5E1;
-            transition: .4s;
-            border-radius: 24px;
-        }
-        
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .toggle-slider {
-            background-color: #2563EB;
-        }
-        
-        input:checked + .toggle-slider:before {
-            transform: translateX(20px);
-        }
-        
-        /* Card Styles */
-        .config-card {
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #E2E8F0;
-            padding: 20px;
-            margin-bottom: 16px;
-        }
-        
-        .config-card-header {
-            border-bottom: 1px solid #E2E8F0;
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-        }
-        
-        /* Modal Styles */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal-overlay.active {
-            display: flex;
-        }
-        
-        .modal {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-            width: 90%;
-            max-width: 800px;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        /* Progress Bar */
-        .storage-progress {
-            height: 8px;
-            background: #E2E8F0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-        
-        .storage-progress-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-        
-        .storage-progress-fill.low {
-            background: #10B981;
-        }
-        
-        .storage-progress-fill.medium {
-            background: #F59E0B;
-        }
-        
-        .storage-progress-fill.high {
-            background: #EF4444;
-        }
-        
-        /* Log Category Modal Styles */
-        .config-item {
-            margin-bottom: 16px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid #F1F5F9;
-        }
-        
-        .config-item:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-        
-        .config-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: #1E293B;
-            margin-bottom: 6px;
-        }
-        
-        .config-value {
-            font-size: 14px;
-            color: #475569;
-        }
-        
-        .config-description {
-            font-size: 12px;
-            color: #64748B;
-            margin-top: 4px;
-        }
-        
-        .config-group {
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            border-radius: 6px;
-            padding: 16px;
-            margin-top: 16px;
-        }
-    </style>
-</head>
-<body class="min-h-screen bg-slate-50">
-    
-    <!-- Sidebar will be inserted here by JavaScript -->
-    <div id="sidebar-container"></div>
-
-    <!-- Log Category Configuration Modal -->
-    <div class="modal-overlay" id="logConfigModal">
-        <div class="modal" style="max-width: 700px;">
-            <div class="p-6">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 class="text-xl font-semibold text-slate-800" id="logConfigTitle">
-                            Log Configuration
-                        </h2>
-                        <p class="text-sm text-slate-500 mt-1" id="logConfigSubtitle">
-                            Configure log settings for this category
+        <!-- Info Box -->
+        <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fa-solid fa-circle-info text-blue-500 mt-1"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800">
+                        Configure each logging category individually
+                    </h3>
+                    <div class="mt-1 text-sm text-blue-700">
+                        <p>
+                            Click the <strong>Configure</strong> button on any log category to set log level, format, interval, and other specific settings for that category.
                         </p>
                     </div>
-                    <button class="text-slate-400 hover:text-slate-600" id="closeLogConfigModal">
-                        <i class="fa-solid fa-xmark text-lg"></i>
-                    </button>
-                </div>
-                
-                <!-- Configuration Options -->
-                <div id="configContainer">
-                    <!-- Configuration will be dynamically populated -->
-                </div>
-                
-                <!-- Footer -->
-                <div class="pt-6 border-t border-slate-200 flex justify-end space-x-3">
-                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelConfigBtn">
-                        Cancel
-                    </button>
-                    <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="saveConfigBtn">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
-                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Main Content Container -->
-    <div class="main-content-with-sidebar">
-        <!-- Header -->
-        <header id="header" class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                <!-- Left: Logo & Breadcrumb -->
-                <div class="flex items-center space-x-4">
-                    <div class="hidden md:flex items-center text-sm text-slate-500 h-6">
-                        <span><i class="fa-solid fa-gear mr-2"></i>Configuration</span>
-                        <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
-                        <span class="text-slate-900 font-medium" id="page-title">Device-Level Logging</span>
-                    </div>
+    <!-- Current Log Status -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        <div class="config-card">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
+                <i class="fa-solid fa-hard-drive mr-2 text-slate-500"></i> Storage Usage
+            </h3>
+            <div class="mb-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Log Storage</span>
+                    <span class="font-medium">156 MB / 300 MB</span>
                 </div>
-
-                <!-- Right: Controls -->
-                <div class="flex items-center space-x-4">
-                    <div class="relative hidden sm:block">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
-                        </div>
-                        <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
-                            <option>Univa-GW-01</option>
-                            <option>Univa-GW-02</option>
-                            <option>Univa-GW-03</option>
-                        </select>
-                    </div>
-                    <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
-                    <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-                        <i class="fa-solid fa-circle-question mr-2"></i> Help
-                    </button>
-                  
+                <div class="storage-progress">
+                    <div class="storage-progress-fill medium" style="width: 52%"></div>
                 </div>
             </div>
-        </header>
+            <div class="text-xs text-slate-500 mt-2">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i>
+                52% used, 144 MB available
+            </div>
+        </div>
+        
+        <div class="config-card">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
+                <i class="fa-solid fa-file-lines mr-2 text-slate-500"></i> Log Files
+            </h3>
+            <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Active Files</span>
+                    <span class="font-medium">8</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Compressed Files</span>
+                    <span class="font-medium">12</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Total Lines Today</span>
+                    <span class="font-medium">42,156</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="config-card">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
+                <i class="fa-solid fa-triangle-exclamation mr-2 text-slate-500"></i> Error Summary
+            </h3>
+            <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Critical (Last 24h)</span>
+                    <span class="font-medium text-logCritical">0</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Errors (Last 24h)</span>
+                    <span class="font-medium text-logError">12</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Warnings (Last 24h)</span>
+                    <span class="font-medium text-logWarning">47</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="config-card">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
+                <i class="fa-solid fa-clock mr-2 text-slate-500"></i> Last Rotation
+            </h3>
+            <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Last Rotation</span>
+                    <span class="font-medium">2 hours ago</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Next Rotation</span>
+                    <span class="font-medium">~22 hours</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-slate-600">Oldest Log</span>
+                    <span class="font-medium">14 days ago</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <!-- Main Content -->
-        <main class="flex-grow">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <!-- Page Header -->
-                <div class="mb-8">
+    <!-- Configuration Sections -->
+    <div class="space-y-6">
+        <!-- Section 1: Logging Master Control -->
+        <section class="config-card">
+            <div class="config-card-header">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-sliders mr-3 text-primary"></i>
+                    Logging Master Control
+                </h2>
+                <p class="text-sm text-slate-600 mt-1">Global controls for the entire logging system</p>
+            </div>
+            
+            <div class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Enable Logging -->
                     <div class="flex items-center justify-between">
                         <div>
-                            <h1 class="text-2xl font-bold text-slate-900">Device-Level Logging</h1>
-                            <p class="text-slate-500 text-sm mt-1">
-                                Configure system-level, hardware-level, and runtime logging for debugging gateway issues
-                            </p>
+                            <label class="block text-sm font-medium text-slate-900 mb-1">Enable Device Logging</label>
+                            <p class="text-xs text-slate-500">Master toggle for entire logging system</p>
                         </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="enableLogging" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                     
-                    <!-- Info Box -->
-                    <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="fa-solid fa-circle-info text-blue-500 mt-1"></i>
-                            </div>
-                            <div class="ml-3">
-                                <h3 class="text-sm font-medium text-blue-800">
-                                    Configure each logging category individually
-                                </h3>
-                                <div class="mt-1 text-sm text-blue-700">
-                                    <p>
-                                        Click the <strong>Configure</strong> button on any log category to set log level, format, interval, and other specific settings for that category.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                    <!-- Global Log Level -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-900 mb-1">Global Log Level</label>
+                        <p class="text-xs text-slate-500 mb-2">Default level for all categories</p>
+                        <select class="w-full compact-select" id="globalLogLevel">
+                            <option value="critical">CRITICAL</option>
+                            <option value="error">ERROR</option>
+                            <option value="warning">WARNING</option>
+                            <option value="info" selected>INFO</option>
+                            <option value="debug">DEBUG</option>
+                        </select>
                     </div>
                 </div>
-
-                <!-- Current Log Status -->
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-                    <div class="config-card">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
-                            <i class="fa-solid fa-hard-drive mr-2 text-slate-500"></i> Storage Usage
-                        </h3>
-                        <div class="mb-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Log Storage</span>
-                                <span class="font-medium">156 MB / 300 MB</span>
-                            </div>
-                            <div class="storage-progress">
-                                <div class="storage-progress-fill medium" style="width: 52%"></div>
-                            </div>
-                        </div>
-                        <div class="text-xs text-slate-500 mt-2">
-                            <i class="fa-solid fa-circle-exclamation mr-1"></i>
-                            52% used, 144 MB available
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Max Storage -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-900 mb-1">Max Storage</label>
+                        <p class="text-xs text-slate-500 mb-2">Storage reserved for logs</p>
+                        <div class="flex items-center space-x-3">
+                            <input type="number" min="10" max="1000" value="300" class="compact-input flex-1" id="maxStorage">
+                            <span class="text-sm text-slate-600">MB</span>
                         </div>
                     </div>
                     
-                    <div class="config-card">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
-                            <i class="fa-solid fa-file-lines mr-2 text-slate-500"></i> Log Files
-                        </h3>
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Active Files</span>
-                                <span class="font-medium">8</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Compressed Files</span>
-                                <span class="font-medium">12</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Total Lines Today</span>
-                                <span class="font-medium">42,156</span>
-                            </div>
-                        </div>
+                    <!-- Rotation Mode -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-900 mb-1">Rotation Mode</label>
+                        <p class="text-xs text-slate-500 mb-2">How logs handle overflow</p>
+                        <select class="w-full compact-select" id="rotationMode">
+                            <option value="fifo">FIFO (delete oldest first)</option>
+                            <option value="compress">Compress old logs to archive</option>
+                            <option value="delete">Delete when full (no compression)</option>
+                            <option value="fifo-compress">FIFO + Compress (recommended)</option>
+                        </select>
                     </div>
-                    
-                    <div class="config-card">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
-                            <i class="fa-solid fa-triangle-exclamation mr-2 text-slate-500"></i> Error Summary
-                        </h3>
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Critical (Last 24h)</span>
-                                <span class="font-medium text-logCritical">0</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Errors (Last 24h)</span>
-                                <span class="font-medium text-logError">12</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Warnings (Last 24h)</span>
-                                <span class="font-medium text-logWarning">47</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="config-card">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4 flex items-center">
-                            <i class="fa-solid fa-clock mr-2 text-slate-500"></i> Last Rotation
-                        </h3>
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Last Rotation</span>
-                                <span class="font-medium">2 hours ago</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Next Rotation</span>
-                                <span class="font-medium">~22 hours</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-600">Oldest Log</span>
-                                <span class="font-medium">14 days ago</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Configuration Sections -->
-                <div class="space-y-6">
-                    <!-- Section 1: Logging Master Control -->
-                    <section class="config-card">
-                        <div class="config-card-header">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-sliders mr-3 text-primary"></i>
-                                Logging Master Control
-                            </h2>
-                            <p class="text-sm text-slate-600 mt-1">Global controls for the entire logging system</p>
-                        </div>
-                        
-                        <div class="space-y-6">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Enable Logging -->
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <label class="block text-sm font-medium text-slate-900 mb-1">Enable Device Logging</label>
-                                        <p class="text-xs text-slate-500">Master toggle for entire logging system</p>
-                                    </div>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="enableLogging" checked>
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </div>
-                                
-                                <!-- Global Log Level -->
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-900 mb-1">Global Log Level</label>
-                                    <p class="text-xs text-slate-500 mb-2">Default level for all categories</p>
-                                    <select class="w-full compact-select" id="globalLogLevel">
-                                        <option value="critical">CRITICAL</option>
-                                        <option value="error">ERROR</option>
-                                        <option value="warning">WARNING</option>
-                                        <option value="info" selected>INFO</option>
-                                        <option value="debug">DEBUG</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <!-- Max Storage -->
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-900 mb-1">Max Storage</label>
-                                    <p class="text-xs text-slate-500 mb-2">Storage reserved for logs</p>
-                                    <div class="flex items-center space-x-3">
-                                        <input type="number" min="10" max="1000" value="300" class="compact-input flex-1" id="maxStorage">
-                                        <span class="text-sm text-slate-600">MB</span>
-                                    </div>
-                                </div>
-                                
-                                <!-- Rotation Mode -->
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-900 mb-1">Rotation Mode</label>
-                                    <p class="text-xs text-slate-500 mb-2">How logs handle overflow</p>
-                                    <select class="w-full compact-select" id="rotationMode">
-                                        <option value="fifo">FIFO (delete oldest first)</option>
-                                        <option value="compress">Compress old logs to archive</option>
-                                        <option value="delete">Delete when full (no compression)</option>
-                                        <option value="fifo-compress">FIFO + Compress (recommended)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Section 2: Log Categories -->
-                    <section class="config-card">
-                        <div class="config-card-header">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-list-check mr-3 text-primary"></i>
-                                Log Categories Configuration
-                            </h2>
-                            <p class="text-sm text-slate-600 mt-1">Configure individual logging categories. Each category can have its own settings.</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <!-- System Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="systemLogs">
-                                        <span class="font-medium text-slate-900 ml-2">System Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">INFO</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Kernel, watchdog, crash reports</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 1s
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('system')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- Network Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="networkLogs">
-                                        <span class="font-medium text-slate-900 ml-2">Network Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">DEBUG</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Ethernet, Wi-Fi, 4G, packet drops</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 5s
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('network')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- CAN Bus Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="canLogs">
-                                        <span class="font-medium text-slate-900 ml-2">CAN Bus Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">WARN</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">RX/TX errors, invalid frames</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 100ms
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('can')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- Modbus Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="modbusLogs">
-                                        <span class="font-medium text-slate-900 ml-2">Modbus Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">ERROR</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Read/write errors, poll failures</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 500ms
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('modbus')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- MQTT Internal Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="mqttLogs">
-                                        <span class="font-medium text-slate-900 ml-2">MQTT Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">INFO</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Connection, publish/subscribe errors</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 2s
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('mqtt')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- Security Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="securityLogs">
-                                        <span class="font-medium text-slate-900 ml-2">Security Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">CRITICAL</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">SSH, login attempts, unauthorized access</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: Real-time
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('security')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- Sensor/GPIO Driver Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="sensorLogs">
-                                        <span class="font-medium text-slate-900 ml-2">Sensor Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Hardware sensor communication</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 10s
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('sensor')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- Rule Engine Diagnostic Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="ruleEngineLogs">
-                                        <span class="font-medium text-slate-900 ml-2">Rule Engine Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Low-level rule execution details</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 1s
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('ruleEngine')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                            
-                            <!-- Debug Logs -->
-                            <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center">
-                                        <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="debugLogs">
-                                        <span class="font-medium text-slate-900 ml-2">Debug Logs</span>
-                                    </div>
-                                    <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
-                                </div>
-                                <div class="text-xs text-slate-500 mb-3">Very high volume - developers only</div>
-                                <div class="text-xs text-slate-500 mb-3">
-                                    <i class="fa-solid fa-clock mr-1"></i> Interval: 100ms
-                                </div>
-                                <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="openLogConfigModal('debug')">
-                                    <i class="fa-solid fa-gear mr-2"></i> Configure
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Quick Actions -->
-                        <div class="mt-6 pt-6 border-t border-slate-200 flex space-x-3">
-                            <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" id="selectAllLogs">
-                                Select All
-                            </button>
-                            <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" id="deselectAllLogs">
-                                Deselect All
-                            </button>
-                            <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" onclick="applyGlobalSettings()">
-                                Apply Global to All
-                            </button>
-                        </div>
-                    </section>
-
-                    <!-- Section 3: Logging Output Destinations -->
-                    <section class="config-card">
-                        <div class="config-card-header">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-location-arrow mr-3 text-primary"></i>
-                                Logging Output Destinations
-                            </h2>
-                            <p class="text-sm text-slate-600 mt-1">Where logs will be stored or streamed</p>
-                        </div>
-                        
-                        <div class="space-y-6">
-                            <!-- Local Storage -->
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-medium text-slate-900">Local Storage</div>
-                                    <div class="text-sm text-slate-500">Default debugging location (/var/log)</div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="localStorage" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            
-                            <!-- External USB Storage -->
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-medium text-slate-900">External USB Storage</div>
-                                    <div class="text-sm text-slate-500">Field engineers onsite collection</div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="usbStorage">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            
-                            <!-- Cloud Upload Endpoint -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-900 mb-1">Cloud Upload Endpoint</label>
-                                <p class="text-xs text-slate-500 mb-2">For cloud dashboards and remote monitoring</p>
-                                <input type="url" class="w-full compact-input" placeholder="https://logs.yourcloud.com/api/v1/logs" id="cloudEndpoint">
-                            </div>
-                            
-                            <!-- Syslog Server -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-900 mb-1">Syslog Server</label>
-                                <p class="text-xs text-slate-500 mb-2">Industrial IT environments (IP:Port)</p>
-                                <input type="text" class="w-full compact-input" placeholder="192.168.1.100:514" id="syslogServer">
-                            </div>
-                            
-                            <!-- MQTT Topic Output -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-900 mb-1">MQTT Topic Output</label>
-                                <p class="text-xs text-slate-500 mb-2">Pipe logs to external monitoring systems</p>
-                                <input type="text" class="w-full compact-input" placeholder="iot/device/logs" value="iot/device/logs" id="mqttTopic">
-                            </div>
-                            
-                            <!-- WebSocket Streaming -->
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-medium text-slate-900">WebSocket Streaming</div>
-                                    <div class="text-sm text-slate-500">Enable live log viewer in Web UI</div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="webSocketStreaming" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Section 4: Log Rotation -->
-                    <section class="config-card">
-                        <div class="config-card-header">
-                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                                <i class="fa-solid fa-rotate-right mr-3 text-primary"></i>
-                                Log Rotation
-                            </h2>
-                            <p class="text-sm text-slate-600 mt-1">Configure log file management</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Max Log File Size -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-900 mb-1">Max Log File Size</label>
-                                <p class="text-xs text-slate-500 mb-2">Individual log file size limit</p>
-                                <div class="flex items-center space-x-3">
-                                    <input type="number" min="1" max="100" value="20" class="compact-input flex-1" id="maxFileSize">
-                                    <span class="text-sm text-slate-600">MB</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Max Log Files -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-900 mb-1">Max Log Files</label>
-                                <p class="text-xs text-slate-500 mb-2">Number of log files to keep</p>
-                                <input type="number" min="1" max="100" value="10" class="w-full compact-input" id="maxLogFiles">
-                            </div>
-                        </div>
-                        
-                        <div class="mt-6 space-y-4">
-                            <!-- Compress Older Files -->
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-medium text-slate-900">Compress Older Files</div>
-                                    <div class="text-sm text-slate-500">Gzip compress logs older than 7 days</div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="compressLogs" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            
-                            <!-- Delete Oldest When Full -->
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="font-medium text-slate-900">Delete Oldest When Full</div>
-                                    <div class="text-sm text-slate-500">Automatically delete oldest logs when storage is full</div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="deleteOldest" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </section>
                 </div>
             </div>
-        </main>
+        </section>
 
-        <!-- Footer Actions -->
-        <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="testLoggingBtn">
-                        <i class="fa-solid fa-vial mr-2 text-slate-400"></i> Test Configuration
-                    </button>
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="rotateNowBtn">
-                        <i class="fa-solid fa-rotate-right mr-2 text-slate-400"></i> Rotate Logs Now
+        <!-- Section 2: Log Categories -->
+        <section class="config-card">
+            <div class="config-card-header">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-list-check mr-3 text-primary"></i>
+                    Log Categories Configuration
+                </h2>
+                <p class="text-sm text-slate-600 mt-1">Configure individual logging categories. Each category can have its own settings.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="logCategories">
+                <!-- System Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="systemLogs">
+                            <span class="font-medium text-slate-900 ml-2">System Logs</span>
+                        </div>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">INFO</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Kernel, watchdog, crash reports</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 1s
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="system">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
                     </button>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
-                        <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
+                
+                <!-- Network Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="networkLogs">
+                            <span class="font-medium text-slate-900 ml-2">Network Logs</span>
+                        </div>
+                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">DEBUG</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Ethernet, Wi-Fi, 4G, packet drops</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 5s
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="network">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
                     </button>
-                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                    <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center">
-                        <i class="fa-solid fa-power-off mr-2"></i> Restart Logger
+                </div>
+                
+                <!-- CAN Bus Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="canLogs">
+                            <span class="font-medium text-slate-900 ml-2">CAN Bus Logs</span>
+                        </div>
+                        <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">WARN</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">RX/TX errors, invalid frames</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 100ms
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="can">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
                     </button>
-                    <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                    <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
-                        Cancel
+                </div>
+                
+                <!-- Modbus Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="modbusLogs">
+                            <span class="font-medium text-slate-900 ml-2">Modbus Logs</span>
+                        </div>
+                        <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">ERROR</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Read/write errors, poll failures</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 500ms
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="modbus">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
                     </button>
-                    <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn">
-                        <i class="fa-solid fa-floppy-disk mr-2"></i> Save All Configurations
+                </div>
+                
+                <!-- MQTT Internal Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="mqttLogs">
+                            <span class="font-medium text-slate-900 ml-2">MQTT Logs</span>
+                        </div>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">INFO</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Connection, publish/subscribe errors</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 2s
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="mqtt">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
+                    </button>
+                </div>
+                
+                <!-- Security Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" checked id="securityLogs">
+                            <span class="font-medium text-slate-900 ml-2">Security Logs</span>
+                        </div>
+                        <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">CRITICAL</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">SSH, login attempts, unauthorized access</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: Real-time
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="security">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
+                    </button>
+                </div>
+                
+                <!-- Sensor/GPIO Driver Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="sensorLogs">
+                            <span class="font-medium text-slate-900 ml-2">Sensor Logs</span>
+                        </div>
+                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Hardware sensor communication</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 10s
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="sensor">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
+                    </button>
+                </div>
+                
+                <!-- Rule Engine Diagnostic Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="ruleEngineLogs">
+                            <span class="font-medium text-slate-900 ml-2">Rule Engine Logs</span>
+                        </div>
+                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Low-level rule execution details</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 1s
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="ruleEngine">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
+                    </button>
+                </div>
+                
+                <!-- Debug Logs -->
+                <div class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <input type="checkbox" class="rounded border-slate-300 text-primary focus:ring-primary" id="debugLogs">
+                            <span class="font-medium text-slate-900 ml-2">Debug Logs</span>
+                        </div>
+                        <span class="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">OFF</span>
+                    </div>
+                    <div class="text-xs text-slate-500 mb-3">Very high volume - developers only</div>
+                    <div class="text-xs text-slate-500 mb-3">
+                        <i class="fa-solid fa-clock mr-1"></i> Interval: 100ms
+                    </div>
+                    <button class="w-full text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50 configure-log-btn" data-category="debug">
+                        <i class="fa-solid fa-gear mr-2"></i> Configure
                     </button>
                 </div>
             </div>
-        </footer>
-    </div> <!-- End of main content container -->
-
-    <script>
-        // SIDEBAR LOADING - RESTORED TO ORIGINAL IMPLEMENTATION
-        async function loadSidebar() {
-            try {
-                const response = await fetch('sidebar.html');
-                if (!response.ok) {
-                    throw new Error(`Failed to load sidebar: ${response.status}`);
-                }
-                
-                const html = await response.text();
-                document.getElementById('sidebar-container').innerHTML = html;
-                
-                // Initialize sidebar after loading
-                initializeSidebar();
-                
-            } catch (error) {
-                console.error('Error loading sidebar:', error);
-                createFallbackSidebar();
-            }
-        }
-
-        function createFallbackSidebar() {
-            const fallbackHTML = `
-                <div class="sidebar" id="sidebar">
-                    <div class="sidebar-logo">
-                        <div class="logo-text">
-                            <i class="fa-solid fa-satellite-dish mr-2"></i> Innospace
-                        </div>
-                    </div>
-                    <div class="sidebar-nav">
-                        <div class="nav-section">
-                            <div class="section-title">Configuration</div>
-                            <a href="general-configuration.html" class="nav-item">
-                                <i class="fa-solid fa-sliders"></i> General Configuration
-                            </a>
-                            <a href="device-management.html" class="nav-item">
-                                <i class="fa-solid fa-microchip"></i> Device Management
-                            </a>
-                            <a href="protocol-mapping.html" class="nav-item">
-                                <i class="fa-solid fa-plug"></i> Protocol Mapping
-                            </a>
-                            <a href="logging.html" class="nav-item active">
-                                <i class="fa-solid fa-file-lines"></i> Device Logging
-                                <span class="nav-item-count">New</span>
-                            </a>
-                        </div>
-                        
-                        <div class="nav-section">
-                            <div class="section-title">Monitoring</div>
-                            <a href="dashboard.html" class="nav-item">
-                                <i class="fa-solid fa-gauge"></i> Dashboard
-                            </a>
-                            <a href="analytics.html" class="nav-item">
-                                <i class="fa-solid fa-chart-line"></i> Analytics
-                            </a>
-                        </div>
-                    </div>
-                    <div class="sidebar-footer">
-                        <div class="user-profile">
-                            <div class="user-avatar">A</div>
-                            <div class="user-info">
-                                <h4>Admin</h4>
-                                <p>System Admin</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="sidebar-toggle" id="sidebarToggle">
-                    <i class="fa-solid fa-bars"></i>
-                </div>
-            `;
             
-            document.getElementById('sidebar-container').innerHTML = fallbackHTML;
-            initializeSidebar();
-        }
+            <!-- Quick Actions -->
+            <div class="mt-6 pt-6 border-t border-slate-200 flex space-x-3">
+                <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" id="selectAllLogs">
+                    Select All
+                </button>
+                <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" id="deselectAllLogs">
+                    Deselect All
+                </button>
+                <button class="text-sm px-3 py-1.5 font-medium text-slate-700 border border-slate-300 rounded-lg bg-white hover:bg-slate-50" id="applyGlobalSettings">
+                    Apply Global to All
+                </button>
+            </div>
+        </section>
 
-        function initializeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
+        <!-- Section 3: Logging Output Destinations -->
+        <section class="config-card">
+            <div class="config-card-header">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-location-arrow mr-3 text-primary"></i>
+                    Logging Output Destinations
+                </h2>
+                <p class="text-sm text-slate-600 mt-1">Where logs will be stored or streamed</p>
+            </div>
             
-            if (!sidebar || !sidebarToggle) return;
-            
-            sidebarToggle.addEventListener('click', function() {
-                sidebar.classList.toggle('active');
-                const icon = this.querySelector('i');
-                icon.className = sidebar.classList.contains('active') 
-                    ? 'fa-solid fa-times' 
-                    : 'fa-solid fa-bars';
-            });
-            
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.add('active');
-                sidebarToggle.style.left = '260px';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-times';
-            }
-            
-            window.addEventListener('resize', handleResponsive);
-        }
-
-        function handleResponsive() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarToggle = document.getElementById('sidebarToggle');
-            
-            if (window.innerWidth <= 1024) {
-                sidebar.classList.remove('active');
-                sidebarToggle.style.display = 'block';
-                sidebarToggle.style.left = '0';
-                sidebarToggle.querySelector('i').className = 'fa-solid fa-bars';
-            } else {
-                sidebar.classList.remove('collapsed', 'active');
-                sidebarToggle.style.display = 'none';
-                sidebarToggle.style.left = '260px';
-            }
-        }
-
-        // Log Category Configuration Data
-        const logConfigs = {
-            system: {
-                title: "System Logs Configuration",
-                subtitle: "Configure kernel, watchdog, crash reports, and system events",
-                enabled: true,
-                config: {
-                    logLevel: "INFO",
-                    logFormat: "TIMESTAMP LEVEL MODULE MESSAGE",
-                    logInterval: "1000",
-                    maxFileSize: "10",
-                    retentionDays: "30",
-                    includeTimestamps: true,
-                    includeProcessId: true,
-                    includeThreadId: false,
-                    bufferSize: "1024",
-                    flushInterval: "5000"
-                }
-            },
-            network: {
-                title: "Network Logs Configuration",
-                subtitle: "Configure Ethernet, Wi-Fi, 4G, packet drops, and connectivity logs",
-                enabled: true,
-                config: {
-                    logLevel: "DEBUG",
-                    logFormat: "TIMESTAMP INTERFACE PROTOCOL SOURCE DESTINATION",
-                    logInterval: "5000",
-                    maxFileSize: "15",
-                    retentionDays: "14",
-                    includeTimestamps: true,
-                    includePacketData: false,
-                    includeInterfaceStats: true,
-                    bufferSize: "2048",
-                    flushInterval: "10000"
-                }
-            },
-            can: {
-                title: "CAN Bus Logs Configuration",
-                subtitle: "Configure CAN bus communication, errors, and diagnostic messages",
-                enabled: true,
-                config: {
-                    logLevel: "WARN",
-                    logFormat: "TIMESTAMP CAN_ID DIRECTION DATA LENGTH",
-                    logInterval: "100",
-                    maxFileSize: "20",
-                    retentionDays: "7",
-                    includeTimestamps: true,
-                    includeRawData: false,
-                    includeErrorFrames: true,
-                    bufferSize: "4096",
-                    flushInterval: "2000"
-                }
-            },
-            modbus: {
-                title: "Modbus Logs Configuration",
-                subtitle: "Configure Modbus RTU/TCP communication and protocol errors",
-                enabled: true,
-                config: {
-                    logLevel: "ERROR",
-                    logFormat: "TIMESTAMP DEVICE FUNCTION REGISTER VALUE",
-                    logInterval: "500",
-                    maxFileSize: "12",
-                    retentionDays: "14",
-                    includeTimestamps: true,
-                    includeRawBytes: false,
-                    includeSlaveResponses: true,
-                    bufferSize: "1024",
-                    flushInterval: "5000"
-                }
-            },
-            mqtt: {
-                title: "MQTT Logs Configuration",
-                subtitle: "Configure MQTT broker connections and publish/subscribe operations",
-                enabled: true,
-                config: {
-                    logLevel: "INFO",
-                    logFormat: "TIMESTAMP TOPIC QOS PAYLOAD",
-                    logInterval: "2000",
-                    maxFileSize: "8",
-                    retentionDays: "30",
-                    includeTimestamps: true,
-                    includePayload: false,
-                    includeQoSDetails: true,
-                    bufferSize: "512",
-                    flushInterval: "3000"
-                }
-            },
-            security: {
-                title: "Security Logs Configuration",
-                subtitle: "Configure authentication, access control, and security events",
-                enabled: true,
-                config: {
-                    logLevel: "CRITICAL",
-                    logFormat: "TIMESTAMP SOURCE EVENT USER RESULT",
-                    logInterval: "0",
-                    maxFileSize: "5",
-                    retentionDays: "90",
-                    includeTimestamps: true,
-                    includeIPAddress: true,
-                    includeUserAgent: false,
-                    bufferSize: "256",
-                    flushInterval: "1000"
-                }
-            },
-            sensor: {
-                title: "Sensor/GPIO Logs Configuration",
-                subtitle: "Configure hardware sensor communication and GPIO operations",
-                enabled: false,
-                config: {
-                    logLevel: "INFO",
-                    logFormat: "TIMESTAMP SENSOR TYPE VALUE UNIT",
-                    logInterval: "10000",
-                    maxFileSize: "10",
-                    retentionDays: "7",
-                    includeTimestamps: true,
-                    includeRawReadings: false,
-                    includeCalibrationData: true,
-                    bufferSize: "512",
-                    flushInterval: "5000"
-                }
-            },
-            ruleEngine: {
-                title: "Rule Engine Logs Configuration",
-                subtitle: "Configure rule execution, condition evaluation, and action triggers",
-                enabled: false,
-                config: {
-                    logLevel: "DEBUG",
-                    logFormat: "TIMESTAMP RULE CONDITION ACTION RESULT",
-                    logInterval: "1000",
-                    maxFileSize: "15",
-                    retentionDays: "14",
-                    includeTimestamps: true,
-                    includeVariableValues: false,
-                    includeExecutionTime: true,
-                    bufferSize: "1024",
-                    flushInterval: "3000"
-                }
-            },
-            debug: {
-                title: "Debug Logs Configuration",
-                subtitle: "Configure detailed debugging information (development only)",
-                enabled: false,
-                config: {
-                    logLevel: "TRACE",
-                    logFormat: "TIMESTAMP FILE FUNCTION LINE MESSAGE",
-                    logInterval: "100",
-                    maxFileSize: "50",
-                    retentionDays: "3",
-                    includeTimestamps: true,
-                    includeStackTraces: true,
-                    includeMemoryInfo: true,
-                    bufferSize: "8192",
-                    flushInterval: "1000"
-                }
-            }
-        };
-
-        // Helper functions for category-specific options
-        function getCategorySpecificOption(category) {
-            const options = {
-                'network': 'Include Packet Data',
-                'can': 'Include Raw Frame Data',
-                'modbus': 'Include Raw Bytes',
-                'mqtt': 'Include Payload Data',
-                'sensor': 'Include Raw Readings',
-                'debug': 'Include Stack Traces',
-                'system': 'Include Process Info',
-                'security': 'Include IP Address',
-                'ruleEngine': 'Include Variable Values',
-                'default': 'Include Detailed Data'
-            };
-            return options[category] || options['default'];
-        }
-
-        function getCategorySpecificDescription(category) {
-            const descriptions = {
-                'network': 'Include full packet payload in logs (increases size)',
-                'can': 'Include complete CAN frame data including raw bytes',
-                'modbus': 'Include raw Modbus request/response bytes',
-                'mqtt': 'Include MQTT message payload content',
-                'sensor': 'Include unprocessed sensor readings',
-                'debug': 'Include complete stack traces for debugging',
-                'system': 'Include process ID and thread information',
-                'security': 'Log source IP addresses for security events',
-                'ruleEngine': 'Include rule variable values during execution',
-                'default': 'Include detailed data in logs'
-            };
-            return descriptions[category] || descriptions['default'];
-        }
-
-        function getCategorySpecificValue(category) {
-            const config = logConfigs[category]?.config;
-            if (!config) return '';
-            
-            const values = {
-                'network': config.includePacketData,
-                'can': config.includeRawData,
-                'modbus': config.includeRawBytes,
-                'mqtt': config.includePayload,
-                'sensor': config.includeRawReadings,
-                'debug': config.includeStackTraces,
-                'system': config.includeProcessId || config.includeThreadId,
-                'security': config.includeIPAddress,
-                'ruleEngine': config.includeVariableValues,
-                'default': false
-            };
-            
-            const value = values[category] || values['default'];
-            return value ? 'checked' : '';
-        }
-
-        function getDebugOptionName(category) {
-            const options = {
-                'network': 'Include Interface Statistics',
-                'can': 'Include Error Frames',
-                'modbus': 'Include Slave Responses',
-                'mqtt': 'Include QoS Details',
-                'sensor': 'Include Calibration Data',
-                'debug': 'Include Memory Info',
-                'system': 'Include Thread IDs',
-                'security': 'Include User Agent',
-                'ruleEngine': 'Include Execution Time',
-                'default': 'Include Debug Information'
-            };
-            return options[category] || options['default'];
-        }
-
-        function getDebugOptionDescription(category) {
-            const descriptions = {
-                'network': 'Include network interface statistics and counters',
-                'can': 'Log all CAN error frames and bus errors',
-                'modbus': 'Include detailed Modbus slave responses',
-                'mqtt': 'Include MQTT Quality of Service level details',
-                'sensor': 'Include sensor calibration and accuracy data',
-                'debug': 'Include memory usage and allocation information',
-                'system': 'Include thread identification in logs',
-                'security': 'Include user agent/browser information',
-                'ruleEngine': 'Include rule execution timing information',
-                'default': 'Include additional debugging information'
-            };
-            return descriptions[category] || descriptions['default'];
-        }
-
-        function getDebugOptionValue(category) {
-            const config = logConfigs[category]?.config;
-            if (!config) return '';
-            
-            const values = {
-                'network': config.includeInterfaceStats,
-                'can': config.includeErrorFrames,
-                'modbus': config.includeSlaveResponses,
-                'mqtt': config.includeQoSDetails,
-                'sensor': config.includeCalibrationData,
-                'debug': config.includeMemoryInfo,
-                'system': config.includeThreadId,
-                'security': config.includeUserAgent,
-                'ruleEngine': config.includeExecutionTime,
-                'default': false
-            };
-            
-            const value = values[category] || values['default'];
-            return value ? 'checked' : '';
-        }
-
-        // Current editing category
-        let currentEditingCategory = null;
-
-        // Initialize application
-        function initApp() {
-            setupEventListeners();
-            updateStorageProgress();
-        }
-
-        // Update storage progress bar
-        function updateStorageProgress() {
-            const storageUsed = 156; // Current usage in MB
-            const storageTotal = parseInt(document.getElementById('maxStorage').value) || 300;
-            const percentage = (storageUsed / storageTotal) * 100;
-            
-            const progressFill = document.querySelector('.storage-progress-fill');
-            if (progressFill) {
-                progressFill.style.width = `${percentage}%`;
-                
-                // Update color based on percentage
-                if (percentage < 70) {
-                    progressFill.className = 'storage-progress-fill low';
-                } else if (percentage < 90) {
-                    progressFill.className = 'storage-progress-fill medium';
-                } else {
-                    progressFill.className = 'storage-progress-fill high';
-                }
-            }
-        }
-
-        // Open log configuration modal
-        function openLogConfigModal(categoryId) {
-            currentEditingCategory = categoryId;
-            const config = logConfigs[categoryId];
-            if (!config) return;
-            
-            // Update modal title
-            document.getElementById('logConfigTitle').textContent = config.title;
-            document.getElementById('logConfigSubtitle').textContent = config.subtitle;
-            
-            // Build configuration form
-            const container = document.getElementById('configContainer');
-            container.innerHTML = '';
-            
-            // Enabled toggle
-            const enabledDiv = document.createElement('div');
-            enabledDiv.className = 'config-item';
-            enabledDiv.innerHTML = `
+            <div class="space-y-6">
+                <!-- Local Storage -->
                 <div class="flex items-center justify-between">
                     <div>
-                        <div class="config-label">Enable Logging</div>
-                        <div class="config-description">Turn logging on/off for this category</div>
+                        <div class="font-medium text-slate-900">Local Storage</div>
+                        <div class="text-sm text-slate-500">Default debugging location (/var/log)</div>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="modalEnabled" ${config.enabled ? 'checked' : ''}>
+                        <input type="checkbox" id="localStorage" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-            `;
-            container.appendChild(enabledDiv);
-            
-            // Basic Settings Group
-            const basicGroup = document.createElement('div');
-            basicGroup.className = 'config-group';
-            basicGroup.innerHTML = `
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">Basic Settings</h3>
-            `;
-            
-            // Log Level
-            const levelOptions = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'TRACE'];
-            basicGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Log Level</div>
-                    <select class="w-full compact-select" id="modalLogLevel">
-                        ${levelOptions.map(level => 
-                            `<option value="${level}" ${config.config.logLevel === level ? 'selected' : ''}>${level}</option>`
-                        ).join('')}
-                    </select>
-                    <div class="config-description">Minimum severity level to log</div>
-                </div>
-            `;
-            
-            // Log Format (FIXED - No redundant timestamp option)
-            const formatOptions = [
-                {value: 'TIMESTAMP LEVEL MODULE MESSAGE', label: 'Standard (Timestamp + Level + Module + Message)'},
-                {value: 'TIMESTAMP LEVEL MESSAGE', label: 'Basic (Timestamp + Level + Message)'},
-                {value: 'TIMESTAMP MESSAGE', label: 'Simple (Timestamp + Message)'},
-                {value: 'LEVEL MODULE MESSAGE', label: 'Compact (Level + Module + Message - No Timestamp)'},
-                {value: 'MODULE MESSAGE', label: 'Minimal (Module + Message)'}
-            ];
-            
-            basicGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Log Format</div>
-                    <select class="w-full compact-select" id="modalLogFormat">
-                        ${formatOptions.map(format => 
-                            `<option value="${format.value}" ${config.config.logFormat === format.value ? 'selected' : ''}>
-                                ${format.label}
-                            </option>`
-                        ).join('')}
-                    </select>
-                    <div class="config-description">Structure of each log entry</div>
-                </div>
-            `;
-            
-            // Log Interval
-            basicGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Log Interval (ms)</div>
-                    <div class="flex items-center space-x-3">
-                        <input type="number" min="0" max="60000" value="${config.config.logInterval}" class="compact-input flex-1" id="modalLogInterval">
-                        <span class="text-sm text-slate-600">ms (0 = real-time)</span>
+                
+                <!-- External USB Storage -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-medium text-slate-900">External USB Storage</div>
+                        <div class="text-sm text-slate-500">Field engineers onsite collection</div>
                     </div>
-                    <div class="config-description">How often to write logs (0 = immediate)</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="usbStorage">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-            `;
+                
+                <!-- Cloud Upload Endpoint -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-1">Cloud Upload Endpoint</label>
+                    <p class="text-xs text-slate-500 mb-2">For cloud dashboards and remote monitoring</p>
+                    <input type="url" class="w-full compact-input" placeholder="https://logs.yourcloud.com/api/v1/logs" id="cloudEndpoint">
+                </div>
+                
+                <!-- Syslog Server -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-1">Syslog Server</label>
+                    <p class="text-xs text-slate-500 mb-2">Industrial IT environments (IP:Port)</p>
+                    <input type="text" class="w-full compact-input" placeholder="192.168.1.100:514" id="syslogServer">
+                </div>
+                
+                <!-- MQTT Topic Output -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-1">MQTT Topic Output</label>
+                    <p class="text-xs text-slate-500 mb-2">Pipe logs to external monitoring systems</p>
+                    <input type="text" class="w-full compact-input" placeholder="iot/device/logs" value="iot/device/logs" id="mqttTopic">
+                </div>
+                
+                <!-- WebSocket Streaming -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-medium text-slate-900">WebSocket Streaming</div>
+                        <div class="text-sm text-slate-500">Enable live log viewer in Web UI</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="webSocketStreaming" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Log Rotation -->
+        <section class="config-card">
+            <div class="config-card-header">
+                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                    <i class="fa-solid fa-rotate-right mr-3 text-primary"></i>
+                    Log Rotation
+                </h2>
+                <p class="text-sm text-slate-600 mt-1">Configure log file management</p>
+            </div>
             
-            container.appendChild(basicGroup);
-            
-            // Advanced Settings Group
-            const advancedGroup = document.createElement('div');
-            advancedGroup.className = 'config-group';
-            advancedGroup.innerHTML = `
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">Advanced Settings</h3>
-            `;
-            
-            // Max File Size
-            advancedGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Max File Size</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Max Log File Size -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-1">Max Log File Size</label>
+                    <p class="text-xs text-slate-500 mb-2">Individual log file size limit</p>
                     <div class="flex items-center space-x-3">
-                        <input type="number" min="1" max="100" value="${config.config.maxFileSize}" class="compact-input flex-1" id="modalMaxFileSize">
+                        <input type="number" min="1" max="100" value="20" class="compact-input flex-1" id="maxFileSize">
                         <span class="text-sm text-slate-600">MB</span>
                     </div>
-                    <div class="config-description">Maximum size of individual log files</div>
                 </div>
-            `;
-            
-            // Retention Days
-            advancedGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Retention Period</div>
-                    <div class="flex items-center space-x-3">
-                        <input type="number" min="1" max="365" value="${config.config.retentionDays}" class="compact-input flex-1" id="modalRetentionDays">
-                        <span class="text-sm text-slate-600">days</span>
-                    </div>
-                    <div class="config-description">How long to keep logs before deletion</div>
+                
+                <!-- Max Log Files -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-900 mb-1">Max Log Files</label>
+                    <p class="text-xs text-slate-500 mb-2">Number of log files to keep</p>
+                    <input type="number" min="1" max="100" value="10" class="w-full compact-input" id="maxLogFiles">
                 </div>
-            `;
+            </div>
             
-            // Buffer Size
-            advancedGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Buffer Size</div>
-                    <div class="flex items-center space-x-3">
-                        <input type="number" min="128" max="16384" value="${config.config.bufferSize}" class="compact-input flex-1" id="modalBufferSize">
-                        <span class="text-sm text-slate-600">KB</span>
+            <div class="mt-6 space-y-4">
+                <!-- Compress Older Files -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-medium text-slate-900">Compress Older Files</div>
+                        <div class="text-sm text-slate-500">Gzip compress logs older than 7 days</div>
                     </div>
-                    <div class="config-description">Memory buffer for log entries before writing to disk</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="compressLogs" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-            `;
-            
-            // Flush Interval
-            advancedGroup.innerHTML += `
-                <div class="config-item">
-                    <div class="config-label">Flush Interval</div>
-                    <div class="flex items-center space-x-3">
-                        <input type="number" min="100" max="30000" value="${config.config.flushInterval}" class="compact-input flex-1" id="modalFlushInterval">
-                        <span class="text-sm text-slate-600">ms</span>
+                
+                <!-- Delete Oldest When Full -->
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-medium text-slate-900">Delete Oldest When Full</div>
+                        <div class="text-sm text-slate-500">Automatically delete oldest logs when storage is full</div>
                     </div>
-                    <div class="config-description">How often to flush buffer to disk</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="deleteOldest" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-            `;
-            
-            container.appendChild(advancedGroup);
-            
-            // Category-Specific Options Group (FIXED - No redundant timestamp option)
-            const optionsGroup = document.createElement('div');
-            optionsGroup.className = 'config-group';
-            optionsGroup.innerHTML = `
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">Additional Information</h3>
-                <div class="space-y-3">
-                    <!-- Category-specific detailed data option -->
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="config-label">${getCategorySpecificOption(categoryId)}</div>
-                            <div class="config-description">${getCategorySpecificDescription(categoryId)}</div>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="modalIncludeDetailedData" ${getCategorySpecificValue(categoryId)}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    
-                    <!-- Category-specific debug option -->
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="config-label">${getDebugOptionName(categoryId)}</div>
-                            <div class="config-description">${getDebugOptionDescription(categoryId)}</div>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="modalIncludeDebugInfo" ${getDebugOptionValue(categoryId)}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Log Category Configuration Modal -->
+<div class="modal-overlay" id="logConfigModal">
+    <div class="modal" style="max-width: 700px;">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-800" id="logConfigTitle">
+                        Log Configuration
+                    </h2>
+                    <p class="text-sm text-slate-500 mt-1" id="logConfigSubtitle">
+                        Configure log settings for this category
+                    </p>
                 </div>
-            `;
-            container.appendChild(optionsGroup);
+                <button class="text-slate-400 hover:text-slate-600" id="closeLogConfigModal">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
             
-            // Show modal
-            document.getElementById('logConfigModal').classList.add('active');
-        }
+            <!-- Configuration Options -->
+            <div id="configContainer">
+                <!-- Configuration will be dynamically populated -->
+            </div>
+            
+            <!-- Footer -->
+            <div class="pt-6 border-t border-slate-200 flex justify-end space-x-3">
+                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelConfigBtn">
+                    Cancel
+                </button>
+                <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="saveConfigBtn">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    /* Add these styles to layout.html's style section */
 
-        // Close log configuration modal
-        function closeLogConfigModal() {
-            document.getElementById('logConfigModal').classList.remove('active');
-            currentEditingCategory = null;
-        }
+/* Logging specific styles */
+.compact-input {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #E2E8F0;
+    transition: all 0.2s;
+}
 
-        // Save configuration from modal
-        function saveLogConfig() {
-            if (!currentEditingCategory) return;
-            
-            const config = logConfigs[currentEditingCategory];
-            if (!config) return;
-            
-            // Update configuration
-            config.enabled = document.getElementById('modalEnabled').checked;
-            config.config.logLevel = document.getElementById('modalLogLevel').value;
-            config.config.logFormat = document.getElementById('modalLogFormat').value;
-            config.config.logInterval = document.getElementById('modalLogInterval').value;
-            config.config.maxFileSize = document.getElementById('modalMaxFileSize').value;
-            config.config.retentionDays = document.getElementById('modalRetentionDays').value;
-            config.config.bufferSize = document.getElementById('modalBufferSize').value;
-            config.config.flushInterval = document.getElementById('modalFlushInterval').value;
-            
-            // Update category-specific options
-            const detailedDataChecked = document.getElementById('modalIncludeDetailedData')?.checked;
-            const debugInfoChecked = document.getElementById('modalIncludeDebugInfo')?.checked;
-            
-            // Update the specific config properties based on category
-            switch(currentEditingCategory) {
-                case 'network':
-                    config.config.includePacketData = detailedDataChecked;
-                    config.config.includeInterfaceStats = debugInfoChecked;
-                    break;
-                case 'can':
-                    config.config.includeRawData = detailedDataChecked;
-                    config.config.includeErrorFrames = debugInfoChecked;
-                    break;
-                case 'modbus':
-                    config.config.includeRawBytes = detailedDataChecked;
-                    config.config.includeSlaveResponses = debugInfoChecked;
-                    break;
-                case 'mqtt':
-                    config.config.includePayload = detailedDataChecked;
-                    config.config.includeQoSDetails = debugInfoChecked;
-                    break;
-                case 'sensor':
-                    config.config.includeRawReadings = detailedDataChecked;
-                    config.config.includeCalibrationData = debugInfoChecked;
-                    break;
-                case 'debug':
-                    config.config.includeStackTraces = detailedDataChecked;
-                    config.config.includeMemoryInfo = debugInfoChecked;
-                    break;
-                case 'system':
-                    config.config.includeProcessId = detailedDataChecked;
-                    config.config.includeThreadId = debugInfoChecked;
-                    break;
-                case 'security':
-                    config.config.includeIPAddress = detailedDataChecked;
-                    config.config.includeUserAgent = debugInfoChecked;
-                    break;
-                case 'ruleEngine':
-                    config.config.includeVariableValues = detailedDataChecked;
-                    config.config.includeExecutionTime = debugInfoChecked;
-                    break;
-            }
-            
-            // Update the checkbox on main page
-            const mainCheckbox = document.getElementById(`${currentEditingCategory}Logs`);
-            if (mainCheckbox) {
-                mainCheckbox.checked = config.enabled;
-            }
-            
-            // Update badge on main page
-            updateCategoryBadge(currentEditingCategory);
-            
-            // Update interval display
-            updateIntervalDisplay(currentEditingCategory);
-            
-            alert(`Configuration saved for ${config.title}`);
-            closeLogConfigModal();
-        }
+.compact-input:focus {
+    outline: none;
+    border-color: #2563EB;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
 
-        // Update category badge
-        function updateCategoryBadge(categoryId) {
-            const config = logConfigs[categoryId];
-            if (!config) return;
-            
-            const badge = document.querySelector(`[onclick="openLogConfigModal('${categoryId}')"]`).closest('.p-3').querySelector('span.bg-');
-            if (badge) {
-                const level = config.config.logLevel;
-                let bgColor = 'gray';
-                let text = 'OFF';
-                
-                if (config.enabled) {
-                    switch(level) {
-                        case 'CRITICAL': bgColor = 'purple'; text = 'CRITICAL'; break;
-                        case 'ERROR': bgColor = 'red'; text = 'ERROR'; break;
-                        case 'WARNING': bgColor = 'yellow'; text = 'WARN'; break;
-                        case 'INFO': bgColor = 'blue'; text = 'INFO'; break;
-                        case 'DEBUG': bgColor = 'green'; text = 'DEBUG'; break;
-                        case 'TRACE': bgColor = 'gray'; text = 'TRACE'; break;
-                    }
-                }
-                
-                badge.className = `text-xs bg-${bgColor}-100 text-${bgColor}-800 px-2 py-1 rounded`;
-                badge.textContent = text;
-            }
-        }
+.compact-select {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #E2E8F0;
+    background-color: white;
+}
 
-        // Update interval display
-        function updateIntervalDisplay(categoryId) {
-            const config = logConfigs[categoryId];
-            if (!config) return;
-            
-            const intervalDisplay = document.querySelector(`[onclick="openLogConfigModal('${categoryId}')"]`).closest('.p-3').querySelector('.text-xs:last-of-type');
-            if (intervalDisplay) {
-                const interval = config.config.logInterval;
-                if (interval === '0') {
-                    intervalDisplay.innerHTML = '<i class="fa-solid fa-clock mr-1"></i> Interval: Real-time';
-                } else {
-                    intervalDisplay.innerHTML = `<i class="fa-solid fa-clock mr-1"></i> Interval: ${formatInterval(interval)}`;
-                }
-            }
-        }
+.compact-select:focus {
+    outline: none;
+    border-color: #2563EB;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
 
-        // Format interval for display
-        function formatInterval(ms) {
-            const num = parseInt(ms);
-            if (num >= 1000) {
-                return `${num/1000}s`;
-            }
-            return `${ms}ms`;
-        }
+.compact-button {
+    padding: 8px 16px;
+    font-size: 14px;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
 
-        // Apply global settings to all categories
-        function applyGlobalSettings() {
-            if (confirm('Apply global log level to all categories? This will override individual settings.')) {
-                const globalLevel = document.getElementById('globalLogLevel').value;
-                
-                Object.keys(logConfigs).forEach(categoryId => {
-                    const config = logConfigs[categoryId];
-                    if (config && config.enabled) {
-                        config.config.logLevel = globalLevel.toUpperCase();
-                        updateCategoryBadge(categoryId);
-                    }
-                });
-                
-                alert('Global settings applied to all enabled categories.');
-            }
-        }
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
 
-        // Setup event listeners
-        function setupEventListeners() {
-            // Master controls
-            document.getElementById('enableLogging').addEventListener('change', function() {
-                console.log('Logging enabled:', this.checked);
-            });
-            
-            document.getElementById('globalLogLevel').addEventListener('change', function() {
-                console.log('Global log level changed to:', this.value);
-            });
-            
-            document.getElementById('maxStorage').addEventListener('input', updateStorageProgress);
-            
-            // Log categories quick actions
-            document.getElementById('selectAllLogs').addEventListener('click', function() {
-                document.querySelectorAll('#logCategories input[type="checkbox"]').forEach(cb => {
-                    cb.checked = true;
-                });
-            });
-            
-            document.getElementById('deselectAllLogs').addEventListener('click', function() {
-                document.querySelectorAll('#logCategories input[type="checkbox"]').forEach(cb => {
-                    cb.checked = false;
-                });
-            });
-            
-            // Configuration modal controls
-            document.getElementById('closeLogConfigModal').addEventListener('click', closeLogConfigModal);
-            document.getElementById('cancelConfigBtn').addEventListener('click', closeLogConfigModal);
-            document.getElementById('saveConfigBtn').addEventListener('click', saveLogConfig);
-            
-            // Footer buttons
-            document.getElementById('testLoggingBtn').addEventListener('click', function() {
-                const btn = this;
-                const original = btn.innerHTML;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Testing...';
-                btn.disabled = true;
-                
-                setTimeout(() => {
-                    btn.innerHTML = original;
-                    btn.disabled = false;
-                    alert('Logging configuration test successful! All destinations are reachable.');
-                }, 2000);
-            });
-            
-            document.getElementById('rotateNowBtn').addEventListener('click', function() {
-                if (confirm('Rotate logs now? Current logs will be archived.')) {
-                    const btn = this;
-                    const original = btn.innerHTML;
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Rotating...';
-                    btn.disabled = true;
-                    
-                    setTimeout(() => {
-                        btn.innerHTML = original;
-                        btn.disabled = false;
-                        alert('Log rotation complete! Old logs have been archived.');
-                    }, 1500);
-                }
-            });
-            
-            // Save buttons
-            document.getElementById('footer-save-btn').addEventListener('click', saveAllConfigurations);
-            
-            // Cancel buttons
-            document.getElementById('footer-cancel-btn').addEventListener('click', function() {
-                if (confirm('Discard all unsaved changes?')) {
-                    location.reload();
-                }
-            });
-            
-            // Gateway select
-            document.getElementById('gateway-select').addEventListener('change', function() {
-                if (confirm('Switch gateway? Unsaved changes will be lost.')) {
-                    location.reload();
-                } else {
-                    this.value = 'Univa-GW-01';
-                }
-            });
-        }
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
 
-        // Save all configurations
-        function saveAllConfigurations() {
-            const btn = document.getElementById('footer-save-btn');
-            if (btn) {
-                const original = btn.innerHTML;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
-                btn.disabled = true;
-                
-                setTimeout(() => {
-                    btn.innerHTML = original;
-                    btn.disabled = false;
-                    
-                    // Collect all configurations
-                    const allConfig = {
-                        global: {
-                            enabled: document.getElementById('enableLogging').checked,
-                            logLevel: document.getElementById('globalLogLevel').value,
-                            maxStorage: document.getElementById('maxStorage').value,
-                            rotationMode: document.getElementById('rotationMode').value,
-                        },
-                        categories: logConfigs,
-                        destinations: {
-                            local: document.getElementById('localStorage').checked,
-                            usb: document.getElementById('usbStorage').checked,
-                            cloud: document.getElementById('cloudEndpoint').value,
-                            syslog: document.getElementById('syslogServer').value,
-                            mqttTopic: document.getElementById('mqttTopic').value,
-                            webSocket: document.getElementById('webSocketStreaming').checked
-                        },
-                        rotation: {
-                            maxFileSize: document.getElementById('maxFileSize').value,
-                            maxFiles: document.getElementById('maxLogFiles').value,
-                            compress: document.getElementById('compressLogs').checked,
-                            deleteOldest: document.getElementById('deleteOldest').checked
-                        }
-                    };
-                    
-                    console.log('Saving all configurations:', allConfig);
-                    alert('All logging configurations saved successfully!\n\nChanges will take effect after the logging service restarts.');
-                }, 1000);
-            }
-        }
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #CBD5E1;
+    transition: .4s;
+    border-radius: 24px;
+}
 
-        // Initialize when DOM is loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            // Load sidebar first (restored your original approach)
-            loadSidebar();
-            
-            // Then initialize the app
-            initApp();
-        });
-    </script>
-</body>
-</html>
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: #2563EB;
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+/* Card Styles */
+.config-card {
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #E2E8F0;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.config-card-header {
+    border-bottom: 1px solid #E2E8F0;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Progress Bar */
+.storage-progress {
+    height: 8px;
+    background: #E2E8F0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.storage-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.storage-progress-fill.low {
+    background: #10B981;
+}
+
+.storage-progress-fill.medium {
+    background: #F59E0B;
+}
+
+.storage-progress-fill.high {
+    background: #EF4444;
+}
+
+/* Log Category Modal Styles */
+.config-item {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.config-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.config-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1E293B;
+    margin-bottom: 6px;
+}
+
+.config-value {
+    font-size: 14px;
+    color: #475569;
+}
+
+.config-description {
+    font-size: 12px;
+    color: #64748B;
+    margin-top: 4px;
+}
+
+.config-group {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 16px;
+}
+</style>
+<!-- Footer Actions -->
+<footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="testLoggingBtn">
+                <i class="fa-solid fa-vial mr-2 text-slate-400"></i> Test Configuration
+            </button>
+            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" id="rotateNowBtn">
+                <i class="fa-solid fa-rotate-right mr-2 text-slate-400"></i> Rotate Logs Now
+            </button>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center" id="resetToDefaultBtn">
+                <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
+            </button>
+            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+            <button class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center" id="restartLoggerBtn">
+                <i class="fa-solid fa-power-off mr-2"></i> Restart Logger
+            </button>
+            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+            <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors" id="footer-cancel-btn">
+                Cancel
+            </button>
+            <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" id="footer-save-btn">
+                <i class="fa-solid fa-floppy-disk mr-2"></i> Save All Configurations
+            </button>
+        </div>
+    </div>
+</footer>

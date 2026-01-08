@@ -8,7 +8,7 @@ class Router {
             'ota-gateway': 'ota-gateway.html',
             'craneiq': 'craneiq.html',
             'data-retention': 'data-retention.html',
-            'logging': 'logging.html',
+            'logging': 'loggar.html',
             'diagnostics': 'diagnostics.html',
             'security': 'security.html',
             'license': 'license.html',
@@ -19,7 +19,9 @@ class Router {
             'notification': 'notification.html'
         };
         
-        this.currentPage = 'general-configuration';
+        // CHANGE 1: Set to null instead of 'general-configuration'
+        this.currentPage = null;
+        
         this.pageTitles = {
             'general-configuration': 'General Configuration',
             'device-management': 'Device Management',
@@ -78,7 +80,18 @@ class Router {
         const pageParam = urlParams.get('page');
         const initialPage = pageParam && this.routes[pageParam] ? pageParam : 'general-configuration';
         
-        this.navigateTo(initialPage, false);
+        // CHANGE 2: Use a different approach for initial load
+        this.initialLoad(initialPage);
+    }
+    
+    // CHANGE 3: Add a separate method for initial load
+    initialLoad(page) {
+        this.currentPage = page;
+        this.loadPage(page);
+        this.updateActiveNavLink();
+        
+        // Update URL without adding to history
+        window.history.replaceState({ page }, '', `?page=${page}`);
     }
     
     navigateTo(page, updateHistory = true) {
@@ -94,10 +107,12 @@ class Router {
         
         // Close sidebar on mobile after navigation
         if (window.innerWidth <= 1024) {
-            toggleMobileSidebar(false);
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('mobileOverlay');
+            if (sidebar) sidebar.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
         }
     }
-    
     async loadPage(page) {
         const loadingIndicator = document.getElementById('loadingIndicator');
         const contentArea = document.getElementById('pageContent');
@@ -179,12 +194,74 @@ class Router {
         case 'mqtt-cloud':
             this.initMqttCloud();
             break;
-        
+        case 'ota-gateway':
+            this.initOtaGateway(); // This should be called for OTA Gateway
+            break;
+        case 'data-retention':  // Add this case
+            this.initDataRetention();
+            break;
+        case 'logging':
+            this.initLogging(); // Add this line
+            break;
+        case 'security':  // Add this case
+            this.initSecurity();
+            break;
+        case 'diagnostics':
+            this.initDiagnostics();
+            break;
+        case 'license':
+            this.initLicense();
+            break;
         // Add other pages as you create them
         default:
             console.log(`No specific initialization for page: ${page}`);
     }
 }
+// In Router class
+initLicense() {
+    if (typeof window.initLicense === 'function') {
+        window.initLicense();
+    } else {
+        console.log('initLicense function not found');
+    }
+}
+// In your existing router.js
+initDiagnostics() {
+    if (typeof window.initDiagnostics === 'function') {
+        window.initDiagnostics();
+    }
+}
+// Add initSecurity method:
+initSecurity() {
+    if (typeof window.initSecurity === 'function') {
+        window.initSecurity();
+    }
+}
+// Add new method for Logging
+initLogging() {
+    // Call the global initialization function
+    if (typeof window.initLogging === 'function') {
+        window.initLogging();
+    } else {
+        console.log('initLogging function not found');
+    }
+}
+// Also fix the initOtaGateway method name casing
+initOtaGateway() {
+    // Call the global initialization function
+    if (typeof window.initOtaGateway === 'function') {
+        window.initOtaGateway();
+    } else {
+        console.log('initOtaGateway function not found - this is normal if the page doesn\'t define it');
+    }
+}
+// Add initDataRetention method:
+initDataRetention() {
+    if (typeof window.initDataRetention === 'function') {
+        window.initDataRetention();
+    }
+}
+// Update the initMqttCloud method (fix casing):
 initMqttCloud() {
     if (typeof window.initMqttCloud === 'function') {
         window.initMqttCloud();
