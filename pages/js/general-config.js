@@ -1,5 +1,4 @@
-// general-config.js - Complete API Integrated Version
-// This function will be called by the router when loading the page
+// general-config.js - Updated with better network handling
 window.initGeneralConfig = function() {
     console.log('General Configuration page initialized');
     
@@ -42,7 +41,7 @@ async function loadConfiguration() {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            credentials: 'include' // Include cookies for session
+            credentials: 'include'
         });
         
         if (!response.ok) {
@@ -100,25 +99,26 @@ function populateFormWithConfig(config) {
         const network = config.network;
         setRadioValue('[name="network-mode"]', network.mode);
         
+        // Load network-specific configuration
         if (network.ethernet) {
-            setRadioValue('[name="ip-assignment"]', network.ethernet.ip_assignment);
-            setInputValue('[name="static-ip"]', network.ethernet.static_ip);
-            setInputValue('[name="subnet-mask"]', network.ethernet.subnet_mask);
-            setInputValue('[name="gateway"]', network.ethernet.gateway);
-            setInputValue('[name="dns1"]', network.ethernet.dns1);
-            setInputValue('[name="dns2"]', network.ethernet.dns2);
+            setRadioValue('[name="ip-assignment"]', network.ethernet.ip_assignment || 'dhcp');
+            setInputValue('[name="static-ip"]', network.ethernet.static_ip || '192.168.1.50');
+            setInputValue('[name="subnet-mask"]', network.ethernet.subnet_mask || '255.255.255.0');
+            setInputValue('[name="gateway"]', network.ethernet.gateway || '192.168.1.1');
+            setInputValue('[name="dns1"]', network.ethernet.dns1 || '8.8.8.8');
+            setInputValue('[name="dns2"]', network.ethernet.dns2 || '8.8.4.4');
         }
         
         if (network.wifi) {
-            setInputValue('[name="wifi-ssid"]', network.wifi.ssid);
-            setInputValue('[name="wifi-password"]', network.wifi.password);
-            updateWiFiSignalStrength(network.wifi.signal_strength || 3);
+            setInputValue('[name="wifi-ssid"]', network.wifi.ssid || '');
+            setInputValue('[name="wifi-password"]', network.wifi.password || '');
+            updateWiFiSignalStrength(network.wifi.signal_strength || 0);
         }
         
         if (network.cellular) {
-            setInputValue('[name="apn"]', network.cellular.apn);
-            setInputValue('[name="cellular-username"]', network.cellular.username);
-            setInputValue('[name="cellular-password"]', network.cellular.password);
+            setInputValue('[name="apn"]', network.cellular.apn || 'internet');
+            setInputValue('[name="cellular-username"]', network.cellular.username || '');
+            setInputValue('[name="cellular-password"]', network.cellular.password || '');
         }
         
         // Trigger network toggle to show correct section
@@ -286,7 +286,7 @@ async function handleSaveConfiguration() {
     }
 }
 
-// Collect Form Data for API
+// Collect Form Data for API - Updated for dynamic network config
 function collectFormData() {
     const configData = {
         gateway_identity: {
@@ -313,16 +313,15 @@ function collectFormData() {
         }
     };
     
-    // Add network-specific configuration
+    // Add network-specific configuration based on selected mode
     const networkMode = configData.network.mode;
-    const ipAssignment = getRadioValue('[name="ip-assignment"]');
     
     if (networkMode === 'ethernet') {
         configData.network.ethernet = {
-            ip_assignment: ipAssignment
+            ip_assignment: getRadioValue('[name="ip-assignment"]')
         };
         
-        if (ipAssignment === 'static') {
+        if (configData.network.ethernet.ip_assignment === 'static') {
             configData.network.ethernet.static_ip = getInputValue('[name="static-ip"]');
             configData.network.ethernet.subnet_mask = getInputValue('[name="subnet-mask"]');
             configData.network.ethernet.gateway = getInputValue('[name="gateway"]');
@@ -534,6 +533,7 @@ function initializeNetworkToggles() {
         radio.addEventListener('change', toggleIPAssignment);
     });
     
+    // Initialize on page load
     toggleNetworkConfig();
     toggleIPAssignment();
 }
@@ -546,15 +546,23 @@ function toggleNetworkConfig() {
     const wifiConfig = document.getElementById('wifi-config');
     const cellularConfig = document.getElementById('cellular-config');
     
+    // Hide all config sections
     if (ethernetConfig) ethernetConfig.style.display = 'none';
     if (wifiConfig) wifiConfig.style.display = 'none';
     if (cellularConfig) cellularConfig.style.display = 'none';
     
+    // Show only the selected config
     if (networkMode === 'ethernet' && ethernetConfig) {
         ethernetConfig.style.display = 'block';
     } else if (networkMode === 'wifi' && wifiConfig) {
         wifiConfig.style.display = 'block';
-        updateWiFiSignalStrength(3);
+        // Update WiFi signal strength when WiFi is selected
+        const currentSSID = getInputValue('[name="wifi-ssid"]');
+        if (currentSSID) {
+            updateWiFiSignalStrength(3); // Default to "Good"
+        } else {
+            updateWiFiSignalStrength(0); // No network
+        }
     } else if (networkMode === 'lte' && cellularConfig) {
         cellularConfig.style.display = 'block';
     }
@@ -579,8 +587,6 @@ function initializeWiFiSignal() {
     if (scanBtn) {
         scanBtn.addEventListener('click', scanWiFi);
     }
-    
-    updateWiFiSignalStrength(3);
 }
 
 function updateWiFiSignalStrength(strength) {
@@ -594,8 +600,10 @@ function updateWiFiSignalStrength(strength) {
         bar.className = 'signal-bar none';
     });
     
-    // Activate bars based on strength
-    for (let i = 0; i <= strength; i++) {
+    // Activate bars based on strength (0-4)
+    const effectiveStrength = Math.min(Math.max(strength, 0), 4);
+    
+    for (let i = 0; i <= effectiveStrength; i++) {
         if (i < signalBars.length) {
             const bar = signalBars[i];
             if (i === 0) bar.className = 'signal-bar poor';
@@ -616,7 +624,7 @@ function updateWiFiSignalStrength(strength) {
                 span.textContent.includes('Fair') || 
                 span.textContent.includes('Good') || 
                 span.textContent.includes('Excellent')) {
-                span.textContent = strengthTexts[strength];
+                span.textContent = strengthTexts[effectiveStrength];
             }
         });
     }
