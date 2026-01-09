@@ -1,143 +1,196 @@
-from flask import Flask, request, jsonify
+# api_server.py - Run on port 8080
 import json
-from datetime import datetime
+import time
+import datetime
 import random
+import socket
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-app = Flask(__name__)
-
-# In-memory config storage
 config_data = {
-    "gateway_identity": {
-        "name": "Univa-GW-01",
-        "serial_number": "GW2025-1190021",
-        "deployment_site": "Chennai Port - Zone A",
-        "location_mode": "manual",
-        "latitude": 12.99123,
-        "longitude": 80.12312,
-        "asset_id": "CRN-CT-12"
+    'gateway_identity': {
+        'name': 'Univa-GW-01',
+        'serial_number': 'GW2025-1190021',
+        'deployment_site': 'Chennai Port - Zone A',
+        'location_mode': 'manual',
+        'latitude': 12.99123,
+        'longitude': 80.12312,
+        'asset_id': 'CRN-CT-12'
     },
-    "date_time": {
-        "timezone": "Asia/Kolkata",
-        "ntp_server": "pool.ntp.org",
-        "date_format": "DD/MM/YYYY",
-        "time_format": "24-Hour",
-        "language": "English"
+    'date_time': {
+        'timezone': 'Asia/Kolkata',
+        'ntp_server': 'pool.ntp.org',
+        'current_date': datetime.datetime.now().strftime('%Y-%m-%d'),
+        'current_time': datetime.datetime.now().strftime('%H:%M'),
+        'date_format': 'DD/MM/YYYY',
+        'time_format': '24-hour',
+        'language': 'en'
     },
-    "network": {
-        "mode": "ethernet",
-        "ethernet": {
-            "ip_assignment": "dhcp",
-            "static_ip": "192.168.1.50",
-            "subnet_mask": "255.255.255.0",
-            "gateway": "192.168.1.1",
-            "dns1": "8.8.8.8",
-            "dns2": "8.8.4.4"
+    'network': {
+        'mode': 'ethernet',
+        'ethernet': {
+            'ip_assignment': 'dhcp',
+            'static_ip': '192.168.1.50',
+            'subnet_mask': '255.255.255.0',
+            'gateway': '192.168.1.1',
+            'dns1': '8.8.8.8',
+            'dns2': '8.8.4.4'
         }
     },
-    "heartbeat": {
-        "interval": 30,
-        "offline_threshold": 120
-    }
+    'heartbeat': {
+        'interval': 30,
+        'offline_threshold': 120
+    },
+    'mac_address': '00:1A:2B:3C:4D:5E'
 }
 
-@app.route('/api/general-configuration', methods=['PUT'])
-def save_config():
-    """Save configuration"""
-    try:
-        if not request.data:
-            return jsonify({
-                "success": False,
-                "message": "No data provided"
-            }), 400
-        
-        data = json.loads(request.data.decode('utf-8'))
-        
-        # Update config
-        update_nested_dict(config_data, data)
-        
-        return jsonify({
-            "success": True,
-            "message": "Configuration saved successfully"
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": "Error: " + str(e)
-        }), 500
-
-def update_nested_dict(target, source):
-    """Update nested dictionary"""
-    for key, value in source.items():
-        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
-            update_nested_dict(target[key], value)
+class APIHandler(BaseHTTPRequestHandler):
+    
+    def _set_headers(self, content_type='application/json'):
+        self.send_response(200)
+        self.send_header('Content-type', content_type)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+    
+    def _safe_write(self, data):
+        """Safely write data, handling connection interruptions"""
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, socket.error) as e:
+            # Client disconnected, ignore error
+            print("Client disconnected: {}".format(e))
+    
+    def do_GET(self):
+        if self.path == '/api/general-configuration':
+            try:
+                self._set_headers()
+                response_data = json.dumps(config_data).encode('utf-8')
+                self._safe_write(response_data)
+            except Exception as e:
+                print("Error processing GET request: {}".format(e))
         else:
-            target[key] = value
+            try:
+                self.send_response(404)
+                self.end_headers()
+            except:
+                pass  # If client already disconnected, ignore error
+    
+    def do_PUT(self):
+        if self.path == '/api/general-configuration':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                if length:
+                    data = json.loads(self.rfile.read(length).decode('utf-8'))
+                    
+                    # Update config
+                    for key in data:
+                        if key in config_data and isinstance(config_data[key], dict):
+                            config_data[key].update(data[key])
+                        elif key in config_data:
+                            config_data[key] = data[key]
+                
+                self._set_headers()
+                response = json.dumps({
+                    'success': True,
+                    'message': 'Configuration saved successfully'
+                }).encode('utf-8')
+                self._safe_write(response)
+            except Exception as e:
+                try:
+                    self.send_response(500)
+                    self.end_headers()
+                    response = json.dumps({
+                        'success': False,
+                        'message': 'Error: ' + str(e)
+                    }).encode('utf-8')
+                    self._safe_write(response)
+                except:
+                    pass  # If client already disconnected, ignore error
+        else:
+            try:
+                self.send_response(404)
+                self.end_headers()
+            except:
+                pass
+    
+    def do_POST(self):
+        if self.path == '/api/general-configuration/wifi-scan':
+            try:
+                time.sleep(1)  # Simulate scanning delay
+                self._set_headers()
+                response = json.dumps({
+                    'success': True,
+                    'networks': [
+                        {'ssid': 'Port_WiFi_5G', 'signal': 4},
+                        {'ssid': 'Guest_WiFi', 'signal': 3},
+                        {'ssid': 'Crane_Control', 'signal': 2}
+                    ]
+                }).encode('utf-8')
+                self._safe_write(response)
+            except Exception as e:
+                print("Error in WiFi scan request: {}".format(e))
+        
+        elif self.path == '/api/general-configuration/time-sync':
+            try:
+                now = datetime.datetime.now()
+                config_data['date_time']['current_date'] = now.strftime('%Y-%m-%d')
+                config_data['date_time']['current_time'] = now.strftime('%H:%M')
+                
+                self._set_headers()
+                response = json.dumps({
+                    'success': True,
+                    'message': 'Time synchronized successfully',
+                    'current_date': config_data['date_time']['current_date'],
+                    'current_time': config_data['date_time']['current_time']
+                }).encode('utf-8')
+                self._safe_write(response)
+            except Exception as e:
+                print("Error in time sync request: {}".format(e))
+        else:
+            try:
+                self.send_response(404)
+                self.end_headers()
+            except:
+                pass
+    
+    def do_OPTIONS(self):
+        try:
+            self.send_response(200)
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.end_headers()
+        except:
+            pass  # If client already disconnected, ignore error
+    
+    def handle(self):
+        """Override handle method to catch all exceptions"""
+        try:
+            BaseHTTPRequestHandler.handle(self)
+        except (ConnectionResetError, BrokenPipeError, socket.error):
+            # Ignore connection-related errors
+            pass
+    
+    def log_message(self, format, *args):
+        # Optional: quiet logging, but can log errors if needed
+        pass
 
-@app.route('/api/general-configuration/wifi-scan', methods=['POST'])
-def wifi_scan():
-    """Scan WiFi networks"""
+def run():
+    port = 8080
+    server = HTTPServer(('0.0.0.0', port), APIHandler)
+    print('API Server running on port ' + str(port))
+    print('Endpoints:')
+    print('  GET  /api/general-configuration')
+    print('  PUT  /api/general-configuration')
+    print('  POST /api/general-configuration/wifi-scan')
+    print('  POST /api/general-configuration/time-sync')
+    print('Press Ctrl+C to stop server')
+    
     try:
-        # Simulated WiFi networks
-        networks = [
-            {"ssid": "Port_WiFi_5G", "signal": random.randint(3, 4), "encryption": "WPA2"},
-            {"ssid": "Guest_WiFi", "signal": random.randint(2, 3), "encryption": "WPA2"},
-            {"ssid": "CraneIQ_Network", "signal": random.randint(3, 4), "encryption": "WPA3"}
-        ]
-        
-        return jsonify({
-            "success": True,
-            "networks": networks
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": "Error: " + str(e)
-        }), 500
-
-@app.route('/api/general-configuration/time-sync', methods=['POST'])
-def time_sync():
-    """Sync time"""
-    try:
-        now = datetime.now()
-        
-        return jsonify({
-            "success": True,
-            "message": "Time synchronized successfully",
-            "current_time": now.strftime('%H:%M'),
-            "current_date": now.strftime('%Y-%m-%d')
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": "Error: " + str(e)
-        }), 500
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check"""
-    return jsonify({
-        "status": "ok",
-        "service": "config-api",
-        "timestamp": datetime.now().isoformat()
-    })
-
-# Simple CORS handler
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
-
-@app.route('/', methods=['OPTIONS'])
-@app.route('/api/<path:path>', methods=['OPTIONS'])
-def handle_options(path=None):
-    """Handle CORS preflight requests"""
-    return '', 200
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print('\nShutting down server...')
+        server.server_close()
+        print('Server stopped.')
 
 if __name__ == '__main__':
-    # Run on port 5000
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    run()
