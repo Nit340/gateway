@@ -1,153 +1,10 @@
-// general-config.js - Updated with better network handling
-window.initGeneralConfig = function() {
-    console.log('General Configuration page initialized');
-    
-    // Load configuration from API and then initialize
-    loadConfiguration().then(() => {
-        initializeGeneralConfig();
-    }).catch(error => {
-        console.error('Failed to load configuration:', error);
-        // Initialize with default values even if API fails
-        initializeGeneralConfig();
-        showNotification('Could not load configuration. Using default values.', 'error');
-    });
-};
+// general-config.js - Clean and fixed version
 
-function initializeGeneralConfig() {
-    console.log('Setting up General Configuration page functionality');
-    
-    // Initialize button handlers
-    initializeButtons();
-    
-    // Initialize network configuration toggles
-    initializeNetworkToggles();
-    
-    // Initialize WiFi signal strength
-    initializeWiFiSignal();
-    
-    // Initialize form validation and interactions
-    initializeFormInteractions();
-    
-    console.log('General Configuration page setup complete');
-}
-
-// API Integration Functions
-async function loadConfiguration() {
-    try {
-        // Make API call to load current configuration
-        const response = await fetch('/api/general-configuration', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include'
-        });
-        
-        if (!response.ok) {
-            if (response.status === 401) {
-                // Redirect to login if unauthorized
-                window.location.href = '/login';
-                return;
-            }
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const config = await response.json();
-        
-        // Populate form fields with configuration data
-        populateFormWithConfig(config);
-        
-        console.log('Configuration loaded successfully:', config);
-        
-        // Show success notification
-        showNotification('Configuration loaded successfully', 'success');
-        
-    } catch (error) {
-        console.error('Error loading configuration:', error);
-        throw error;
-    }
-}
-
-function populateFormWithConfig(config) {
-    // SECTION A: Gateway Identity
-    if (config.gateway_identity) {
-        const identity = config.gateway_identity;
-        setInputValue('[name="gateway-name"]', identity.name);
-        setInputValue('[name="serial-number"]', identity.serial_number);
-        setInputValue('[name="deployment-site"]', identity.deployment_site);
-        setRadioValue('[name="location-mode"]', identity.location_mode);
-        setInputValue('[name="latitude"]', identity.latitude);
-        setInputValue('[name="longitude"]', identity.longitude);
-        setInputValue('[name="asset-id"]', identity.asset_id);
-    }
-    
-    // SECTION B: Date, Time & Localization
-    if (config.date_time) {
-        const dateTime = config.date_time;
-        setSelectValue('[name="timezone"]', dateTime.timezone);
-        setSelectValue('[name="ntp-server"]', dateTime.ntp_server);
-        setInputValue('[name="date"]', dateTime.current_date);
-        setInputValue('[name="time"]', dateTime.current_time);
-        setSelectValue('[name="date-format"]', dateTime.date_format);
-        setSelectValue('[name="time-format"]', dateTime.time_format);
-        setSelectValue('[name="language"]', dateTime.language);
-    }
-    
-    // SECTION C: Network Configuration
-    if (config.network) {
-        const network = config.network;
-        setRadioValue('[name="network-mode"]', network.mode);
-        
-        // Load network-specific configuration
-        if (network.ethernet) {
-            setRadioValue('[name="ip-assignment"]', network.ethernet.ip_assignment || 'dhcp');
-            setInputValue('[name="static-ip"]', network.ethernet.static_ip || '192.168.1.50');
-            setInputValue('[name="subnet-mask"]', network.ethernet.subnet_mask || '255.255.255.0');
-            setInputValue('[name="gateway"]', network.ethernet.gateway || '192.168.1.1');
-            setInputValue('[name="dns1"]', network.ethernet.dns1 || '8.8.8.8');
-            setInputValue('[name="dns2"]', network.ethernet.dns2 || '8.8.4.4');
-        }
-        
-        if (network.wifi) {
-            setInputValue('[name="wifi-ssid"]', network.wifi.ssid || '');
-            setInputValue('[name="wifi-password"]', network.wifi.password || '');
-            updateWiFiSignalStrength(network.wifi.signal_strength || 0);
-        }
-        
-        if (network.cellular) {
-            setInputValue('[name="apn"]', network.cellular.apn || 'internet');
-            setInputValue('[name="cellular-username"]', network.cellular.username || '');
-            setInputValue('[name="cellular-password"]', network.cellular.password || '');
-        }
-        
-        // Trigger network toggle to show correct section
-        setTimeout(() => toggleNetworkConfig(), 100);
-    }
-    
-    // SECTION D: System Heartbeat
-    if (config.heartbeat) {
-        const heartbeat = config.heartbeat;
-        setInputValue('[name="heartbeat-interval"]', heartbeat.interval);
-        setInputValue('[name="offline-threshold"]', heartbeat.offline_threshold);
-    }
-    
-    // Update MAC address display if available
-    if (config.mac_address) {
-        const macElement = document.querySelector('[data-mac-address]');
-        if (macElement) {
-            macElement.textContent = config.mac_address;
-        }
-    }
-}
-
-// Helper functions for setting form values
+// Helper functions
 function setInputValue(selector, value) {
     if (value === undefined || value === null) return;
     const element = document.querySelector(selector);
-    if (element) {
-        element.value = value;
-    }
+    if (element) element.value = value;
 }
 
 function setRadioValue(selector, value) {
@@ -166,8 +23,7 @@ function setSelectValue(selector, value) {
     const select = document.querySelector(selector);
     if (select) {
         for (let i = 0; i < select.options.length; i++) {
-            if (select.options[i].value === value || 
-                select.options[i].text.includes(value)) {
+            if (select.options[i].value === value) {
                 select.selectedIndex = i;
                 break;
             }
@@ -175,350 +31,19 @@ function setSelectValue(selector, value) {
     }
 }
 
-// Button Handlers
-function initializeButtons() {
-    // Handle Refresh button
-    const refreshBtn = document.getElementById('refresh-btn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', function() {
-            if (confirm('Refresh page? Any unsaved changes will be lost.')) {
-                location.reload();
-            }
-        });
-    }
-    
-    // Handle Save Changes button
-    const saveBtn = document.getElementById('save-btn');
-    if (saveBtn) {
-        saveBtn.addEventListener('click', function() {
-            handleSaveConfiguration();
-        });
-    }
-    
-    // Handle Sync Now button
-    const syncBtn = document.querySelector('.sync-time-btn');
-    if (syncBtn) {
-        syncBtn.addEventListener('click', function() {
-            handleTimeSync();
-        });
-    }
-}
-
-// Save Configuration Handler
-async function handleSaveConfiguration() {
-    const saveBtn = document.getElementById('save-btn');
-    if (!saveBtn) return;
-    
-    // Validate form before saving
-    if (!validateRequiredFields()) {
-        showNotification('Please fill in all required fields', 'error');
-        return;
-    }
-    
-    const originalText = saveBtn.innerHTML;
-    
-    // Show loading state
-    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-    saveBtn.disabled = true;
-    
-    // Collect all form data
-    const configData = collectFormData();
-    
-    try {
-        // Make API call to save configuration
-        const response = await fetch('/api/general-configuration', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(configData)
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        // Show success message
-        saveBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved Successfully!';
-        saveBtn.classList.remove('bg-primary', 'hover:bg-primaryHover');
-        saveBtn.classList.add('bg-success', 'hover:bg-emerald-600');
-        
-        // Revert after 2 seconds
-        setTimeout(() => {
-            saveBtn.innerHTML = originalText;
-            saveBtn.classList.remove('bg-success', 'hover:bg-emerald-600');
-            saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
-            saveBtn.disabled = false;
-        }, 2000);
-        
-        // Show notification
-        showNotification(result.message || 'Configuration saved successfully!', 'success');
-        
-        // Refresh configuration data after a short delay
-        setTimeout(() => {
-            loadConfiguration().catch(() => {
-                // Silently handle refresh errors
-            });
-        }, 500);
-        
-    } catch (error) {
-        console.error('Error saving configuration:', error);
-        
-        // Show error state
-        saveBtn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Save Failed!';
-        saveBtn.classList.remove('bg-primary', 'hover:bg-primaryHover');
-        saveBtn.classList.add('bg-red-500', 'hover:bg-red-600');
-        
-        // Revert after 3 seconds
-        setTimeout(() => {
-            saveBtn.innerHTML = originalText;
-            saveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
-            saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
-            saveBtn.disabled = false;
-        }, 3000);
-        
-        showNotification(`Failed to save configuration: ${error.message}`, 'error');
-    }
-}
-
-// Collect Form Data for API - Updated for dynamic network config
-function collectFormData() {
-    const configData = {
-        gateway_identity: {
-            name: getInputValue('[name="gateway-name"]'),
-            deployment_site: getInputValue('[name="deployment-site"]'),
-            location_mode: getRadioValue('[name="location-mode"]'),
-            latitude: parseFloat(getInputValue('[name="latitude"]')) || 0,
-            longitude: parseFloat(getInputValue('[name="longitude"]')) || 0,
-            asset_id: getInputValue('[name="asset-id"]')
-        },
-        date_time: {
-            timezone: getSelectValue('[name="timezone"]'),
-            ntp_server: getSelectValue('[name="ntp-server"]'),
-            date_format: getSelectValue('[name="date-format"]'),
-            time_format: getSelectValue('[name="time-format"]'),
-            language: getSelectValue('[name="language"]')
-        },
-        network: {
-            mode: getRadioValue('[name="network-mode"]')
-        },
-        heartbeat: {
-            interval: parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
-            offline_threshold: parseInt(getInputValue('[name="offline-threshold"]')) || 120
-        }
-    };
-    
-    // Add network-specific configuration based on selected mode
-    const networkMode = configData.network.mode;
-    
-    if (networkMode === 'ethernet') {
-        configData.network.ethernet = {
-            ip_assignment: getRadioValue('[name="ip-assignment"]')
-        };
-        
-        if (configData.network.ethernet.ip_assignment === 'static') {
-            configData.network.ethernet.static_ip = getInputValue('[name="static-ip"]');
-            configData.network.ethernet.subnet_mask = getInputValue('[name="subnet-mask"]');
-            configData.network.ethernet.gateway = getInputValue('[name="gateway"]');
-            configData.network.ethernet.dns1 = getInputValue('[name="dns1"]');
-            configData.network.ethernet.dns2 = getInputValue('[name="dns2"]');
-        }
-    } else if (networkMode === 'wifi') {
-        configData.network.wifi = {
-            ssid: getInputValue('[name="wifi-ssid"]'),
-            password: getInputValue('[name="wifi-password"]')
-        };
-    } else if (networkMode === 'lte') {
-        configData.network.cellular = {
-            apn: getInputValue('[name="apn"]'),
-            username: getInputValue('[name="cellular-username"]'),
-            password: getInputValue('[name="cellular-password"]')
-        };
-    }
-    
-    return configData;
-}
-
-// Helper functions for getting form values
 function getInputValue(selector) {
     const element = document.querySelector(selector);
     return element ? element.value : '';
 }
 
 function getRadioValue(selector) {
-    const radio = document.querySelector(`${selector}:checked`);
+    const radio = document.querySelector(selector + ':checked');
     return radio ? radio.value : '';
 }
 
 function getSelectValue(selector) {
     const select = document.querySelector(selector);
     return select ? select.options[select.selectedIndex].value : '';
-}
-
-// Time Sync Handler
-async function handleTimeSync() {
-    try {
-        const syncBtn = document.querySelector('.sync-time-btn');
-        if (syncBtn) {
-            const originalHTML = syncBtn.innerHTML;
-            syncBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-            syncBtn.disabled = true;
-        }
-        
-        // Make API call to sync time
-        const response = await fetch('/api/general-configuration/time-sync', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            credentials: 'include'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        // Update form fields with synced time
-        if (result.current_date && result.current_time) {
-            setInputValue('[name="date"]', result.current_date);
-            setInputValue('[name="time"]', result.current_time);
-        }
-        
-        // Restore button
-        if (syncBtn) {
-            syncBtn.innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Sync Now';
-            syncBtn.disabled = false;
-        }
-        
-        // Show notification
-        showNotification(result.message || 'Time synchronized successfully', 'success');
-        
-    } catch (error) {
-        console.error('Error syncing time:', error);
-        
-        // Fallback to client time if API fails
-        const now = new Date();
-        const date = now.toISOString().split('T')[0];
-        const time = now.toTimeString().split(' ')[0].substring(0, 5);
-        
-        setInputValue('[name="date"]', date);
-        setInputValue('[name="time"]', time);
-        
-        // Restore button
-        const syncBtn = document.querySelector('.sync-time-btn');
-        if (syncBtn) {
-            syncBtn.innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Sync Now';
-            syncBtn.disabled = false;
-        }
-        
-        showNotification(`Time synced to local time: ${date} ${time}`, 'info');
-    }
-}
-
-// WiFi Scan Handler
-async function scanWiFi() {
-    const wifiConfig = document.getElementById('wifi-config');
-    if (!wifiConfig) return;
-    
-    const scanButton = wifiConfig.querySelector('.scan-wifi-btn');
-    if (!scanButton) return;
-    
-    const originalHTML = scanButton.innerHTML;
-    
-    // Show scanning animation
-    scanButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-    scanButton.disabled = true;
-    
-    try {
-        // Make API call to scan WiFi
-        const response = await fetch('/api/general-configuration/wifi-scan', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            credentials: 'include'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success && result.networks && result.networks.length > 0) {
-            // Populate WiFi networks dropdown
-            updateWiFiNetworksList(result.networks);
-            
-            // Update signal strength with the strongest network
-            const strongestNetwork = result.networks.reduce((prev, current) => 
-                (prev.signal > current.signal) ? prev : current
-            );
-            
-            updateWiFiSignalStrength(strongestNetwork.signal);
-            
-            // Auto-select the strongest network
-            const ssidInput = document.querySelector('[name="wifi-ssid"]');
-            if (ssidInput) {
-                ssidInput.value = strongestNetwork.ssid;
-            }
-            
-            // Show notification
-            showNotification(`Found ${result.networks.length} WiFi network(s)`, 'success');
-        } else {
-            updateWiFiSignalStrength(0); // No networks found
-            showNotification('No WiFi networks found', 'warning');
-        }
-        
-    } catch (error) {
-        console.error('Error scanning WiFi:', error);
-        
-        // Fallback to random signal for demo
-        const randomStrength = Math.floor(Math.random() * 4) + 1;
-        updateWiFiSignalStrength(randomStrength);
-        
-        showNotification('WiFi scan completed (demo mode)', 'info');
-    } finally {
-        // Restore button
-        scanButton.innerHTML = originalHTML;
-        scanButton.disabled = false;
-    }
-}
-
-// Update WiFi Networks List
-function updateWiFiNetworksList(networks) {
-    const ssidInput = document.querySelector('[name="wifi-ssid"]');
-    if (!ssidInput) return;
-    
-    // Convert input to datalist for autocomplete
-    const datalistId = 'wifi-networks-list';
-    let datalist = document.getElementById(datalistId);
-    
-    if (!datalist) {
-        datalist = document.createElement('datalist');
-        datalist.id = datalistId;
-        ssidInput.setAttribute('list', datalistId);
-        ssidInput.parentNode.appendChild(datalist);
-    }
-    
-    // Clear existing options
-    datalist.innerHTML = '';
-    
-    // Add new options
-    networks.forEach(network => {
-        const option = document.createElement('option');
-        option.value = network.ssid;
-        option.textContent = `${network.ssid} (${['None', 'Poor', 'Fair', 'Good', 'Excellent'][network.signal]})`;
-        datalist.appendChild(option);
-    });
 }
 
 // Network Toggle Functions
@@ -533,48 +58,39 @@ function initializeNetworkToggles() {
         radio.addEventListener('change', toggleIPAssignment);
     });
     
-    // Initialize on page load
     toggleNetworkConfig();
     toggleIPAssignment();
 }
 
 function toggleNetworkConfig() {
-    const networkMode = document.querySelector('input[name="network-mode"]:checked')?.value;
+    const networkMode = document.querySelector('input[name="network-mode"]:checked');
     if (!networkMode) return;
     
+    const mode = networkMode.value;
     const ethernetConfig = document.getElementById('ethernet-config');
     const wifiConfig = document.getElementById('wifi-config');
     const cellularConfig = document.getElementById('cellular-config');
     
-    // Hide all config sections
     if (ethernetConfig) ethernetConfig.style.display = 'none';
     if (wifiConfig) wifiConfig.style.display = 'none';
     if (cellularConfig) cellularConfig.style.display = 'none';
     
-    // Show only the selected config
-    if (networkMode === 'ethernet' && ethernetConfig) {
+    if (mode === 'ethernet' && ethernetConfig) {
         ethernetConfig.style.display = 'block';
-    } else if (networkMode === 'wifi' && wifiConfig) {
+    } else if (mode === 'wifi' && wifiConfig) {
         wifiConfig.style.display = 'block';
-        // Update WiFi signal strength when WiFi is selected
-        const currentSSID = getInputValue('[name="wifi-ssid"]');
-        if (currentSSID) {
-            updateWiFiSignalStrength(3); // Default to "Good"
-        } else {
-            updateWiFiSignalStrength(0); // No network
-        }
-    } else if (networkMode === 'lte' && cellularConfig) {
+    } else if (mode === 'lte' && cellularConfig) {
         cellularConfig.style.display = 'block';
     }
 }
 
 function toggleIPAssignment() {
-    const ipAssignment = document.querySelector('input[name="ip-assignment"]:checked')?.value;
+    const ipAssignment = document.querySelector('input[name="ip-assignment"]:checked');
     const staticConfig = document.getElementById('static-ip-config');
     
     if (!staticConfig) return;
     
-    if (ipAssignment === 'static') {
+    if (ipAssignment && ipAssignment.value === 'static') {
         staticConfig.classList.remove('hidden');
     } else {
         staticConfig.classList.add('hidden');
@@ -582,17 +98,8 @@ function toggleIPAssignment() {
 }
 
 // WiFi Signal Functions
-function initializeWiFiSignal() {
-    const scanBtn = document.querySelector('#wifi-config .scan-wifi-btn');
-    if (scanBtn) {
-        scanBtn.addEventListener('click', scanWiFi);
-    }
-}
-
 function updateWiFiSignalStrength(strength) {
     const signalBars = document.querySelectorAll('#wifi-config .signal-bar');
-    const strengthTexts = ['None', 'Poor', 'Fair', 'Good', 'Excellent'];
-    
     if (!signalBars.length) return;
     
     // Reset all bars
@@ -613,64 +120,29 @@ function updateWiFiSignalStrength(strength) {
             else if (i === 4) bar.className = 'signal-bar excellent';
         }
     }
+}
+
+function getSignalStrengthText(strength) {
+    const strengthTexts = ['None', 'Poor', 'Fair', 'Good', 'Excellent'];
+    return strengthTexts[Math.min(Math.max(strength, 0), 4)] || 'Unknown';
+}
+
+function updateWiFiSignalDisplay(strength) {
+    const wifiConfig = document.getElementById('wifi-config');
+    if (!wifiConfig || wifiConfig.style.display === 'none') {
+        return;
+    }
+    
+    updateWiFiSignalStrength(strength);
     
     // Update strength text
-    const wifiConfig = document.getElementById('wifi-config');
-    if (wifiConfig) {
-        const strengthSpans = wifiConfig.querySelectorAll('.signal-strength + span, .signal-strength + .ml-2');
-        strengthSpans.forEach(span => {
-            if (span.textContent.includes('None') || 
-                span.textContent.includes('Poor') || 
-                span.textContent.includes('Fair') || 
-                span.textContent.includes('Good') || 
-                span.textContent.includes('Excellent')) {
-                span.textContent = strengthTexts[effectiveStrength];
-            }
-        });
-    }
-}
-
-// Form Validation Functions
-function initializeFormInteractions() {
-    const formElements = document.querySelectorAll('input, select, textarea');
-    formElements.forEach(element => {
-        element.addEventListener('change', function() {
-            validateFormField(this);
-        });
-        
-        // Real-time validation for required fields
-        if (element.hasAttribute('required')) {
-            element.addEventListener('input', function() {
-                validateFormField(this);
-            });
+    const strengthText = getSignalStrengthText(strength);
+    const strengthSpans = wifiConfig.querySelectorAll('.signal-strength + span, .signal-strength + .ml-2');
+    strengthSpans.forEach(span => {
+        if (!span.querySelector('i')) {
+            span.textContent = strengthText;
         }
     });
-    
-    validateRequiredFields();
-}
-
-function validateFormField(element) {
-    // Basic validation for required fields
-    if (element.hasAttribute('required') && !element.value.trim()) {
-        element.classList.add('border-red-300', 'bg-red-50');
-        return false;
-    } else {
-        element.classList.remove('border-red-300', 'bg-red-50');
-        return true;
-    }
-}
-
-function validateRequiredFields() {
-    const requiredFields = document.querySelectorAll('[required]');
-    let allValid = true;
-    
-    requiredFields.forEach(field => {
-        if (!validateFormField(field)) {
-            allValid = false;
-        }
-    });
-    
-    return allValid;
 }
 
 // Notification System
@@ -683,7 +155,7 @@ function showNotification(message, type = 'info') {
     
     // Create notification element
     const notification = document.createElement('div');
-    notification.className = `notification-toast fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg border transition-all duration-300 transform translate-x-0 opacity-100`;
+    notification.className = 'notification-toast fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg border transition-all duration-300 transform translate-x-0 opacity-100';
     
     // Set styles based on type
     const typeStyles = {
@@ -733,13 +205,372 @@ function showNotification(message, type = 'info') {
     }, 5000);
 }
 
-// Export functions if needed for module system
+// Collect Form Data for API (single JSON) - FIXED VERSION
+function collectFormData() {
+    const configData = {
+        gateway_identity: {
+            name: getInputValue('[name="gateway-name"]'),
+            deployment_site: getInputValue('[name="deployment-site"]'),
+            location_mode: getRadioValue('[name="location-mode"]'),
+            latitude: parseFloat(getInputValue('[name="latitude"]')) || 0,
+            longitude: parseFloat(getInputValue('[name="longitude"]')) || 0,
+            asset_id: getInputValue('[name="asset-id"]')
+        },
+        date_time: {
+            timezone: getSelectValue('[name="timezone"]'),
+            ntp_server: getSelectValue('[name="ntp-server"]'),
+            date_format: getSelectValue('[name="date-format"]'),
+            time_format: getSelectValue('[name="time-format"]'),
+            language: getSelectValue('[name="language"]')
+        },
+        network: {
+            mode: getRadioValue('[name="network-mode"]')
+        },
+        heartbeat: {
+            interval: parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
+            offline_threshold: parseInt(getInputValue('[name="offline-threshold"]')) || 120
+        },
+        mac_address: document.querySelector('[data-mac-address]') ? document.querySelector('[data-mac-address]').textContent : '00:1A:2B:3C:4D:5E'
+    };
+    
+    const networkMode = configData.network.mode;
+    
+    if (networkMode === 'ethernet') {
+        configData.network.ethernet = {
+            ip_assignment: getRadioValue('[name="ip-assignment"]')
+        };
+        
+        if (configData.network.ethernet.ip_assignment === 'static') {
+            configData.network.ethernet.static_ip = getInputValue('[name="static-ip"]');
+            configData.network.ethernet.subnet_mask = getInputValue('[name="subnet-mask"]');
+            configData.network.ethernet.gateway = getInputValue('[name="gateway"]');
+            configData.network.ethernet.dns1 = getInputValue('[name="dns1"]');
+            configData.network.ethernet.dns2 = getInputValue('[name="dns2"]');
+        }
+    } else if (networkMode === 'wifi') {
+        const ssid = getInputValue('[name="wifi-ssid"]');
+        const password = getInputValue('[name="wifi-password"]');
+        
+        configData.network.wifi = {};
+        if (ssid) configData.network.wifi.ssid = ssid;
+        if (password) configData.network.wifi.password = password;
+    } else if (networkMode === 'lte') {
+        configData.network.cellular = {
+            apn: getInputValue('[name="apn"]') || 'internet'
+        };
+        
+        const username = getInputValue('[name="cellular-username"]');
+        const password = getInputValue('[name="cellular-password"]');
+        
+        if (username) configData.network.cellular.username = username;
+        if (password) configData.network.cellular.password = password;
+    }
+    
+    return configData;
+}
+
+// Save Configuration Handler
+async function handleSaveConfiguration() {
+    const saveBtn = document.getElementById('save-btn');
+    if (!saveBtn) return;
+    
+    const originalText = saveBtn.innerHTML;
+    
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+    saveBtn.disabled = true;
+    
+    const configData = collectFormData();
+    
+    try {
+        const response = await fetch('/api/general-configuration', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(configData)
+        });
+        
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        
+        const result = await response.json();
+        
+        saveBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved!';
+        saveBtn.classList.remove('bg-primary', 'hover:bg-primaryHover');
+        saveBtn.classList.add('bg-success', 'hover:bg-emerald-600');
+        
+        setTimeout(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.classList.remove('bg-success', 'hover:bg-emerald-600');
+            saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
+            saveBtn.disabled = false;
+        }, 2000);
+        
+        showNotification(result.message || 'Saved successfully', 'success');
+        
+    } catch (error) {
+        console.error('Save error:', error);
+        
+        saveBtn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
+        saveBtn.classList.remove('bg-primary', 'hover:bg-primaryHover');
+        saveBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+        
+        setTimeout(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+            saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
+            saveBtn.disabled = false;
+        }, 3000);
+        
+        showNotification('Save failed: ' + error.message, 'error');
+    }
+}
+
+// Main initialization
+window.initGeneralConfig = function() {
+    console.log('General Configuration initialized');
+    
+    loadConfiguration().then(() => {
+        initializeGeneralConfig();
+        initializeWebSocket();
+    }).catch(error => {
+        console.error('Load error:', error);
+        initializeGeneralConfig();
+        initializeWebSocket();
+        showNotification('Load failed', 'error');
+    });
+};
+
+function initializeGeneralConfig() {
+    initializeButtons();
+    initializeNetworkToggles();
+    console.log('Configuration setup complete');
+}
+
+// WebSocket
+let wsConnection = null;
+let reconnectInterval = null;
+
+function initializeWebSocket() {
+    const wsUrl = 'ws://' + window.location.host + '/ws';
+    console.log('Connecting WebSocket:', wsUrl);
+    
+    wsConnection = new WebSocket(wsUrl);
+    
+    wsConnection.onopen = function() {
+        console.log('WebSocket connected');
+        if (reconnectInterval) {
+            clearInterval(reconnectInterval);
+            reconnectInterval = null;
+        }
+    };
+    
+    wsConnection.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+        } catch (e) {
+            console.error('WebSocket parse error:', e);
+        }
+    };
+    
+    wsConnection.onclose = function() {
+        console.log('WebSocket disconnected');
+        
+        if (!reconnectInterval) {
+            reconnectInterval = setInterval(() => {
+                console.log('Reconnecting WebSocket...');
+                initializeWebSocket();
+            }, 5000);
+        }
+    };
+    
+    wsConnection.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+}
+
+function handleWebSocketMessage(data) {
+    console.log('WebSocket:', data.type);
+    
+    switch (data.type) {
+        case 'initial':
+            setInputValue('[name="date"]', data.current_date);
+            setInputValue('[name="time"]', data.current_time);
+            if (data.wifi_signal_strength !== undefined) {
+                updateWiFiSignalDisplay(data.wifi_signal_strength);
+            }
+            break;
+            
+        case 'wifi_signal_update':
+            updateWiFiSignalDisplay(data.strength);
+            break;
+            
+        case 'time_update':
+            setInputValue('[name="date"]', data.current_date);
+            setInputValue('[name="time"]', data.current_time);
+            break;
+            
+        case 'time_synced':
+            showNotification('Time synchronized', 'success');
+            break;
+    }
+}
+
+function syncTimeViaWebSocket() {
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+        wsConnection.send(JSON.stringify({ type: 'sync_time' }));
+        return true;
+    }
+    return false;
+}
+
+// Load configuration from API
+async function loadConfiguration() {
+    try {
+        const response = await fetch('/api/general-configuration');
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        
+        const config = await response.json();
+        populateFormWithConfig(config);
+        console.log('Configuration loaded:', config);
+        
+    } catch (error) {
+        console.error('Load error:', error);
+        throw error;
+    }
+}
+
+function populateFormWithConfig(config) {
+    // Gateway Identity
+    if (config.gateway_identity) {
+        const id = config.gateway_identity;
+        setInputValue('[name="gateway-name"]', id.name);
+        setInputValue('[name="serial-number"]', id.serial_number);
+        setInputValue('[name="deployment-site"]', id.deployment_site);
+        setRadioValue('[name="location-mode"]', id.location_mode);
+        setInputValue('[name="latitude"]', id.latitude);
+        setInputValue('[name="longitude"]', id.longitude);
+        setInputValue('[name="asset-id"]', id.asset_id);
+    }
+    
+    // Date & Time
+    if (config.date_time) {
+        const dt = config.date_time;
+        setSelectValue('[name="timezone"]', dt.timezone);
+        setSelectValue('[name="ntp-server"]', dt.ntp_server);
+        setSelectValue('[name="date-format"]', dt.date_format);
+        setSelectValue('[name="time-format"]', dt.time_format);
+        setSelectValue('[name="language"]', dt.language);
+    }
+    
+    // Network
+    if (config.network) {
+        const net = config.network;
+        setRadioValue('[name="network-mode"]', net.mode);
+        
+        if (net.ethernet) {
+            setRadioValue('[name="ip-assignment"]', net.ethernet.ip_assignment || 'dhcp');
+            setInputValue('[name="static-ip"]', net.ethernet.static_ip || '192.168.1.50');
+            setInputValue('[name="subnet-mask"]', net.ethernet.subnet_mask || '255.255.255.0');
+            setInputValue('[name="gateway"]', net.ethernet.gateway || '192.168.1.1');
+            setInputValue('[name="dns1"]', net.ethernet.dns1 || '8.8.8.8');
+            setInputValue('[name="dns2"]', net.ethernet.dns2 || '8.8.4.4');
+        }
+        
+        if (net.wifi) {
+            setInputValue('[name="wifi-ssid"]', net.wifi.ssid || '');
+            setInputValue('[name="wifi-password"]', net.wifi.password || '');
+        }
+        
+        if (net.cellular) {
+            setInputValue('[name="apn"]', net.cellular.apn || 'internet');
+            setInputValue('[name="cellular-username"]', net.cellular.username || '');
+            setInputValue('[name="cellular-password"]', net.cellular.password || '');
+        }
+        
+        setTimeout(() => toggleNetworkConfig(), 100);
+    }
+    
+    // Heartbeat
+    if (config.heartbeat) {
+        setInputValue('[name="heartbeat-interval"]', config.heartbeat.interval);
+        setInputValue('[name="offline-threshold"]', config.heartbeat.offline_threshold);
+    }
+    
+    // MAC Address
+    if (config.mac_address) {
+        const macElement = document.querySelector('[data-mac-address]');
+        if (macElement) macElement.textContent = config.mac_address;
+    }
+}
+
+// Button Handlers
+function initializeButtons() {
+    // Refresh
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            if (confirm('Refresh page?')) {
+                location.reload();
+            }
+        });
+    }
+    
+    // Save
+    const saveBtn = document.getElementById('save-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', handleSaveConfiguration);
+    }
+    
+    // Sync Time
+    const syncBtn = document.querySelector('.sync-time-btn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', function() {
+            const originalHTML = syncBtn.innerHTML;
+            syncBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            syncBtn.disabled = true;
+            
+            if (syncTimeViaWebSocket()) {
+                setTimeout(() => {
+                    syncBtn.innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Sync Now';
+                    syncBtn.disabled = false;
+                }, 1000);
+            } else {
+                showNotification('Not connected', 'warning');
+                syncBtn.innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Sync Now';
+                syncBtn.disabled = false;
+            }
+        });
+    }
+    
+    // Hide WiFi scan button
+    const scanBtn = document.querySelector('#wifi-config .scan-wifi-btn');
+    if (scanBtn) {
+        scanBtn.style.display = 'none';
+    }
+}
+
+// Cleanup
+window.addEventListener('beforeunload', function() {
+    if (wsConnection) {
+        wsConnection.close();
+    }
+    
+    if (reconnectInterval) {
+        clearInterval(reconnectInterval);
+    }
+});
+
+// Export for module system
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        initGeneralConfig,
-        loadConfiguration,
-        handleSaveConfiguration,
-        handleTimeSync,
-        scanWiFi
+        initGeneralConfig: window.initGeneralConfig,
+        loadConfiguration: loadConfiguration,
+        handleSaveConfiguration: handleSaveConfiguration
     };
 }

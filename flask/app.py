@@ -1,12 +1,25 @@
-# api_server.py - Run on port 8080
+# Save this as api_server_async.py and run it
+import aiohttp
+from aiohttp import web
+import asyncio
 import json
-import time
 import datetime
+import sqlite3
 import random
-import socket
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from typing import Dict, Any
 
-config_data = {
+# Database setup
+DB_FILE = 'gateway_config.db'
+
+# In-memory real-time state (NOT in database)
+realtime_state = {
+    'current_date': datetime.datetime.now().strftime('%Y-%m-%d'),
+    'current_time': datetime.datetime.now().strftime('%H:%M'),
+    'wifi_signal_strength': 3  # Default signal strength
+}
+
+# Default configuration (single JSON in database)
+DEFAULT_CONFIG = {
     'gateway_identity': {
         'name': 'Univa-GW-01',
         'serial_number': 'GW2025-1190021',
@@ -19,8 +32,6 @@ config_data = {
     'date_time': {
         'timezone': 'Asia/Kolkata',
         'ntp_server': 'pool.ntp.org',
-        'current_date': datetime.datetime.now().strftime('%Y-%m-%d'),
-        'current_time': datetime.datetime.now().strftime('%H:%M'),
         'date_format': 'DD/MM/YYYY',
         'time_format': '24-hour',
         'language': 'en'
@@ -43,154 +54,288 @@ config_data = {
     'mac_address': '00:1A:2B:3C:4D:5E'
 }
 
-class APIHandler(BaseHTTPRequestHandler):
-    
-    def _set_headers(self, content_type='application/json'):
-        self.send_response(200)
-        self.send_header('Content-type', content_type)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-    
-    def _safe_write(self, data):
-        """Safely write data, handling connection interruptions"""
-        try:
-            self.wfile.write(data)
-        except (BrokenPipeError, ConnectionResetError, socket.error) as e:
-            # Client disconnected, ignore error
-            print("Client disconnected: {}".format(e))
-    
-    def do_GET(self):
-        if self.path == '/api/general-configuration':
-            try:
-                self._set_headers()
-                response_data = json.dumps(config_data).encode('utf-8')
-                self._safe_write(response_data)
-            except Exception as e:
-                print("Error processing GET request: {}".format(e))
-        else:
-            try:
-                self.send_response(404)
-                self.end_headers()
-            except:
-                pass  # If client already disconnected, ignore error
-    
-    def do_PUT(self):
-        if self.path == '/api/general-configuration':
-            try:
-                length = int(self.headers.get('Content-Length', 0))
-                if length:
-                    data = json.loads(self.rfile.read(length).decode('utf-8'))
-                    
-                    # Update config
-                    for key in data:
-                        if key in config_data and isinstance(config_data[key], dict):
-                            config_data[key].update(data[key])
-                        elif key in config_data:
-                            config_data[key] = data[key]
-                
-                self._set_headers()
-                response = json.dumps({
-                    'success': True,
-                    'message': 'Configuration saved successfully'
-                }).encode('utf-8')
-                self._safe_write(response)
-            except Exception as e:
-                try:
-                    self.send_response(500)
-                    self.end_headers()
-                    response = json.dumps({
-                        'success': False,
-                        'message': 'Error: ' + str(e)
-                    }).encode('utf-8')
-                    self._safe_write(response)
-                except:
-                    pass  # If client already disconnected, ignore error
-        else:
-            try:
-                self.send_response(404)
-                self.end_headers()
-            except:
-                pass
-    
-    def do_POST(self):
-        if self.path == '/api/general-configuration/wifi-scan':
-            try:
-                time.sleep(1)  # Simulate scanning delay
-                self._set_headers()
-                response = json.dumps({
-                    'success': True,
-                    'networks': [
-                        {'ssid': 'Port_WiFi_5G', 'signal': 4},
-                        {'ssid': 'Guest_WiFi', 'signal': 3},
-                        {'ssid': 'Crane_Control', 'signal': 2}
-                    ]
-                }).encode('utf-8')
-                self._safe_write(response)
-            except Exception as e:
-                print("Error in WiFi scan request: {}".format(e))
-        
-        elif self.path == '/api/general-configuration/time-sync':
-            try:
-                now = datetime.datetime.now()
-                config_data['date_time']['current_date'] = now.strftime('%Y-%m-%d')
-                config_data['date_time']['current_time'] = now.strftime('%H:%M')
-                
-                self._set_headers()
-                response = json.dumps({
-                    'success': True,
-                    'message': 'Time synchronized successfully',
-                    'current_date': config_data['date_time']['current_date'],
-                    'current_time': config_data['date_time']['current_time']
-                }).encode('utf-8')
-                self._safe_write(response)
-            except Exception as e:
-                print("Error in time sync request: {}".format(e))
-        else:
-            try:
-                self.send_response(404)
-                self.end_headers()
-            except:
-                pass
-    
-    def do_OPTIONS(self):
-        try:
-            self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.end_headers()
-        except:
-            pass  # If client already disconnected, ignore error
-    
-    def handle(self):
-        """Override handle method to catch all exceptions"""
-        try:
-            BaseHTTPRequestHandler.handle(self)
-        except (ConnectionResetError, BrokenPipeError, socket.error):
-            # Ignore connection-related errors
-            pass
-    
-    def log_message(self, format, *args):
-        # Optional: quiet logging, but can log errors if needed
-        pass
 
-def run():
-    port = 8080
-    server = HTTPServer(('0.0.0.0', port), APIHandler)
-    print('API Server running on port ' + str(port))
-    print('Endpoints:')
-    print('  GET  /api/general-configuration')
-    print('  PUT  /api/general-configuration')
-    print('  POST /api/general-configuration/wifi-scan')
-    print('  POST /api/general-configuration/time-sync')
-    print('Press Ctrl+C to stop server')
+def init_database():
+    """Initialize SQLite database with single JSON field"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    # Create table with single JSON field
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS general_configuration (
+            id INTEGER PRIMARY KEY,
+            config_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Check if we have any records
+    cursor.execute('SELECT COUNT(*) FROM general_configuration')
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        # Insert default configuration as single JSON
+        cursor.execute('''
+            INSERT INTO general_configuration (config_json)
+            VALUES (?)
+        ''', (json.dumps(DEFAULT_CONFIG),))
+    
+    conn.commit()
+    conn.close()
+    print("Database initialized (single JSON field)")
+
+
+def get_configuration() -> Dict[str, Any]:
+    """Retrieve configuration from database as single JSON"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT config_json FROM general_configuration WHERE id = 1')
+    row = cursor.fetchone()
+    
+    conn.close()
+    
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except:
+            return DEFAULT_CONFIG.copy()
+    
+    return DEFAULT_CONFIG.copy()
+
+
+def update_configuration(config_data: Dict[str, Any]) -> bool:
+    """Update configuration in database as single JSON"""
+    try:
+        # Get current config and merge with new data
+        current = get_configuration()
+        
+        # Deep merge the configuration
+        for key in config_data:
+            if key in current and isinstance(current[key], dict) and isinstance(config_data[key], dict):
+                current[key].update(config_data[key])
+            else:
+                current[key] = config_data[key]
+        
+        # Save as single JSON
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE general_configuration 
+            SET config_json = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = 1
+        ''', (json.dumps(current),))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Error updating configuration: {}".format(e))
+        return False
+
+
+# WebSocket connections
+connected_websockets = set()
+
+
+async def websocket_handler(request):
+    """Handle WebSocket connections for real-time updates"""
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    
+    connected_websockets.add(ws)
+    print("WebSocket connected. Total clients: {}".format(len(connected_websockets)))
     
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print('\nShutting down server...')
-        server.server_close()
-        print('Server stopped.')
+        # Get current config to check WiFi mode
+        config = get_configuration()
+        network_mode = config.get('network', {}).get('mode', 'ethernet')
+        wifi_configured = network_mode == 'wifi' and config.get('network', {}).get('wifi', {}).get('ssid')
+        
+        # Prepare initial data
+        initial_data = {
+            'type': 'initial',
+            'current_date': realtime_state['current_date'],
+            'current_time': realtime_state['current_time']
+        }
+        
+        # Only include signal strength if WiFi is configured
+        if wifi_configured:
+            initial_data['wifi_signal_strength'] = realtime_state['wifi_signal_strength']
+        
+        await ws.send_json(initial_data)
+        
+        async for msg in ws:
+            if msg.type == aiohttp.WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data)
+                    
+                    if data.get('type') == 'sync_time':
+                        # Update time in memory
+                        realtime_state['current_date'] = datetime.datetime.now().strftime('%Y-%m-%d')
+                        realtime_state['current_time'] = datetime.datetime.now().strftime('%H:%M')
+                        
+                        # Broadcast to all clients
+                        for client in connected_websockets:
+                            try:
+                                await client.send_json({
+                                    'type': 'time_update',
+                                    'current_date': realtime_state['current_date'],
+                                    'current_time': realtime_state['current_time']
+                                })
+                            except:
+                                pass
+                        
+                        # Send confirmation
+                        await ws.send_json({
+                            'type': 'time_synced',
+                            'current_date': realtime_state['current_date'],
+                            'current_time': realtime_state['current_time']
+                        })
+                    
+                    elif data.get('type') == 'ping':
+                        await ws.send_json({'type': 'pong'})
+                        
+                except json.JSONDecodeError:
+                    await ws.send_json({
+                        'type': 'error',
+                        'message': 'Invalid JSON format'
+                    })
+                    
+    except Exception as e:
+        print("WebSocket error: {}".format(e))
+    finally:
+        connected_websockets.remove(ws)
+        print("WebSocket disconnected. Total clients: {}".format(len(connected_websockets)))
+    
+    return ws
+
+
+async def periodic_updates():
+    """Update real-time state periodically"""
+    while True:
+        try:
+            # Update time every second
+            realtime_state['current_date'] = datetime.datetime.now().strftime('%Y-%m-%d')
+            realtime_state['current_time'] = datetime.datetime.now().strftime('%H:%M')
+            
+            # Get current config to check WiFi mode
+            config = get_configuration()
+            network_mode = config.get('network', {}).get('mode', 'ethernet')
+            wifi_configured = network_mode == 'wifi' and config.get('network', {}).get('wifi', {}).get('ssid')
+            
+            # Update WiFi signal only if WiFi is configured
+            if wifi_configured:
+                if random.random() < 0.2:  # 20% chance to change
+                    change = random.choice([-1, 0, 1])
+                    new_strength = max(0, min(4, realtime_state['wifi_signal_strength'] + change))
+                    
+                    if new_strength != realtime_state['wifi_signal_strength']:
+                        realtime_state['wifi_signal_strength'] = new_strength
+                        
+                        # Broadcast signal update to clients with WiFi
+                        for ws in connected_websockets:
+                            try:
+                                await ws.send_json({
+                                    'type': 'wifi_signal_update',
+                                    'strength': new_strength
+                                })
+                            except:
+                                pass
+            
+            # Broadcast time update to all connected clients
+            time_update = {
+                'type': 'time_update',
+                'current_date': realtime_state['current_date'],
+                'current_time': realtime_state['current_time']
+            }
+            
+            for ws in connected_websockets:
+                try:
+                    await ws.send_json(time_update)
+                except:
+                    pass
+            
+            await asyncio.sleep(1)  # Update every second
+            
+        except Exception as e:
+            print("Error in periodic updates: {}".format(e))
+            await asyncio.sleep(5)
+
+
+# HTTP Route Handlers
+async def get_config_handler(request):
+    """GET handler - configuration as single JSON"""
+    config = get_configuration()
+    return web.json_response(config)
+
+
+async def put_config_handler(request):
+    """PUT handler - update configuration as single JSON"""
+    try:
+        data = await request.json()
+        success = update_configuration(data)
+        
+        if success:
+            return web.json_response({
+                'success': True,
+                'message': 'Configuration saved successfully'
+            })
+        return web.json_response({
+            'success': False,
+            'message': 'Failed to save configuration'
+        }, status=500)
+        
+    except Exception as e:
+        print("Error in PUT handler: {}".format(e))
+        return web.json_response({
+            'success': False,
+            'message': str(e)
+        }, status=400)
+
+
+async def start_background_tasks(app):
+    """Start background tasks"""
+    app['periodic_updates'] = asyncio.ensure_future(periodic_updates())
+
+
+async def cleanup_background_tasks(app):
+    """Cleanup background tasks"""
+    app['periodic_updates'].cancel()
+    await app['periodic_updates']
+
+
+def create_app():
+    """Create and configure the aiohttp application"""
+    app = web.Application()
+    
+    # HTTP endpoints for configuration
+    app.router.add_get('/api/general-configuration', get_config_handler)
+    app.router.add_put('/api/general-configuration', put_config_handler)
+    
+    # WebSocket for real-time data
+    app.router.add_get('/ws', websocket_handler)
+    
+    # Background tasks
+    app.on_startup.append(start_background_tasks)
+    app.on_cleanup.append(cleanup_background_tasks)
+    
+    return app
+
 
 if __name__ == '__main__':
-    run()
+    # Initialize database
+    print("Initializing database...")
+    init_database()
+    
+    print("Starting server on http://0.0.0.0:8080")
+    print("Database: Single JSON field for all configuration")
+    print("Memory: Real-time state (date/time/signal)")
+    print("HTTP: Full configuration management")
+    print("WebSocket: Real-time updates (signal only if WiFi configured)")
+    print("Press Ctrl+C to stop")
+    
+    web.run_app(create_app(), host='0.0.0.0', port=8080)
