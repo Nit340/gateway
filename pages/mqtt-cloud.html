@@ -1,166 +1,281 @@
-<!-- This is the main content only, to be loaded dynamically -->
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <!-- Title Section -->
-    <div class="mb-8">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-slate-900">Cloud Connection Manager</h1>
-                <p class="text-slate-500 text-sm mt-1">Configure and manage connections to various cloud services</p>
+<!-- mqtt-cloud.html -->
+<div class="main-content-with-sidebar">
+    <main class="flex-grow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Title Section -->
+            <div class="mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold text-slate-900">Cloud Connection Manager</h1>
+                        <p class="text-slate-500 text-sm mt-1">Configure and manage connections to various cloud services</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <!-- ADD CONNECTION BUTTON -->
+                        <button onclick="window.cloudConnections.showConnectionManager()" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
+                            <i class="fa-solid fa-plus mr-1 text-xs"></i> Add Connection
+                        </button>
+                        <button onclick="window.cloudConnections.showHelp()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                            <i class="fa-solid fa-circle-question mr-1 text-xs"></i> Help
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="flex items-center space-x-2">
-                <button onclick="window.showConnectionManager()" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
-                    <i class="fa-solid fa-plus mr-1 text-xs"></i> Add Connection
-                </button>
-                <button onclick="window.showHelp()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
-                    <i class="fa-solid fa-circle-question mr-1 text-xs"></i> Help
-                </button>
-            </div>
-        </div>
-    </div>
 
-    <div class="space-y-8">
-        <!-- Two Column Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Column: Connections List -->
-            <section class="lg:col-span-1">
-                <div class="config-card">
-                    <div class="p-4 border-b border-border">
-                        <h2 class="text-sm font-semibold text-slate-800 flex items-center">
-                            <i class="fa-solid fa-list mr-2 text-primary text-xs"></i> 
-                            Active Connections (<span id="connectionCount">0</span>)
-                        </h2>
-                    </div>
-                    
-                    <div class="p-3 space-y-3" id="connectionsList">
-                        <!-- Connections will be dynamically loaded here -->
-                    </div>
-                </div>
-            </section>
+            <div class="space-y-8">
+                <!-- Two Column Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left Column: Connections List -->
+                    <section class="lg:col-span-1">
+                        <div class="config-card">
+                            <div class="p-4 border-b border-border">
+                                <h2 class="text-sm font-semibold text-slate-800 flex items-center">
+                                    <i class="fa-solid fa-list mr-2 text-primary text-xs"></i> 
+                                    Active Connections (<span id="connectionCount">0</span>)
+                                </h2>
+                            </div>
+                            
+                            <div class="p-3 space-y-3" id="connectionsList">
+                                <!-- Connections will be dynamically loaded here -->
+                                <div class="text-center py-8 text-slate-400">
+                                    <i class="fa-solid fa-cloud text-3xl mb-3"></i>
+                                    <p class="text-sm">No connections yet</p>
+                                    <p class="text-xs mt-1">Click "Add Connection" to get started</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
 
-            <!-- Right Column: Configuration -->
-            <section class="lg:col-span-2 space-y-4">
-                <!-- Connection Status Card -->
-                <div class="config-card p-4">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-sm font-semibold text-slate-900" id="connectionName">No Connection Selected</h3>
-                            <p class="text-xs text-slate-500" id="connectionDescription">Select a connection to view details</p>
+                    <!-- Right Column: Configuration -->
+                    <section class="lg:col-span-2 space-y-4">
+                        <!-- Connection Status Card -->
+                        <div class="config-card p-4">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-slate-900" id="connectionName">No Connection Selected</h3>
+                                    <p class="text-xs text-slate-500" id="connectionDescription">Select a connection to view details</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-medium text-slate-700">Enabled</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" checked id="mqtt-enabled" disabled>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Quick Stats -->
+                            <div class="grid grid-cols-4 gap-3 mb-4">
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Messages</div>
+                                    <div class="text-sm font-bold text-slate-900" id="statMessages">0</div>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Errors</div>
+                                    <div class="text-sm font-bold text-success" id="statErrors">0</div>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Last Sent</div>
+                                    <div class="text-sm font-bold text-slate-900" id="statLastSent">Never</div>
+                                </div>
+                                <div class="bg-slate-50 p-2 rounded text-center">
+                                    <div class="text-xs text-slate-500">Latency</div>
+                                    <div class="text-sm font-bold text-slate-900" id="statLatency">0 ms</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-medium text-slate-700">Enabled</span>
-                            <label class="toggle-switch">
-                                <input type="checkbox" checked id="mqtt-enabled">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Quick Stats -->
-                    <div class="grid grid-cols-4 gap-3 mb-4">
-                        <div class="bg-slate-50 p-2 rounded text-center">
-                            <div class="text-xs text-slate-500">Messages</div>
-                            <div class="text-sm font-bold text-slate-900" id="statMessages">0</div>
-                        </div>
-                        <div class="bg-slate-50 p-2 rounded text-center">
-                            <div class="text-xs text-slate-500">Errors</div>
-                            <div class="text-sm font-bold text-success" id="statErrors">0</div>
-                        </div>
-                        <div class="bg-slate-50 p-2 rounded text-center">
-                            <div class="text-xs text-slate-500">Last Sent</div>
-                            <div class="text-sm font-bold text-slate-900" id="statLastSent">Never</div>
-                        </div>
-                        <div class="bg-slate-50 p-2 rounded text-center">
-                            <div class="text-xs text-slate-500">Latency</div>
-                            <div class="text-sm font-bold text-slate-900" id="statLatency">0 ms</div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Configuration Tabs -->
-                <div class="config-card">
-                    <!-- Tabs -->
-                    <div class="flex border-b border-border">
-                        <button onclick="window.switchTab('connection')" class="tab-button active" id="tab-connection">Connection</button>
-                        <button onclick="window.switchTab('topics')" class="tab-button" id="tab-topics">Topics & Format</button>
-                        <button onclick="window.switchTab('publishing')" class="tab-button" id="tab-publishing">Tag Publishing</button>
-                        <button onclick="window.switchTab('advanced')" class="tab-button" id="tab-advanced">Advanced</button>
-                    </div>
-                    
-                    <!-- Connection Settings (Tab 1) -->
-                    <div id="tab-content-connection" class="p-4 space-y-6">
-                        <!-- This will be dynamically populated -->
-                    </div>
-                    
-                    <!-- Topics & Format (Tab 2) -->
-                    <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;"></div>
-                    
-                    <!-- Tag Publishing (Tab 3) -->
-                    <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;"></div>
-                    
-                    <!-- Advanced (Tab 4) -->
-                    <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;"></div>
-                </div>
-                
-                <!-- Connection Monitor -->
-                <div class="config-card p-4">
-                    <h4 class="text-xs font-semibold text-slate-900 mb-3">Connection Diagnostics</h4>
-                    
-                    <div class="grid grid-cols-2 gap-6">
-                        <!-- Status Panel -->
-                        <div>
-                            <div class="space-y-2">
-                                <div class="flex justify-between">
-                                    <span class="text-xs text-slate-600">Status:</span>
-                                    <span class="status-indicator offline" id="diagnosticStatus">Disconnected</span>
+                        <!-- Configuration Tabs -->
+                        <div class="config-card">
+                            <!-- Tabs -->
+                            <div class="flex border-b border-border">
+                                <button onclick="window.cloudConnections.switchTab('connection')" class="tab-button active" id="tab-connection">Connection</button>
+                                <button onclick="window.cloudConnections.switchTab('topics')" class="tab-button" id="tab-topics">Topics & Format</button>
+                                <button onclick="window.cloudConnections.switchTab('publishing')" class="tab-button" id="tab-publishing">Tag Publishing</button>
+                                <button onclick="window.cloudConnections.switchTab('advanced')" class="tab-button" id="tab-advanced">Advanced</button>
+                            </div>
+                            
+                            <!-- Connection Settings (Tab 1) -->
+                            <div id="tab-content-connection" class="p-4 space-y-6">
+                                <!-- This will be dynamically populated based on selected connection -->
+                                <div class="text-center py-12 text-slate-400">
+                                    <i class="fa-solid fa-plug text-3xl mb-3"></i>
+                                    <p class="text-sm">Select a connection to configure</p>
+                                    <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-xs text-slate-600">Last Message Published:</span>
-                                    <span class="text-xs font-mono text-slate-900" id="diagnosticLastMessage">Never</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-xs text-slate-600">Packets Sent:</span>
-                                    <span class="text-xs font-mono text-slate-900" id="diagnosticPacketsSent">0</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-xs text-slate-600">Packets Received:</span>
-                                    <span class="text-xs font-mono text-slate-900" id="diagnosticPacketsReceived">0</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-xs text-slate-600">Last Error:</span>
-                                    <span class="text-xs font-mono text-green-600" id="diagnosticLastError">None</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-xs text-slate-600">Round-trip Latency:</span>
-                                    <span class="text-xs font-mono text-slate-900" id="diagnosticLatency">0 ms</span>
-                                </div>
+                            </div>
+                            
+                            <!-- Topics & Format (Tab 2) -->
+                            <div id="tab-content-topics" class="p-4 space-y-6" style="display: none;">
+                                <!-- This content is only shown for MQTT connections -->
+                            </div>
+                            
+                            <!-- Tag Publishing (Tab 3) -->
+                            <div id="tab-content-publishing" class="p-4 space-y-6" style="display: none;">
+                                <!-- This content is only shown for MQTT connections -->
+                            </div>
+                            
+                            <!-- Advanced (Tab 4) -->
+                            <div id="tab-content-advanced" class="p-4 space-y-6" style="display: none;">
+                                <!-- This content is only shown for MQTT connections -->
                             </div>
                         </div>
                         
-                        <!-- Downlink Commands -->
-                        <div>
-                            <h5 class="text-xs font-medium text-slate-700 mb-2">Recent Downlink Commands</h5>
-                            <div class="border border-slate-200 rounded overflow-hidden">
-                                <table class="w-full text-xs">
-                                    <thead class="bg-slate-50">
-                                        <tr>
-                                            <th class="p-2 text-left">Timestamp</th>
-                                            <th class="p-2 text-left">Command</th>
-                                            <th class="p-2 text-left">Result</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="downlinkCommands">
-                                        <tr>
-                                            <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
-                                                No commands received
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                        <!-- Connection Monitor -->
+                        <div class="config-card p-4">
+                            <h4 class="text-xs font-semibold text-slate-900 mb-3">Connection Diagnostics</h4>
+                            
+                            <div class="grid grid-cols-2 gap-6">
+                                <!-- Status Panel -->
+                                <div>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Status:</span>
+                                            <span class="status-indicator offline" id="diagnosticStatus">Disconnected</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Last Message Published:</span>
+                                            <span class="text-xs font-mono text-slate-900" id="diagnosticLastMessage">Never</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Packets Sent:</span>
+                                            <span class="text-xs font-mono text-slate-900" id="diagnosticPacketsSent">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Packets Received:</span>
+                                            <span class="text-xs font-mono text-slate-900" id="diagnosticPacketsReceived">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Last Error:</span>
+                                            <span class="text-xs font-mono text-green-600" id="diagnosticLastError">None</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-xs text-slate-600">Round-trip Latency:</span>
+                                            <span class="text-xs font-mono text-slate-900" id="diagnosticLatency">0 ms</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Downlink Commands -->
+                                <div>
+                                    <h5 class="text-xs font-medium text-slate-700 mb-2">Recent Downlink Commands</h5>
+                                    <div class="border border-slate-200 rounded overflow-hidden">
+                                        <table class="w-full text-xs">
+                                            <thead class="bg-slate-50">
+                                                <tr>
+                                                    <th class="p-2 text-left">Timestamp</th>
+                                                    <th class="p-2 text-left">Command</th>
+                                                    <th class="p-2 text-left">Result</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="downlinkCommands">
+                                                <tr>
+                                                    <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
+                                                        No commands received
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
-            </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Actions -->
+    <footer id="footer" class="bg-white border-t border-border mt-12 sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center" onclick="window.cloudConnections.refreshConnections()">
+                    <i class="fa-solid fa-sync mr-2 text-slate-400"></i> Refresh
+                </button>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="text-slate-500 hover:text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg transition-colors" onclick="window.cloudConnections.cancelChanges()">
+                    Back
+                </button>
+                <button class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg shadow-sm transition-colors flex items-center shadow-lg shadow-blue-500/30" onclick="window.cloudConnections.saveAllConnections()">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<!-- Modals (added at the end of the content) -->
+<div id="connectionManagerModal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-900">Add New Connection</h3>
+                <button onclick="window.cloudConnections.closeModal('connectionManagerModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                    &times;
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <!-- Connection Type Selection -->
+            <div id="connectionTypeSelection">
+                <h4 class="text-sm font-semibold text-slate-900 mb-4">Select Connection Type</h4>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="connectionTypesGrid"></div>
+            </div>
+            
+            <!-- Connection Form -->
+            <div id="connectionFormContainer" class="hidden">
+                <h4 id="formTitle" class="text-sm font-semibold text-slate-900 mb-6"></h4>
+                <div id="formContent" class="space-y-6 max-h-[50vh] overflow-y-auto pr-2"></div>
+                <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+                    <button onclick="window.cloudConnections.cancelConnectionForm()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">
+                        Cancel
+                    </button>
+                    <button onclick="window.cloudConnections.saveNewConnection()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                        <i class="fa-solid fa-plus mr-1"></i> Add Connection
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="testResultsModal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-900">Connection Test Results</h3>
+                <button onclick="window.cloudConnections.closeModal('testResultsModal')" class="text-slate-400 hover:text-slate-600 text-2xl">
+                    &times;
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-slate-700">Connection Status:</span>
+                    <span class="status-indicator online">Connected</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-slate-700">Latency:</span>
+                    <span class="text-sm font-mono text-slate-900">124 ms</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-slate-700">Authentication:</span>
+                    <span class="text-sm font-mono text-green-600">Success</span>
+                </div>
+            </div>
+            <div class="mt-6 p-4 bg-green-50 rounded border border-green-200">
+                <div class="flex items-center">
+                    <i class="fa-solid fa-check-circle text-green-600 mr-2"></i>
+                    <span class="text-sm text-green-800">Connection test successful! All systems operational.</span>
+                </div>
+            </div>
+            <div class="flex justify-end mt-8 pt-6 border-t border-slate-200">
+                <button onclick="window.cloudConnections.closeModal('testResultsModal')" class="compact-button bg-primary hover:bg-primaryHover text-white">
+                    Close
+                </button>
+            </div>
         </div>
     </div>
 </div>
