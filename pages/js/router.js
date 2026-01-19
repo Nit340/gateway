@@ -20,6 +20,7 @@ class Router {
         };
         
         this.currentPage = null;
+        this.previousPage = null;
         
         this.pageTitles = {
             'general-configuration': 'General Configuration',
@@ -44,7 +45,7 @@ class Router {
         this.pageScripts = {
             'device-management': 'pages/js/device-management.js',
             'mqtt-cloud': 'pages/js/mqtt-cloud.js',
-            'general-configuration': 'pages/js/general-configuration.js',
+            'general-configuration': 'pages/js/general-config.js',
             'modbus-mapping': 'pages/js/modbus-mapping.js',
             'ota-gateway': 'pages/js/ota-gateway.js',
             'data-retention': 'pages/js/data-retention.js',
@@ -61,6 +62,7 @@ class Router {
         };
         
         this.loadedScripts = new Set();
+        this.scriptPromises = new Map();
         
         this.init();
     }
@@ -104,7 +106,14 @@ class Router {
     navigateTo(page, updateHistory = true) {
         if (this.currentPage === page) return;
         
+        this.previousPage = this.currentPage;
         this.currentPage = page;
+        
+        // Clean up previous page before loading new one
+        if (this.previousPage) {
+            this.cleanupPageScripts(this.previousPage);
+        }
+        
         this.loadPage(page);
         this.updateActiveNavLink();
         
@@ -150,7 +159,7 @@ class Router {
             // Load and initialize page-specific script
             await this.loadPageScript(page);
             
-            // Initialize page-specific functionality
+            // Initialize page-specific functionality with delay
             this.initializePageScripts(page);
             
             // Scroll to top
@@ -183,40 +192,191 @@ class Router {
     async loadPageScript(page) {
         const scriptName = this.pageScripts[page];
         
-        if (!scriptName || this.loadedScripts.has(scriptName)) {
-            return;
+        if (!scriptName) {
+            return Promise.resolve();
         }
         
-        console.log(`Attempting to load script: ${scriptName} for page: ${page}`);
+        // Check if script is already loading
+        if (this.scriptPromises.has(scriptName)) {
+            return this.scriptPromises.get(scriptName);
+        }
         
-        try {
-            // Load the script dynamically
-            const script = document.createElement('script');
-            script.src = scriptName;
-            script.type = 'text/javascript';
-            
-            // Add to document
-            document.head.appendChild(script);
-            
-            // Wait for script to load
-            await new Promise((resolve, reject) => {
-                script.onload = resolve;
-                script.onerror = () => {
-                    console.warn(`Script failed to load: ${scriptName}`);
+        console.log(`Loading script: ${scriptName} for page: ${page}`);
+        
+        const loadPromise = new Promise(async (resolve, reject) => {
+            try {
+                // Remove any existing script with same src to prevent duplicates
+                const existingScripts = document.querySelectorAll(`script[src="${scriptName}"]`);
+                existingScripts.forEach(script => {
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                });
+                
+                // Clear module cache for this script
+                delete window[`${page.replace('-', '_')}_loaded`];
+                
+                const script = document.createElement('script');
+                script.src = scriptName;
+                script.type = 'text/javascript';
+                script.setAttribute('data-page', page);
+                
+                script.onload = () => {
+                    console.log(`Successfully loaded: ${scriptName}`);
+                    resolve();
+                };
+                
+                script.onerror = (error) => {
+                    console.warn(`Failed to load script: ${scriptName}`, error);
+                    this.scriptPromises.delete(scriptName);
                     reject(new Error(`Failed to load ${scriptName}`));
                 };
-            });
-            
-            // Mark as loaded
-            this.loadedScripts.add(scriptName);
-            
-            console.log(`Successfully loaded: ${scriptName}`);
-            
-        } catch (error) {
-            console.warn(`Could not load script ${scriptName}:`, error.message);
-            // Don't throw error - allow page to load without script
-            // Script might not exist yet, and that's okay
+                
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                console.warn(`Script load error for ${page}:`, error.message);
+                this.scriptPromises.delete(scriptName);
+                reject(error);
+            }
+        });
+        
+        this.scriptPromises.set(scriptName, loadPromise);
+        this.loadedScripts.add(scriptName);
+        
+        return loadPromise;
+    }
+    
+    cleanupPageScripts(page) {
+        const scriptName = this.pageScripts[page];
+        
+        if (!scriptName) return;
+        
+        // Remove script promise
+        this.scriptPromises.delete(scriptName);
+        this.loadedScripts.delete(scriptName);
+        
+        // Clean up page-specific global variables and connections
+        switch(page) {
+            case 'general-configuration':
+                // Clean up WebSocket
+                if (typeof window.wsConnection !== 'undefined' && window.wsConnection) {
+                    try {
+                        window.wsConnection.close();
+                    } catch (e) {
+                        console.log('WebSocket already closed');
+                    }
+                    window.wsConnection = null;
+                }
+                
+                // Clear reconnect interval
+                if (typeof window.reconnectInterval !== 'undefined' && window.reconnectInterval) {
+                    clearInterval(window.reconnectInterval);
+                    window.reconnectInterval = null;
+                }
+                
+                // Clear functions
+                delete window.initGeneralConfig;
+                break;
+                
+            case 'device-management':
+                // Clean up WebSocket
+                if (typeof window.deviceWsConnection !== 'undefined' && window.deviceWsConnection) {
+                    try {
+                        window.deviceWsConnection.close();
+                    } catch (e) {
+                        console.log('Device WebSocket already closed');
+                    }
+                    window.deviceWsConnection = null;
+                }
+                
+                // Clear global functions and state
+                if (window.deviceManagement) {
+                    delete window.deviceManagement;
+                }
+                delete window.initializeDeviceManagement;
+                break;
+                
+            case 'modbus-mapping':
+                // Clear modbus mapping state
+                delete window.initializeModbusMapping;
+                break;
+                
+            case 'mqtt-cloud':
+                // Clean up MQTT connections if any
+                if (typeof window.mqttClient !== 'undefined' && window.mqttClient) {
+                    try {
+                        window.mqttClient.end();
+                    } catch (e) {
+                        console.log('MQTT client already disconnected');
+                    }
+                    window.mqttClient = null;
+                }
+                delete window.initMqttCloud;
+                break;
+                
+            case 'ota-gateway':
+                delete window.initOtaGateway;
+                break;
+                
+            case 'data-retention':
+                delete window.initDataRetention;
+                break;
+                
+            case 'logging':
+                delete window.initLogging;
+                break;
+                
+            case 'security':
+                if (window.userManagement) {
+                    delete window.userManagement;
+                }
+                delete window.initSecurity;
+                break;
+                
+            case 'diagnostics':
+                // Clean up terminal if active
+                if (typeof window.terminal !== 'undefined' && window.terminal) {
+                    try {
+                        window.terminal.dispose();
+                    } catch (e) {
+                        console.log('Terminal already disposed');
+                    }
+                    window.terminal = null;
+                }
+                delete window.initDiagnostics;
+                break;
+                
+            case 'license':
+                delete window.initLicense;
+                break;
+                
+            case 'automation':
+                delete window.initAutomation;
+                break;
+                
+            case 'alerts':
+                delete window.initAlerts;
+                break;
+                
+            case 'rules':
+                delete window.initRules;
+                break;
+                
+            case 'backup':
+                delete window.initBackup;
+                break;
+                
+            case 'notification':
+                delete window.initNotification;
+                break;
+                
+            case 'craneiq':
+                delete window.initCraneIQ;
+                break;
         }
+        
+        console.log(`Cleaned up resources for page: ${page}`);
     }
     
     updateActiveNavLink() {
@@ -230,77 +390,171 @@ class Router {
     }
     
     initializePageScripts(page) {
-        // Clear any conflicting global state from previous pages
-        this.cleanupPreviousPage();
-        
-        // Page-specific initialization
-        switch(page) {
-            case 'general-configuration':
-                this.initGeneralConfig();
-                break;
-            case 'device-management':
-                this.initDeviceManagement();
-                break;
-            case 'modbus-mapping':
-                this.initModbusMapping();
-                break;
-            case 'mqtt-cloud':
-                this.initMqttCloud();
-                break;
-            case 'ota-gateway':
-                this.initOtaGateway();
-                break;
-            case 'data-retention':
-                this.initDataRetention();
-                break;
-            case 'logging':
-                this.initLogging();
-                break;
-            case 'security':
-                this.initSecurity();
-                break;
-            case 'diagnostics':
-                this.initDiagnostics();
-                break;
-            case 'license':
-                this.initLicense();
-                break;
-            case 'automation':
-                this.initAutomation();
-                break;
-            case 'alerts':
-                this.initAlerts();
-                break;
-            case 'rules':
-                this.initRules();
-                break;
-            case 'backup':
-                this.initBackup();
-                break;
-            case 'notification':
-                this.initNotification();
-                break;
-            case 'craneiq':
-                this.initCraneIQ();
-                break;
-            default:
-                console.log(`No specific initialization for page: ${page}`);
-        }
+        // Add delay to ensure DOM is fully loaded and script is ready
+        setTimeout(() => {
+            switch(page) {
+                case 'general-configuration':
+                    if (typeof window.initGeneralConfig === 'function') {
+                        console.log('Initializing General Configuration');
+                        window.initGeneralConfig();
+                    } else {
+                        console.warn('initGeneralConfig function not found');
+                    }
+                    break;
+                    
+                case 'device-management':
+                    if (typeof window.initializeDeviceManagement === 'function') {
+                        console.log('Initializing Device Management');
+                        window.initializeDeviceManagement();
+                    } else {
+                        console.warn('initializeDeviceManagement function not found');
+                    }
+                    break;
+                    
+                case 'modbus-mapping':
+                    if (typeof window.initializeModbusMapping === 'function') {
+                        console.log('Initializing Modbus Mapping');
+                        window.initializeModbusMapping();
+                    } else {
+                        console.warn('initializeModbusMapping function not found');
+                    }
+                    break;
+                    
+                case 'mqtt-cloud':
+                    if (typeof window.initMqttCloud === 'function') {
+                        console.log('Initializing MQTT Cloud');
+                        window.initMqttCloud();
+                    } else {
+                        console.warn('initMqttCloud function not found');
+                    }
+                    break;
+                    
+                case 'ota-gateway':
+                    if (typeof window.initOtaGateway === 'function') {
+                        console.log('Initializing OTA Gateway');
+                        window.initOtaGateway();
+                    } else {
+                        console.warn('initOtaGateway function not found');
+                    }
+                    break;
+                    
+                case 'data-retention':
+                    if (typeof window.initDataRetention === 'function') {
+                        console.log('Initializing Data Retention');
+                        window.initDataRetention();
+                    } else {
+                        console.warn('initDataRetention function not found');
+                    }
+                    break;
+                    
+                case 'logging':
+                    if (typeof window.initLogging === 'function') {
+                        console.log('Initializing Logging');
+                        window.initLogging();
+                    } else {
+                        console.warn('initLogging function not found');
+                    }
+                    break;
+                    
+                case 'security':
+                    if (typeof window.initSecurity === 'function') {
+                        console.log('Initializing Security');
+                        window.initSecurity();
+                    } else {
+                        console.warn('initSecurity function not found');
+                    }
+                    break;
+                    
+                case 'diagnostics':
+                    if (typeof window.initDiagnostics === 'function') {
+                        console.log('Initializing Diagnostics');
+                        window.initDiagnostics();
+                    } else {
+                        console.warn('initDiagnostics function not found');
+                    }
+                    break;
+                    
+                case 'license':
+                    if (typeof window.initLicense === 'function') {
+                        console.log('Initializing License');
+                        window.initLicense();
+                    } else {
+                        console.warn('initLicense function not found');
+                    }
+                    break;
+                    
+                case 'automation':
+                    if (typeof window.initAutomation === 'function') {
+                        console.log('Initializing Automation');
+                        window.initAutomation();
+                    } else {
+                        console.warn('initAutomation function not found');
+                    }
+                    break;
+                    
+                case 'alerts':
+                    if (typeof window.initAlerts === 'function') {
+                        console.log('Initializing Alerts');
+                        window.initAlerts();
+                    } else {
+                        console.warn('initAlerts function not found');
+                    }
+                    break;
+                    
+                case 'rules':
+                    if (typeof window.initRules === 'function') {
+                        console.log('Initializing Rules');
+                        window.initRules();
+                    } else {
+                        console.warn('initRules function not found');
+                    }
+                    break;
+                    
+                case 'backup':
+                    if (typeof window.initBackup === 'function') {
+                        console.log('Initializing Backup');
+                        window.initBackup();
+                    } else {
+                        console.warn('initBackup function not found');
+                    }
+                    break;
+                    
+                case 'notification':
+                    if (typeof window.initNotification === 'function') {
+                        console.log('Initializing Notification');
+                        window.initNotification();
+                    } else {
+                        console.warn('initNotification function not found');
+                    }
+                    break;
+                    
+                case 'craneiq':
+                    if (typeof window.initCraneIQ === 'function') {
+                        console.log('Initializing CraneIQ');
+                        window.initCraneIQ();
+                    } else {
+                        console.warn('initCraneIQ function not found');
+                    }
+                    break;
+                    
+                default:
+                    console.log(`No specific initialization for page: ${page}`);
+            }
+        }, 150); // 150ms delay to ensure DOM is ready
     }
     
-    // Add cleanup method to prevent conflicts
     cleanupPreviousPage() {
-        // Clean up WebSocket connections from other pages
-        if (window.deviceManagement && window.deviceManagement.cleanup) {
-            window.deviceManagement.cleanup();
-        }
-        
-        // Clear any modals or overlays
-        document.querySelectorAll('.modal-overlay, .modal').forEach(el => {
+        // Close any open modals or overlays
+        document.querySelectorAll('.modal-overlay, .modal, .add-device-panel').forEach(el => {
             el.classList.remove('active');
         });
         
         document.body.classList.remove('modal-open');
+        
+        // Clear any active dropdowns
+        document.querySelectorAll('.action-dropdown-content.show').forEach(el => {
+            el.classList.remove('show');
+        });
         
         // Clear any active notifications
         document.querySelectorAll('.notification-toast').forEach(el => {
@@ -308,136 +562,33 @@ class Router {
         });
     }
     
-    // Page-specific initialization methods
-    initLicense() {
-        if (typeof window.initLicense === 'function') {
-            window.initLicense();
-        } else {
-            console.log('initLicense function not found');
+    // Public method to reload current page
+    reloadCurrentPage() {
+        if (this.currentPage) {
+            this.loadPage(this.currentPage);
         }
     }
     
-    initDiagnostics() {
-        if (typeof window.initDiagnostics === 'function') {
-            window.initDiagnostics();
-        } else {
-            console.log('initDiagnostics function not found');
-        }
+    // Public method to get current page
+    getCurrentPage() {
+        return this.currentPage;
     }
     
-    initSecurity() {
-        if (typeof window.initSecurity === 'function') {
-            window.initSecurity();
-        } else {
-            console.log('initSecurity function not found');
-        }
-    }
-    
-    initLogging() {
-        if (typeof window.initLogging === 'function') {
-            window.initLogging();
-        } else {
-            console.log('initLogging function not found');
-        }
-    }
-    
-    initOtaGateway() {
-        if (typeof window.initOtaGateway === 'function') {
-            window.initOtaGateway();
-        } else {
-            console.log('initOtaGateway function not found');
-        }
-    }
-    
-    initDataRetention() {
-        if (typeof window.initDataRetention === 'function') {
-            window.initDataRetention();
-        } else {
-            console.log('initDataRetention function not found');
-        }
-    }
-    
-    initMqttCloud() {
-        if (typeof window.initMqttCloud === 'function') {
-            window.initMqttCloud();
-        } else {
-            console.log('initMqttCloud function not found');
-        }
-    }
-    
-    initModbusMapping() {
-        if (typeof window.initializeModbusMapping === 'function') {
-            window.initializeModbusMapping();
-        } else {
-            console.log('initializeModbusMapping function not found');
-        }
-    }
-    
-    initDeviceManagement() {
-        if (typeof window.initializeDeviceManagement === 'function') {
-            window.initializeDeviceManagement();
-        } else {
-            console.log('initializeDeviceManagement function not found');
-        }
-    }
-    
-    initGeneralConfig() {
-        if (typeof window.initGeneralConfig === 'function') {
-            window.initGeneralConfig();
-        } else {
-            console.log('initGeneralConfig function not found');
-        }
-    }
-    
-    // Add these new initialization methods for other pages
-    initAutomation() {
-        if (typeof window.initAutomation === 'function') {
-            window.initAutomation();
-        } else {
-            console.log('initAutomation function not found');
-        }
-    }
-    
-    initAlerts() {
-        if (typeof window.initAlerts === 'function') {
-            window.initAlerts();
-        } else {
-            console.log('initAlerts function not found');
-        }
-    }
-    
-    initRules() {
-        if (typeof window.initRules === 'function') {
-            window.initRules();
-        } else {
-            console.log('initRules function not found');
-        }
-    }
-    
-    initBackup() {
-        if (typeof window.initBackup === 'function') {
-            window.initBackup();
-        } else {
-            console.log('initBackup function not found');
-        }
-    }
-    
-    initNotification() {
-        if (typeof window.initNotification === 'function') {
-            window.initNotification();
-        } else {
-            console.log('initNotification function not found');
-        }
-    }
-    
-    initCraneIQ() {
-        if (typeof window.initCraneIQ === 'function') {
-            window.initCraneIQ();
-        } else {
-            console.log('initCraneIQ function not found');
-        }
+    // Public method to check if page exists
+    hasPage(page) {
+        return this.routes.hasOwnProperty(page);
     }
 }
 
-// Export for global access
-window.Router = Router;
+// Initialize router when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.router = new Router();
+    
+    // Expose router for global access
+    window.Router = Router;
+});
+
+// Export for module system if needed
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = Router;
+}

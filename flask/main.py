@@ -12,12 +12,21 @@ from device_management import (
     scan_devices, get_scan_status, scan_wireless, pair_wireless,
     import_devices_csv, export_devices_csv
 )
+from tag_mapping import (  # NEW IMPORT
+    get_tag_mapping_page,
+    create_tag_mapping, update_tag_mapping, delete_tag_mapping, get_tag_mapping_details,
+    get_available_devices, get_protocol_form,
+    import_csv, export_csv, filter_tag_mappings,
+    test_device_connection, validate_all_mappings, save_configuration
+)
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
-
 async def device_management_handler(request):
     """GET handler - device management page"""
     return web.Response(text='Device Management API is running. Use API endpoints.', content_type='text/html')
+async def tag_mapping_handler(request):
+    """GET handler - tag mapping page with embedded data"""
+    return await get_tag_mapping_page(request)
 
 async def start_background_tasks(app):
     """Start background tasks"""
@@ -68,6 +77,33 @@ def create_app():
     app.router.add_post('/api/device-management/import', import_devices_csv)
     app.router.add_post('/api/device-management/export', export_devices_csv)
     
+    # Tag Mapping endpoints (NEW)
+    app.router.add_get('/tag-mapping', tag_mapping_handler)
+    
+    # Tag Mapping API operations
+    app.router.add_post('/api/tag-mapping', create_tag_mapping)
+    app.router.add_put('/api/tag-mapping/{id}', update_tag_mapping)
+    app.router.add_delete('/api/tag-mapping/{id}', delete_tag_mapping)
+    app.router.add_get('/api/tag-mapping/{id}', get_tag_mapping_details)
+    
+    # Device and protocol information
+    app.router.add_get('/api/tag-mapping/devices', get_available_devices)
+    app.router.add_get('/api/tag-mapping/protocol-forms/{protocol}', get_protocol_form)
+    
+    # Import/Export operations
+    app.router.add_post('/api/tag-mapping/import-csv', import_csv)
+    app.router.add_get('/api/tag-mapping/export-csv', export_csv)
+    
+    # Filtering and search
+    app.router.add_get('/api/tag-mapping/filter', filter_tag_mappings)
+    
+    # Device testing and validation
+    app.router.add_post('/api/tag-mapping/devices/{device_id}/test', test_device_connection)
+    app.router.add_post('/api/tag-mapping/validate-all', validate_all_mappings)
+    
+    # Configuration management
+    app.router.add_put('/api/tag-mapping/save-config', save_configuration)
+    
     # WebSocket for real-time data
     app.router.add_get('/ws', websocket_handler)
     
@@ -86,11 +122,15 @@ if __name__ == '__main__':
     init_database()
     
     print("Starting server on http://0.0.0.0:8080")
-    print("Database: Device management tables created (empty)")
-    print("Memory: Real-time device status tracking")
-    print("HTTP: Full device management API")
-    print("WebSocket: Device status updates")
-    print("Import/Export: CSV with full device configuration")
+    print("Database: Tag mapping tables created")
+    print("Routes:")
+    print("  GET  /tag-mapping                - Tag mapping page")
+    print("  POST /api/tag-mapping            - Create tag mapping")
+    print("  PUT  /api/tag-mapping/{id}       - Update tag mapping")
+    print("  GET  /api/tag-mapping/{id}       - Get tag details")
+    print("  DELETE /api/tag-mapping/{id}     - Delete tag mapping")
+    print("  GET  /api/tag-mapping/devices    - Get available devices")
+    print("  GET  /api/tag-mapping/protocol-forms/{protocol} - Get protocol form")
     print("Press Ctrl+C to stop")
     
     web.run_app(create_app(), host='0.0.0.0', port=8080)
