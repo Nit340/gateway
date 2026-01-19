@@ -475,8 +475,10 @@ function initApp() {
     // Debug: Check if connections are properly set up
     setTimeout(() => {
         console.log('Available connections:', Object.keys(connections));
-        console.log('cloudConnections object:', window.cloudConnections);
-        console.log('selectConnection function exists:', typeof window.cloudConnections.selectConnection);
+        if (window.cloudConnections) {
+            console.log('cloudConnections object:', window.cloudConnections);
+            console.log('selectConnection function exists:', typeof window.cloudConnections.selectConnection);
+        }
     }, 500);
 }
 
@@ -951,6 +953,13 @@ function showEmptyConnectionState() {
 }
 
 async function updateConfigurationForConnection(conn) {
+    // SAFETY CHECK: Don't run if we're not on the cloud connections page
+    const isOnCloudPage = document.getElementById('connectionName') !== null;
+    if (!isOnCloudPage) {
+        console.log('Not on cloud connections page, skipping update');
+        return;
+    }
+    
     const connectionConfig = config.connectionTypes[conn.type];
     if (!connectionConfig) {
         console.error('Connection type not found:', conn.type);

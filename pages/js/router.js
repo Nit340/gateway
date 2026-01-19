@@ -19,7 +19,6 @@ class Router {
             'notification': 'notification.html'
         };
         
-        // CHANGE 1: Set to null instead of 'general-configuration'
         this.currentPage = null;
         
         this.pageTitles = {
@@ -41,6 +40,28 @@ class Router {
             'notification': 'Notification & Alerts'
         };
         
+        // UPDATED: Scripts are in pages/js/ directory
+        this.pageScripts = {
+            'device-management': 'pages/js/device-management.js',
+            'mqtt-cloud': 'pages/js/mqtt-cloud.js',
+            'general-configuration': 'pages/js/general-configuration.js',
+            'modbus-mapping': 'pages/js/modbus-mapping.js',
+            'ota-gateway': 'pages/js/ota-gateway.js',
+            'data-retention': 'pages/js/data-retention.js',
+            'logging': 'pages/js/loggar.js',
+            'security': 'pages/js/security.js',
+            'diagnostics': 'pages/js/diagnostics.js',
+            'license': 'pages/js/license.js',
+            'alerts': 'pages/js/alerts.js',
+            'automation': 'pages/js/automation.js',
+            'backup': 'pages/js/backup.js',
+            'craneiq': 'pages/js/craneiq.js',
+            'notification': 'pages/js/notification.js',
+            'rules': 'pages/js/rules.js'
+        };
+        
+        this.loadedScripts = new Set();
+        
         this.init();
     }
     
@@ -56,18 +77,6 @@ class Router {
             });
         });
         
-        // Handle gateway select change
-        const gatewaySelect = document.getElementById('gateway-select');
-        if (gatewaySelect) {
-            gatewaySelect.addEventListener('change', function() {
-                if (confirm('Switch to another gateway? Unsaved changes will be lost.')) {
-                    location.reload();
-                } else {
-                    this.value = 'Univa-GW-01';
-                }
-            });
-        }
-        
         // Handle browser back/forward buttons
         window.addEventListener('popstate', (event) => {
             if (event.state && event.state.page) {
@@ -80,11 +89,9 @@ class Router {
         const pageParam = urlParams.get('page');
         const initialPage = pageParam && this.routes[pageParam] ? pageParam : 'general-configuration';
         
-        // CHANGE 2: Use a different approach for initial load
         this.initialLoad(initialPage);
     }
     
-    // CHANGE 3: Add a separate method for initial load
     initialLoad(page) {
         this.currentPage = page;
         this.loadPage(page);
@@ -113,6 +120,7 @@ class Router {
             if (overlay) overlay.classList.remove('active');
         }
     }
+    
     async loadPage(page) {
         const loadingIndicator = document.getElementById('loadingIndicator');
         const contentArea = document.getElementById('pageContent');
@@ -139,7 +147,10 @@ class Router {
             // Update content area
             if (contentArea) contentArea.innerHTML = html;
             
-            // Initialize page-specific scripts
+            // Load and initialize page-specific script
+            await this.loadPageScript(page);
+            
+            // Initialize page-specific functionality
             this.initializePageScripts(page);
             
             // Scroll to top
@@ -169,6 +180,45 @@ class Router {
         }
     }
     
+    async loadPageScript(page) {
+        const scriptName = this.pageScripts[page];
+        
+        if (!scriptName || this.loadedScripts.has(scriptName)) {
+            return;
+        }
+        
+        console.log(`Attempting to load script: ${scriptName} for page: ${page}`);
+        
+        try {
+            // Load the script dynamically
+            const script = document.createElement('script');
+            script.src = scriptName;
+            script.type = 'text/javascript';
+            
+            // Add to document
+            document.head.appendChild(script);
+            
+            // Wait for script to load
+            await new Promise((resolve, reject) => {
+                script.onload = resolve;
+                script.onerror = () => {
+                    console.warn(`Script failed to load: ${scriptName}`);
+                    reject(new Error(`Failed to load ${scriptName}`));
+                };
+            });
+            
+            // Mark as loaded
+            this.loadedScripts.add(scriptName);
+            
+            console.log(`Successfully loaded: ${scriptName}`);
+            
+        } catch (error) {
+            console.warn(`Could not load script ${scriptName}:`, error.message);
+            // Don't throw error - allow page to load without script
+            // Script might not exist yet, and that's okay
+        }
+    }
+    
     updateActiveNavLink() {
         document.querySelectorAll('.nav-link').forEach(link => {
             if (link.dataset.page === this.currentPage) {
@@ -179,113 +229,212 @@ class Router {
         });
     }
     
-   initializePageScripts(page) {
-    // Page-specific initialization
-    switch(page) {
-        case 'general-configuration':
-            this.initGeneralConfig();
-            break;
-        case 'device-management':
-            this.initDeviceManagement();
-            break;
-        case 'modbus-mapping':
-            this.initModbusMapping();
-            break;
-        case 'mqtt-cloud':
-            this.initMqttCloud();
-            break;
-        case 'ota-gateway':
-            this.initOtaGateway(); // This should be called for OTA Gateway
-            break;
-        case 'data-retention':  // Add this case
-            this.initDataRetention();
-            break;
-        case 'logging':
-            this.initLogging(); // Add this line
-            break;
-        case 'security':  // Add this case
-            this.initSecurity();
-            break;
-        case 'diagnostics':
-            this.initDiagnostics();
-            break;
-        case 'license':
-            this.initLicense();
-            break;
-        // Add other pages as you create them
-        default:
-            console.log(`No specific initialization for page: ${page}`);
-    }
-}
-// In Router class
-initLicense() {
-    if (typeof window.initLicense === 'function') {
-        window.initLicense();
-    } else {
-        console.log('initLicense function not found');
-    }
-}
-// In your existing router.js
-initDiagnostics() {
-    if (typeof window.initDiagnostics === 'function') {
-        window.initDiagnostics();
-    }
-}
-// Add initSecurity method:
-initSecurity() {
-    if (typeof window.initSecurity === 'function') {
-        window.initSecurity();
-    }
-}
-// Add new method for Logging
-initLogging() {
-    // Call the global initialization function
-    if (typeof window.initLogging === 'function') {
-        window.initLogging();
-    } else {
-        console.log('initLogging function not found');
-    }
-}
-// Also fix the initOtaGateway method name casing
-initOtaGateway() {
-    // Call the global initialization function
-    if (typeof window.initOtaGateway === 'function') {
-        window.initOtaGateway();
-    } else {
-        console.log('initOtaGateway function not found - this is normal if the page doesn\'t define it');
-    }
-}
-// Add initDataRetention method:
-initDataRetention() {
-    if (typeof window.initDataRetention === 'function') {
-        window.initDataRetention();
-    }
-}
-// Update the initMqttCloud method (fix casing):
-initMqttCloud() {
-    if (typeof window.initMqttCloud === 'function') {
-        window.initMqttCloud();
-    }
-}
-initModbusMapping() {
-    if (typeof window.initializeModbusMapping === 'function') {
-        window.initializeModbusMapping();
-    }
-}
-
-    initDeviceManagement() {
-        // Call the global initialization function
-        if (typeof window.initializeDeviceManagement === 'function') {
-            window.initializeDeviceManagement();
+    initializePageScripts(page) {
+        // Clear any conflicting global state from previous pages
+        this.cleanupPreviousPage();
+        
+        // Page-specific initialization
+        switch(page) {
+            case 'general-configuration':
+                this.initGeneralConfig();
+                break;
+            case 'device-management':
+                this.initDeviceManagement();
+                break;
+            case 'modbus-mapping':
+                this.initModbusMapping();
+                break;
+            case 'mqtt-cloud':
+                this.initMqttCloud();
+                break;
+            case 'ota-gateway':
+                this.initOtaGateway();
+                break;
+            case 'data-retention':
+                this.initDataRetention();
+                break;
+            case 'logging':
+                this.initLogging();
+                break;
+            case 'security':
+                this.initSecurity();
+                break;
+            case 'diagnostics':
+                this.initDiagnostics();
+                break;
+            case 'license':
+                this.initLicense();
+                break;
+            case 'automation':
+                this.initAutomation();
+                break;
+            case 'alerts':
+                this.initAlerts();
+                break;
+            case 'rules':
+                this.initRules();
+                break;
+            case 'backup':
+                this.initBackup();
+                break;
+            case 'notification':
+                this.initNotification();
+                break;
+            case 'craneiq':
+                this.initCraneIQ();
+                break;
+            default:
+                console.log(`No specific initialization for page: ${page}`);
         }
     }
-
+    
+    // Add cleanup method to prevent conflicts
+    cleanupPreviousPage() {
+        // Clean up WebSocket connections from other pages
+        if (window.deviceManagement && window.deviceManagement.cleanup) {
+            window.deviceManagement.cleanup();
+        }
+        
+        // Clear any modals or overlays
+        document.querySelectorAll('.modal-overlay, .modal').forEach(el => {
+            el.classList.remove('active');
+        });
+        
+        document.body.classList.remove('modal-open');
+        
+        // Clear any active notifications
+        document.querySelectorAll('.notification-toast').forEach(el => {
+            el.remove();
+        });
+    }
+    
+    // Page-specific initialization methods
+    initLicense() {
+        if (typeof window.initLicense === 'function') {
+            window.initLicense();
+        } else {
+            console.log('initLicense function not found');
+        }
+    }
+    
+    initDiagnostics() {
+        if (typeof window.initDiagnostics === 'function') {
+            window.initDiagnostics();
+        } else {
+            console.log('initDiagnostics function not found');
+        }
+    }
+    
+    initSecurity() {
+        if (typeof window.initSecurity === 'function') {
+            window.initSecurity();
+        } else {
+            console.log('initSecurity function not found');
+        }
+    }
+    
+    initLogging() {
+        if (typeof window.initLogging === 'function') {
+            window.initLogging();
+        } else {
+            console.log('initLogging function not found');
+        }
+    }
+    
+    initOtaGateway() {
+        if (typeof window.initOtaGateway === 'function') {
+            window.initOtaGateway();
+        } else {
+            console.log('initOtaGateway function not found');
+        }
+    }
+    
+    initDataRetention() {
+        if (typeof window.initDataRetention === 'function') {
+            window.initDataRetention();
+        } else {
+            console.log('initDataRetention function not found');
+        }
+    }
+    
+    initMqttCloud() {
+        if (typeof window.initMqttCloud === 'function') {
+            window.initMqttCloud();
+        } else {
+            console.log('initMqttCloud function not found');
+        }
+    }
+    
+    initModbusMapping() {
+        if (typeof window.initializeModbusMapping === 'function') {
+            window.initializeModbusMapping();
+        } else {
+            console.log('initializeModbusMapping function not found');
+        }
+    }
+    
+    initDeviceManagement() {
+        if (typeof window.initializeDeviceManagement === 'function') {
+            window.initializeDeviceManagement();
+        } else {
+            console.log('initializeDeviceManagement function not found');
+        }
+    }
+    
     initGeneralConfig() {
-        // Call the global initialization function
         if (typeof window.initGeneralConfig === 'function') {
             window.initGeneralConfig();
         } else {
-            console.log('initGeneralConfig function not found - this is normal if the page doesn\'t define it');
+            console.log('initGeneralConfig function not found');
+        }
+    }
+    
+    // Add these new initialization methods for other pages
+    initAutomation() {
+        if (typeof window.initAutomation === 'function') {
+            window.initAutomation();
+        } else {
+            console.log('initAutomation function not found');
+        }
+    }
+    
+    initAlerts() {
+        if (typeof window.initAlerts === 'function') {
+            window.initAlerts();
+        } else {
+            console.log('initAlerts function not found');
+        }
+    }
+    
+    initRules() {
+        if (typeof window.initRules === 'function') {
+            window.initRules();
+        } else {
+            console.log('initRules function not found');
+        }
+    }
+    
+    initBackup() {
+        if (typeof window.initBackup === 'function') {
+            window.initBackup();
+        } else {
+            console.log('initBackup function not found');
+        }
+    }
+    
+    initNotification() {
+        if (typeof window.initNotification === 'function') {
+            window.initNotification();
+        } else {
+            console.log('initNotification function not found');
+        }
+    }
+    
+    initCraneIQ() {
+        if (typeof window.initCraneIQ === 'function') {
+            window.initCraneIQ();
+        } else {
+            console.log('initCraneIQ function not found');
         }
     }
 }
