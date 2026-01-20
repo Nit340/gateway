@@ -35,6 +35,7 @@ def init_database():
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             type TEXT NOT NULL,
+            protocol TEXT NOT NULL DEFAULT 'modbus-tcp',  -- NEW COLUMN
             address TEXT,
             group_id INTEGER,
             config_json TEXT NOT NULL,
@@ -133,7 +134,7 @@ def init_database():
     conn.commit()
     conn.close()
     print("Database initialized with all tables")
-    print("✓ Device management table created WITHOUT firmware_version column")
+    print("✓ Device management table created WITH protocol column")  # UPDATED MESSAGE
     print("✓ Tag mapping table simplified to JSON storage")
 
 def get_configuration():

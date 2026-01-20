@@ -45,15 +45,8 @@ async def get_tag_mapping_page(request):
     
     # Get all devices
     cursor.execute('''
-        SELECT dm.id, dm.name, dm.type, 
-               CASE 
-                   WHEN dm.config_json LIKE '%"protocol":"modbus-rtu"%' THEN 'modbus-rtu'
-                   WHEN dm.config_json LIKE '%"protocol":"modbus-tcp"%' THEN 'modbus-tcp'
-                   WHEN dm.config_json LIKE '%"protocol":"can"%' THEN 'can'
-                   WHEN dm.config_json LIKE '%"protocol":"ethernet-ip"%' THEN 'ethernet-ip'
-                   ELSE 'unknown'
-               END as protocol,
-               dm.config_json
+        SELECT dm.id, dm.name, dm.type, dm.protocol,  -- Use protocol column
+            dm.config_json
         FROM device_management dm
         ORDER BY dm.name
     ''')
@@ -504,31 +497,32 @@ async def get_tag_mapping_details(request):
             'error': f'Server error: {str(e)}'
         }, status=500)
 
-# GET /api/tag-mapping/devices - Get available devices
 async def get_available_devices(request):
     """Get list of all available devices for dropdown selection"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # SIMPLIFIED QUERY - No JSON extraction
         cursor.execute('''
-            SELECT dm.id, dm.name, dm.type, 
-                   CASE 
-                       WHEN dm.config_json LIKE '%"protocol":"modbus-rtu"%' THEN 'modbus-rtu'
-                       WHEN dm.config_json LIKE '%"protocol":"modbus-tcp"%' THEN 'modbus-tcp'
-                       WHEN dm.config_json LIKE '%"protocol":"can"%' THEN 'can'
-                       WHEN dm.config_json LIKE '%"protocol":"ethernet-ip"%' THEN 'ethernet-ip'
-                       ELSE 'unknown'
-                   END as protocol,
-                   dm.config_json,
-                   (SELECT COUNT(*) FROM tag_mappings tm WHERE tm.device_id = dm.id) as tag_count
+            SELECT 
+                dm.id, 
+                dm.name, 
+                dm.type, 
+                dm.protocol,  -- Use protocol column directly
+                dm.config_json,
+                (SELECT COUNT(*) FROM tag_mappings tm WHERE tm.device_id = dm.id) as tag_count
             FROM device_management dm
             ORDER BY dm.name
         ''')
         
         devices = []
         for row in cursor.fetchall():
-            config = json.loads(row['config_json']) if row['config_json'] else {}
+            try:
+                config = json.loads(row['config_json']) if row['config_json'] else {}
+            except:
+                config = {}
+                
             devices.append({
                 'id': row['id'],
                 'name': row['name'],
@@ -547,6 +541,7 @@ async def get_available_devices(request):
         })
         
     except Exception as e:
+        print(f"Error getting devices: {str(e)}")
         return web.json_response({
             'success': False,
             'error': f'Server error: {str(e)}'
@@ -560,162 +555,52 @@ async def get_protocol_form(request):
         
         # Protocol-specific form configurations
         protocol_forms = {
-            'modbus-rtu': {
-                'protocol': 'Modbus RTU',
+            'modbus-rtu': { ... },
+            'modbus-tcp': { ... },
+            'can': { ... },
+            'ethernet-ip': { ... },
+            'wireless': {  # NEW
+                'protocol': 'Wireless',
                 'formFields': [
                     {
-                        'name': 'registerType',
-                        'label': 'Register Type',
-                        'type': 'select',
-                        'options': [
-                            {'value': 'holding', 'label': 'Holding Register (4x)'},
-                            {'value': 'input', 'label': 'Input Register (3x)'},
-                            {'value': 'coil', 'label': 'Coil (0x)'},
-                            {'value': 'discrete', 'label': 'Discrete Input (1x)'}
-                        ],
-                        'default': 'holding'
-                    },
-                    {
-                        'name': 'address',
-                        'label': 'Register Address',
-                        'type': 'number',
-                        'min': 0,
-                        'max': 65535,
-                        'default': 40001
-                    },
-                    {
-                        'name': 'registerCount',
-                        'label': 'Register Count',
-                        'type': 'number',
-                        'min': 1,
-                        'max': 125,
-                        'default': 1
-                    },
-                    {
-                        'name': 'byteOrder',
-                        'label': 'Byte Order',
-                        'type': 'select',
-                        'options': [
-                            {'value': '0', 'label': '0-based (ABCD)'},
-                            {'value': '1', 'label': '1-based (BADC)'}
-                        ],
-                        'default': '0'
-                    }
-                ],
-                'supportedDataTypes': ['INT16', 'UINT16', 'INT32', 'UINT32', 'FLOAT32', 'BOOL']
-            },
-            'modbus-tcp': {
-                'protocol': 'Modbus TCP',
-                'formFields': [
-                    {
-                        'name': 'registerType',
-                        'label': 'Register Type',
-                        'type': 'select',
-                        'options': [
-                            {'value': 'holding', 'label': 'Holding Register (4x)'},
-                            {'value': 'input', 'label': 'Input Register (3x)'}
-                        ],
-                        'default': 'holding'
-                    },
-                    {
-                        'name': 'address',
-                        'label': 'Register Address',
-                        'type': 'number',
-                        'min': 0,
-                        'max': 65535,
-                        'default': 40001
-                    },
-                    {
-                        'name': 'registerCount',
-                        'label': 'Register Count',
-                        'type': 'number',
-                        'min': 1,
-                        'max': 125,
-                        'default': 1
-                    }
-                ],
-                'supportedDataTypes': ['INT16', 'UINT16', 'INT32', 'UINT32', 'FLOAT32', 'BOOL']
-            },
-            'can': {
-                'protocol': 'CANBus',
-                'formFields': [
-                    {
-                        'name': 'canId',
-                        'label': 'CAN ID',
+                        'name': 'rf_address',
+                        'label': 'RF Address',
                         'type': 'text',
-                        'placeholder': 'e.g., 0x100',
-                        'default': '0x100'
-                    },
-                    {
-                        'name': 'dataLength',
-                        'label': 'Data Length (Bytes)',
-                        'type': 'select',
-                        'options': [
-                            {'value': '1', 'label': '1 byte'},
-                            {'value': '2', 'label': '2 bytes'},
-                            {'value': '4', 'label': '4 bytes'},
-                            {'value': '8', 'label': '8 bytes'}
-                        ],
-                        'default': '4'
-                    },
-                    {
-                        'name': 'byteOrder',
-                        'label': 'Byte Order',
-                        'type': 'select',
-                        'options': [
-                            {'value': 'little-endian', 'label': 'Little Endian'},
-                            {'value': 'big-endian', 'label': 'Big Endian'}
-                        ],
-                        'default': 'little-endian'
-                    }
-                ],
-                'supportedDataTypes': ['INT16', 'UINT16', 'INT32', 'UINT32', 'FLOAT32', 'BYTE']
-            },
-            'ethernet-ip': {
-                'protocol': 'EtherNet/IP',
-                'formFields': [
-                    {
-                        'name': 'tagName',
-                        'label': 'Tag Name',
-                        'type': 'text',
-                        'placeholder': 'e.g., MotorRPM',
+                        'placeholder': 'e.g., RF:0x09',
                         'default': ''
                     },
                     {
-                        'name': 'dataType',
-                        'label': 'Data Type',
-                        'type': 'select',
-                        'options': [
-                            {'value': 'BOOL', 'label': 'BOOL (1 bit)'},
-                            {'value': 'SINT', 'label': 'SINT (8-bit)'},
-                            {'value': 'INT', 'label': 'INT (16-bit)'},
-                            {'value': 'DINT', 'label': 'DINT (32-bit)'},
-                            {'value': 'REAL', 'label': 'REAL (32-bit float)'}
-                        ],
-                        'default': 'DINT'
+                        'name': 'channel',
+                        'label': 'Channel',
+                        'type': 'number',
+                        'min': 1,
+                        'max': 16,
+                        'default': 1
                     }
                 ],
-                'supportedDataTypes': ['BOOL', 'INT16', 'UINT16', 'INT32', 'UINT32', 'FLOAT32']
+                'supportedDataTypes': ['INT16', 'UINT16', 'INT32', 'UINT32', 'FLOAT32']
+            },
+            'acs-sensor': {  # NEW
+                'protocol': 'ACS Sensor',
+                'formFields': [
+                    {
+                        'name': 'sensor_id',
+                        'label': 'Sensor ID',
+                        'type': 'text',
+                        'placeholder': 'e.g., ACS-001',
+                        'default': ''
+                    },
+                    {
+                        'name': 'parameter_id',
+                        'label': 'Parameter ID',
+                        'type': 'text',
+                        'placeholder': 'e.g., TEMP, PRESSURE',
+                        'default': ''
+                    }
+                ],
+                'supportedDataTypes': ['INT16', 'UINT32', 'FLOAT32']
             }
         }
-        
-        if protocol in protocol_forms:
-            return web.json_response(protocol_forms[protocol])
-        else:
-            # Default form for unknown protocols
-            return web.json_response({
-                'protocol': protocol.upper(),
-                'formFields': [
-                    {
-                        'name': 'address',
-                        'label': 'Address',
-                        'type': 'text',
-                        'placeholder': 'Enter address...',
-                        'default': ''
-                    }
-                ],
-                'supportedDataTypes': ['INT16', 'UINT16', 'INT32', 'UINT32', 'FLOAT32', 'BOOL', 'STRING']
-            })
         
     except Exception as e:
         return web.json_response({
@@ -949,7 +834,6 @@ async def export_csv(request):
             'error': f'Export error: {str(e)}'
         }, status=500)
 
-# GET /api/tag-mapping/filter - Filter tag mappings
 async def filter_tag_mappings(request):
     """Filter tag mappings based on criteria"""
     try:
@@ -964,7 +848,7 @@ async def filter_tag_mappings(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Build query
+        # Build query - SIMPLIFIED without JSON extraction
         query_sql = '''
             SELECT 
                 tm.id,
@@ -972,13 +856,7 @@ async def filter_tag_mappings(request):
                 tm.config_json,
                 dm.name as device_name,
                 dm.id as device_id,
-                CASE 
-                    WHEN dm.config_json LIKE '%"protocol":"modbus-rtu"%' THEN 'modbus-rtu'
-                    WHEN dm.config_json LIKE '%"protocol":"modbus-tcp"%' THEN 'modbus-tcp'
-                    WHEN dm.config_json LIKE '%"protocol":"can"%' THEN 'can'
-                    WHEN dm.config_json LIKE '%"protocol":"ethernet-ip"%' THEN 'ethernet-ip'
-                    ELSE 'unknown'
-                END as protocol
+                dm.protocol  -- Use protocol column directly
             FROM tag_mappings tm
             LEFT JOIN device_management dm ON tm.device_id = dm.id
         '''
@@ -987,33 +865,25 @@ async def filter_tag_mappings(request):
         where_conditions = []
         
         if category:
-            where_conditions.append("json_extract(tm.config_json, '$.category') = ?")
-            query_params.append(category)
+            # Parse JSON in Python instead of SQL
+            # We'll filter after fetching
+            pass
         
         if device_id:
             where_conditions.append('tm.device_id = ?')
             query_params.append(device_id)
         
         if protocol:
-            where_conditions.append('''
-                CASE 
-                    WHEN dm.config_json LIKE '%"protocol":"modbus-rtu"%' THEN 'modbus-rtu'
-                    WHEN dm.config_json LIKE '%"protocol":"modbus-tcp"%' THEN 'modbus-tcp'
-                    WHEN dm.config_json LIKE '%"protocol":"can"%' THEN 'can'
-                    WHEN dm.config_json LIKE '%"protocol":"ethernet-ip"%' THEN 'ethernet-ip'
-                    ELSE 'unknown'
-                END = ?
-            ''')
+            where_conditions.append('dm.protocol = ?')
             query_params.append(protocol)
         
         if search:
             where_conditions.append('''
                 (LOWER(tm.tag_name) LIKE ? OR 
-                 LOWER(json_extract(tm.config_json, '$.description')) LIKE ? OR
                  LOWER(dm.name) LIKE ?)
             ''')
             search_term = f'%{search}%'
-            query_params.extend([search_term, search_term, search_term])
+            query_params.extend([search_term, search_term])
         
         if where_conditions:
             query_sql += ' WHERE ' + ' AND '.join(where_conditions)
@@ -1033,6 +903,10 @@ async def filter_tag_mappings(request):
                     config.update(json.loads(row['config_json']))
                 except:
                     pass
+            
+            # Filter by category if specified (in Python)
+            if category and config.get('category') != category:
+                continue
             
             mapping = {
                 'id': row['id'],
@@ -1062,11 +936,11 @@ async def filter_tag_mappings(request):
         })
         
     except Exception as e:
+        print(f"Filter error: {str(e)}")
         return web.json_response({
             'success': False,
             'error': f'Filter error: {str(e)}'
         }, status=500)
-
 # POST /api/tag-mapping/devices/{device_id}/test - Test device connection
 async def test_device_connection(request):
     """Test connection to a device"""

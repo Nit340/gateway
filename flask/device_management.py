@@ -23,7 +23,7 @@ async def get_all_devices(request):
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT d.id, d.name, d.type, d.address, 
+            SELECT d.id, d.name, d.type, d.protocol, d.address, 
                    g.name as group_name, g.color, d.config_json
             FROM device_management d
             LEFT JOIN device_groups g ON d.group_id = g.id
@@ -32,7 +32,7 @@ async def get_all_devices(request):
         
         devices = []
         for row in cursor.fetchall():
-            device_id, name, type_, address, group_name, color, config_json = row
+            device_id, name, type_, protocol, address, group_name, color, config_json = row
             
             # Get real-time status (not from database)
             status = device_status_tracker.get(device_id, {'status': 'Online', 'last_poll': 'Just now'})
@@ -41,6 +41,7 @@ async def get_all_devices(request):
                 'id': device_id,
                 'name': name,
                 'type': type_,
+                'protocol': protocol,
                 'address': address,
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
@@ -69,7 +70,7 @@ async def get_device_details(request):
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT d.id, d.name, d.type, d.address, 
+            SELECT d.id, d.name, d.type, d.protocol, d.address, 
                    g.name as group_name, g.color, d.config_json
             FROM device_management d
             LEFT JOIN device_groups g ON d.group_id = g.id
@@ -80,7 +81,7 @@ async def get_device_details(request):
         if not row:
             return web.json_response({'error': 'Device not found'}, status=404)
         
-        device_id, name, type_, address, group_name, color, config_json = row
+        device_id, name, type_, protocol, address, group_name, color, config_json = row
         config = json.loads(config_json) if config_json else {}
         
         # Get real-time status
@@ -98,6 +99,7 @@ async def get_device_details(request):
         details = {
             'name': name,
             'type': type_,
+            'protocol': protocol,
             'address': address,
             'group': group_name,
             'config': config,
@@ -138,8 +140,26 @@ async def add_device(request):
         
         config = data.get('config', {})
         
+        # Determine protocol based on type or explicit protocol field
+        if 'protocol' in data:
+            protocol = data['protocol']
+        elif data.get('type') == 'Modbus TCP':
+            protocol = 'modbus-tcp'
+        elif data.get('type') == 'Modbus RTU':
+            protocol = 'modbus-rtu'
+        elif data.get('type') == 'CAN':
+            protocol = 'can'
+        elif data.get('type') == 'Wireless':
+            protocol = 'wireless'
+        elif data.get('type') == 'ACS Sensor':
+            protocol = 'acs-sensor'
+        elif data.get('type') == 'EtherNet/IP':
+            protocol = 'ethernet-ip'
+        else:
+            protocol = 'modbus-tcp'  # Default
+        
         # FIX: Ensure Modbus TCP has all required fields
-        if data.get('type') == 'Modbus TCP':
+        if data.get('type') == 'Modbus TCP' or protocol == 'modbus-tcp':
             # Validate and set defaults for all TCP fields
             config.setdefault('ip_address', '192.168.1.100')
             config.setdefault('port', 502)
@@ -151,12 +171,13 @@ async def add_device(request):
             print("Saving Modbus TCP device with config:", config)
         
         cursor.execute('''
-            INSERT INTO device_management (id, name, type, address, group_id, config_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO device_management (id, name, type, protocol, address, group_id, config_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             device_id,
             data['name'],
             data['type'],
+            protocol,
             data.get('address', 'N/A'),
             group_id,
             json.dumps(config)
@@ -174,6 +195,7 @@ async def add_device(request):
                 'id': device_id,
                 'name': data['name'],
                 'type': data['type'],
+                'protocol': protocol,
                 'address': data.get('address', 'N/A'),
                 'status': 'Online'
             }
@@ -209,6 +231,10 @@ async def update_device(request):
             updates.append('type = ?')
             params.append(data['type'])
         
+        if 'protocol' in data:
+            updates.append('protocol = ?')
+            params.append(data['protocol'])
+        
         if 'address' in data:
             updates.append('address = ?')
             params.append(data['address'])
@@ -226,7 +252,7 @@ async def update_device(request):
         if 'config' in data:
             config = data['config']
             # FIX: Ensure Modbus TCP has all required fields
-            if data.get('type', '') == 'Modbus TCP':
+            if data.get('type', '') == 'Modbus TCP' or data.get('protocol', '') == 'modbus-tcp':
                 config.setdefault('ip_address', '192.168.1.100')
                 config.setdefault('port', 502)
                 config.setdefault('slave_address', 1)
@@ -253,7 +279,8 @@ async def update_device(request):
             'device': {
                 'id': device_id,
                 'name': data.get('name', ''),
-                'type': data.get('type', '')
+                'type': data.get('type', ''),
+                'protocol': data.get('protocol', '')
             }
         })
         
@@ -339,7 +366,7 @@ async def duplicate_device(request):
         
         # Get original device
         cursor.execute('''
-            SELECT name, type, address, group_id, config_json
+            SELECT name, type, protocol, address, group_id, config_json
             FROM device_management WHERE id = ?
         ''', (device_id,))
         
@@ -347,7 +374,7 @@ async def duplicate_device(request):
         if not row:
             return web.json_response({'error': 'Device not found'}, status=404)
         
-        name, type_, address, group_id, config_json = row
+        name, type_, protocol, address, group_id, config_json = row
         
         # Get the next device number
         cursor.execute('SELECT COUNT(*) FROM device_management')
@@ -357,9 +384,9 @@ async def duplicate_device(request):
         new_name = "{} (Copy)".format(name)
         
         cursor.execute('''
-            INSERT INTO device_management (id, name, type, address, group_id, config_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (new_device_id, new_name, type_, address, group_id, config_json))
+            INSERT INTO device_management (id, name, type, protocol, address, group_id, config_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (new_device_id, new_name, type_, protocol, address, group_id, config_json))
         
         conn.commit()
         conn.close()
@@ -373,7 +400,8 @@ async def duplicate_device(request):
             'new_device': {
                 'id': new_device_id,
                 'name': new_name,
-                'type': type_
+                'type': type_,
+                'protocol': protocol
             }
         })
         
@@ -730,16 +758,38 @@ async def import_devices_csv(request):
                                     'sensitivity': 'Medium'
                                 }
                         
+                        # Determine protocol
+                        if 'Protocol' in row and row['Protocol'].strip():
+                            protocol = row['Protocol'].strip()
+                        else:
+                            # Map type to protocol
+                            device_type = row.get('Type', 'Unknown').strip()
+                            if device_type == 'Modbus TCP':
+                                protocol = 'modbus-tcp'
+                            elif device_type == 'Modbus RTU':
+                                protocol = 'modbus-rtu'
+                            elif device_type == 'CAN':
+                                protocol = 'can'
+                            elif device_type == 'Wireless':
+                                protocol = 'wireless'
+                            elif device_type == 'ACS Sensor':
+                                protocol = 'acs-sensor'
+                            elif device_type == 'EtherNet/IP':
+                                protocol = 'ethernet-ip'
+                            else:
+                                protocol = 'modbus-tcp'  # Default
+                        
                         if existing_device_id:
                             # Update existing device
                             cursor.execute('''
                                 UPDATE device_management 
-                                SET name = ?, type = ?, address = ?, 
+                                SET name = ?, type = ?, protocol = ?, address = ?, 
                                     group_id = ?, config_json = ?, updated_at = CURRENT_TIMESTAMP
                                 WHERE id = ?
                             ''', (
                                 device_name,
                                 row.get('Type', 'Unknown').strip(),
+                                protocol,
                                 row.get('Address/ID', 'N/A'),
                                 group_id,
                                 json.dumps(config),
@@ -759,12 +809,13 @@ async def import_devices_csv(request):
                             
                             cursor.execute('''
                                 INSERT INTO device_management 
-                                (id, name, type, address, group_id, config_json)
-                                VALUES (?, ?, ?, ?, ?, ?)
+                                (id, name, type, protocol, address, group_id, config_json)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 device_id,
                                 device_name,
                                 row.get('Type', 'Unknown').strip(),
+                                protocol,
                                 row.get('Address/ID', 'N/A'),
                                 group_id,
                                 json.dumps(config)
@@ -807,7 +858,7 @@ async def export_devices_csv(request):
         
         # Get all devices with their full configuration
         cursor.execute('''
-            SELECT d.id, d.name, d.type, d.address,
+            SELECT d.id, d.name, d.type, d.protocol, d.address,
                    g.name as group_name, d.config_json
             FROM device_management d
             LEFT JOIN device_groups g ON d.group_id = g.id
@@ -818,15 +869,15 @@ async def export_devices_csv(request):
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write comprehensive header (REMOVED Firmware Version)
+        # Write comprehensive header (INCLUDES Protocol column)
         writer.writerow([
-            'Device ID', 'Device Name', 'Type', 'Address/ID', 
+            'Device ID', 'Device Name', 'Type', 'Protocol', 'Address/ID', 
             'Group', 'Configuration JSON'
         ])
         
         # Write data
         for row in cursor.fetchall():
-            device_id, name, type_, address, group_name, config_json = row
+            device_id, name, type_, protocol, address, group_name, config_json = row
             
             # Get real-time status
             status = device_status_tracker.get(device_id, {'status': 'Online', 'last_poll': 'Just now'})
@@ -839,6 +890,7 @@ async def export_devices_csv(request):
                 device_id,
                 name,
                 type_,
+                protocol,
                 address,
                 group_name or 'None',
                 config_json  # Include the full configuration JSON
