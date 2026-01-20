@@ -44,24 +44,13 @@ def init_database():
         )
     ''')
     
-   
+    # UPDATED: Simplified tag_mappings table to store everything as JSON
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tag_mappings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id TEXT NOT NULL,
             tag_name TEXT NOT NULL,
-            description TEXT,
-            address TEXT NOT NULL,
-            data_type TEXT NOT NULL,
-            endianness TEXT DEFAULT 'big-endian',
-            scale REAL DEFAULT 1.0,
-            offset REAL DEFAULT 0.0,
-            unit TEXT,
-            poll_interval INTEGER DEFAULT 200,
-            category TEXT,
-            min_valid REAL,
-            max_valid REAL,
-            protocol_config TEXT,  -- JSON with protocol-specific config
+            config_json TEXT NOT NULL,  -- All tag configuration stored as JSON
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, tag_name),
@@ -145,7 +134,7 @@ def init_database():
     conn.close()
     print("Database initialized with all tables")
     print("✓ Device management table created WITHOUT firmware_version column")
-    print("✓ Tag mapping tables created with default categories")
+    print("✓ Tag mapping table simplified to JSON storage")
 
 def get_configuration():
     """Retrieve configuration from database as single JSON"""

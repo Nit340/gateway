@@ -63,6 +63,8 @@ class Router {
         
         this.loadedScripts = new Set();
         this.scriptPromises = new Map();
+        this.initializedPages = new Set(); // NEW: Track initialized pages
+        this.currentInitializationTimer = null; // NEW: Track initialization timer
         
         this.init();
     }
@@ -106,12 +108,15 @@ class Router {
     navigateTo(page, updateHistory = true) {
         if (this.currentPage === page) return;
         
+        console.log(`Navigating from ${this.currentPage} to ${page}`);
+        
         this.previousPage = this.currentPage;
         this.currentPage = page;
         
         // Clean up previous page before loading new one
         if (this.previousPage) {
             this.cleanupPageScripts(this.previousPage);
+            this.cleanupPreviousPage();
         }
         
         this.loadPage(page);
@@ -156,7 +161,7 @@ class Router {
             // Update content area
             if (contentArea) contentArea.innerHTML = html;
             
-            // Load and initialize page-specific script
+            // Load page-specific script
             await this.loadPageScript(page);
             
             // Initialize page-specific functionality with delay
@@ -196,39 +201,41 @@ class Router {
             return Promise.resolve();
         }
         
-        // Check if script is already loading
-        if (this.scriptPromises.has(scriptName)) {
-            return this.scriptPromises.get(scriptName);
+        // Check if script is already loaded and cached
+        if (this.loadedScripts.has(scriptName)) {
+            console.log(`Script ${scriptName} already loaded, reusing cached version`);
+            return Promise.resolve();
         }
         
         console.log(`Loading script: ${scriptName} for page: ${page}`);
         
         const loadPromise = new Promise(async (resolve, reject) => {
             try {
-                // Remove any existing script with same src to prevent duplicates
-                const existingScripts = document.querySelectorAll(`script[src="${scriptName}"]`);
-                existingScripts.forEach(script => {
-                    if (script.parentNode) {
-                        script.parentNode.removeChild(script);
-                    }
-                });
-                
-                // Clear module cache for this script
-                delete window[`${page.replace('-', '_')}_loaded`];
+                // Check if script is already in DOM (cached by browser)
+                const existingScript = document.querySelector(`script[src="${scriptName}"]`);
+                if (existingScript) {
+                    console.log(`Script ${scriptName} already exists in DOM`);
+                    this.loadedScripts.add(scriptName);
+                    resolve();
+                    return;
+                }
                 
                 const script = document.createElement('script');
                 script.src = scriptName;
                 script.type = 'text/javascript';
                 script.setAttribute('data-page', page);
+                script.setAttribute('data-router-loaded', 'true');
                 
                 script.onload = () => {
                     console.log(`Successfully loaded: ${scriptName}`);
+                    this.loadedScripts.add(scriptName);
                     resolve();
                 };
                 
                 script.onerror = (error) => {
                     console.warn(`Failed to load script: ${scriptName}`, error);
                     this.scriptPromises.delete(scriptName);
+                    this.loadedScripts.delete(scriptName);
                     reject(new Error(`Failed to load ${scriptName}`));
                 };
                 
@@ -237,13 +244,12 @@ class Router {
             } catch (error) {
                 console.warn(`Script load error for ${page}:`, error.message);
                 this.scriptPromises.delete(scriptName);
+                this.loadedScripts.delete(scriptName);
                 reject(error);
             }
         });
         
         this.scriptPromises.set(scriptName, loadPromise);
-        this.loadedScripts.add(scriptName);
-        
         return loadPromise;
     }
     
@@ -252,9 +258,11 @@ class Router {
         
         if (!scriptName) return;
         
-        // Remove script promise
+        // Remove from initialized pages
+        this.initializedPages.delete(page);
+        
+        // Remove script promise (but keep in loadedScripts for caching)
         this.scriptPromises.delete(scriptName);
-        this.loadedScripts.delete(scriptName);
         
         // Clean up page-specific global variables and connections
         switch(page) {
@@ -275,8 +283,13 @@ class Router {
                     window.reconnectInterval = null;
                 }
                 
-                // Clear functions
-                delete window.initGeneralConfig;
+                // Clear global flag
+                delete window.general_configuration_initialized;
+                
+                // Call cleanup if exists
+                if (typeof window.cleanupGeneralConfig === 'function') {
+                    window.cleanupGeneralConfig();
+                }
                 break;
                 
             case 'device-management':
@@ -290,16 +303,23 @@ class Router {
                     window.deviceWsConnection = null;
                 }
                 
-                // Clear global functions and state
-                if (window.deviceManagement) {
-                    delete window.deviceManagement;
+                // Clear global flag
+                delete window.device_management_initialized;
+                
+                // Call cleanup function if it exists
+                if (typeof window.cleanupDeviceManagement === 'function') {
+                    window.cleanupDeviceManagement();
                 }
-                delete window.initializeDeviceManagement;
                 break;
                 
             case 'modbus-mapping':
-                // Clear modbus mapping state
-                delete window.initializeModbusMapping;
+                // Clear global flag
+                delete window.modbus_mapping_initialized;
+                
+                // Call cleanup if exists
+                if (typeof window.cleanupModbusMapping === 'function') {
+                    window.cleanupModbusMapping();
+                }
                 break;
                 
             case 'mqtt-cloud':
@@ -312,26 +332,41 @@ class Router {
                     }
                     window.mqttClient = null;
                 }
-                delete window.initMqttCloud;
+                
+                // Clear global flag
+                delete window.mqtt_cloud_initialized;
+                
+                if (typeof window.cleanupMqttCloud === 'function') {
+                    window.cleanupMqttCloud();
+                }
                 break;
                 
             case 'ota-gateway':
-                delete window.initOtaGateway;
+                delete window.ota_gateway_initialized;
+                if (typeof window.cleanupOtaGateway === 'function') {
+                    window.cleanupOtaGateway();
+                }
                 break;
                 
             case 'data-retention':
-                delete window.initDataRetention;
+                delete window.data_retention_initialized;
+                if (typeof window.cleanupDataRetention === 'function') {
+                    window.cleanupDataRetention();
+                }
                 break;
                 
             case 'logging':
-                delete window.initLogging;
+                delete window.logging_initialized;
+                if (typeof window.cleanupLogging === 'function') {
+                    window.cleanupLogging();
+                }
                 break;
                 
             case 'security':
-                if (window.userManagement) {
-                    delete window.userManagement;
+                delete window.security_initialized;
+                if (typeof window.cleanupSecurity === 'function') {
+                    window.cleanupSecurity();
                 }
-                delete window.initSecurity;
                 break;
                 
             case 'diagnostics':
@@ -344,35 +379,60 @@ class Router {
                     }
                     window.terminal = null;
                 }
-                delete window.initDiagnostics;
+                
+                delete window.diagnostics_initialized;
+                if (typeof window.cleanupDiagnostics === 'function') {
+                    window.cleanupDiagnostics();
+                }
                 break;
                 
             case 'license':
-                delete window.initLicense;
+                delete window.license_initialized;
+                if (typeof window.cleanupLicense === 'function') {
+                    window.cleanupLicense();
+                }
                 break;
                 
             case 'automation':
-                delete window.initAutomation;
+                delete window.automation_initialized;
+                if (typeof window.cleanupAutomation === 'function') {
+                    window.cleanupAutomation();
+                }
                 break;
                 
             case 'alerts':
-                delete window.initAlerts;
+                delete window.alerts_initialized;
+                if (typeof window.cleanupAlerts === 'function') {
+                    window.cleanupAlerts();
+                }
                 break;
                 
             case 'rules':
-                delete window.initRules;
+                delete window.rules_initialized;
+                if (typeof window.cleanupRules === 'function') {
+                    window.cleanupRules();
+                }
                 break;
                 
             case 'backup':
-                delete window.initBackup;
+                delete window.backup_initialized;
+                if (typeof window.cleanupBackup === 'function') {
+                    window.cleanupBackup();
+                }
                 break;
                 
             case 'notification':
-                delete window.initNotification;
+                delete window.notification_initialized;
+                if (typeof window.cleanupNotification === 'function') {
+                    window.cleanupNotification();
+                }
                 break;
                 
             case 'craneiq':
-                delete window.initCraneIQ;
+                delete window.craneiq_initialized;
+                if (typeof window.cleanupCraneIQ === 'function') {
+                    window.cleanupCraneIQ();
+                }
                 break;
         }
         
@@ -390,13 +450,38 @@ class Router {
     }
     
     initializePageScripts(page) {
-        // Add delay to ensure DOM is fully loaded and script is ready
-        setTimeout(() => {
+        // Clear any previous initialization timer
+        if (this.currentInitializationTimer) {
+            clearTimeout(this.currentInitializationTimer);
+            this.currentInitializationTimer = null;
+        }
+        
+        // Check if page is already initialized (prevent duplicate initialization)
+        if (this.initializedPages.has(page)) {
+            console.log(`Page ${page} already initialized in this session, skipping...`);
+            return;
+        }
+        
+        // Also check global flag (extra protection)
+        const globalFlag = `${page.replace('-', '_')}_initialized`;
+        if (window[globalFlag]) {
+            console.log(`Page ${page} already initialized (global flag), skipping...`);
+            return;
+        }
+        
+        console.log(`Scheduling initialization for page: ${page}`);
+        
+        // Set a new timer for initialization
+        this.currentInitializationTimer = setTimeout(() => {
+            console.log(`Executing initialization for page: ${page}`);
+            
             switch(page) {
                 case 'general-configuration':
                     if (typeof window.initGeneralConfig === 'function') {
                         console.log('Initializing General Configuration');
                         window.initGeneralConfig();
+                        this.initializedPages.add(page);
+                        window.general_configuration_initialized = true;
                     } else {
                         console.warn('initGeneralConfig function not found');
                     }
@@ -406,6 +491,8 @@ class Router {
                     if (typeof window.initializeDeviceManagement === 'function') {
                         console.log('Initializing Device Management');
                         window.initializeDeviceManagement();
+                        this.initializedPages.add(page);
+                        window.device_management_initialized = true;
                     } else {
                         console.warn('initializeDeviceManagement function not found');
                     }
@@ -415,6 +502,8 @@ class Router {
                     if (typeof window.initializeModbusMapping === 'function') {
                         console.log('Initializing Modbus Mapping');
                         window.initializeModbusMapping();
+                        this.initializedPages.add(page);
+                        window.modbus_mapping_initialized = true;
                     } else {
                         console.warn('initializeModbusMapping function not found');
                     }
@@ -424,6 +513,8 @@ class Router {
                     if (typeof window.initMqttCloud === 'function') {
                         console.log('Initializing MQTT Cloud');
                         window.initMqttCloud();
+                        this.initializedPages.add(page);
+                        window.mqtt_cloud_initialized = true;
                     } else {
                         console.warn('initMqttCloud function not found');
                     }
@@ -433,6 +524,8 @@ class Router {
                     if (typeof window.initOtaGateway === 'function') {
                         console.log('Initializing OTA Gateway');
                         window.initOtaGateway();
+                        this.initializedPages.add(page);
+                        window.ota_gateway_initialized = true;
                     } else {
                         console.warn('initOtaGateway function not found');
                     }
@@ -442,6 +535,8 @@ class Router {
                     if (typeof window.initDataRetention === 'function') {
                         console.log('Initializing Data Retention');
                         window.initDataRetention();
+                        this.initializedPages.add(page);
+                        window.data_retention_initialized = true;
                     } else {
                         console.warn('initDataRetention function not found');
                     }
@@ -451,6 +546,8 @@ class Router {
                     if (typeof window.initLogging === 'function') {
                         console.log('Initializing Logging');
                         window.initLogging();
+                        this.initializedPages.add(page);
+                        window.logging_initialized = true;
                     } else {
                         console.warn('initLogging function not found');
                     }
@@ -460,6 +557,8 @@ class Router {
                     if (typeof window.initSecurity === 'function') {
                         console.log('Initializing Security');
                         window.initSecurity();
+                        this.initializedPages.add(page);
+                        window.security_initialized = true;
                     } else {
                         console.warn('initSecurity function not found');
                     }
@@ -469,6 +568,8 @@ class Router {
                     if (typeof window.initDiagnostics === 'function') {
                         console.log('Initializing Diagnostics');
                         window.initDiagnostics();
+                        this.initializedPages.add(page);
+                        window.diagnostics_initialized = true;
                     } else {
                         console.warn('initDiagnostics function not found');
                     }
@@ -478,6 +579,8 @@ class Router {
                     if (typeof window.initLicense === 'function') {
                         console.log('Initializing License');
                         window.initLicense();
+                        this.initializedPages.add(page);
+                        window.license_initialized = true;
                     } else {
                         console.warn('initLicense function not found');
                     }
@@ -487,6 +590,8 @@ class Router {
                     if (typeof window.initAutomation === 'function') {
                         console.log('Initializing Automation');
                         window.initAutomation();
+                        this.initializedPages.add(page);
+                        window.automation_initialized = true;
                     } else {
                         console.warn('initAutomation function not found');
                     }
@@ -496,6 +601,8 @@ class Router {
                     if (typeof window.initAlerts === 'function') {
                         console.log('Initializing Alerts');
                         window.initAlerts();
+                        this.initializedPages.add(page);
+                        window.alerts_initialized = true;
                     } else {
                         console.warn('initAlerts function not found');
                     }
@@ -505,6 +612,8 @@ class Router {
                     if (typeof window.initRules === 'function') {
                         console.log('Initializing Rules');
                         window.initRules();
+                        this.initializedPages.add(page);
+                        window.rules_initialized = true;
                     } else {
                         console.warn('initRules function not found');
                     }
@@ -514,6 +623,8 @@ class Router {
                     if (typeof window.initBackup === 'function') {
                         console.log('Initializing Backup');
                         window.initBackup();
+                        this.initializedPages.add(page);
+                        window.backup_initialized = true;
                     } else {
                         console.warn('initBackup function not found');
                     }
@@ -523,6 +634,8 @@ class Router {
                     if (typeof window.initNotification === 'function') {
                         console.log('Initializing Notification');
                         window.initNotification();
+                        this.initializedPages.add(page);
+                        window.notification_initialized = true;
                     } else {
                         console.warn('initNotification function not found');
                     }
@@ -532,6 +645,8 @@ class Router {
                     if (typeof window.initCraneIQ === 'function') {
                         console.log('Initializing CraneIQ');
                         window.initCraneIQ();
+                        this.initializedPages.add(page);
+                        window.craneiq_initialized = true;
                     } else {
                         console.warn('initCraneIQ function not found');
                     }
@@ -540,6 +655,8 @@ class Router {
                 default:
                     console.log(`No specific initialization for page: ${page}`);
             }
+            
+            this.currentInitializationTimer = null;
         }, 150); // 150ms delay to ensure DOM is ready
     }
     
@@ -565,6 +682,13 @@ class Router {
     // Public method to reload current page
     reloadCurrentPage() {
         if (this.currentPage) {
+            // Remove from initialized pages so it re-initializes
+            this.initializedPages.delete(this.currentPage);
+            
+            // Clear global flag
+            const globalFlag = `${this.currentPage.replace('-', '_')}_initialized`;
+            delete window[globalFlag];
+            
             this.loadPage(this.currentPage);
         }
     }

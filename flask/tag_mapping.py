@@ -1,4 +1,4 @@
-# tag_mapping.py - Tag mapping management API
+# tag_mapping.py - Tag mapping management API with JSON storage
 from aiohttp import web
 import json
 import sqlite3
@@ -14,6 +14,22 @@ def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
+
+# Default tag configuration schema
+DEFAULT_TAG_CONFIG = {
+    'description': '',
+    'address': '',
+    'data_type': 'INT16',
+    'endianness': 'big-endian',
+    'scale': 1.0,
+    'offset': 0.0,
+    'unit': '',
+    'poll_interval': 200,
+    'category': 'Sensors',
+    'min_valid': None,
+    'max_valid': None,
+    'protocol_config': {}
+}
 
 # GET /tag-mapping - Main tag mapping page
 async def get_tag_mapping_page(request):
@@ -58,18 +74,24 @@ async def get_tag_mapping_page(request):
     
     # Get all tag mappings with device info
     cursor.execute('''
-        SELECT tm.*, dm.name as device_name, tc.name as category_name, tc.color as category_color
+        SELECT tm.id, tm.device_id, tm.tag_name, tm.config_json,
+               dm.name as device_name
         FROM tag_mappings tm
         LEFT JOIN device_management dm ON tm.device_id = dm.id
-        LEFT JOIN tag_categories tc ON tm.category = tc.name
         ORDER BY tm.tag_name
     ''')
     
     mappings = []
     for row in cursor.fetchall():
-        protocol_config = json.loads(row['protocol_config']) if row['protocol_config'] else {}
+        # Parse JSON configuration
+        config = DEFAULT_TAG_CONFIG.copy()
+        if row['config_json']:
+            try:
+                config.update(json.loads(row['config_json']))
+            except:
+                pass
         
-        # Determine protocol from device or config
+        # Determine protocol from device
         device_protocol = 'modbus'
         for device in devices:
             if device['id'] == row['device_id']:
@@ -80,23 +102,23 @@ async def get_tag_mapping_page(request):
             'id': row['id'],
             'deviceId': row['device_id'],
             'deviceName': row['device_name'],
-            'address': row['address'],
             'tagName': row['tag_name'],
-            'dataType': row['data_type'],
-            'scale': str(row['scale']),
-            'offset': str(row['offset']),
-            'unit': row['unit'],
-            'pollInterval': str(row['poll_interval']),
-            'category': row['category'] or 'Sensors',
-            'description': row['description'] or '',
-            'minValid': str(row['min_valid']) if row['min_valid'] is not None else '',
-            'maxValid': str(row['max_valid']) if row['max_valid'] is not None else '',
-            'endianness': row['endianness'],
-            'protocol': device_protocol
+            'protocol': device_protocol,
+            'address': config['address'],
+            'dataType': config['data_type'],
+            'scale': str(config['scale']),
+            'offset': str(config['offset']),
+            'unit': config['unit'],
+            'pollInterval': str(config['poll_interval']),
+            'category': config['category'],
+            'description': config['description'],
+            'minValid': str(config['min_valid']) if config['min_valid'] is not None else '',
+            'maxValid': str(config['max_valid']) if config['max_valid'] is not None else '',
+            'endianness': config['endianness']
         }
         
         # Merge protocol-specific config
-        mapping.update(protocol_config)
+        mapping.update(config['protocol_config'])
         mappings.append(mapping)
     
     # Get categories
@@ -142,21 +164,8 @@ async def create_tag_mapping(request):
                     'error': f'Missing required field: {field}'
                 }, status=400)
         
-        # Check if tag name already exists for this device
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id FROM tag_mappings 
-            WHERE device_id = ? AND tag_name = ?
-        ''', (data['deviceId'], data['tagName']))
-        
-        if cursor.fetchone():
-            conn.close()
-            return web.json_response({
-                'success': False,
-                'error': 'TAG_001: Tag name already exists for this device'
-            }, status=409)
         
         # Check if device exists
         cursor.execute('SELECT id FROM device_management WHERE id = ?', (data['deviceId'],))
@@ -167,37 +176,73 @@ async def create_tag_mapping(request):
                 'error': 'TAG_002: Invalid device ID'
             }, status=404)
         
-        # Prepare protocol config
+        # Check if tag name already exists for this device
+        cursor.execute('''
+            SELECT id FROM tag_mappings 
+            WHERE device_id = ? AND LOWER(tag_name) = LOWER(?)
+        ''', (data['deviceId'], data['tagName']))
+        
+        existing_tag = cursor.fetchone()
+        if existing_tag:
+            conn.close()
+            return web.json_response({
+                'success': False,
+                'error': f'TAG_001: Tag name "{data["tagName"]}" already exists for this device. Please use a unique tag name.',
+                'code': 'TAG_001'
+            }, status=409)
+        
+        # Prepare configuration JSON
+        config_json = DEFAULT_TAG_CONFIG.copy()
+        
+        # Map input fields to configuration
+        field_mapping = {
+            'description': 'description',
+            'address': 'address',
+            'dataType': 'data_type',
+            'endianness': 'endianness',
+            'scale': 'scale',
+            'offset': 'offset',
+            'unit': 'unit',
+            'pollInterval': 'poll_interval',
+            'category': 'category',
+            'minValid': 'min_valid',
+            'maxValid': 'max_valid'
+        }
+        
+        for input_field, config_field in field_mapping.items():
+            if input_field in data:
+                if input_field in ['scale', 'offset', 'minValid', 'maxValid']:
+                    try:
+                        config_json[config_field] = float(data[input_field]) if data[input_field] not in ['', None] else None
+                    except (ValueError, TypeError):
+                        config_json[config_field] = None if input_field in ['minValid', 'maxValid'] else 0.0
+                elif input_field == 'pollInterval':
+                    try:
+                        config_json[config_field] = int(data[input_field])
+                    except (ValueError, TypeError):
+                        config_json[config_field] = 200
+                else:
+                    config_json[config_field] = data[input_field]
+        
+        # Prepare protocol-specific configuration
         protocol_config = {}
         protocol_keys = ['registerType', 'registerCount', 'byteOrder', 'canId', 
                         'dataLength', 'channel', 'nodeId', 'sensorId', 'parameterId']
+        
         for key in protocol_keys:
             if key in data:
                 protocol_config[key] = data[key]
         
+        config_json['protocol_config'] = protocol_config
+        
         # Insert tag mapping
         cursor.execute('''
-            INSERT INTO tag_mappings (
-                device_id, tag_name, description, address, 
-                data_type, endianness, scale, offset, unit,
-                poll_interval, category, min_valid, max_valid,
-                protocol_config
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tag_mappings (device_id, tag_name, config_json)
+            VALUES (?, ?, ?)
         ''', (
             data['deviceId'],
             data['tagName'],
-            data.get('description', ''),
-            data['address'],
-            data['dataType'],
-            data.get('endianness', 'big-endian'),
-            float(data.get('scale', 1.0)),
-            float(data.get('offset', 0.0)),
-            data.get('unit', ''),
-            int(data.get('pollInterval', 200)),
-            data.get('category', 'Sensors'),
-            float(data['minValid']) if data.get('minValid') else None,
-            float(data['maxValid']) if data.get('maxValid') else None,
-            json.dumps(protocol_config) if protocol_config else None
+            json.dumps(config_json)
         ))
         
         tag_id = cursor.lastrowid
@@ -239,36 +284,46 @@ async def update_tag_mapping(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if tag exists
-        cursor.execute('SELECT id FROM tag_mappings WHERE id = ?', (tag_id,))
-        if not cursor.fetchone():
+        # Check if tag exists and get current config
+        cursor.execute('SELECT id, device_id, config_json FROM tag_mappings WHERE id = ?', (tag_id,))
+        tag = cursor.fetchone()
+        if not tag:
             conn.close()
             return web.json_response({
                 'success': False,
                 'error': 'TAG_005: Tag mapping not found'
             }, status=404)
         
+        device_id = tag['device_id']
+        
         # Check if new tag name conflicts (if changed)
-        if 'tagName' in data:
+        if 'tagName' in data and data['tagName']:
             cursor.execute('''
                 SELECT id FROM tag_mappings 
-                WHERE device_id = (SELECT device_id FROM tag_mappings WHERE id = ?)
-                AND tag_name = ? AND id != ?
-            ''', (tag_id, data['tagName'], tag_id))
+                WHERE device_id = ? 
+                AND LOWER(tag_name) = LOWER(?) 
+                AND id != ?
+            ''', (device_id, data['tagName'], tag_id))
             
             if cursor.fetchone():
                 conn.close()
                 return web.json_response({
                     'success': False,
-                    'error': 'TAG_001: Tag name already exists for this device'
+                    'error': f'TAG_001: Tag name "{data["tagName"]}" already exists for this device. Please use a unique tag name.',
+                    'code': 'TAG_001'
                 }, status=409)
         
-        # Prepare update fields
-        update_fields = []
-        update_values = []
+        # Load current configuration
+        current_config = DEFAULT_TAG_CONFIG.copy()
+        if tag['config_json']:
+            try:
+                current_config.update(json.loads(tag['config_json']))
+            except:
+                pass
         
+        # Update configuration with new values
         field_mapping = {
-            'tagName': 'tag_name',
+            'tagName': 'tag_name',  # Special case for column name
             'description': 'description',
             'address': 'address',
             'dataType': 'data_type',
@@ -282,53 +337,42 @@ async def update_tag_mapping(request):
             'maxValid': 'max_valid'
         }
         
-        for json_field, db_field in field_mapping.items():
-            if json_field in data:
-                if json_field in ['minValid', 'maxValid']:
-                    if data[json_field] == '':
-                        update_fields.append(f"{db_field} = ?")
-                        update_values.append(None)
-                    else:
-                        update_fields.append(f"{db_field} = ?")
-                        update_values.append(float(data[json_field]))
-                elif json_field in ['scale', 'offset']:
-                    update_fields.append(f"{db_field} = ?")
-                    update_values.append(float(data[json_field]))
-                elif json_field == 'pollInterval':
-                    update_fields.append(f"{db_field} = ?")
-                    update_values.append(int(data[json_field]))
-                else:
-                    update_fields.append(f"{db_field} = ?")
-                    update_values.append(data[json_field])
+        # Update tag name if provided
+        if 'tagName' in data:
+            cursor.execute('UPDATE tag_mappings SET tag_name = ? WHERE id = ?', (data['tagName'], tag_id))
         
-        # Handle protocol config
-        protocol_config = {}
+        # Update configuration JSON
+        for input_field, config_field in field_mapping.items():
+            if input_field in data and input_field != 'tagName':
+                if input_field in ['scale', 'offset', 'minValid', 'maxValid']:
+                    try:
+                        current_config[config_field] = float(data[input_field]) if data[input_field] not in ['', None] else None
+                    except (ValueError, TypeError):
+                        current_config[config_field] = None if input_field in ['minValid', 'maxValid'] else 0.0
+                elif input_field == 'pollInterval':
+                    try:
+                        current_config[config_field] = int(data[input_field])
+                    except (ValueError, TypeError):
+                        current_config[config_field] = 200
+                else:
+                    current_config[config_field] = data[input_field]
+        
+        # Update protocol-specific configuration
         protocol_keys = ['registerType', 'registerCount', 'byteOrder', 'canId', 
                         'dataLength', 'channel', 'nodeId', 'sensorId', 'parameterId']
         
         for key in protocol_keys:
             if key in data:
-                protocol_config[key] = data[key]
+                current_config['protocol_config'][key] = data[key]
         
-        if protocol_config:
-            update_fields.append("protocol_config = ?")
-            update_values.append(json.dumps(protocol_config))
+        # Save updated configuration
+        cursor.execute('''
+            UPDATE tag_mappings 
+            SET config_json = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (json.dumps(current_config), tag_id))
         
-        # Add updated_at timestamp
-        update_fields.append("updated_at = CURRENT_TIMESTAMP")
-        
-        # Execute update
-        if update_fields:
-            update_query = f'''
-                UPDATE tag_mappings 
-                SET {', '.join(update_fields)}
-                WHERE id = ?
-            '''
-            update_values.append(tag_id)
-            
-            cursor.execute(update_query, update_values)
-            conn.commit()
-        
+        conn.commit()
         conn.close()
         
         return web.json_response({
@@ -408,8 +452,13 @@ async def get_tag_mapping_details(request):
                 'error': 'TAG_005: Tag mapping not found'
             }, status=404)
         
-        # Parse protocol config
-        protocol_config = json.loads(row['protocol_config']) if row['protocol_config'] else {}
+        # Parse configuration JSON
+        config = DEFAULT_TAG_CONFIG.copy()
+        if row['config_json']:
+            try:
+                config.update(json.loads(row['config_json']))
+            except:
+                pass
         
         # Get device protocol from device management
         conn = get_db_connection()
@@ -421,11 +470,12 @@ async def get_tag_mapping_details(request):
         device_protocol = 'Unknown'
         if device_config and device_config['config_json']:
             try:
-                config = json.loads(device_config['config_json'])
-                device_protocol = config.get('protocol', 'Unknown')
+                device_config_json = json.loads(device_config['config_json'])
+                device_protocol = device_config_json.get('protocol', 'Unknown')
             except:
                 pass
         
+        # Build response data
         tag_data = {
             'id': row['id'],
             'deviceId': row['device_id'],
@@ -433,25 +483,18 @@ async def get_tag_mapping_details(request):
             'deviceType': row['device_type'],
             'protocol': device_protocol,
             'tagName': row['tag_name'],
-            'description': row['description'],
-            'address': row['address'],
-            'dataType': row['data_type'],
-            'endianness': row['endianness'],
-            'scale': row['scale'],
-            'offset': row['offset'],
-            'unit': row['unit'],
-            'pollInterval': row['poll_interval'],
-            'category': row['category'],
-            'minValid': row['min_valid'],
-            'maxValid': row['max_valid'],
             'createdAt': row['created_at'],
             'updatedAt': row['updated_at'],
             'lastValue': 0.0,  # Would come from real-time data
             'quality': 'Good'  # Default quality
         }
         
-        # Add protocol-specific config
-        tag_data.update(protocol_config)
+        # Add configuration data
+        tag_data.update(config)
+        
+        # Flatten protocol config for easier access
+        if 'protocol_config' in tag_data:
+            tag_data.update(tag_data['protocol_config'])
         
         return web.json_response(tag_data)
         
@@ -711,9 +754,9 @@ async def import_csv(request):
             try:
                 # Validate required fields
                 required = ['deviceName', 'tagName', 'address', 'dataType']
-                for field in required:
-                    if not row.get(field):
-                        raise ValueError(f'Missing required field: {field}')
+                for field_name in required:
+                    if not row.get(field_name):
+                        raise ValueError(f'Missing required field: {field_name}')
                 
                 # Get device ID from device name
                 cursor.execute('SELECT id FROM device_management WHERE name = ?', (row['deviceName'],))
@@ -724,44 +767,53 @@ async def import_csv(request):
                 
                 device_id = device['id']
                 
-                # Check for duplicate tag
+                # Check for duplicate tag (case-insensitive)
                 cursor.execute('''
                     SELECT id FROM tag_mappings 
-                    WHERE device_id = ? AND tag_name = ?
+                    WHERE device_id = ? AND LOWER(tag_name) = LOWER(?)
                 ''', (device_id, row['tagName']))
                 
                 if cursor.fetchone():
-                    raise ValueError(f'Tag already exists: {row["tagName"]}')
+                    raise ValueError(f'Tag name already exists for this device: {row["tagName"]}')
+                
+                # Prepare configuration JSON
+                config_json = DEFAULT_TAG_CONFIG.copy()
+                
+                # Map CSV fields to configuration
+                config_json['description'] = row.get('description', '')
+                config_json['address'] = row['address']
+                config_json['data_type'] = row['dataType']
+                config_json['endianness'] = row.get('endianness', 'big-endian')
+                config_json['unit'] = row.get('unit', '')
+                config_json['category'] = row.get('category', 'Sensors')
                 
                 # Parse numeric values
-                scale = float(row.get('scale', 1.0))
-                offset = float(row.get('offset', 0.0))
-                poll_interval = int(row.get('pollInterval', 200))
+                try:
+                    config_json['scale'] = float(row.get('scale', 1.0))
+                except (ValueError, TypeError):
+                    config_json['scale'] = 1.0
                 
-                min_valid = float(row['minValid']) if row.get('minValid') else None
-                max_valid = float(row['maxValid']) if row.get('maxValid') else None
+                try:
+                    config_json['offset'] = float(row.get('offset', 0.0))
+                except (ValueError, TypeError):
+                    config_json['offset'] = 0.0
+                
+                try:
+                    config_json['poll_interval'] = int(row.get('pollInterval', 200))
+                except (ValueError, TypeError):
+                    config_json['poll_interval'] = 200
+                
+                config_json['min_valid'] = float(row['minValid']) if row.get('minValid') else None
+                config_json['max_valid'] = float(row['maxValid']) if row.get('maxValid') else None
                 
                 # Insert tag mapping
                 cursor.execute('''
-                    INSERT INTO tag_mappings (
-                        device_id, tag_name, description, address, 
-                        data_type, endianness, scale, offset, unit,
-                        poll_interval, category, min_valid, max_valid
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tag_mappings (device_id, tag_name, config_json)
+                    VALUES (?, ?, ?)
                 ''', (
                     device_id,
                     row['tagName'],
-                    row.get('description', ''),
-                    row['address'],
-                    row['dataType'],
-                    row.get('endianness', 'big-endian'),
-                    scale,
-                    offset,
-                    row.get('unit', ''),
-                    poll_interval,
-                    row.get('category', 'Sensors'),
-                    min_valid,
-                    max_valid
+                    json.dumps(config_json)
                 ))
                 
                 imported += 1
@@ -802,20 +854,12 @@ async def export_csv(request):
         # Build query with filters
         query_sql = '''
             SELECT 
-                dm.name as device_name,
+                tm.id,
+                tm.device_id,
                 tm.tag_name,
-                tm.description,
-                tm.address,
-                tm.data_type,
-                tm.endianness,
-                tm.scale,
-                tm.offset,
-                tm.unit,
-                tm.poll_interval,
-                tm.category,
-                tm.min_valid,
-                tm.max_valid,
-                tm.created_at
+                tm.config_json,
+                tm.created_at,
+                dm.name as device_name
             FROM tag_mappings tm
             LEFT JOIN device_management dm ON tm.device_id = dm.id
         '''
@@ -824,8 +868,17 @@ async def export_csv(request):
         where_conditions = []
         
         if category:
-            where_conditions.append('tm.category = ?')
-            query_params.append(category)
+            # We need to parse JSON to filter by category
+            # This is inefficient but works for small datasets
+            cursor.execute('''
+                SELECT tm.id, tm.config_json
+                FROM tag_mappings tm
+                WHERE json_extract(tm.config_json, '$.category') = ?
+            ''', (category,))
+            category_ids = [row['id'] for row in cursor.fetchall()]
+            if category_ids:
+                where_conditions.append(f'tm.id IN ({",".join("?" * len(category_ids))})')
+                query_params.extend(category_ids)
         
         if device_id:
             where_conditions.append('tm.device_id = ?')
@@ -842,6 +895,8 @@ async def export_csv(request):
         
         # Create CSV in memory
         output = io.StringIO()
+        
+        # Define CSV fields
         fieldnames = [
             'device_name', 'tag_name', 'description', 'address', 
             'data_type', 'endianness', 'scale', 'offset', 'unit',
@@ -852,7 +907,31 @@ async def export_csv(request):
         writer.writeheader()
         
         for row in rows:
-            writer.writerow(dict(row))
+            # Parse JSON configuration
+            config = DEFAULT_TAG_CONFIG.copy()
+            if row['config_json']:
+                try:
+                    config.update(json.loads(row['config_json']))
+                except:
+                    pass
+            
+            # Write CSV row
+            writer.writerow({
+                'device_name': row['device_name'],
+                'tag_name': row['tag_name'],
+                'description': config['description'],
+                'address': config['address'],
+                'data_type': config['data_type'],
+                'endianness': config['endianness'],
+                'scale': config['scale'],
+                'offset': config['offset'],
+                'unit': config['unit'],
+                'poll_interval': config['poll_interval'],
+                'category': config['category'],
+                'min_valid': config['min_valid'],
+                'max_valid': config['max_valid'],
+                'created_at': row['created_at']
+            })
         
         csv_content = output.getvalue()
         output.close()
@@ -890,12 +969,7 @@ async def filter_tag_mappings(request):
             SELECT 
                 tm.id,
                 tm.tag_name,
-                tm.description,
-                tm.address,
-                tm.data_type,
-                tm.unit,
-                tm.category,
-                tm.poll_interval,
+                tm.config_json,
                 dm.name as device_name,
                 dm.id as device_id,
                 CASE 
@@ -913,7 +987,7 @@ async def filter_tag_mappings(request):
         where_conditions = []
         
         if category:
-            where_conditions.append('tm.category = ?')
+            where_conditions.append("json_extract(tm.config_json, '$.category') = ?")
             query_params.append(category)
         
         if device_id:
@@ -935,7 +1009,7 @@ async def filter_tag_mappings(request):
         if search:
             where_conditions.append('''
                 (LOWER(tm.tag_name) LIKE ? OR 
-                 LOWER(tm.description) LIKE ? OR
+                 LOWER(json_extract(tm.config_json, '$.description')) LIKE ? OR
                  LOWER(dm.name) LIKE ?)
             ''')
             search_term = f'%{search}%'
@@ -949,10 +1023,36 @@ async def filter_tag_mappings(request):
         cursor.execute(query_sql, query_params)
         rows = cursor.fetchall()
         
-        # Convert to list of dictionaries
+        # Convert to list of dictionaries with parsed JSON
         mappings = []
         for row in rows:
-            mappings.append(dict(row))
+            # Parse JSON configuration
+            config = DEFAULT_TAG_CONFIG.copy()
+            if row['config_json']:
+                try:
+                    config.update(json.loads(row['config_json']))
+                except:
+                    pass
+            
+            mapping = {
+                'id': row['id'],
+                'tag_name': row['tag_name'],
+                'device_name': row['device_name'],
+                'device_id': row['device_id'],
+                'protocol': row['protocol']
+            }
+            
+            # Add configuration fields
+            mapping.update({
+                'description': config['description'],
+                'address': config['address'],
+                'data_type': config['data_type'],
+                'unit': config['unit'],
+                'category': config['category'],
+                'poll_interval': config['poll_interval']
+            })
+            
+            mappings.append(mapping)
         
         conn.close()
         
@@ -1022,27 +1122,26 @@ async def validate_all_mappings(request):
         
         # Get all tag mappings
         cursor.execute('''
-            SELECT COUNT(*) as total_count,
-                   SUM(CASE WHEN address IS NULL OR address = '' THEN 1 ELSE 0 END) as missing_address,
-                   SUM(CASE WHEN tag_name IS NULL OR tag_name = '' THEN 1 ELSE 0 END) as missing_name,
-                   SUM(CASE WHEN data_type IS NULL OR data_type = '' THEN 1 ELSE 0 END) as missing_type
+            SELECT COUNT(*) as total_count
             FROM tag_mappings
         ''')
         
-        stats = cursor.fetchone()
+        total = cursor.fetchone()['total_count']
+        
+        # Check for invalid JSON
+        cursor.execute('''
+            SELECT COUNT(*) as invalid_json_count
+            FROM tag_mappings
+            WHERE config_json IS NULL OR json_valid(config_json) = 0
+        ''')
+        
+        invalid_json = cursor.fetchone()['invalid_json_count']
+        
         conn.close()
         
-        total = stats['total_count']
         errors = []
-        
-        if stats['missing_address'] > 0:
-            errors.append(f'{stats["missing_address"]} mappings missing address')
-        
-        if stats['missing_name'] > 0:
-            errors.append(f'{stats["missing_name"]} mappings missing tag name')
-        
-        if stats['missing_type'] > 0:
-            errors.append(f'{stats["missing_type"]} mappings missing data type')
+        if invalid_json > 0:
+            errors.append(f'{invalid_json} mappings have invalid JSON configuration')
         
         return web.json_response({
             'success': True,

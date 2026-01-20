@@ -30,6 +30,9 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         let selectedColor = 'blue';
         let selectedGroupId = null;
         let selectedDevicesForAssignment = new Set();
+        
+        // Fix: Add flag to prevent multiple saves
+        let isSaving = false;
 
         // WebSocket for device status updates
         let deviceWsConnection = null;
@@ -419,69 +422,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             }
         }
 
-        function renderDevicesTable() {
-            const tbody = document.getElementById('devicesTableBody');
-            if (!tbody) return;
-            
-            tbody.innerHTML = '';
-            
-            devices.forEach(function(device) {
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-slate-50 transition-colors';
-                row.id = 'device-' + device.id;
-                row.dataset.deviceId = device.id;
-                
-                let statusColor = 'bg-green-500';
-                if (device.status === 'Offline') {
-                    statusColor = 'bg-red-500';
-                } else if (device.status === 'Warning') {
-                    statusColor = 'bg-yellow-500';
-                }
-                
-                let typeColor = 'bg-blue-100 text-blue-800';
-                if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
-                if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
-                if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
-                if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
-                
-                row.innerHTML = '<td class="p-4">' +
-                    '<div class="font-medium text-slate-900">' + device.name + '</div>' +
-                    '<div class="text-xs text-slate-500 mt-1">' + device.address + '</div>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
-                    device.type + 
-                    '</span>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<div class="text-sm">' + (device.group || 'None') + '</div>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<div class="flex items-center">' +
-                    '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
-                    '<span class="text-sm text-slate-700">' + device.status + '</span>' +
-                    '</div>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<div class="text-sm">' + device.lastPoll + '</div>' +
-                    '</td>' +
-                    '<td class="p-4 text-right">' +
-                    '<div class="action-dropdown flex justify-end">' +
-                    '<button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
-                    'Edit ?' +
-                    '</button>' +
-                    '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
-                    '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')">Edit Device</a>' +
-                    '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')">View Details</a>' +
-                    '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')">Disable Device</a>' +
-                    '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600">Delete Device</a>' +
-                    '</div>' +
-                    '</div>' +
-                    '</td>';
-                
-                tbody.appendChild(row);
-            });
-        }
+        
 
         function renderGroups() {
             const container = document.getElementById('groupsContainer');
@@ -1247,6 +1188,251 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             }, 5000);
         }
 
+        // ==================================================
+        // FIXED: Save Device Handler (Prevents Multiple Saves)
+        // ==================================================
+        async function handleSaveDevice(event) {
+            if (isSaving) return;
+            
+            isSaving = true;
+            console.log('Save device button clicked - handling');
+            
+            // Get form elements with null checks
+            const deviceNameInput = document.getElementById('deviceNameInput');
+            const deviceGroupSelect = document.getElementById('deviceGroupSelect');
+            const deviceTypeElement = document.querySelector('input[name="device-type"]:checked');
+            const saveDeviceBtn = document.getElementById('saveDeviceBtn');
+            
+            // ADD NULL CHECKS
+            if (!deviceNameInput || !deviceGroupSelect) {
+                console.error('Required form elements not found');
+                showNotification('Form elements missing. Please refresh the page.', 'error');
+                isSaving = false;
+                return;
+            }
+            
+            if (!deviceTypeElement) {
+                console.error('No device type selected');
+                showNotification('Please select a device type.', 'error');
+                isSaving = false;
+                return;
+            }
+            
+            const deviceName = deviceNameInput.value.trim();
+            const deviceGroup = deviceGroupSelect.value;
+            const deviceType = deviceTypeElement.value;
+            
+            console.log('Device data:', { deviceName, deviceGroup, deviceType });
+            
+            if (!deviceName) {
+                alert('Please enter a device name.');
+                isSaving = false;
+                return;
+            }
+            
+            const typeMap = {
+                'modbus-rtu': 'Modbus RTU',
+                'modbus-tcp': 'Modbus TCP',
+                'canbus': 'CAN',
+                'wireless': 'Wireless',
+                'acs': 'ACS Sensor'
+            };
+            
+            let address = 'N/A';
+            let config = {};
+            
+            // Get protocol-specific fields with null checks
+            if (deviceType === 'modbus-rtu') {
+                const slaveAddress = document.getElementById('modbusAddress');
+                const baudRate = document.getElementById('baudRate');
+                const parity = document.getElementById('parity');
+                const stopBits = document.getElementById('stopBits');
+                const pollingInterval = document.getElementById('pollingInterval');
+                
+                if (!slaveAddress || !baudRate || !parity || !stopBits || !pollingInterval) {
+                    showNotification('Modbus RTU configuration fields not found', 'error');
+                    console.error('Missing RTU fields:', { slaveAddress, baudRate, parity, stopBits, pollingInterval });
+                    isSaving = false;
+                    return;
+                }
+                
+                address = 'Slave ' + slaveAddress.value;
+                config = {
+                    slave_address: parseInt(slaveAddress.value) || 1,
+                    baud_rate: parseInt(baudRate.value) || 9600,
+                    parity: parity.value || 'None',
+                    stop_bits: parseInt(stopBits.value) || 1,
+                    polling_interval: parseInt(pollingInterval.value) || 500
+                };
+                
+                console.log('RTU config created:', config);
+                
+            } else if (deviceType === 'modbus-tcp') {
+                // Get all TCP form elements - USING CORRECT IDs FROM HTML
+                const ip = document.getElementById('modbusTcpIp');
+                const port = document.getElementById('modbusTcpPort');
+                const slaveAddress = document.getElementById('modbusTcpSlaveAddress');
+                const polling = document.getElementById('modbusTcpPolling'); // CHANGED from modbusTcpPollingInterval
+                const timeout = document.getElementById('modbusTcpTimeout');
+                
+                console.log('TCP form elements:', { ip, port, slaveAddress, polling, timeout });
+                
+                // Check if all TCP fields exist
+                if (!ip || !port || !slaveAddress || !polling || !timeout) {
+                    showNotification('Modbus TCP configuration fields not found. Please ensure the TCP form is visible.', 'error');
+                    console.error('Missing TCP fields:', { 
+                        ip: ip ? 'found' : 'missing', 
+                        port: port ? 'found' : 'missing',
+                        slaveAddress: slaveAddress ? 'found' : 'missing',
+                        polling: polling ? 'found' : 'missing',
+                        timeout: timeout ? 'found' : 'missing'
+                    });
+                    isSaving = false;
+                    return;
+                }
+                
+                address = ip.value + ':' + port.value;
+                config = {
+                    ip_address: ip.value,
+                    port: parseInt(port.value) || 502,
+                    slave_address: parseInt(slaveAddress.value) || 1,
+                    polling_interval: parseInt(polling.value) || 1000, // CHANGED from pollingInterval
+                    timeout: parseInt(timeout.value) || 5000,
+                    retry_count: 3 // Default value since HTML doesn't have this field
+                };
+                
+                console.log('TCP config created:', config);
+                
+            } else if (deviceType === 'canbus') {
+                const canId = document.getElementById('canId');
+                const canProtocol = document.getElementById('canProtocol');
+                const bitrate = document.getElementById('bitrate');
+                
+                if (!canId || !canProtocol || !bitrate) {
+                    showNotification('CAN configuration fields not found', 'error');
+                    console.error('Missing CAN fields:', { canId, canProtocol, bitrate });
+                    isSaving = false;
+                    return;
+                }
+                
+                address = canId.value;
+                config = {
+                    can_id: address,
+                    protocol: canProtocol.value || 'CANOpen',
+                    bitrate: bitrate.value || '500K'
+                };
+                
+            } else if (deviceType === 'wireless') {
+                const rfAddress = document.getElementById('rfAddress');
+                
+                if (!rfAddress) {
+                    showNotification('Wireless configuration fields not found', 'error');
+                    console.error('Missing Wireless fields:', { rfAddress });
+                    isSaving = false;
+                    return;
+                }
+                
+                address = rfAddress.value;
+                config = {
+                    rf_address: address,
+                    signal_strength: -70
+                };
+                
+            } else if (deviceType === 'acs') {
+                const sensorId = document.getElementById('acsSensorId');
+                const samplingRate = document.getElementById('acsSamplingRate');
+                const sensitivity = document.getElementById('acsSensitivity');
+                const calibration = document.getElementById('acsCalibration');
+                
+                if (!sensorId || !samplingRate || !sensitivity || !calibration) {
+                    showNotification('ACS Sensor configuration fields not found', 'error');
+                    console.error('Missing ACS fields:', { sensorId, samplingRate, sensitivity, calibration });
+                    isSaving = false;
+                    return;
+                }
+                
+                address = sensorId.value;
+                config = {
+                    sensor_id: address,
+                    sampling_rate: samplingRate.value || '10 Hz',
+                    sensitivity: sensitivity.value || 'Medium',
+                    calibration: parseFloat(calibration.value) || 1.0
+                };
+            }
+            
+            const deviceData = {
+                name: deviceName,
+                type: typeMap[deviceType],
+                address: address,
+                group: deviceGroup === 'None' ? '' : deviceGroup,
+                config: config
+            };
+            
+            console.log('Device data to save:', deviceData);
+            
+            // Check if updating existing device
+            const deviceId = saveDeviceBtn.dataset.deviceId;
+            
+            // Disable button and show loading
+            const originalBtnHTML = saveDeviceBtn.innerHTML;
+            saveDeviceBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+            saveDeviceBtn.disabled = true;
+            
+            try {
+                let response;
+                if (deviceId) {
+                    // Update existing device
+                    response = await fetch('/api/device-management/devices/' + deviceId, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(deviceData)
+                    });
+                } else {
+                    // Add new device
+                    response = await fetch('/api/device-management/devices', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(deviceData)
+                    });
+                }
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error('HTTP ' + response.status + ': ' + errorText);
+                }
+                
+                const result = await response.json();
+                
+                // Reload devices
+                await loadDevices();
+                renderDevicesTable();
+                await loadGroups();
+                renderGroups();
+                
+                // Close the panel
+                const addDevicePanel = document.getElementById('addDevicePanel');
+                if (addDevicePanel) {
+                    addDevicePanel.classList.remove('active');
+                    document.body.classList.remove('modal-open');
+                }
+                
+                showNotification('Device "' + deviceName + '" ' + (deviceId ? 'updated' : 'added') + ' successfully.', 'success');
+                
+            } catch (error) {
+                console.error('Error saving device:', error);
+                showNotification('Failed to save device: ' + error.message, 'error');
+            } finally {
+                // Re-enable button
+                saveDeviceBtn.innerHTML = originalBtnHTML;
+                saveDeviceBtn.disabled = false;
+                isSaving = false;
+            }
+        }
+
         function setupEventListeners() {
             console.log('Setting up event listeners...');
             
@@ -1255,6 +1441,14 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             
             // Add escape key listener
             setupEscapeKeyListener();
+            
+            // FIXED: Use event delegation for save button
+            document.addEventListener('click', function(event) {
+                if (event.target.id === 'saveDeviceBtn' || event.target.closest('#saveDeviceBtn')) {
+                    event.preventDefault();
+                    handleSaveDevice(event);
+                }
+            });
             
             // Add device panel
             const addDeviceBtn = document.getElementById('addDeviceBtn');
@@ -1313,229 +1507,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 });
             });
 
-            // Save device - FIXED for Modbus TCP
-            const saveDeviceBtn = document.getElementById('saveDeviceBtn');
-            if (saveDeviceBtn) {
-                saveDeviceBtn.addEventListener('click', async function() {
-                    console.log('Save device button clicked');
-                    
-                    // Get form elements with null checks
-                    const deviceNameInput = document.getElementById('deviceNameInput');
-                    const deviceGroupSelect = document.getElementById('deviceGroupSelect');
-                    const deviceTypeElement = document.querySelector('input[name="device-type"]:checked');
-                    
-                    // ADD NULL CHECKS
-                    if (!deviceNameInput || !deviceGroupSelect) {
-                        console.error('Required form elements not found');
-                        showNotification('Form elements missing. Please refresh the page.', 'error');
-                        return;
-                    }
-                    
-                    if (!deviceTypeElement) {
-                        console.error('No device type selected');
-                        showNotification('Please select a device type.', 'error');
-                        return;
-                    }
-                    
-                    const deviceName = deviceNameInput.value.trim();
-                    const deviceGroup = deviceGroupSelect.value;
-                    const deviceType = deviceTypeElement.value;
-                    
-                    console.log('Device data:', { deviceName, deviceGroup, deviceType });
-                    
-                    if (!deviceName) {
-                        alert('Please enter a device name.');
-                        return;
-                    }
-                    
-                    const typeMap = {
-                        'modbus-rtu': 'Modbus RTU',
-                        'modbus-tcp': 'Modbus TCP',
-                        'canbus': 'CAN',
-                        'wireless': 'Wireless',
-                        'acs': 'ACS Sensor'
-                    };
-                    
-                    let address = 'N/A';
-                    let config = {};
-                    
-                    // Get protocol-specific fields with null checks
-                    if (deviceType === 'modbus-rtu') {
-                        const slaveAddress = document.getElementById('modbusAddress');
-                        const baudRate = document.getElementById('baudRate');
-                        const parity = document.getElementById('parity');
-                        const stopBits = document.getElementById('stopBits');
-                        const pollingInterval = document.getElementById('pollingInterval');
-                        
-                        if (!slaveAddress || !baudRate || !parity || !stopBits || !pollingInterval) {
-                            showNotification('Modbus RTU configuration fields not found', 'error');
-                            console.error('Missing RTU fields:', { slaveAddress, baudRate, parity, stopBits, pollingInterval });
-                            return;
-                        }
-                        
-                        address = 'Slave ' + slaveAddress.value;
-                        config = {
-                            slave_address: parseInt(slaveAddress.value) || 1,
-                            baud_rate: parseInt(baudRate.value) || 9600,
-                            parity: parity.value || 'None',
-                            stop_bits: parseInt(stopBits.value) || 1,
-                            polling_interval: parseInt(pollingInterval.value) || 500
-                        };
-                        
-                        console.log('RTU config created:', config);
-                        
-                    } else if (deviceType === 'modbus-tcp') {
-                        // Get all TCP form elements - USING CORRECT IDs FROM HTML
-                        const ip = document.getElementById('modbusTcpIp');
-                        const port = document.getElementById('modbusTcpPort');
-                        const slaveAddress = document.getElementById('modbusTcpSlaveAddress');
-                        const polling = document.getElementById('modbusTcpPolling'); // CHANGED from modbusTcpPollingInterval
-                        const timeout = document.getElementById('modbusTcpTimeout');
-                        
-                        console.log('TCP form elements:', { ip, port, slaveAddress, polling, timeout });
-                        
-                        // Check if all TCP fields exist
-                        if (!ip || !port || !slaveAddress || !polling || !timeout) {
-                            showNotification('Modbus TCP configuration fields not found. Please ensure the TCP form is visible.', 'error');
-                            console.error('Missing TCP fields:', { 
-                                ip: ip ? 'found' : 'missing', 
-                                port: port ? 'found' : 'missing',
-                                slaveAddress: slaveAddress ? 'found' : 'missing',
-                                polling: polling ? 'found' : 'missing',
-                                timeout: timeout ? 'found' : 'missing'
-                            });
-                            return;
-                        }
-                        
-                        address = ip.value + ':' + port.value;
-                        config = {
-                            ip_address: ip.value,
-                            port: parseInt(port.value) || 502,
-                            slave_address: parseInt(slaveAddress.value) || 1,
-                            polling_interval: parseInt(polling.value) || 1000, // CHANGED from pollingInterval
-                            timeout: parseInt(timeout.value) || 5000,
-                            retry_count: 3 // Default value since HTML doesn't have this field
-                        };
-                        
-                        console.log('TCP config created:', config);
-                        
-                    } else if (deviceType === 'canbus') {
-                        const canId = document.getElementById('canId');
-                        const canProtocol = document.getElementById('canProtocol');
-                        const bitrate = document.getElementById('bitrate');
-                        
-                        if (!canId || !canProtocol || !bitrate) {
-                            showNotification('CAN configuration fields not found', 'error');
-                            console.error('Missing CAN fields:', { canId, canProtocol, bitrate });
-                            return;
-                        }
-                        
-                        address = canId.value;
-                        config = {
-                            can_id: address,
-                            protocol: canProtocol.value || 'CANOpen',
-                            bitrate: bitrate.value || '500K'
-                        };
-                        
-                    } else if (deviceType === 'wireless') {
-                        const rfAddress = document.getElementById('rfAddress');
-                        
-                        if (!rfAddress) {
-                            showNotification('Wireless configuration fields not found', 'error');
-                            console.error('Missing Wireless fields:', { rfAddress });
-                            return;
-                        }
-                        
-                        address = rfAddress.value;
-                        config = {
-                            rf_address: address,
-                            signal_strength: -70
-                        };
-                        
-                    } else if (deviceType === 'acs') {
-                        const sensorId = document.getElementById('acsSensorId');
-                        const samplingRate = document.getElementById('acsSamplingRate');
-                        const sensitivity = document.getElementById('acsSensitivity');
-                        const calibration = document.getElementById('acsCalibration');
-                        
-                        if (!sensorId || !samplingRate || !sensitivity || !calibration) {
-                            showNotification('ACS Sensor configuration fields not found', 'error');
-                            console.error('Missing ACS fields:', { sensorId, samplingRate, sensitivity, calibration });
-                            return;
-                        }
-                        
-                        address = sensorId.value;
-                        config = {
-                            sensor_id: address,
-                            sampling_rate: samplingRate.value || '10 Hz',
-                            sensitivity: sensitivity.value || 'Medium',
-                            calibration: parseFloat(calibration.value) || 1.0
-                        };
-                    }
-                    
-                    const deviceData = {
-                        name: deviceName,
-                        type: typeMap[deviceType],
-                        address: address,
-                        group: deviceGroup === 'None' ? '' : deviceGroup,
-                        config: config
-                    };
-                    
-                    console.log('Device data to save:', deviceData);
-                    
-                    // Check if updating existing device
-                    const deviceId = this.dataset.deviceId;
-                    
-                    try {
-                        let response;
-                        if (deviceId) {
-                            // Update existing device
-                            response = await fetch('/api/device-management/devices/' + deviceId, {
-                                method: 'PUT',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(deviceData)
-                            });
-                        } else {
-                            // Add new device
-                            response = await fetch('/api/device-management/devices', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(deviceData)
-                            });
-                        }
-                        
-                        if (!response.ok) {
-                            const errorText = await response.text();
-                            throw new Error('HTTP ' + response.status + ': ' + errorText);
-                        }
-                        
-                        const result = await response.json();
-                        
-                        // Reload devices
-                        await loadDevices();
-                        renderDevicesTable();
-                        await loadGroups();
-                        renderGroups();
-                        
-                        // Close the panel
-                        const addDevicePanel = document.getElementById('addDevicePanel');
-                        if (addDevicePanel) {
-                            addDevicePanel.classList.remove('active');
-                            document.body.classList.remove('modal-open');
-                        }
-                        
-                        showNotification('Device "' + deviceName + '" ' + (deviceId ? 'updated' : 'added') + ' successfully.', 'success');
-                        
-                    } catch (error) {
-                        console.error('Error saving device:', error);
-                        showNotification('Failed to save device: ' + error.message, 'error');
-                    }
-                });
-            }
+            // REMOVED: The old saveDeviceBtn event listener is now handled by event delegation above
 
             // Add group modal
             const addGroupBtn = document.getElementById('addGroupBtn');
@@ -1990,69 +1962,135 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             renderFilteredTable(filteredDevices);
         }
 
-        function renderFilteredTable(filteredDevices) {
-            const tbody = document.getElementById('devicesTableBody');
-            if (!tbody) return;
-            
-            tbody.innerHTML = '';
-            
-            filteredDevices.forEach(function(device) {
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-slate-50 transition-colors';
-                row.id = 'device-' + device.id;
-                row.dataset.deviceId = device.id;
-                
-                let statusColor = 'bg-green-500';
-                if (device.status === 'Offline') {
-                    statusColor = 'bg-red-500';
-                } else if (device.status === 'Warning') {
-                    statusColor = 'bg-yellow-500';
-                }
-                
-                let typeColor = 'bg-blue-100 text-blue-800';
-                if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
-                if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
-                if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
-                if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
-                
-                row.innerHTML = '<td class="p-4">' +
-                    '<div class="font-medium text-slate-900">' + device.name + '</div>' +
-                    '<div class="text-xs text-slate-500 mt-1">' + device.address + '</div>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
-                    device.type +
-                    '</span>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<div class="text-sm">' + (device.group || 'None') + '</div>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<div class="flex items-center">' +
-                    '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
-                    '<span class="text-sm text-slate-700">' + device.status + '</span>' +
-                    '</div>' +
-                    '</td>' +
-                    '<td class="p-4">' +
-                    '<div class="text-sm">' + device.lastPoll + '</div>' +
-                    '</td>' +
-                    '<td class="p-4 text-right">' +
-                    '<div class="action-dropdown flex justify-end">' +
-                    '<button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
-                    'Edit ?' +
-                    '</button>' +
-                    '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
-                    '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')">Edit Device</a>' +
-                    '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')">View Details</a>' +
-                    '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')">Disable Device</a>' +
-                    '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600">Delete Device</a>' +
-                    '</div>' +
-                    '</div>' +
-                    '</td>';
-                
-                tbody.appendChild(row);
-            });
+        function renderDevicesTable() {
+    const tbody = document.getElementById('devicesTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    devices.forEach(function(device) {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-50 transition-colors';
+        row.id = 'device-' + device.id;
+        row.dataset.deviceId = device.id;
+        
+        let statusColor = 'bg-green-500';
+        if (device.status === 'Offline') {
+            statusColor = 'bg-red-500';
+        } else if (device.status === 'Warning') {
+            statusColor = 'bg-yellow-500';
+        } else if (device.status === 'Disabled') {
+            statusColor = 'bg-gray-500';
         }
+        
+        let typeColor = 'bg-blue-100 text-blue-800';
+        if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
+        if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
+        if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
+        if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
+        
+        row.innerHTML = '<td class="p-4">' +  // Column 1: Device Name ONLY
+            '<div class="font-medium text-slate-900">' + device.name + '</div>' +
+            // REMOVED: Address from subtitle here
+            '</td>' +
+            '<td class="p-4">' +  // Column 2: Type
+            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
+            device.type + 
+            '</span>' +
+            '</td>' +
+            '<td class="p-4">' +  // Column 3: Address/ID (FIXED: Show device.address here)
+            '<div class="text-sm font-mono">' + device.address + '</div>' +  // Changed to device.address
+            '</td>' +
+            '<td class="p-4">' +  // Column 4: Status
+            '<div class="flex items-center">' +
+            '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
+            '<span class="text-sm text-slate-700">' + device.status + '</span>' +
+            '</div>' +
+            '</td>' +
+            '<td class="p-4">' +  // Column 5: Last Poll
+            '<div class="text-sm">' + device.lastPoll + '</div>' +
+            '</td>' +
+            '<td class="p-4 text-right">' +  // Column 6: Actions
+            '<div class="action-dropdown flex justify-end">' +
+            '<button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
+            'Edit ?' +
+            '</button>' +
+            '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
+            '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')">Edit Device</a>' +
+            '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')">View Details</a>' +
+            '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')">Disable Device</a>' +
+            '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600">Delete Device</a>' +
+            '</div>' +
+            '</div>' +
+            '</td>';
+        
+        tbody.appendChild(row);
+    });
+}
+function renderFilteredTable(filteredDevices) {
+    const tbody = document.getElementById('devicesTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    filteredDevices.forEach(function(device) {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-50 transition-colors';
+        row.id = 'device-' + device.id;
+        row.dataset.deviceId = device.id;
+        
+        let statusColor = 'bg-green-500';
+        if (device.status === 'Offline') {
+            statusColor = 'bg-red-500';
+        } else if (device.status === 'Warning') {
+            statusColor = 'bg-yellow-500';
+        } else if (device.status === 'Disabled') {
+            statusColor = 'bg-gray-500';
+        }
+        
+        let typeColor = 'bg-blue-100 text-blue-800';
+        if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
+        if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
+        if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
+        if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
+        
+        row.innerHTML = '<td class="p-4">' +  // Column 1: Device Name ONLY
+            '<div class="font-medium text-slate-900">' + device.name + '</div>' +
+            '</td>' +
+            '<td class="p-4">' +  // Column 2: Type
+            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
+            device.type +
+            '</span>' +
+            '</td>' +
+            '<td class="p-4">' +  // Column 3: Address/ID (FIXED: Show device.address here)
+            '<div class="text-sm font-mono">' + device.address + '</div>' +  // Changed to device.address
+            '</td>' +
+            '<td class="p-4">' +  // Column 4: Status
+            '<div class="flex items-center">' +
+            '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
+            '<span class="text-sm text-slate-700">' + device.status + '</span>' +
+            '</div>' +
+            '</td>' +
+            '<td class="p-4">' +  // Column 5: Last Poll
+            '<div class="text-sm">' + device.lastPoll + '</div>' +
+            '</td>' +
+            '<td class="p-4 text-right">' +  // Column 6: Actions
+            '<div class="action-dropdown flex justify-end">' +
+            '<button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
+            'Edit ?' +
+            '</button>' +
+            '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
+            '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')">Edit Device</a>' +
+            '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')">View Details</a>' +
+            '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')">Disable Device</a>' +
+            '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600">Delete Device</a>' +
+            '</div>' +
+            '</div>' +
+            '</td>';
+        
+        tbody.appendChild(row);
+    });
+}
 
         function initGroupModal() {
             const colorSelection = document.querySelector('#addGroupModal .flex.space-x-2');
@@ -2086,6 +2124,9 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             devices = [];
             groups = [];
             
+            // Reset saving flag
+            isSaving = false;
+            
             console.log('Device management cleanup complete');
         }
 
@@ -2107,7 +2148,9 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             pingDevice: pingDevice,
             exportDevices: exportDevices,
             importCSVFile: importCSVFile,
-            cleanup: cleanupDeviceManagement
+            cleanup: cleanupDeviceManagement,
+            // Add the new save handler
+            handleSaveDevice: handleSaveDevice
         };
 
         // Cleanup on page unload

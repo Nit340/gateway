@@ -1,4 +1,4 @@
-// modbus-mapping.js - Protocol mapping functionality
+// modbus-mapping.js - Tag mapping functionality with backend API integration
 
 // This function will be called by the router when loading the page
 window.initializeModbusMapping = function() {
@@ -13,133 +13,157 @@ window.initializeModbusMapping = function() {
     let currentStep = 1;
     let currentProtocol = 'modbus';
 
-    // Sample data
-    const sampleDevices = [
-        {
-            id: 1,
-            name: 'LoadCell_1',
-            type: 'Load Cell',
-            protocol: 'modbus-rtu',
-            address: '01',
-            status: 'online',
-            pollRate: '200',
-            tags: 4,
-            description: 'Main hoist load cell'
-        },
-        {
-            id: 2,
-            name: 'Inclin_Arm',
-            type: 'Inclinometer',
-            protocol: 'modbus-tcp',
-            address: '192.168.1.21:502',
-            status: 'online',
-            pollRate: '500',
-            tags: 3,
-            description: 'Boom angle sensor'
-        },
-        {
-            id: 3,
-            name: 'HoistDrive',
-            type: 'Drive Controller',
-            protocol: 'can',
-            address: '0x32',
-            status: 'offline',
-            pollRate: '100',
-            tags: 6,
-            description: 'Main hoist drive'
-        },
-        {
-            id: 4,
-            name: 'WindSensor',
-            type: 'Wind Sensor',
-            protocol: 'modbus-rtu',
-            address: '02',
-            status: 'warning',
-            pollRate: '1000',
-            tags: 2,
-            description: 'Wind speed sensor'
-        }
-    ];
+    // API base URL
+    const API_BASE = '/api/tag-mapping';
 
-    const sampleMappings = [
-        {
-            id: 1,
-            deviceId: 1,
-            address: '30001',
-            tagName: 'Hoist_Load',
-            dataType: 'INT16',
-            scale: '0.01',
-            offset: '0',
-            unit: 'tons',
-            pollInterval: '200',
-            category: 'Load Monitoring',
-            description: 'Main hoist load measurement',
-            minValid: '0',
-            maxValid: '200',
-            endianness: 'big-endian'
-        },
-        {
-            id: 2,
-            deviceId: 2,
-            address: '40002',
-            tagName: 'Boom_Angle',
-            dataType: 'FLOAT32',
-            scale: '0.1',
-            offset: '0',
-            unit: 'degrees',
-            pollInterval: '500',
-            category: 'Position Tracking',
-            description: 'Boom angle measurement',
-            minValid: '-10',
-            maxValid: '85',
-            endianness: 'little-endian'
-        },
-        {
-            id: 3,
-            deviceId: 3,
-            address: '0x100',
-            tagName: 'Motor_RPM',
-            dataType: 'INT16',
-            scale: '1',
-            offset: '0',
-            unit: 'RPM',
-            pollInterval: '100',
-            category: 'Motor',
-            description: 'Motor rotation speed',
-            minValid: '-100',
-            maxValid: '3000',
-            endianness: 'big-endian'
-        },
-        {
-            id: 4,
-            deviceId: 1,
-            address: '30002',
-            tagName: 'Hoist_Height',
-            dataType: 'INT32',
-            scale: '0.01',
-            offset: '0',
-            unit: 'meters',
-            pollInterval: '200',
-            category: 'Position Tracking',
-            description: 'Hoist height measurement',
-            minValid: '0',
-            maxValid: '100',
-            endianness: 'big-endian'
+    // Notification system - Fixed to prevent recursion
+    function showTagNotification(message, type = 'info', duration = 3000) {
+        // Remove existing notification if any
+        const existingNotification = document.getElementById('tag-mapping-notification');
+        if (existingNotification) {
+            existingNotification.remove();
         }
-    ];
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.id = 'tag-mapping-notification';
+        notification.className = 'fixed top-4 right-4 z-50 max-w-sm';
+        
+        // Set colors based on type
+        let bgColor = 'bg-blue-500';
+        let textColor = 'text-white';
+        let borderColor = 'border-blue-500';
+        let icon = 'fa-info-circle';
+        
+        switch (type) {
+            case 'success':
+                bgColor = 'bg-green-500';
+                borderColor = 'border-green-500';
+                icon = 'fa-check-circle';
+                break;
+            case 'error':
+                bgColor = 'bg-red-500';
+                borderColor = 'border-red-500';
+                icon = 'fa-exclamation-circle';
+                break;
+            case 'warning':
+                bgColor = 'bg-yellow-500';
+                borderColor = 'border-yellow-500';
+                icon = 'fa-exclamation-triangle';
+                break;
+            case 'info':
+            default:
+                bgColor = 'bg-blue-500';
+                borderColor = 'border-blue-500';
+                icon = 'fa-info-circle';
+        }
+        
+        notification.innerHTML = `
+            <div class="rounded-lg shadow-lg ${bgColor} ${textColor} border ${borderColor} p-4 flex items-start justify-between animate-fade-in">
+                <div class="flex items-center">
+                    <i class="fa-solid ${icon} mr-3"></i>
+                    <div class="text-sm font-medium">${message}</div>
+                </div>
+                <button class="ml-4 text-white hover:text-gray-200 focus:outline-none" onclick="document.getElementById('tag-mapping-notification').remove()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        // Add to document
+        document.body.appendChild(notification);
+        
+        // Auto-remove after duration
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, duration);
+    }
+
+    // Helper function to generate unique tag name suggestions
+    function generateTagNameSuggestion(baseName, deviceId) {
+        if (!baseName || !deviceId) return baseName;
+        
+        // Get all existing tag names for this device (excluding current mapping if editing)
+        const existingTagNames = mappings
+            .filter(m => (m.device_id || m.deviceId) === deviceId)
+            .filter(m => m.id !== selectedMappingId) // Exclude current mapping when editing
+            .map(m => m.tag_name || m.tagName)
+            .map(name => name.toLowerCase());
+        
+        // Check if base name already exists (case-insensitive)
+        const baseLower = baseName.toLowerCase();
+        if (!existingTagNames.includes(baseLower)) {
+            return baseName;
+        }
+        
+        // Try adding number suffixes
+        for (let i = 1; i <= 100; i++) {
+            const suggestion = `${baseName}_${i}`;
+            if (!existingTagNames.includes(suggestion.toLowerCase())) {
+                return suggestion;
+            }
+        }
+        
+        // Try adding different suffixes
+        const suffixes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'Primary', 'Secondary', 'Backup', 'Main'];
+        for (const suffix of suffixes) {
+            const suggestion = `${baseName}_${suffix}`;
+            if (!existingTagNames.includes(suggestion.toLowerCase())) {
+                return suggestion;
+            }
+        }
+        
+        // Fallback: add timestamp
+        return `${baseName}_${Date.now().toString().slice(-4)}`;
+    }
 
     // Initialize application
-    function initApp() {
-        devices = [...sampleDevices];
-        mappings = [...sampleMappings];
-        
-        generateTags();
-        initDeviceFilters();
-        renderMappingsTable();
-        renderTagsList();
-        setupEventListeners();
-        
-        console.log('Modbus Mapping app initialized successfully');
+    async function initApp() {
+        try {
+            // Load data from embedded data or fetch from API
+            if (window.embeddedData) {
+                devices = window.embeddedData.devices || [];
+                mappings = window.embeddedData.mappings || [];
+            } else {
+                // Fallback: fetch from API
+                await loadDataFromAPI();
+            }
+            
+            generateTags();
+            initDeviceFilters();
+            renderMappingsTable();
+            renderTagsList();
+            setupEventListeners();
+            
+            console.log('Modbus Mapping app initialized successfully');
+        } catch (error) {
+            console.error('Error initializing app:', error);
+            showTagNotification('Error loading tag mappings. Please refresh the page.', 'error');
+        }
+    }
+
+    // Load data from API
+    async function loadDataFromAPI() {
+        try {
+            // Load devices
+            const devicesResponse = await fetch(`${API_BASE}/devices`);
+            if (devicesResponse.ok) {
+                const data = await devicesResponse.json();
+                devices = data.devices || [];
+            }
+            
+            // Load mappings
+            const mappingsResponse = await fetch(`${API_BASE}/filter`);
+            if (mappingsResponse.ok) {
+                const data = await mappingsResponse.json();
+                mappings = data.mappings || [];
+            }
+        } catch (error) {
+            console.error('Error loading data from API:', error);
+            throw error;
+        }
     }
 
     // Initialize device filter dropdowns
@@ -181,22 +205,22 @@ window.initializeModbusMapping = function() {
     // Generate tags from mappings
     function generateTags() {
         tags = mappings.map(mapping => {
-            const device = devices.find(d => d.id === mapping.deviceId);
+            const device = devices.find(d => d.id === mapping.device_id || d.id === mapping.deviceId);
             return {
                 id: mapping.id,
-                name: mapping.tagName,
-                description: mapping.description,
-                deviceId: mapping.deviceId,
+                name: mapping.tag_name || mapping.tagName,
+                description: mapping.description || '',
+                deviceId: mapping.device_id || mapping.deviceId,
                 deviceName: device?.name || 'Unknown',
                 deviceProtocol: device?.protocol || 'Unknown',
                 value: getRandomValue(mapping),
                 lastUpdated: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                unit: mapping.unit,
+                unit: mapping.unit || '',
                 address: mapping.address,
-                category: mapping.category,
-                usedBy: getUsedBy(mapping.category),
-                dataType: mapping.dataType,
-                pollInterval: mapping.pollInterval
+                category: mapping.category || 'Sensors',
+                usedBy: getUsedBy(mapping.category || 'Sensors'),
+                dataType: mapping.data_type || mapping.dataType,
+                pollInterval: mapping.poll_interval || mapping.pollInterval
             };
         });
     }
@@ -215,7 +239,7 @@ window.initializeModbusMapping = function() {
         const range = ranges[mapping.unit] || ranges.default;
         const random = range.min + Math.random() * (range.max - range.min);
         
-        if (mapping.dataType.includes('FLOAT')) {
+        if ((mapping.data_type || mapping.dataType || '').includes('FLOAT')) {
             return random.toFixed(2);
         } else {
             return Math.round(random);
@@ -251,12 +275,12 @@ window.initializeModbusMapping = function() {
             const deviceName = deviceFilter;
             const device = devices.find(d => d.name === deviceName);
             if (device) {
-                filteredMappings = mappings.filter(m => m.deviceId === device.id);
+                filteredMappings = mappings.filter(m => (m.device_id || m.deviceId) === device.id);
             }
         }
         
         filteredMappings.forEach(mapping => {
-            const device = devices.find(d => d.id === mapping.deviceId);
+            const device = devices.find(d => d.id === (mapping.device_id || mapping.deviceId));
             if (!device) return;
             
             const row = document.createElement('tr');
@@ -265,15 +289,17 @@ window.initializeModbusMapping = function() {
             
             // Data type badge
             let dataTypeClass = 'data-type-badge ';
-            if (mapping.dataType.includes('INT16')) dataTypeClass += 'int16';
-            else if (mapping.dataType.includes('INT32')) dataTypeClass += 'int32';
-            else if (mapping.dataType.includes('FLOAT')) dataTypeClass += 'float32';
-            else if (mapping.dataType.includes('UINT')) dataTypeClass += 'uint16';
+            const dataType = mapping.data_type || mapping.dataType || '';
+            if (dataType.includes('INT16')) dataTypeClass += 'int16';
+            else if (dataType.includes('INT32')) dataTypeClass += 'int32';
+            else if (dataType.includes('FLOAT')) dataTypeClass += 'float32';
+            else if (dataType.includes('UINT')) dataTypeClass += 'uint16';
             else dataTypeClass += 'bool';
             
             // Protocol badge
             let protocolClass = 'protocol-badge ';
-            switch(device.protocol) {
+            const protocol = device.protocol || 'unknown';
+            switch(protocol) {
                 case 'modbus-rtu':
                 case 'modbus-tcp':
                     protocolClass += 'modbus'; break;
@@ -291,16 +317,16 @@ window.initializeModbusMapping = function() {
                     <div class="text-xs text-slate-500">${device.type}</div>
                 </td>
                 <td>
-                    <span class="${protocolClass}">${device.protocol.replace('-', ' ').toUpperCase()}</span>
+                    <span class="${protocolClass}">${protocol.replace('-', ' ').toUpperCase()}</span>
                 </td>
                 <td class="font-mono">${mapping.address}</td>
                 <td>
-                    <div class="font-medium">${mapping.tagName}</div>
-                    <div class="text-xs text-slate-500 truncate max-w-[150px]">${mapping.description}</div>
+                    <div class="font-medium">${mapping.tag_name || mapping.tagName}</div>
+                    <div class="text-xs text-slate-500 truncate max-w-[150px]">${mapping.description || ''}</div>
                 </td>
-                <td><span class="${dataTypeClass}">${mapping.dataType}</span></td>
-                <td>${mapping.unit}</td>
-                <td class="font-mono">${mapping.pollInterval}</td>
+                <td><span class="${dataTypeClass}">${dataType}</span></td>
+                <td>${mapping.unit || ''}</td>
+                <td class="font-mono">${mapping.poll_interval || mapping.pollInterval || '200'}</td>
                 <td class="text-right">
                     <div class="flex justify-end space-x-1">
                         <button class="w-6 h-6 rounded border border-slate-300 flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary text-xs edit-mapping-btn" data-id="${mapping.id}">
@@ -424,7 +450,7 @@ window.initializeModbusMapping = function() {
                         <div class="text-xs text-slate-500 truncate">${tag.description}</div>
                     </div>
                     <div class="flex flex-col items-end gap-1">
-                        <span class="${protocolClass}">${device?.protocol.replace('-', ' ').toUpperCase() || ''}</span>
+                        <span class="${protocolClass}">${device?.protocol?.replace('-', ' ').toUpperCase() || ''}</span>
                         <span class="${dataTypeClass}">${tag.dataType}</span>
                     </div>
                 </div>
@@ -461,40 +487,92 @@ window.initializeModbusMapping = function() {
     }
 
     // Import CSV function
-    function importCSV() {
-        showNotification('Import CSV functionality would be implemented here', 'info');
+    async function importCSV() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.csv';
+        
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                showTagNotification('Importing CSV file...', 'info');
+                const response = await fetch(`${API_BASE}/import-csv`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showTagNotification(`CSV import completed! Imported: ${result.imported}, Failed: ${result.failed}`, 'success');
+                    
+                    // Reload data
+                    await loadDataFromAPI();
+                    generateTags();
+                    renderMappingsTable();
+                    renderTagsList();
+                } else {
+                    showTagNotification(`Import failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showTagNotification('Error importing CSV file', 'error');
+            }
+        };
+        
+        fileInput.click();
     }
 
     // Export CSV function
-    function exportCSV() {
-        // Create CSV content
-        let csvContent = "Device,Protocol,Address,Tag Name,Data Type,Unit,Scale,Offset,Poll Interval,Category,Description,Min Valid,Max Valid\n";
-        
-        mappings.forEach(mapping => {
-            const device = devices.find(d => d.id === mapping.deviceId);
-            const protocol = device ? device.protocol : 'Unknown';
-            const deviceName = device ? device.name : 'Unknown';
+    async function exportCSV() {
+        try {
+            // Get current filters
+            const deviceFilter = document.getElementById('deviceFilter').value;
+            const device = devices.find(d => d.name === deviceFilter);
             
-            csvContent += `"${deviceName}","${protocol}","${mapping.address}","${mapping.tagName}","${mapping.dataType}","${mapping.unit}","${mapping.scale}","${mapping.offset}","${mapping.pollInterval}","${mapping.category}","${mapping.description}","${mapping.minValid || ''}","${mapping.maxValid || ''}"\n`;
-        });
-        
-        // Create download link
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', 'tag_mappings_export.csv');
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        showNotification('CSV export completed! File: tag_mappings_export.csv', 'success');
+            // Build query parameters
+            let queryParams = new URLSearchParams();
+            if (deviceFilter !== 'All Devices' && device) {
+                queryParams.append('device_id', device.id);
+            }
+            
+            showTagNotification('Exporting CSV file...', 'info');
+            
+            // Make request
+            const response = await fetch(`${API_BASE}/export-csv?${queryParams.toString()}`);
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'tag_mappings_export.csv';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                showTagNotification('CSV export completed!', 'success');
+            } else {
+                throw new Error('Export failed');
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            showTagNotification('Error exporting CSV file', 'error');
+        }
     }
 
     // Add new mapping
     function addNewMapping() {
         console.log('Add new mapping clicked');
+        
+        // Reset selected mapping ID when adding new
+        selectedMappingId = null;
         
         if (!selectedDeviceId) {
             // If no device is selected, show device selection modal
@@ -504,7 +582,7 @@ window.initializeModbusMapping = function() {
         
         const device = devices.find(d => d.id === selectedDeviceId);
         if (!device) {
-            showNotification('Selected device not found. Please select a device first.', 'error');
+            showTagNotification('Selected device not found. Please select a device first.', 'error');
             return;
         }
         
@@ -549,7 +627,7 @@ window.initializeModbusMapping = function() {
             'ethernet-ip': 'EtherNet/IP'
         };
         
-        return `${protocolMap[protocol] || protocol.toUpperCase()} | Address: ${address}`;
+        return `${protocolMap[protocol] || protocol.toUpperCase()} | Address: ${address || 'N/A'}`;
     }
 
     // Set default address based on protocol
@@ -627,7 +705,7 @@ window.initializeModbusMapping = function() {
         setTimeout(() => {
             document.querySelectorAll('.device-select-item').forEach(item => {
                 item.addEventListener('click', function() {
-                    const deviceId = parseInt(this.getAttribute('data-id'));
+                    const deviceId = this.getAttribute('data-id');
                     selectDeviceForMapping(deviceId);
                 });
             });
@@ -661,14 +739,30 @@ window.initializeModbusMapping = function() {
     }
 
     // Edit mapping
-    function editMapping(id) {
-        selectedMappingId = id;
-        const mapping = mappings.find(m => m.id === id);
-        const device = mapping ? devices.find(d => d.id === mapping.deviceId) : null;
-        
-        if (mapping && device) {
-            // Set the selected device
-            selectedDeviceId = device.id;
+    async function editMapping(id) {
+        try {
+            selectedMappingId = id;
+            
+            const response = await fetch(`${API_BASE}/${id}`);
+            if (!response.ok) {
+                throw new Error('Failed to load mapping details');
+            }
+            
+            const mapping = await response.json();
+            
+            if (mapping.success === false) {
+                showTagNotification(mapping.error, 'error');
+                return;
+            }
+            
+            selectedDeviceId = mapping.deviceId;
+            
+            // Find device
+            const device = devices.find(d => d.id === mapping.deviceId);
+            if (!device) {
+                showTagNotification('Device not found', 'error');
+                return;
+            }
             
             // Reset modal state
             resetModal();
@@ -709,6 +803,28 @@ window.initializeModbusMapping = function() {
                 addressInput.value = mapping.address;
             }
             
+            // Load protocol-specific fields from mapping data
+            if (mapping.registerType) {
+                const addressTypeSelect = document.getElementById('mappingAddressType');
+                if (addressTypeSelect) {
+                    addressTypeSelect.value = mapping.registerType;
+                }
+            }
+            
+            if (mapping.registerCount) {
+                const registerCountInput = document.getElementById('mappingRegisterCount');
+                if (registerCountInput) {
+                    registerCountInput.value = mapping.registerCount;
+                }
+            }
+            
+            if (mapping.byteOrder) {
+                const byteOrderSelect = document.getElementById('mappingByteOrder');
+                if (byteOrderSelect) {
+                    byteOrderSelect.value = mapping.byteOrder;
+                }
+            }
+            
             // Show modal
             const modal = document.getElementById('editMappingModal');
             if (modal) {
@@ -717,6 +833,10 @@ window.initializeModbusMapping = function() {
             
             // Go to step 3 for editing
             goToStep(3);
+            
+        } catch (error) {
+            console.error('Error loading mapping:', error);
+            showTagNotification('Error loading mapping details', 'error');
         }
     }
 
@@ -930,7 +1050,7 @@ window.initializeModbusMapping = function() {
         const step1Content = document.getElementById('step1-content');
         if (step1Content) step1Content.classList.add('active');
         
-        // Reset form values
+        // Reset form values to defaults
         const tagName = document.getElementById('mappingTagName');
         const description = document.getElementById('mappingDescription');
         const dataType = document.getElementById('mappingDataType');
@@ -946,20 +1066,23 @@ window.initializeModbusMapping = function() {
         const pollPreset = document.getElementById('mappingPollPreset');
         const category = document.getElementById('mappingCategory');
         
-        if (tagName) tagName.value = '';
-        if (description) description.value = '';
-        if (dataType) dataType.value = 'INT16';
-        if (endianness) endianness.value = 'big-endian';
-        if (unit) unit.value = '';
-        if (scale) scale.value = '1';
-        if (offset) offset.value = '0';
-        if (minValue) minValue.value = '';
-        if (maxValue) maxValue.value = '';
-        if (warning) warning.value = '';
-        if (alarm) alarm.value = '';
-        if (pollInterval) pollInterval.value = '200';
-        if (pollPreset) pollPreset.value = '200';
-        if (category) category.value = 'Sensors';
+        // Only reset if we're adding a new mapping (not editing)
+        if (!selectedMappingId) {
+            if (tagName) tagName.value = '';
+            if (description) description.value = '';
+            if (dataType) dataType.value = 'INT16';
+            if (endianness) endianness.value = 'big-endian';
+            if (unit) unit.value = '';
+            if (scale) scale.value = '1';
+            if (offset) offset.value = '0';
+            if (minValue) minValue.value = '';
+            if (maxValue) maxValue.value = '';
+            if (warning) warning.value = '';
+            if (alarm) alarm.value = '';
+            if (pollInterval) pollInterval.value = '200';
+            if (pollPreset) pollPreset.value = '200';
+            if (category) category.value = 'Sensors';
+        }
         
         // Reset advanced sections
         const validationSection = document.getElementById('validation-section');
@@ -1020,25 +1143,35 @@ window.initializeModbusMapping = function() {
     }
 
     // Delete mapping
-    function deleteMapping(id) {
-        const mapping = mappings.find(m => m.id === id);
-        if (!mapping) return;
+    async function deleteMapping(id) {
+        if (!confirm('Are you sure you want to delete this mapping?')) {
+            return;
+        }
         
-        if (confirm(`Delete mapping "${mapping.tagName}"?`)) {
-            // Remove mapping
-            mappings = mappings.filter(m => m.id !== id);
+        try {
+            const response = await fetch(`${API_BASE}/${id}`, {
+                method: 'DELETE'
+            });
             
-            // Update device tag count
-            const device = devices.find(d => d.id === mapping.deviceId);
-            if (device) {
-                device.tags = mappings.filter(m => m.deviceId === device.id).length;
+            const result = await response.json();
+            
+            if (result.success) {
+                showTagNotification('Mapping deleted successfully!', 'success');
+                
+                // Remove from local state
+                mappings = mappings.filter(m => m.id !== id);
+                generateTags();
+                renderMappingsTable();
+                renderTagsList();
+                
+                // Reset selected mapping ID
+                selectedMappingId = null;
+            } else {
+                showTagNotification(`Delete failed: ${result.error}`, 'error');
             }
-            
-            generateTags();
-            renderMappingsTable();
-            renderTagsList();
-            
-            showNotification('Mapping deleted successfully!', 'success');
+        } catch (error) {
+            console.error('Delete error:', error);
+            showTagNotification('Error deleting mapping', 'error');
         }
     }
 
@@ -1051,7 +1184,7 @@ window.initializeModbusMapping = function() {
         if (deviceFilter) {
             deviceFilter.addEventListener('change', renderMappingsTable);
         }
-
+        
         // Tag filters
         const tagSearch = document.getElementById('tagSearch');
         const tagCategoryFilter = document.getElementById('tagCategoryFilter');
@@ -1060,27 +1193,35 @@ window.initializeModbusMapping = function() {
         if (tagSearch) tagSearch.addEventListener('input', renderTagsList);
         if (tagCategoryFilter) tagCategoryFilter.addEventListener('change', renderTagsList);
         if (tagDeviceFilter) tagDeviceFilter.addEventListener('change', renderTagsList);
-
+        
         // Add Mapping buttons
         const addMappingBtn = document.getElementById('addMappingBtn');
         const addFirstMappingBtn = document.getElementById('addFirstMappingBtn');
         
         if (addMappingBtn) {
-            addMappingBtn.addEventListener('click', addNewMapping);
+            addMappingBtn.addEventListener('click', function() {
+                // Reset selected mapping ID when adding new
+                selectedMappingId = null;
+                addNewMapping();
+            });
             console.log('Add Mapping button listener attached');
         }
         
         if (addFirstMappingBtn) {
-            addFirstMappingBtn.addEventListener('click', addNewMapping);
+            addFirstMappingBtn.addEventListener('click', function() {
+                // Reset selected mapping ID when adding new
+                selectedMappingId = null;
+                addNewMapping();
+            });
         }
-
+        
         // Import/Export CSV buttons
         const importCSVBtn = document.getElementById('importCSVBtn');
         const exportCSVBtn = document.getElementById('exportCSVBtn');
         
         if (importCSVBtn) importCSVBtn.addEventListener('click', importCSV);
         if (exportCSVBtn) exportCSVBtn.addEventListener('click', exportCSV);
-
+        
         // Modal tabs
         const protocolTabsContainer = document.getElementById('protocolTabsContainer');
         if (protocolTabsContainer) {
@@ -1097,7 +1238,7 @@ window.initializeModbusMapping = function() {
                 }
             });
         }
-
+        
         // Step navigation
         const nextStep1Btn = document.getElementById('nextStep1Btn');
         const prevStep2Btn = document.getElementById('prevStep2Btn');
@@ -1108,7 +1249,7 @@ window.initializeModbusMapping = function() {
         if (prevStep2Btn) prevStep2Btn.addEventListener('click', () => goToStep(1));
         if (nextStep2Btn) nextStep2Btn.addEventListener('click', () => goToStep(3));
         if (prevStep3Btn) prevStep3Btn.addEventListener('click', () => goToStep(2));
-
+        
         // Poll preset selector
         const mappingPollPreset = document.getElementById('mappingPollPreset');
         if (mappingPollPreset) {
@@ -1123,7 +1264,7 @@ window.initializeModbusMapping = function() {
                 }
             });
         }
-
+        
         // Data type change
         const mappingDataType = document.getElementById('mappingDataType');
         if (mappingDataType) {
@@ -1172,7 +1313,7 @@ window.initializeModbusMapping = function() {
                 }
             });
         }
-
+        
         // Edit mapping modal controls
         const closeEditMappingModal = document.getElementById('closeEditMappingModal');
         const cancelEditMapping = document.getElementById('cancelEditMapping');
@@ -1180,188 +1321,259 @@ window.initializeModbusMapping = function() {
         if (closeEditMappingModal) {
             closeEditMappingModal.addEventListener('click', function() {
                 document.getElementById('editMappingModal').classList.remove('active');
+                selectedMappingId = null;
+                selectedDeviceId = null;
             });
         }
         
         if (cancelEditMapping) {
             cancelEditMapping.addEventListener('click', function() {
                 document.getElementById('editMappingModal').classList.remove('active');
+                selectedMappingId = null;
+                selectedDeviceId = null;
             });
         }
-
+        
         // Save mapping
         const saveMappingBtn = document.getElementById('saveMappingBtn');
         if (saveMappingBtn) {
-            saveMappingBtn.addEventListener('click', function() {
+            saveMappingBtn.addEventListener('click', async function() {
                 const tagName = document.getElementById('mappingTagName').value.trim();
                 const addressValue = document.getElementById('mappingAddressValue').value.trim();
                 
                 if (!tagName) {
-                    showNotification('Tag name is required', 'error');
+                    showTagNotification('Tag name is required', 'error');
                     return;
                 }
                 
                 if (!addressValue) {
-                    showNotification('Address value is required', 'error');
+                    showTagNotification('Address value is required', 'error');
                     return;
                 }
                 
-                // Construct address based on protocol
-                let address = addressValue;
+                // Collect form data
+                const formData = {
+                    deviceId: selectedDeviceId,
+                    tagName: tagName,
+                    address: addressValue,
+                    description: document.getElementById('mappingDescription').value,
+                    dataType: document.getElementById('mappingDataType').value,
+                    endianness: document.getElementById('mappingEndianness').value,
+                    unit: document.getElementById('mappingUnit').value,
+                    scale: document.getElementById('mappingScale').value,
+                    offset: document.getElementById('mappingOffset').value,
+                    minValid: document.getElementById('mappingMinValue').value || '',
+                    maxValid: document.getElementById('mappingMaxValue').value || '',
+                    pollInterval: document.getElementById('mappingPollInterval').value,
+                    category: document.getElementById('mappingCategory').value,
+                    protocol: currentProtocol
+                };
+                
+                // Add protocol-specific fields
                 const addressType = document.getElementById('mappingAddressType')?.value;
+                if (addressType) {
+                    formData.registerType = addressType;
+                }
                 
-                if (currentProtocol === 'modbus' && addressType) {
-                    const prefixes = {
-                        'holding': '4',
-                        'input': '3',
-                        'coil': '0',
-                        'discrete': '1'
-                    };
-                    if (prefixes[addressType]) {
-                        address = prefixes[addressType] + addressValue;
+                // Add register count for modbus
+                if (currentProtocol === 'modbus') {
+                    const registerCount = document.getElementById('mappingRegisterCount')?.value;
+                    if (registerCount) {
+                        formData.registerCount = registerCount;
+                    }
+                    
+                    const byteOrder = document.getElementById('mappingByteOrder')?.value;
+                    if (byteOrder) {
+                        formData.byteOrder = byteOrder;
                     }
                 }
                 
-                if (selectedMappingId) {
-                    // Update existing mapping
-                    const mapping = mappings.find(m => m.id === selectedMappingId);
-                    if (mapping) {
-                        Object.assign(mapping, {
-                            tagName: tagName,
-                            address: address,
-                            description: document.getElementById('mappingDescription').value,
-                            dataType: document.getElementById('mappingDataType').value,
-                            endianness: document.getElementById('mappingEndianness').value,
-                            unit: document.getElementById('mappingUnit').value,
-                            scale: document.getElementById('mappingScale').value,
-                            offset: document.getElementById('mappingOffset').value,
-                            minValid: document.getElementById('mappingMinValue').value || undefined,
-                            maxValid: document.getElementById('mappingMaxValue').value || undefined,
-                            pollInterval: document.getElementById('mappingPollInterval').value,
-                            category: document.getElementById('mappingCategory').value,
-                            protocol: currentProtocol
-                        });
+                try {
+                    let response;
+                    let method;
+                    let url;
+                    
+                    if (selectedMappingId) {
+                        // UPDATE existing mapping
+                        console.log('Updating mapping ID:', selectedMappingId);
+                        method = 'PUT';
+                        url = `${API_BASE}/${selectedMappingId}`;
+                    } else {
+                        // CREATE new mapping
+                        console.log('Creating new mapping');
+                        method = 'POST';
+                        url = `${API_BASE}`;
+                    }
+                    
+                    showTagNotification('Saving mapping...', 'info');
+                    
+                    response = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showTagNotification(selectedMappingId ? 'Mapping updated successfully!' : 'Mapping added successfully!', 'success');
                         
-                        showNotification('Mapping updated successfully!', 'success');
+                        // Reload data
+                        await loadDataFromAPI();
+                        generateTags();
+                        renderMappingsTable();
+                        renderTagsList();
+                        
+                        // Close modal and reset state
+                        document.getElementById('editMappingModal').classList.remove('active');
+                        selectedMappingId = null;
+                        selectedDeviceId = null;
+                    } else {
+                        // Handle specific error codes
+                        if (result.code === 'TAG_001') {
+                            // Tag name already exists - suggest alternatives
+                            const suggestion = generateTagNameSuggestion(tagName, selectedDeviceId);
+                            showTagNotification(`${result.error} Suggested: ${suggestion}`, 'error', 5000);
+                            
+                            // Auto-fill suggested name
+                            document.getElementById('mappingTagName').value = suggestion;
+                        } else {
+                            showTagNotification(`Error: ${result.error}`, 'error');
+                        }
                     }
-                } else {
-                    // Add new mapping
-                    const newMapping = {
-                        id: mappings.length > 0 ? Math.max(...mappings.map(m => m.id)) + 1 : 1,
-                        deviceId: selectedDeviceId,
-                        address: address,
-                        tagName: tagName,
-                        dataType: document.getElementById('mappingDataType').value,
-                        endianness: document.getElementById('mappingEndianness').value,
-                        scale: document.getElementById('mappingScale').value,
-                        offset: document.getElementById('mappingOffset').value,
-                        unit: document.getElementById('mappingUnit').value,
-                        pollInterval: document.getElementById('mappingPollInterval').value,
-                        category: document.getElementById('mappingCategory').value,
-                        description: document.getElementById('mappingDescription').value,
-                        minValid: document.getElementById('mappingMinValue').value || undefined,
-                        maxValid: document.getElementById('mappingMaxValue').value || undefined,
-                        protocol: currentProtocol
-                    };
-                    
-                    mappings.push(newMapping);
-                    
-                    // Update device tag count
-                    const device = devices.find(d => d.id === selectedDeviceId);
-                    if (device) {
-                        device.tags = mappings.filter(m => m.deviceId === selectedDeviceId).length;
-                    }
-                    
-                    showNotification('Mapping added successfully!', 'success');
+                } catch (error) {
+                    console.error('Save error:', error);
+                    showTagNotification('Error saving mapping', 'error');
                 }
-                
-                // Refresh UI
-                generateTags();
-                renderMappingsTable();
-                renderTagsList();
-                
-                // Close modal
-                document.getElementById('editMappingModal').classList.remove('active');
             });
         }
-
+        
         // Test buttons
         const testDeviceBtn = document.getElementById('testDeviceBtn');
         const validateAllBtn = document.getElementById('validateAllBtn');
         
         if (testDeviceBtn) {
-            testDeviceBtn.addEventListener('click', function() {
+            testDeviceBtn.addEventListener('click', async function() {
                 if (!selectedDeviceId) {
-                    showNotification('Please select a device first', 'error');
+                    showTagNotification('Please select a device first', 'error');
                     return;
                 }
-                const device = devices.find(d => d.id === selectedDeviceId);
+                
                 const btn = this;
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-xs"></i> Testing...';
                 btn.disabled = true;
                 
-                setTimeout(() => {
+                try {
+                    const response = await fetch(`${API_BASE}/devices/${selectedDeviceId}/test`, {
+                        method: 'POST'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showTagNotification(`Device "${result.device_name}" test successful! Ping: ${result.ping_time_ms}ms, Status: ${result.status}`, 'success');
+                    } else {
+                        showTagNotification(`Test failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Test error:', error);
+                    showTagNotification('Error testing device', 'error');
+                } finally {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    showNotification(`Device "${device.name}" test successful! Response time: ${Math.floor(Math.random() * 100)}ms`, 'success');
-                }, 1500);
+                }
             });
         }
         
         if (validateAllBtn) {
-            validateAllBtn.addEventListener('click', function() {
+            validateAllBtn.addEventListener('click', async function() {
                 const btn = this;
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1 text-xs"></i> Validating...';
                 btn.disabled = true;
                 
-                setTimeout(() => {
+                try {
+                    const response = await fetch(`${API_BASE}/validate-all`, {
+                        method: 'POST'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        if (result.errors && result.errors.length > 0) {
+                            showTagNotification(`Validation completed with ${result.errors.length} error(s): ${result.errors.join(', ')}`, 'warning');
+                        } else {
+                            showTagNotification(`Validation complete! ${result.validated_count} mappings validated successfully.`, 'success');
+                        }
+                    } else {
+                        showTagNotification(`Validation failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Validation error:', error);
+                    showTagNotification('Error validating mappings', 'error');
+                } finally {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    showNotification(`Validation complete! ${mappings.length} mappings validated successfully.`, 'success');
-                }, 2000);
+                }
             });
         }
-
+        
         // Save button
         const saveBtn = document.getElementById('save-btn');
         if (saveBtn) {
-            saveBtn.addEventListener('click', function() {
+            saveBtn.addEventListener('click', async function() {
+                const btn = this;
                 const original = this.innerHTML;
                 this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving...';
                 this.disabled = true;
                 
-                setTimeout(() => {
-                    this.innerHTML = original;
-                    this.disabled = false;
-                    showNotification('Configuration saved successfully!', 'success');
-                }, 1000);
+                try {
+                    const response = await fetch(`${API_BASE}/save-config`, {
+                        method: 'PUT'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showTagNotification('Configuration saved successfully!', 'success');
+                    } else {
+                        showTagNotification(`Save failed: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Save error:', error);
+                    showTagNotification('Error saving configuration', 'error');
+                } finally {
+                    btn.innerHTML = original;
+                    btn.disabled = false;
+                }
             });
         }
-
+        
         // Cancel button
         const cancelBtn = document.getElementById('cancel-btn');
         if (cancelBtn) {
             cancelBtn.addEventListener('click', function() {
                 if (confirm('Discard all unsaved changes?')) {
-                    showNotification('Changes discarded', 'info');
+                    showTagNotification('Changes discarded', 'info');
                     initApp(); // Reset to original data
                 }
             });
         }
-
+        
         // Reset default button
         const resetDefaultBtn = document.getElementById('resetDefaultBtn');
         if (resetDefaultBtn) {
             resetDefaultBtn.addEventListener('click', function() {
                 if (confirm('Reset all mappings to default?')) {
                     initApp();
-                    showNotification('Reset to default successful!', 'success');
+                    showTagNotification('Reset to default successful!', 'success');
                 }
             });
         }
-
+        
         // Reboot gateway button
         const rebootGatewayBtn = document.getElementById('rebootGatewayBtn');
         if (rebootGatewayBtn) {
@@ -1375,12 +1587,12 @@ window.initializeModbusMapping = function() {
                     setTimeout(() => {
                         btn.innerHTML = originalText;
                         btn.disabled = false;
-                        showNotification('Gateway reboot initiated!', 'success');
+                        showTagNotification('Gateway reboot initiated!', 'success');
                     }, 2000);
                 }
             });
         }
-
+        
         // Validation toggle
         const validationToggle = document.getElementById('validationToggle');
         if (validationToggle) {
