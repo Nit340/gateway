@@ -209,7 +209,15 @@ async def update_device(request):
     """PUT update device"""
     try:
         device_id = request.match_info['device_id']
-        data = await request.json()
+        
+        # Read and parse JSON with better error handling
+        try:
+            data = await request.json()
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error for device {device_id}: {e}")
+            return web.json_response({'error': 'Invalid JSON format'}, status=400)
+        
+        print(f"Updating device {device_id} with data: {data}")
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -251,7 +259,7 @@ async def update_device(request):
         
         if 'config' in data:
             config = data['config']
-            # FIX: Ensure Modbus TCP has all required fields
+            # Ensure Modbus TCP has all required fields
             if data.get('type', '') == 'Modbus TCP' or data.get('protocol', '') == 'modbus-tcp':
                 config.setdefault('ip_address', '192.168.1.100')
                 config.setdefault('port', 502)
@@ -261,13 +269,23 @@ async def update_device(request):
                 config.setdefault('retry_count', 3)
                 print("Updating Modbus TCP device with config:", config)
             
+            # Validate config is valid JSON
+            try:
+                config_json = json.dumps(config)
+            except Exception as e:
+                print(f"Error serializing config for device {device_id}: {e}")
+                return web.json_response({'error': 'Invalid configuration format'}, status=400)
+            
             updates.append('config_json = ?')
-            params.append(json.dumps(config))
+            params.append(config_json)
         
         if updates:
             updates.append('updated_at = CURRENT_TIMESTAMP')
             query = 'UPDATE device_management SET {} WHERE id = ?'.format(', '.join(updates))
             params.append(device_id)
+            
+            print(f"Executing query: {query}")
+            print(f"With params: {params}")
             
             cursor.execute(query, params)
             conn.commit()
@@ -285,7 +303,9 @@ async def update_device(request):
         })
         
     except Exception as e:
-        print("Error updating device: {}".format(e))
+        print("Error updating device:", str(e))
+        import traceback
+        traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
 
 async def delete_device(request):
@@ -357,7 +377,7 @@ async def disable_device(request):
         return web.json_response({'error': str(e)}, status=500)
 
 async def duplicate_device(request):
-    """POST duplicate device"""
+    """POST duplicate device with all its tag mappings"""
     try:
         device_id = request.match_info['device_id']
         
@@ -372,21 +392,94 @@ async def duplicate_device(request):
         
         row = cursor.fetchone()
         if not row:
+            conn.close()
             return web.json_response({'error': 'Device not found'}, status=404)
         
         name, type_, protocol, address, group_id, config_json = row
         
-        # Get the next device number
-        cursor.execute('SELECT COUNT(*) FROM device_management')
-        device_count = cursor.fetchone()[0]
-        new_device_id = str(device_count + 1)  # Simple sequential number
+        # Find the next available device ID
+        # Get all existing IDs and find the maximum
+        cursor.execute('SELECT id FROM device_management')
+        existing_ids = [int(row[0]) for row in cursor.fetchall() if row[0].isdigit()]
         
-        new_name = "{} (Copy)".format(name)
+        if existing_ids:
+            new_device_id = str(max(existing_ids) + 1)
+        else:
+            new_device_id = "1"
         
+        # Generate new device name with suffix like -001, -002, etc.
+        base_name = name
+        suffix_number = 1
+        
+        # Check if the name already ends with a pattern like " -001"
+        import re
+        match = re.search(r'^(.*?)\s*-(\d+)$', name)
+        if match:
+            base_name = match.group(1).strip()
+            try:
+                suffix_number = int(match.group(2)) + 1
+            except ValueError:
+                suffix_number = 1
+        
+        # Find next available suffix
+        max_attempts = 100
+        while max_attempts > 0:
+            new_name = f"{base_name} -{suffix_number:03d}"
+            cursor.execute('SELECT id FROM device_management WHERE name = ?', (new_name,))
+            if not cursor.fetchone():
+                break
+            suffix_number += 1
+            max_attempts -= 1
+        
+        if max_attempts == 0:
+            conn.close()
+            return web.json_response({'error': 'Could not generate unique device name'}, status=400)
+        
+        # Insert the duplicated device
         cursor.execute('''
             INSERT INTO device_management (id, name, type, protocol, address, group_id, config_json)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (new_device_id, new_name, type_, protocol, address, group_id, config_json))
+        
+        # Duplicate all tag mappings from the original device
+        cursor.execute('''
+            SELECT tag_name, config_json
+            FROM tag_mappings
+            WHERE device_id = ?
+        ''', (device_id,))
+        
+        tags = cursor.fetchall()
+        tags_duplicated = 0
+        for tag_row in tags:
+            tag_name, tag_config_json = tag_row
+            
+            # Check if tag name already exists for the new device
+            # If it does, add a suffix
+            cursor.execute('''
+                SELECT id FROM tag_mappings 
+                WHERE device_id = ? AND tag_name = ?
+            ''', (new_device_id, tag_name))
+            
+            if cursor.fetchone():
+                # Tag name already exists, add suffix
+                tag_suffix = 1
+                while True:
+                    new_tag_name = f"{tag_name}_{tag_suffix:03d}"
+                    cursor.execute('''
+                        SELECT id FROM tag_mappings 
+                        WHERE device_id = ? AND tag_name = ?
+                    ''', (new_device_id, new_tag_name))
+                    if not cursor.fetchone():
+                        break
+                    tag_suffix += 1
+            else:
+                new_tag_name = tag_name
+            
+            cursor.execute('''
+                INSERT INTO tag_mappings (device_id, tag_name, config_json)
+                VALUES (?, ?, ?)
+            ''', (new_device_id, new_tag_name, tag_config_json))
+            tags_duplicated += 1
         
         conn.commit()
         conn.close()
@@ -402,11 +495,17 @@ async def duplicate_device(request):
                 'name': new_name,
                 'type': type_,
                 'protocol': protocol
-            }
+            },
+            'tags_duplicated': tags_duplicated
         })
         
+    except sqlite3.IntegrityError as e:
+        print("Database integrity error duplicating device:", str(e))
+        return web.json_response({'error': f'Database error: {str(e)}'}, status=500)
     except Exception as e:
-        print("Error duplicating device: {}".format(e))
+        print("Error duplicating device:", str(e))
+        import traceback
+        traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
 
 async def get_device_packets(request):

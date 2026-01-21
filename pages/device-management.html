@@ -573,108 +573,53 @@
                     </div>
                 </section>
 
-                <!-- SECTION C: Device Details -->
-                <section id="section-details" class="bg-white rounded-xl shadow-sm border border-border p-6" style="display: none;">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                            <i class="fa-solid fa-info-circle mr-2 text-primary"></i> 
-                            <span class="mr-2" id="selectedDeviceTitle">Device Details</span>
-                            <span class="text-xs font-normal text-slate-500">SECTION C</span>
-                        </h2>
-                        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full" id="selectedDeviceName">
-                            No device selected
-                        </div>
+<div id="section-details" class="hidden">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-slate-900">Device Details</h2>
+                <p id="selectedDeviceName" class="text-slate-600">Selected: <span class="font-medium">-</span></p>
+            </div>
+            <button onclick="document.getElementById('section-details').style.display = 'none'" 
+                    class="text-slate-500 hover:text-slate-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-3">Status Information</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm text-slate-600">Current Status:</span>
+                        <span id="deviceStatus" class="text-sm font-medium">-</span>
                     </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <!-- Device Health -->
-                        <div>
-                            <h3 class="text-sm font-semibold text-slate-900 mb-4">Device Health</h3>
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-slate-600">Status:</span>
-                                    <span class="font-medium" id="deviceStatus">-</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-slate-600">Last Response:</span>
-                                    <span class="font-mono" id="lastResponse">-</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-slate-600">Retries:</span>
-                                    <span id="retries">-</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-slate-600">Signal Strength:</span>
-                                    <span id="signalStrength">-</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-slate-600">Firmware Version:</span>
-                                    <span id="firmwareVersion">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Communication Test -->
-                        <div>
-                            <h3 class="text-sm font-semibold text-slate-900 mb-4">Communication Test</h3>
-                            <div class="space-y-4">
-                                <div class="flex space-x-3">
-                                    <button class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="pingDeviceBtn">
-                                        Ping Device
-                                    </button>
-                                    <button class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="viewPacketsBtn">
-                                        View Last 10 Packets
-                                    </button>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">Packet Preview:</label>
-                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3" id="packetPreview">
-                                        <div class="font-mono text-xs space-y-1">
-                                            <div>10:02:01 → 01 03 00 10 00 02 C4 0B</div>
-                                            <div>10:02:01 ← 01 03 04 00 12 01 1A 69 85</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Calibration -->
-                        <div class="md:col-span-2">
-                            <h3 class="text-sm font-semibold text-slate-900 mb-4">Calibration</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Scale Factor</label>
-                                    <input type="number" value="1.000" step="0.001" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="scaleFactor">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Zero Offset</label>
-                                    <input type="number" value="0.00" step="0.01" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="zeroOffset">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">Test Reading</label>
-                                    <div class="text-lg font-semibold text-slate-900" id="testReading">2.34 tons</div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-slate-600">Last Response:</span>
+                        <span id="lastResponse" class="text-sm font-medium">-</span>
                     </div>
-                    
-                    <!-- Actions -->
-                    <div class="mt-8 pt-6 border-t border-slate-200">
-                        <h3 class="text-sm font-semibold text-slate-900 mb-4">Actions</h3>
-                        <div class="flex space-x-3">
-                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm" id="disableDeviceBtn">
-                                Disable Device
-                            </button>
-                            <button class="px-4 py-2 border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-sm" id="deleteDeviceBtn">
-                                Delete Device
-                            </button>
-                            <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm" id="duplicateDeviceBtn">
-                                Duplicate
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
+                </div>
+            </div>
+            
+            <div>
+                <h3 class="text-sm font-medium text-slate-700 mb-3">Configuration</h3>
+                <div id="deviceConfigDisplay" class="bg-slate-50 rounded p-4 max-h-64 overflow-y-auto">
+                    <!-- Configuration will be loaded here -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- ACTION BUTTONS: ONLY PING and VIEW PACKETS -->
+        <div class="flex space-x-2 border-t pt-4">
+            <button id="pingDeviceBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center">
+                <i class="fas fa-satellite-dish mr-2"></i> Ping Device
+            </button>
+            <button id="viewPacketsBtn" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center">
+                <i class="fas fa-network-wired mr-2"></i> View Packets
+            </button>
+        </div>
+    </div>
+</div>
                 <!-- SECTION D: Device Group Management -->
                 <section id="section-groups" class="bg-white rounded-xl shadow-sm border border-border p-6">
                     <div class="flex items-center justify-between mb-6">

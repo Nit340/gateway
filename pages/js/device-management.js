@@ -21,6 +21,9 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             
             // Initialize the app
             initApp();
+            
+            // Add debug button
+            addDebugButton();
         }
 
         // Global state - scoped to this IIFE
@@ -208,6 +211,53 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 body.modal-open {
                     overflow: hidden;
                 }
+
+                /* Action button styles */
+                .action-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    border: none;
+                    background: none;
+                }
+                
+                .action-btn:hover {
+                    background-color: #f8fafc;
+                }
+                
+                .action-btn i {
+                    margin-right: 4px;
+                    font-size: 12px;
+                }
+                
+                .action-btn.edit { color: #3b82f6; }
+                .action-btn.view { color: #10b981; }
+                .action-btn.duplicate { color: #8b5cf6; }
+                .action-btn.disable { color: #f59e0b; }
+                .action-btn.delete { color: #ef4444; }
+                
+                /* Status indicator styles */
+                .status-indicator {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                
+                .status-dot {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    display: inline-block;
+                }
+                
+                .status-online { background-color: #10b981; }
+                .status-offline { background-color: #ef4444; }
+                .status-warning { background-color: #f59e0b; }
+                .status-disabled { background-color: #6b7280; }
             `;
             document.head.appendChild(style);
         }
@@ -389,11 +439,15 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 if (deviceRow) {
                     const statusCell = deviceRow.querySelector('td:nth-child(4)');
                     if (statusCell) {
-                        let statusColor = 'bg-green-500';
-                        if (data.status === 'Offline') statusColor = 'bg-red-500';
-                        if (data.status === 'Warning') statusColor = 'bg-yellow-500';
+                        let statusClass = 'status-online';
+                        if (data.status === 'Offline') statusClass = 'status-offline';
+                        if (data.status === 'Warning') statusClass = 'status-warning';
+                        if (data.status === 'Disabled') statusClass = 'status-disabled';
                         
-                        statusCell.innerHTML = '<div class="flex items-center"><span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span><span class="text-sm text-slate-700">' + data.status + '</span></div>';
+                        statusCell.innerHTML = '<div class="status-indicator">' +
+                            '<span class="status-dot ' + statusClass + '"></span>' +
+                            '<span class="text-sm text-slate-700">' + data.status + '</span>' +
+                            '</div>';
                     }
                     
                     const lastPollCell = deviceRow.querySelector('td:nth-child(5)');
@@ -415,14 +469,14 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 if (selectedDeviceId === data.device_id) {
                     const device = devices.find(function(d) { return d.id === data.device_id; });
                     if (device) {
-                        document.getElementById('deviceStatus').textContent = device.details.status;
-                        document.getElementById('lastResponse').textContent = device.details.lastResponse;
+                        const deviceStatusElement = document.getElementById('deviceStatus');
+                        const lastResponseElement = document.getElementById('lastResponse');
+                        if (deviceStatusElement) deviceStatusElement.textContent = device.details.status;
+                        if (lastResponseElement) lastResponseElement.textContent = device.details.lastResponse;
                     }
                 }
             }
         }
-
-        
 
         function renderGroups() {
             const container = document.getElementById('groupsContainer');
@@ -439,74 +493,164 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     '</div>' +
                     '<div class="text-xs text-slate-500 mb-3">' + group.device_count + ' devices</div>' +
                     '<button class="text-xs text-primary hover:text-primaryHover" onclick="window.deviceManagement.openAssignDevicesModal(' + group.id + ')">' +
-                    'Assign Devices ?' +
+                    'Assign Devices' +
                     '</button>';
                 container.appendChild(groupElement);
             });
         }
 
-        async function showDeviceDetails(deviceId) {
-            try {
-                const response = await fetch('/api/device-management/devices/' + deviceId + '/details');
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                
-                const device = await response.json();
-                selectedDeviceId = deviceId;
-                
-                document.getElementById('selectedDeviceTitle').textContent = 'Device Details';
-                document.getElementById('selectedDeviceName').textContent = 'Selected: ' + device.name;
-                document.getElementById('deviceStatus').textContent = device.status || '-';
-                document.getElementById('lastResponse').textContent = device.last_response || '-';
-                document.getElementById('retries').textContent = '0';
-                document.getElementById('signalStrength').textContent = 'N/A';
-                
-                // Display configuration details
-                let configHtml = '<div class="space-y-2 text-sm">';
-                
-                if (device.type === 'Modbus TCP' && device.config) {
-                    configHtml += '<div><strong>IP Address:</strong> ' + (device.config.ip_address || '-') + '</div>';
-                    configHtml += '<div><strong>Port:</strong> ' + (device.config.port || '-') + '</div>';
-                    configHtml += '<div><strong>Slave Address:</strong> ' + (device.config.slave_address || '-') + '</div>';
-                    configHtml += '<div><strong>Polling Interval:</strong> ' + (device.config.polling_interval || '1000') + ' ms</div>';
-                    configHtml += '<div><strong>Timeout:</strong> ' + (device.config.timeout || '5000') + ' ms</div>';
-                    configHtml += '<div><strong>Retry Count:</strong> ' + (device.config.retry_count || '3') + '</div>';
-                } else if (device.type === 'Modbus RTU' && device.config) {
-                    configHtml += '<div><strong>Slave Address:</strong> ' + (device.config.slave_address || '-') + '</div>';
-                    configHtml += '<div><strong>Baud Rate:</strong> ' + (device.config.baud_rate || '-') + '</div>';
-                    configHtml += '<div><strong>Parity:</strong> ' + (device.config.parity || '-') + '</div>';
-                    configHtml += '<div><strong>Stop Bits:</strong> ' + (device.config.stop_bits || '-') + '</div>';
-                    configHtml += '<div><strong>Polling Interval:</strong> ' + (device.config.polling_interval || '500') + ' ms</div>';
-                } else if (device.type === 'CAN' && device.config) {
-                    configHtml += '<div><strong>CAN ID:</strong> ' + (device.config.can_id || '-') + '</div>';
-                    configHtml += '<div><strong>Protocol:</strong> ' + (device.config.protocol || '-') + '</div>';
-                    configHtml += '<div><strong>Bitrate:</strong> ' + (device.config.bitrate || '-') + '</div>';
-                } else if (device.type === 'Wireless' && device.config) {
-                    configHtml += '<div><strong>RF Address:</strong> ' + (device.config.rf_address || '-') + '</div>';
-                    configHtml += '<div><strong>Signal Strength:</strong> ' + (device.config.signal_strength || '-') + ' dBm</div>';
-                } else if (device.type === 'ACS Sensor' && device.config) {
-                    configHtml += '<div><strong>Sensor ID:</strong> ' + (device.config.sensor_id || '-') + '</div>';
-                    configHtml += '<div><strong>Sampling Rate:</strong> ' + (device.config.sampling_rate || '-') + '</div>';
-                    configHtml += '<div><strong>Sensitivity:</strong> ' + (device.config.sensitivity || '-') + '</div>';
-                    configHtml += '<div><strong>Calibration Factor:</strong> ' + (device.config.calibration || '-') + '</div>';
-                }
-                
-                configHtml += '</div>';
-                
-                // Update configuration display
-                const configDisplay = document.getElementById('deviceConfigDisplay');
-                if (configDisplay) {
-                    configDisplay.innerHTML = configHtml;
-                }
-                
-                document.getElementById('section-details').style.display = 'block';
-                
-                closeAllDropdowns();
-                
-            } catch (error) {
-                console.error('Error loading device details:', error);
-                showNotification('Failed to load device details', 'error');
+        // Debug function
+        function debugDetailsSection() {
+            const detailsSection = document.getElementById('section-details');
+            console.log('=== DEBUG section-details ===');
+            console.log('Element exists:', !!detailsSection);
+            if (detailsSection) {
+                console.log('Current display style:', detailsSection.style.display);
+                console.log('Current classes:', detailsSection.className);
+                console.log('Parent element:', detailsSection.parentElement);
             }
+            
+            // Check if there's a modal overlay blocking it
+            const modalOverlays = document.querySelectorAll('.modal-overlay');
+            console.log('Modal overlays found:', modalOverlays.length);
+            
+            // Check body classes
+            console.log('Body has modal-open class:', document.body.classList.contains('modal-open'));
         }
+
+       async function showDeviceDetails(deviceId) {
+    try {
+        console.log('Loading details for device:', deviceId);
+        
+        const response = await fetch('/api/device-management/devices/' + deviceId + '/details');
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('HTTP ' + response.status + ': ' + errorText);
+        }
+        
+        const device = await response.json();
+        console.log('Device data received:', device);
+        
+        selectedDeviceId = deviceId;
+        
+        // Update the device information
+        const selectedDeviceName = document.getElementById('selectedDeviceName');
+        const deviceStatus = document.getElementById('deviceStatus');
+        const lastResponse = document.getElementById('lastResponse');
+        
+        if (selectedDeviceName) {
+            selectedDeviceName.textContent = 'Selected: ' + device.name;
+        }
+        
+        if (deviceStatus) {
+            deviceStatus.textContent = device.status || '-';
+        }
+        
+        if (lastResponse) {
+            lastResponse.textContent = device.last_response || '-';
+        }
+        
+        // Display configuration details
+        const deviceConfigDisplay = document.getElementById('deviceConfigDisplay');
+        if (deviceConfigDisplay) {
+            let configHtml = '<div class="space-y-2 text-sm">';
+            
+            // Add basic device info
+            configHtml += '<div class="grid grid-cols-2 gap-4 mb-4">';
+            configHtml += '<div><strong class="text-slate-700">Device Type:</strong> ' + (device.type || '-') + '</div>';
+            configHtml += '<div><strong class="text-slate-700">Protocol:</strong> ' + (device.protocol || '-') + '</div>';
+            configHtml += '<div><strong class="text-slate-700">Address:</strong> ' + (device.address || '-') + '</div>';
+            configHtml += '<div><strong class="text-slate-700">Group:</strong> ' + (device.group || 'None') + '</div>';
+            configHtml += '</div>';
+            
+            // Add configuration based on device type
+            configHtml += '<div class="border-t pt-4">';
+            configHtml += '<h4 class="text-sm font-medium text-slate-700 mb-2">Configuration Details:</h4>';
+            
+            if (device.type === 'Modbus TCP' && device.config) {
+                configHtml += '<div class="grid grid-cols-2 gap-2">';
+                configHtml += '<div><strong class="text-slate-600">IP Address:</strong></div><div>' + (device.config.ip_address || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Port:</strong></div><div>' + (device.config.port || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Slave Address:</strong></div><div>' + (device.config.slave_address || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Polling Interval:</strong></div><div>' + (device.config.polling_interval || '1000') + ' ms</div>';
+                configHtml += '<div><strong class="text-slate-600">Timeout:</strong></div><div>' + (device.config.timeout || '5000') + ' ms</div>';
+                configHtml += '<div><strong class="text-slate-600">Retry Count:</strong></div><div>' + (device.config.retry_count || '3') + '</div>';
+                configHtml += '</div>';
+            } else if (device.type === 'Modbus RTU' && device.config) {
+                configHtml += '<div class="grid grid-cols-2 gap-2">';
+                configHtml += '<div><strong class="text-slate-600">Slave Address:</strong></div><div>' + (device.config.slave_address || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Baud Rate:</strong></div><div>' + (device.config.baud_rate || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Parity:</strong></div><div>' + (device.config.parity || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Stop Bits:</strong></div><div>' + (device.config.stop_bits || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Polling Interval:</strong></div><div>' + (device.config.polling_interval || '500') + ' ms</div>';
+                configHtml += '</div>';
+            } else if (device.type === 'CAN' && device.config) {
+                configHtml += '<div class="grid grid-cols-2 gap-2">';
+                configHtml += '<div><strong class="text-slate-600">CAN ID:</strong></div><div>' + (device.config.can_id || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Protocol:</strong></div><div>' + (device.config.protocol || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Bitrate:</strong></div><div>' + (device.config.bitrate || '-') + '</div>';
+                configHtml += '</div>';
+            } else if (device.type === 'Wireless' && device.config) {
+                configHtml += '<div class="grid grid-cols-2 gap-2">';
+                configHtml += '<div><strong class="text-slate-600">RF Address:</strong></div><div>' + (device.config.rf_address || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Signal Strength:</strong></div><div>' + (device.config.signal_strength || '-') + ' dBm</div>';
+                configHtml += '</div>';
+            } else if (device.type === 'ACS Sensor' && device.config) {
+                configHtml += '<div class="grid grid-cols-2 gap-2">';
+                configHtml += '<div><strong class="text-slate-600">Sensor ID:</strong></div><div>' + (device.config.sensor_id || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Sampling Rate:</strong></div><div>' + (device.config.sampling_rate || '-') + '</div>';
+                configHtml += '<div><strong class="text-slate-600">Sensitivity:</strong></div><div>' + (device.config.sensitivity || '-') + '</div>';
+                configHtml += '</div>';
+            } else if (device.config && typeof device.config === 'object') {
+                // Generic display for any other device type
+                configHtml += '<div class="space-y-1">';
+                for (const [key, value] of Object.entries(device.config)) {
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    configHtml += '<div><strong class="text-slate-600">' + formattedKey + ':</strong> ' + value + '</div>';
+                }
+                configHtml += '</div>';
+            } else {
+                configHtml += '<div class="text-slate-500 italic">No configuration details available</div>';
+            }
+            
+            configHtml += '</div></div>';
+            deviceConfigDisplay.innerHTML = configHtml;
+        }
+        
+        // CRITICAL: Show the details section
+        const detailsSection = document.getElementById('section-details');
+        if (detailsSection) {
+            console.log('Setting section-details display to block');
+            detailsSection.style.display = 'block';
+            detailsSection.classList.remove('hidden');
+            
+            // Scroll to it
+            setTimeout(() => {
+                detailsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+            
+            console.log('After setting display:', detailsSection.style.display);
+        } else {
+            console.error('section-details element not found!');
+        }
+        
+        // Close any modals that might be blocking the view
+        closeAllModals();
+        
+        // Close all dropdowns
+        closeAllDropdowns();
+        
+        console.log('Device details loaded successfully');
+        
+    } catch (error) {
+        console.error('Error loading device details:', error);
+        showNotification('Failed to load device details: ' + error.message, 'error');
+    }
+}
+
+        // ==================================================
+        // DEVICE ACTION METHODS - All actions go here
+        // ==================================================
 
         async function editDevice(deviceId) {
             try {
@@ -578,14 +722,6 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             }
         }
 
-        function openAddDevicePanel() {
-            const addDevicePanel = document.getElementById('addDevicePanel');
-            if (addDevicePanel) {
-                addDevicePanel.classList.add('active');
-                document.body.classList.add('modal-open');
-            }
-        }
-
         async function disableDevice(deviceId) {
             const device = devices.find(function(d) { return d.id === deviceId; });
             if (!device) return;
@@ -639,7 +775,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     renderDevicesTable();
                     
                     if (selectedDeviceId === deviceId) {
-                        document.getElementById('section-details').style.display = 'none';
+                        const detailsSection = document.getElementById('section-details');
+                        if (detailsSection) {
+                            detailsSection.style.display = 'none';
+                        }
                         selectedDeviceId = null;
                     }
                     
@@ -671,26 +810,39 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         }
 
         async function duplicateDevice(deviceId) {
-            try {
-                const response = await fetch('/api/device-management/devices/' + deviceId + '/duplicate', {
-                    method: 'POST'
-                });
-                
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                
-                const result = await response.json();
-                
-                // Reload devices
-                await loadDevices();
-                renderDevicesTable();
-                
-                showNotification('Device duplicated successfully', 'success');
-                
-            } catch (error) {
-                console.error('Error duplicating device:', error);
-                showNotification('Failed to duplicate device', 'error');
+    const device = devices.find(function(d) { return d.id === deviceId; });
+    if (!device) return;
+    
+    if (confirm('Are you sure you want to duplicate "' + device.name + '"? All tag mappings will also be duplicated.')) {
+        try {
+            const response = await fetch('/api/device-management/devices/' + deviceId + '/duplicate', {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error('HTTP ' + response.status + ': ' + errorText);
             }
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'Duplication failed');
+            }
+            
+            // Reload devices
+            await loadDevices();
+            renderDevicesTable();
+            
+            showNotification('Device "' + result.new_device.name + '" duplicated successfully with ' + result.tags_duplicated + ' tag(s)', 'success');
+            
+        } catch (error) {
+            console.error('Error duplicating device:', error);
+            showNotification('Failed to duplicate device: ' + error.message, 'error');
         }
+    }
+    closeAllDropdowns();
+}
 
         async function getDevicePackets(deviceId) {
             try {
@@ -699,20 +851,31 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 
                 const data = await response.json();
                 
-                // Display packets (simplified)
-                let packetHtml = '';
+                // Display packets in a modal or alert
+                let packetText = 'Recent packets for device:\n\n';
                 data.packets.forEach(function(packet) {
                     const time = new Date(packet.timestamp).toLocaleTimeString();
-                    packetHtml += '<div>' + time + ' ' + (packet.direction === 'tx' ? '?' : '?') + ' ' + packet.data_hex + '</div>';
+                    const direction = packet.direction === 'tx' ? '→ TX' : '← RX';
+                    packetText += time + ' ' + direction + ' ' + packet.data_hex + '\n';
                 });
                 
-                const packetPreview = document.getElementById('packetPreview');
-                if (packetPreview) {
-                    packetPreview.innerHTML = '<div class="font-mono text-xs space-y-1">' + packetHtml + '</div>';
-                }
+                alert(packetText);
                 
             } catch (error) {
                 console.error('Error getting packets:', error);
+                showNotification('Failed to get device packets', 'error');
+            }
+        }
+
+        // ==================================================
+        // END OF DEVICE ACTION METHODS
+        // ==================================================
+
+        function openAddDevicePanel() {
+            const addDevicePanel = document.getElementById('addDevicePanel');
+            if (addDevicePanel) {
+                addDevicePanel.classList.add('active');
+                document.body.classList.add('modal-open');
             }
         }
 
@@ -1433,6 +1596,46 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             }
         }
 
+        function addDebugButton() {
+            // Don't add in production
+            if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                return;
+            }
+            
+            const debugBtn = document.createElement('button');
+            debugBtn.textContent = 'Debug Details Section';
+            debugBtn.id = 'debugDetailsBtn';
+            debugBtn.style.position = 'fixed';
+            debugBtn.style.bottom = '20px';
+            debugBtn.style.right = '20px';
+            debugBtn.style.zIndex = '9999';
+            debugBtn.style.padding = '10px';
+            debugBtn.style.backgroundColor = 'red';
+            debugBtn.style.color = 'white';
+            debugBtn.style.border = 'none';
+            debugBtn.style.borderRadius = '5px';
+            debugBtn.style.fontSize = '12px';
+            
+            debugBtn.onclick = function() {
+                debugDetailsSection();
+                
+                // Also try to manually show the section
+                const detailsSection = document.getElementById('section-details');
+                if (detailsSection) {
+                    console.log('Manually toggling section');
+                    if (detailsSection.style.display === 'none') {
+                        detailsSection.style.display = 'block';
+                        console.log('Set display to block');
+                    } else {
+                        detailsSection.style.display = 'none';
+                        console.log('Set display to none');
+                    }
+                }
+            };
+            
+            document.body.appendChild(debugBtn);
+        }
+
         function setupEventListeners() {
             console.log('Setting up event listeners...');
             
@@ -1507,8 +1710,6 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 });
             });
 
-            // REMOVED: The old saveDeviceBtn event listener is now handled by event delegation above
-
             // Add group modal
             const addGroupBtn = document.getElementById('addGroupBtn');
             if (addGroupBtn) {
@@ -1557,54 +1758,6 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                         e.target.classList.remove('border-transparent');
                         e.target.classList.add('border-blue-700');
                     }
-                });
-            }
-
-            // Device actions in details section
-            const pingDeviceBtn = document.getElementById('pingDeviceBtn');
-            if (pingDeviceBtn) {
-                pingDeviceBtn.addEventListener('click', async function() {
-                    if (!selectedDeviceId) return;
-                    
-                    this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Pinging...';
-                    this.disabled = true;
-                    
-                    await pingDevice(selectedDeviceId);
-                    
-                    this.innerHTML = 'Ping Device';
-                    this.disabled = false;
-                });
-            }
-            
-            const viewPacketsBtn = document.getElementById('viewPacketsBtn');
-            if (viewPacketsBtn) {
-                viewPacketsBtn.addEventListener('click', async function() {
-                    if (!selectedDeviceId) return;
-                    await getDevicePackets(selectedDeviceId);
-                });
-            }
-            
-            const disableDeviceBtn = document.getElementById('disableDeviceBtn');
-            if (disableDeviceBtn) {
-                disableDeviceBtn.addEventListener('click', async function() {
-                    if (!selectedDeviceId) return;
-                    await disableDevice(selectedDeviceId);
-                });
-            }
-            
-            const deleteDeviceBtn = document.getElementById('deleteDeviceBtn');
-            if (deleteDeviceBtn) {
-                deleteDeviceBtn.addEventListener('click', async function() {
-                    if (!selectedDeviceId) return;
-                    await deleteDevice(selectedDeviceId);
-                });
-            }
-            
-            const duplicateDeviceBtn = document.getElementById('duplicateDeviceBtn');
-            if (duplicateDeviceBtn) {
-                duplicateDeviceBtn.addEventListener('click', async function() {
-                    if (!selectedDeviceId) return;
-                    await duplicateDevice(selectedDeviceId);
                 });
             }
 
@@ -1963,134 +2116,136 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         }
 
         function renderDevicesTable() {
-    const tbody = document.getElementById('devicesTableBody');
-    if (!tbody) return;
-    
-    tbody.innerHTML = '';
-    
-    devices.forEach(function(device) {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-slate-50 transition-colors';
-        row.id = 'device-' + device.id;
-        row.dataset.deviceId = device.id;
-        
-        let statusColor = 'bg-green-500';
-        if (device.status === 'Offline') {
-            statusColor = 'bg-red-500';
-        } else if (device.status === 'Warning') {
-            statusColor = 'bg-yellow-500';
-        } else if (device.status === 'Disabled') {
-            statusColor = 'bg-gray-500';
+            const tbody = document.getElementById('devicesTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            devices.forEach(function(device) {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition-colors';
+                row.id = 'device-' + device.id;
+                row.dataset.deviceId = device.id;
+                
+                let statusColor = 'bg-green-500';
+                if (device.status === 'Offline') {
+                    statusColor = 'bg-red-500';
+                } else if (device.status === 'Warning') {
+                    statusColor = 'bg-yellow-500';
+                } else if (device.status === 'Disabled') {
+                    statusColor = 'bg-gray-500';
+                }
+                
+                let typeColor = 'bg-blue-100 text-blue-800';
+                if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
+                if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
+                if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
+                if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
+                
+                row.innerHTML = '<td class="p-4">' +  // Column 1: Device Name ONLY
+                    '<div class="font-medium text-slate-900">' + device.name + '</div>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 2: Type
+                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
+                    device.type + 
+                    '</span>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 3: Address/ID
+                    '<div class="text-sm font-mono">' + device.address + '</div>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 4: Status
+                    '<div class="flex items-center">' +
+                    '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
+                    '<span class="text-sm text-slate-700">' + device.status + '</span>' +
+                    '</div>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 5: Last Poll
+                    '<div class="text-sm">' + device.lastPoll + '</div>' +
+                    '</td>' +
+                    '<td class="p-4 text-right">' +  // Column 6: Actions
+                    '<div class="action-dropdown flex justify-end">' +
+                    '<button class="text-slate-500 hover:text-slate-700 text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
+                    '<i class="fas fa-ellipsis-v"></i>' +  // Three-dot icon instead of "Edit ?"
+                    '</button>' +
+                    '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
+                    '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')"><i class="fas fa-edit mr-2"></i>Edit Device</a>' +
+                    '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')"><i class="fas fa-eye mr-2"></i>View Details</a>' +
+                    '<a href="#" onclick="window.deviceManagement.duplicateDevice(\'' + device.id + '\')"><i class="fas fa-copy mr-2"></i>Duplicate Device</a>' +
+                    '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')"><i class="fas fa-ban mr-2"></i>' + (device.status === 'Disabled' ? 'Enable Device' : 'Disable Device') + '</a>' +
+                    '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600"><i class="fas fa-trash mr-2"></i>Delete Device</a>' +
+                    '</div>' +
+                    '</div>' +
+                    '</td>';
+                
+                tbody.appendChild(row);
+            });
         }
-        
-        let typeColor = 'bg-blue-100 text-blue-800';
-        if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
-        if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
-        if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
-        if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
-        
-        row.innerHTML = '<td class="p-4">' +  // Column 1: Device Name ONLY
-            '<div class="font-medium text-slate-900">' + device.name + '</div>' +
-            // REMOVED: Address from subtitle here
-            '</td>' +
-            '<td class="p-4">' +  // Column 2: Type
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
-            device.type + 
-            '</span>' +
-            '</td>' +
-            '<td class="p-4">' +  // Column 3: Address/ID (FIXED: Show device.address here)
-            '<div class="text-sm font-mono">' + device.address + '</div>' +  // Changed to device.address
-            '</td>' +
-            '<td class="p-4">' +  // Column 4: Status
-            '<div class="flex items-center">' +
-            '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
-            '<span class="text-sm text-slate-700">' + device.status + '</span>' +
-            '</div>' +
-            '</td>' +
-            '<td class="p-4">' +  // Column 5: Last Poll
-            '<div class="text-sm">' + device.lastPoll + '</div>' +
-            '</td>' +
-            '<td class="p-4 text-right">' +  // Column 6: Actions
-            '<div class="action-dropdown flex justify-end">' +
-            '<button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
-            'Edit ?' +
-            '</button>' +
-            '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
-            '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')">Edit Device</a>' +
-            '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')">View Details</a>' +
-            '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')">Disable Device</a>' +
-            '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600">Delete Device</a>' +
-            '</div>' +
-            '</div>' +
-            '</td>';
-        
-        tbody.appendChild(row);
-    });
-}
-function renderFilteredTable(filteredDevices) {
-    const tbody = document.getElementById('devicesTableBody');
-    if (!tbody) return;
-    
-    tbody.innerHTML = '';
-    
-    filteredDevices.forEach(function(device) {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-slate-50 transition-colors';
-        row.id = 'device-' + device.id;
-        row.dataset.deviceId = device.id;
-        
-        let statusColor = 'bg-green-500';
-        if (device.status === 'Offline') {
-            statusColor = 'bg-red-500';
-        } else if (device.status === 'Warning') {
-            statusColor = 'bg-yellow-500';
-        } else if (device.status === 'Disabled') {
-            statusColor = 'bg-gray-500';
+
+        function renderFilteredTable(filteredDevices) {
+            const tbody = document.getElementById('devicesTableBody');
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            filteredDevices.forEach(function(device) {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition-colors';
+                row.id = 'device-' + device.id;
+                row.dataset.deviceId = device.id;
+                
+                let statusColor = 'bg-green-500';
+                if (device.status === 'Offline') {
+                    statusColor = 'bg-red-500';
+                } else if (device.status === 'Warning') {
+                    statusColor = 'bg-yellow-500';
+                } else if (device.status === 'Disabled') {
+                    statusColor = 'bg-gray-500';
+                }
+                
+                let typeColor = 'bg-blue-100 text-blue-800';
+                if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
+                if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
+                if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
+                if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
+                
+                row.innerHTML = '<td class="p-4">' +  // Column 1: Device Name ONLY
+                    '<div class="font-medium text-slate-900">' + device.name + '</div>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 2: Type
+                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
+                    device.type +
+                    '</span>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 3: Address/ID
+                    '<div class="text-sm font-mono">' + device.address + '</div>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 4: Status
+                    '<div class="flex items-center">' +
+                    '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
+                    '<span class="text-sm text-slate-700">' + device.status + '</span>' +
+                    '</div>' +
+                    '</td>' +
+                    '<td class="p-4">' +  // Column 5: Last Poll
+                    '<div class="text-sm">' + device.lastPoll + '</div>' +
+                    '</td>' +
+                    '<td class="p-4 text-right">' +  // Column 6: Actions
+                    '<div class="action-dropdown flex justify-end">' +
+                    '<button class="text-slate-500 hover:text-slate-700 text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
+                    '<i class="fas fa-ellipsis-v"></i>' +  // Three-dot icon instead of "Edit ?"
+                    '</button>' +
+                    '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
+                    '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')"><i class="fas fa-edit mr-2"></i>Edit Device</a>' +
+                    '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')"><i class="fas fa-eye mr-2"></i>View Details</a>' +
+                    '<a href="#" onclick="window.deviceManagement.duplicateDevice(\'' + device.id + '\')"><i class="fas fa-copy mr-2"></i>Duplicate Device</a>' +
+                    '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')"><i class="fas fa-ban mr-2"></i>' + (device.status === 'Disabled' ? 'Enable Device' : 'Disable Device') + '</a>' +
+                    '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600"><i class="fas fa-trash mr-2"></i>Delete Device</a>' +
+                    '</div>' +
+                    '</div>' +
+                    '</td>';
+                
+                tbody.appendChild(row);
+            });
         }
-        
-        let typeColor = 'bg-blue-100 text-blue-800';
-        if (device.type === 'CAN') typeColor = 'bg-orange-100 text-orange-800';
-        if (device.type === 'Wireless') typeColor = 'bg-purple-100 text-purple-800';
-        if (device.type === 'Modbus TCP') typeColor = 'bg-cyan-100 text-cyan-800';
-        if (device.type === 'ACS Sensor') typeColor = 'bg-indigo-100 text-indigo-800';
-        
-        row.innerHTML = '<td class="p-4">' +  // Column 1: Device Name ONLY
-            '<div class="font-medium text-slate-900">' + device.name + '</div>' +
-            '</td>' +
-            '<td class="p-4">' +  // Column 2: Type
-            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ' + typeColor + '">' +
-            device.type +
-            '</span>' +
-            '</td>' +
-            '<td class="p-4">' +  // Column 3: Address/ID (FIXED: Show device.address here)
-            '<div class="text-sm font-mono">' + device.address + '</div>' +  // Changed to device.address
-            '</td>' +
-            '<td class="p-4">' +  // Column 4: Status
-            '<div class="flex items-center">' +
-            '<span class="w-2 h-2 rounded-full ' + statusColor + ' mr-2"></span>' +
-            '<span class="text-sm text-slate-700">' + device.status + '</span>' +
-            '</div>' +
-            '</td>' +
-            '<td class="p-4">' +  // Column 5: Last Poll
-            '<div class="text-sm">' + device.lastPoll + '</div>' +
-            '</td>' +
-            '<td class="p-4 text-right">' +  // Column 6: Actions
-            '<div class="action-dropdown flex justify-end">' +
-            '<button class="text-primary hover:text-primaryHover text-sm font-medium dropdown-toggle" onclick="window.deviceManagement.toggleDropdown(\'' + device.id + '\')">' +
-            'Edit ?' +
-            '</button>' +
-            '<div class="action-dropdown-content" id="dropdown-' + device.id + '">' +
-            '<a href="#" onclick="window.deviceManagement.editDevice(\'' + device.id + '\')">Edit Device</a>' +
-            '<a href="#" onclick="window.deviceManagement.showDeviceDetails(\'' + device.id + '\')">View Details</a>' +
-            '<a href="#" onclick="window.deviceManagement.disableDevice(\'' + device.id + '\')">Disable Device</a>' +
-            '<a href="#" onclick="window.deviceManagement.deleteDevice(\'' + device.id + '\')" class="text-red-600">Delete Device</a>' +
-            '</div>' +
-            '</div>' +
-            '</td>';
-        
-        tbody.appendChild(row);
-    });
-}
 
         function initGroupModal() {
             const colorSelection = document.querySelector('#addGroupModal .flex.space-x-2');
@@ -2140,17 +2295,19 @@ function renderFilteredTable(filteredDevices) {
             showDeviceDetails: showDeviceDetails,
             disableDevice: disableDevice,
             deleteDevice: deleteDevice,
+            duplicateDevice: duplicateDevice,
+            pingDevice: pingDevice,
+            getDevicePackets: getDevicePackets,
             openAssignDevicesModal: openAssignDevicesModal,
             toggleDeviceSelection: toggleDeviceSelection,
             assignDevicesToGroup: assignDevicesToGroup,
             addNewGroup: addNewGroup,
             saveNewGroup: saveNewGroup,
-            pingDevice: pingDevice,
             exportDevices: exportDevices,
             importCSVFile: importCSVFile,
             cleanup: cleanupDeviceManagement,
-            // Add the new save handler
-            handleSaveDevice: handleSaveDevice
+            handleSaveDevice: handleSaveDevice,
+            debugDetailsSection: debugDetailsSection
         };
 
         // Cleanup on page unload
