@@ -1,25 +1,78 @@
 # database.py - Database initialization and operations
 import sqlite3
 import json
+from datetime import datetime
 
 DB_FILE = 'gateway_config.db'
 
 def init_database():
-    """Initialize SQLite database with empty tables - NO DEFAULT DATA"""
+    """Initialize SQLite database with new schema"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
-    # General configuration table (existing)
+    # Create all tables
+    create_tables(cursor)
+    
+    # Insert default data
+    insert_default_data(cursor)
+    
+    conn.commit()
+    conn.close()
+    print("Database initialized with new schema")
+    print("✓ General configuration table (no JSON)")
+    print("✓ Services table (modbus, loadcell)")
+    print("✓ Modbus_device table (tcp/rtu with connection details)")
+    print("✓ Loadcell_device table (with calibration)")
+    print("✓ Modbus_datapoints table")
+    print("✓ Loadcell_datapoints table (auto-created: load, capacity)")
+    print("✓ Dynamic device groups")
+
+def create_tables(cursor):
+    """Create all tables with proper schema"""
+    
+    # General configuration table - NO JSON, all columns
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS general_configuration (
             id INTEGER PRIMARY KEY,
-            config_json TEXT NOT NULL,
+            
+            -- Gateway Identity
+            gateway_name TEXT DEFAULT 'Univa-GW-01',
+            serial_number TEXT DEFAULT 'GW2025-1190021',
+            deployment_site TEXT DEFAULT 'Chennai Port - Zone A',
+            location_mode TEXT DEFAULT 'manual',
+            latitude REAL DEFAULT 12.99123,
+            longitude REAL DEFAULT 80.12312,
+            asset_id TEXT DEFAULT 'CRN-CT-12',
+            mac_address TEXT DEFAULT '00:1A:2B:3C:4D:5E',
+            
+            -- Date & Time
+            timezone TEXT DEFAULT 'Asia/Kolkata',
+            ntp_server TEXT DEFAULT 'pool.ntp.org',
+            date_format TEXT DEFAULT 'DD/MM/YYYY',
+            time_format TEXT DEFAULT '24-hour',
+            language TEXT DEFAULT 'en',
+            
+            -- Heartbeat
+            heartbeat_interval INTEGER DEFAULT 30,
+            offline_threshold INTEGER DEFAULT 120,
+            
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
-    # Device management tables (new) - WITHOUT firmware_version
+    # Services table - ONLY names (modbus and loadcell)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS services (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            enabled BOOLEAN DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Device groups table - DYNAMIC, users create any groups
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS device_groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,328 +83,425 @@ def init_database():
         )
     ''')
     
+    # Modbus device table - with ALL connection details
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS device_management (
+        CREATE TABLE IF NOT EXISTS modbus_device (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
-            type TEXT NOT NULL,
-            protocol TEXT NOT NULL DEFAULT 'modbus-tcp',  -- NEW COLUMN
-            address TEXT,
+            device_type TEXT NOT NULL CHECK(device_type IN ('tcp', 'rtu')),
             group_id INTEGER,
-            config_json TEXT NOT NULL,
+            service_id INTEGER,
+            
+            -- Common modbus config
+            slave_id INTEGER DEFAULT 1,
+            timeout_ms INTEGER DEFAULT 1000,
+            retry_count INTEGER DEFAULT 3,
+            polling_interval_ms INTEGER DEFAULT 100,
+            
+            -- TCP specific
+            ip_address TEXT,
+            port INTEGER DEFAULT 502,
+            
+            -- RTU specific
+            serial_port TEXT DEFAULT '/dev/ttymxc2',
+            baud_rate INTEGER DEFAULT 9600,
+            parity TEXT DEFAULT 'N',
+            data_bits INTEGER DEFAULT 8,
+            stop_bits INTEGER DEFAULT 1,
+            
+            -- Status
+            enabled BOOLEAN DEFAULT 1,
+            status TEXT DEFAULT 'offline',
+            
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES device_groups(id)
+            FOREIGN KEY (group_id) REFERENCES device_groups(id),
+            FOREIGN KEY (service_id) REFERENCES services(id)
         )
     ''')
     
-    # UPDATED: Simplified tag_mappings table to store everything as JSON
+    # Loadcell device table - with ALL calibration details
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tag_mappings (
+        CREATE TABLE IF NOT EXISTS loadcell_device (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            group_id INTEGER,
+            service_id INTEGER,
+            
+            -- Device connection
+            device_path TEXT NOT NULL,
+            channel INTEGER DEFAULT 0,
+            
+            -- Calibration
+            tare_offset REAL DEFAULT 0.0,
+            known_weight REAL DEFAULT 1000.0,
+            known_weight_raw REAL DEFAULT 0.0,
+            shift_bits INTEGER DEFAULT 10,
+            unit TEXT DEFAULT 'g',
+            capacity REAL DEFAULT 40000.0,
+            
+            -- Service settings
+            pipeline_server TEXT DEFAULT '127.0.0.1',
+            pipeline_port INTEGER DEFAULT 7000,
+            log_level TEXT DEFAULT 'info',
+            polling_interval_ms INTEGER DEFAULT 15,
+            
+            -- Filters
+            lowpass_filter_enabled BOOLEAN DEFAULT 0,
+            filter_cutoff_frequency REAL DEFAULT 8.0,
+            filter_activation_delta_min REAL DEFAULT 20000.0,
+            moving_avg_enabled BOOLEAN DEFAULT 1,
+            moving_avg_window INTEGER DEFAULT 4,
+            median_filter_enabled BOOLEAN DEFAULT 1,
+            median_filter_window INTEGER DEFAULT 3,
+            autotare_enabled BOOLEAN DEFAULT 1,
+            autotare_trigger_delta_grams REAL DEFAULT -5.0,
+            adaptive_deadband_enabled BOOLEAN DEFAULT 1,
+            adaptive_deadband_min REAL DEFAULT 1.0,
+            adaptive_deadband_max REAL DEFAULT 20.0,
+            adaptive_deadband_grow_rate REAL DEFAULT 0.5,
+            adaptive_deadband_shrink_rate REAL DEFAULT 1.5,
+            publish_step_grams REAL DEFAULT 5.0,
+            overload_threshold REAL DEFAULT 5000.0,
+            overload_relay TEXT DEFAULT 'relay2',
+            overload_action INTEGER DEFAULT 0,
+            overload_cooldown_ms INTEGER DEFAULT 2000,
+            confirm_count INTEGER DEFAULT 3,
+            capacity_name TEXT DEFAULT 'capacity',
+            
+            -- Status
+            enabled BOOLEAN DEFAULT 1,
+            status TEXT DEFAULT 'offline',
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES device_groups(id),
+            FOREIGN KEY (service_id) REFERENCES services(id)
+        )
+    ''')
+    
+    # Modbus datapoints table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS modbus_datapoints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id TEXT NOT NULL,
-            tag_name TEXT NOT NULL,
-            config_json TEXT NOT NULL,  -- All tag configuration stored as JSON
+            name TEXT NOT NULL,
+            register_address INTEGER NOT NULL,
+            register_type TEXT NOT NULL CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
+            data_type TEXT NOT NULL CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
+            byte_order TEXT DEFAULT 'big',
+            word_order TEXT DEFAULT 'big',
+            scale_factor REAL DEFAULT 1.0,
+            offset REAL DEFAULT 0.0,
+            unit TEXT,
+            description TEXT,
+            enabled BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(device_id, tag_name),
-            FOREIGN KEY (device_id) REFERENCES device_management(id) ON DELETE CASCADE
+            UNIQUE(device_id, name),
+            FOREIGN KEY (device_id) REFERENCES modbus_device(id) ON DELETE CASCADE
         )
     ''')
     
+    # Loadcell datapoints table - ONLY name (auto-created)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tag_categories (
+        CREATE TABLE IF NOT EXISTS loadcell_datapoints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            description TEXT,
-            color TEXT DEFAULT 'blue',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            device_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(device_id, name),
+            FOREIGN KEY (device_id) REFERENCES loadcell_device(id) ON DELETE CASCADE
         )
     ''')
+
+def insert_default_data(cursor):
+    """Insert default data"""
     
-    # Check for general configuration - INSERT ONLY IF EMPTY
+    # Insert general configuration
     cursor.execute('SELECT COUNT(*) FROM general_configuration')
-    count = cursor.fetchone()[0]
-    
-    if count == 0:
-        default_config = {
-            'gateway_identity': {
-                'name': 'Univa-GW-01',
-                'serial_number': 'GW2025-1190021',
-                'deployment_site': 'Chennai Port - Zone A',
-                'location_mode': 'manual',
-                'latitude': 12.99123,
-                'longitude': 80.12312,
-                'asset_id': 'CRN-CT-12'
-            },
-            'date_time': {
-                'timezone': 'Asia/Kolkata',
-                'ntp_server': 'pool.ntp.org',
-                'date_format': 'DD/MM/YYYY',
-                'time_format': '24-hour',
-                'language': 'en'
-            },
-            'network': {
-                'mode': 'ethernet',
-                'ethernet': {
-                    'ip_assignment': 'dhcp',
-                    'static_ip': '192.168.1.50',
-                    'subnet_mask': '255.255.255.0',
-                    'gateway': '192.168.1.1',
-                    'dns1': '8.8.8.8',
-                    'dns2': '8.8.4.4'
-                }
-            },
-            'heartbeat': {
-                'interval': 30,
-                'offline_threshold': 120
-            },
-            'mac_address': '00:1A:2B:3C:4D:5E'
-        }
+    if cursor.fetchone()[0] == 0:
         cursor.execute('''
-            INSERT INTO general_configuration (config_json)
-            VALUES (?)
-        ''', (json.dumps(default_config),))
+            INSERT INTO general_configuration (id) VALUES (1)
+        ''')
     
-    # Insert default categories if not exists
-    default_categories = [
-        ('Load Monitoring', 'Load measurement tags', 'red'),
-        ('Safety', 'Safety-related tags', 'orange'),
-        ('Position Tracking', 'Position and movement tags', 'green'),
-        ('Sensors', 'Sensor data tags', 'blue'),
-        ('Motor', 'Motor control tags', 'purple'),
-        ('Diagnostic', 'Diagnostic and health tags', 'yellow'),
-        ('Status', 'Status monitoring tags', 'cyan'),
-        ('Configuration', 'Configuration tags', 'gray')
+    # Insert services
+    services = [
+        ('modbus', 'Modbus RTU/TCP service'),
+        ('loadcell', 'Load cell service')
     ]
     
-    for category in default_categories:
+    for service in services:
         cursor.execute('''
-            INSERT OR IGNORE INTO tag_categories (name, description, color)
-            VALUES (?, ?, ?)
-        ''', category)
-    
-    conn.commit()
-    conn.close()
-    print("Database initialized with all tables")
-    print("✓ Device management table created WITH protocol column")  # UPDATED MESSAGE
-    print("✓ Tag mapping table simplified to JSON storage")
+            INSERT OR IGNORE INTO services (name, description)
+            VALUES (?, ?)
+        ''', service)
 
-def get_configuration():
-    """Retrieve configuration from database as single JSON"""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT config_json FROM general_configuration WHERE id = 1')
-    row = cursor.fetchone()
-    
-    conn.close()
-    
-    if row and row[0]:
-        try:
-            return json.loads(row[0])
-        except:
-            return {}
-    
-    return {}
-
-def update_configuration(config_data):
-    """Update configuration in database as single JSON"""
+# Database operations for general configuration
+def get_general_configuration():
+    """Get general configuration as dictionary"""
     try:
-        current = get_configuration()
-        
-        # Deep merge of configuration
-        for key in config_data:
-            if key in current and isinstance(current[key], dict) and isinstance(config_data[key], dict):
-                # Recursive merge for nested dictionaries
-                def merge_dicts(dict1, dict2):
-                    for k, v in dict2.items():
-                        if k in dict1 and isinstance(dict1[k], dict) and isinstance(v, dict):
-                            merge_dicts(dict1[k], v)
-                        else:
-                            dict1[k] = v
-                
-                merge_dicts(current[key], config_data[key])
-            else:
-                current[key] = config_data[key]
-        
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
         cursor.execute('''
-            UPDATE general_configuration 
-            SET config_json = ?,
-                updated_at = CURRENT_TIMESTAMP
+            SELECT gateway_name, serial_number, deployment_site, location_mode,
+                   latitude, longitude, asset_id, mac_address,
+                   timezone, ntp_server, date_format, time_format, language,
+                   heartbeat_interval, offline_threshold
+            FROM general_configuration 
             WHERE id = 1
-        ''', (json.dumps(current),))
+        ''')
         
-        conn.commit()
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                'gateway_identity': {
+                    'name': row[0],
+                    'serial_number': row[1],
+                    'deployment_site': row[2],
+                    'location_mode': row[3],
+                    'latitude': row[4],
+                    'longitude': row[5],
+                    'asset_id': row[6]
+                },
+                'date_time': {
+                    'timezone': row[8],
+                    'ntp_server': row[9],
+                    'date_format': row[10],
+                    'time_format': row[11],
+                    'language': row[12]
+                },
+                'heartbeat': {
+                    'interval': row[13],
+                    'offline_threshold': row[14]
+                },
+                'mac_address': row[7]
+            }
+        
+        return {}
+    except Exception as e:
+        print(f"Error getting general config: {e}")
+        return {}
+
+def update_general_configuration(config_data):
+    """Update general configuration"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Extract fields from nested structure
+        updates = []
+        values = []
+        
+        if 'gateway_identity' in config_data:
+            gi = config_data['gateway_identity']
+            if 'name' in gi:
+                updates.append('gateway_name = ?')
+                values.append(gi['name'])
+            if 'serial_number' in gi:
+                updates.append('serial_number = ?')
+                values.append(gi['serial_number'])
+            if 'deployment_site' in gi:
+                updates.append('deployment_site = ?')
+                values.append(gi['deployment_site'])
+            if 'location_mode' in gi:
+                updates.append('location_mode = ?')
+                values.append(gi['location_mode'])
+            if 'latitude' in gi:
+                updates.append('latitude = ?')
+                values.append(gi['latitude'])
+            if 'longitude' in gi:
+                updates.append('longitude = ?')
+                values.append(gi['longitude'])
+            if 'asset_id' in gi:
+                updates.append('asset_id = ?')
+                values.append(gi['asset_id'])
+        
+        if 'date_time' in config_data:
+            dt = config_data['date_time']
+            if 'timezone' in dt:
+                updates.append('timezone = ?')
+                values.append(dt['timezone'])
+            if 'ntp_server' in dt:
+                updates.append('ntp_server = ?')
+                values.append(dt['ntp_server'])
+            if 'date_format' in dt:
+                updates.append('date_format = ?')
+                values.append(dt['date_format'])
+            if 'time_format' in dt:
+                updates.append('time_format = ?')
+                values.append(dt['time_format'])
+            if 'language' in dt:
+                updates.append('language = ?')
+                values.append(dt['language'])
+        
+        if 'heartbeat' in config_data:
+            hb = config_data['heartbeat']
+            if 'interval' in hb:
+                updates.append('heartbeat_interval = ?')
+                values.append(hb['interval'])
+            if 'offline_threshold' in hb:
+                updates.append('offline_threshold = ?')
+                values.append(hb['offline_threshold'])
+        
+        if 'mac_address' in config_data:
+            updates.append('mac_address = ?')
+            values.append(config_data['mac_address'])
+        
+        if updates:
+            query = f'''
+                UPDATE general_configuration 
+                SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = 1
+            '''
+            cursor.execute(query, values)
+            conn.commit()
+        
         conn.close()
         return True
     except Exception as e:
-        print("Error updating configuration: {}".format(e))
+        print(f"Error updating general config: {e}")
         return False
 
-def get_device_count():
-    """Get total number of devices"""
+# Device Groups operations
+def get_all_device_groups():
+    """Get all device groups"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT COUNT(*) FROM device_management')
-        count = cursor.fetchone()[0]
+        cursor.execute('''
+            SELECT id, name, color, description, created_at
+            FROM device_groups
+            ORDER BY name
+        ''')
+        
+        groups = []
+        for row in cursor.fetchall():
+            groups.append({
+                'id': row[0],
+                'name': row[1],
+                'color': row[2],
+                'description': row[3],
+                'created_at': row[4]
+            })
         
         conn.close()
-        return count
-    except:
-        return 0
+        return groups
+    except Exception as e:
+        print(f"Error getting device groups: {e}")
+        return []
 
-def get_group_count():
-    """Get total number of groups"""
+def add_device_group(name, color='blue', description=''):
+    """Add a new device group"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT COUNT(*) FROM device_groups')
-        count = cursor.fetchone()[0]
+        cursor.execute('''
+            INSERT INTO device_groups (name, color, description)
+            VALUES (?, ?, ?)
+        ''', (name, color, description))
         
+        group_id = cursor.lastrowid
+        conn.commit()
         conn.close()
-        return count
-    except:
-        return 0
+        return group_id
+    except Exception as e:
+        print(f"Error adding device group: {e}")
+        return None
 
-def get_tag_count():
-    """Get total number of tag mappings"""
+# Services operations
+def get_all_services():
+    """Get all services"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT COUNT(*) FROM tag_mappings')
-        count = cursor.fetchone()[0]
+        cursor.execute('''
+            SELECT id, name, description, enabled
+            FROM services
+            ORDER BY name
+        ''')
+        
+        services = []
+        for row in cursor.fetchall():
+            services.append({
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'enabled': row[3]
+            })
         
         conn.close()
-        return count
-    except:
-        return 0
+        return services
+    except Exception as e:
+        print(f"Error getting services: {e}")
+        return []
 
+def get_service_by_name(name):
+    """Get service ID by name"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT id FROM services WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        
+        conn.close()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"Error getting service by name: {e}")
+        return None
+
+# Database statistics
 def get_database_stats():
     """Get database statistics"""
-    return {
-        'devices': get_device_count(),
-        'groups': get_group_count(),
-        'tags': get_tag_count()
-    }
-
-def reset_database():
-    """Reset database - DANGEROUS: Only for development"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Drop all tables
-        cursor.execute('DROP TABLE IF EXISTS tag_mappings')
-        cursor.execute('DROP TABLE IF EXISTS tag_categories')
-        cursor.execute('DROP TABLE IF EXISTS device_management')
-        cursor.execute('DROP TABLE IF EXISTS device_groups')
-        cursor.execute('DROP TABLE IF EXISTS general_configuration')
+        cursor.execute('SELECT COUNT(*) FROM modbus_device')
+        modbus_count = cursor.fetchone()[0]
         
-        conn.commit()
-        conn.close()
+        cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+        loadcell_count = cursor.fetchone()[0]
         
-        print("Database reset complete")
-        print("Re-initializing database...")
-        init_database()
+        cursor.execute('SELECT COUNT(*) FROM modbus_datapoints')
+        modbus_datapoint_count = cursor.fetchone()[0]
         
-        return True
-    except Exception as e:
-        print("Error resetting database: {}".format(e))
-        return False
-
-def backup_database(backup_file='gateway_config_backup.db'):
-    """Create a backup of the database"""
-    try:
-        import shutil
-        import os
+        cursor.execute('SELECT COUNT(*) FROM loadcell_datapoints')
+        loadcell_datapoint_count = cursor.fetchone()[0]
         
-        if os.path.exists(DB_FILE):
-            shutil.copy2(DB_FILE, backup_file)
-            print("Database backed up to: {}".format(backup_file))
-            return True
-        else:
-            print("Database file not found: {}".format(DB_FILE))
-            return False
-    except Exception as e:
-        print("Error backing up database: {}".format(e))
-        return False
-
-def restore_database(backup_file='gateway_config_backup.db'):
-    """Restore database from backup"""
-    try:
-        import shutil
-        import os
-        
-        if os.path.exists(backup_file):
-            # Close any existing connections
-            import sqlite3
-            try:
-                sqlite3.connect(DB_FILE).close()
-            except:
-                pass
-            
-            shutil.copy2(backup_file, DB_FILE)
-            print("Database restored from: {}".format(backup_file))
-            return True
-        else:
-            print("Backup file not found: {}".format(backup_file))
-            return False
-    except Exception as e:
-        print("Error restoring database: {}".format(e))
-        return False
-
-# Test function to verify database structure
-def test_database_structure():
-    """Test database structure and print schema"""
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        print("\n=== Database Structure ===")
-        
-        # Get all tables
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = cursor.fetchall()
-        
-        for table in tables:
-            table_name = table[0]
-            print(f"\nTable: {table_name}")
-            
-            # Get table schema
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            columns = cursor.fetchall()
-            
-            for col in columns:
-                col_id, col_name, col_type, not_null, default_val, pk = col
-                print(f"  {col_name}: {col_type} {'PK' if pk else ''} {'NOT NULL' if not_null else ''} {f'DEFAULT {default_val}' if default_val else ''}")
-        
-        # Get row counts
-        print("\n=== Row Counts ===")
-        for table in tables:
-            table_name = table[0]
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-            count = cursor.fetchone()[0]
-            print(f"{table_name}: {count} rows")
+        cursor.execute('SELECT COUNT(*) FROM device_groups')
+        group_count = cursor.fetchone()[0]
         
         conn.close()
-        return True
+        
+        return {
+            'modbus_devices': modbus_count,
+            'loadcell_devices': loadcell_count,
+            'total_devices': modbus_count + loadcell_count,
+            'modbus_datapoints': modbus_datapoint_count,
+            'loadcell_datapoints': loadcell_datapoint_count,
+            'total_datapoints': modbus_datapoint_count + loadcell_datapoint_count,
+            'groups': group_count
+        }
     except Exception as e:
-        print("Error testing database structure: {}".format(e))
-        return False
+        print(f"Error getting stats: {e}")
+        return {}
 
 # Initialize database when module is imported
 if __name__ == '__main__':
     print("Initializing database...")
     init_database()
-    test_database_structure()
+    
+    print("\n=== Database Statistics ===")
+    stats = get_database_stats()
+    for key, value in stats.items():
+        print(f"{key}: {value}")
 else:
-    # Auto-initialize when module is imported
     init_database()

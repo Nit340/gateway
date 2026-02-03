@@ -3,9 +3,9 @@
     <!-- Tab Navigation for MQTT Form -->
     <div class="flex border-b border-slate-200 mb-4">
         <button onclick="window.mqttFormLogic.switchMqttTab('connection')" class="tab-button active">Connection</button>
-        <button class="tab-button" onclick="switchMqttTab('topics')">Topics & Format</button>
-        <button class="tab-button" onclick="switchMqttTab('publishing')">Tag Publishing</button>
-        <button class="tab-button" onclick="switchMqttTab('advanced')">Advanced</button>
+        <button class="tab-button" onclick="window.mqttFormLogic.switchMqttTab('topics')">Topics & Format</button>
+        <button class="tab-button" onclick="window.mqttFormLogic.switchMqttTab('publishing')">Tag Publishing</button>
+        <button class="tab-button" onclick="window.mqttFormLogic.switchMqttTab('advanced')">Advanced</button>
     </div>
     
     <!-- CONNECTION TAB CONTENT -->
@@ -90,7 +90,7 @@
                                class="w-full compact-input"
                                value="********"
                                placeholder="Enter password">
-                        <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="generatePassword('field-password')">
+                        <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="window.mqttFormLogic.generatePassword('field-password')">
                             Generate
                         </button>
                     </div>
@@ -156,7 +156,7 @@
         </div>
         
         <div class="flex justify-end">
-            <button onclick="saveMqttConnectionSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+            <button onclick="window.mqttFormLogic.saveMqttConnectionSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
                 <i class="fa-solid fa-save mr-1"></i> Save Connection
             </button>
         </div>
@@ -177,69 +177,12 @@
                     <p class="help-text">Root topic for all published messages</p>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Telemetry Topic</label>
-                        <div class="flex items-center gap-2">
-                            <input type="text" id="field-telemetryTopic" 
-                                   class="w-full compact-input"
-                                   value="telemetry"
-                                   placeholder="telemetry"
-                                   onchange="window.mqttFormLogic.updateAllTopicOptions()">
-                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="addCustomTopic('telemetry')">
-                                <i class="fa-solid fa-plus"></i>
-                            </button>
-                        </div>
-                        <p class="help-text">Sub-topic for telemetry data</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Topic</label>
-                        <div class="flex items-center gap-2">
-                            <input type="text" id="field-alarmTopic" 
-                                   class="w-full compact-input"
-                                   value="alarms"
-                                   placeholder="alarms"
-                                   onchange="window.mqttFormLogic.updateAllTopicOptions()">
-                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="addCustomTopic('alarm')">
-                                <i class="fa-solid fa-plus"></i>
-                            </button>
-                        </div>
-                        <p class="help-text">Sub-topic for alarm notifications</p>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Event Topic</label>
-                        <div class="flex items-center gap-2">
-                            <input type="text" id="field-eventTopic" 
-                                   class="w-full compact-input"
-                                   value="events"
-                                   placeholder="events"
-                                   onchange="window.mqttFormLogic.updateAllTopicOptions()">
-                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="addCustomTopic('event')">
-                                <i class="fa-solid fa-plus"></i>
-                            </button>
-                        </div>
-                        <p class="help-text">Sub-topic for system events</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Command Topic</label>
-                        <input type="text" id="field-commandTopic" 
-                               class="w-full compact-input"
-                               value="commands"
-                               placeholder="commands"
-                               onchange="window.mqttFormLogic.updateAllTopicOptions()">
-                        <p class="help-text">Sub-topic for receiving commands</p>
-                    </div>
-                </div>
-                
                 <!-- Custom Topics Section -->
                 <div>
                     <div class="flex justify-between items-center mb-2">
                         <label class="block text-xs font-medium text-slate-700">Custom Topics</label>
                         <button type="button" 
-                                onclick="addNewCustomTopic()"
+                                onclick="window.mqttFormLogic.addNewCustomTopic()"
                                 class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
                             <i class="fa-solid fa-plus mr-1"></i> Add Custom Topic
                         </button>
@@ -250,16 +193,16 @@
                             <div class="flex items-center gap-2">
                                 <input type="text" 
                                        class="w-full compact-input"
-                                       value="status"
-                                       placeholder="status"
+                                       value="telemetry"
+                                       placeholder="telemetry"
                                        onchange="window.mqttFormLogic.updateAllTopicOptions()">
-                                <button type="button" class="compact-button border border-red-300 text-red-700 hover:bg-red-50" onclick="removeCustomTopic(this)">
+                                <button type="button" class="compact-button border border-red-300 text-red-700 hover:bg-red-50" onclick="window.mqttFormLogic.removeCustomTopic(this)">
                                     <i class="fa-solid fa-trash"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
-                    <p class="help-text">Additional custom topics for publishing</p>
+                    <p class="help-text">Add custom topics for publishing</p>
                 </div>
             </div>
         </div>
@@ -268,28 +211,36 @@
             <h5 class="form-section-title">Message Format</h5>
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Topic-specific Format</label>
-                    <div class="space-y-4">
-                        <!-- Topic Format Mappings -->
-                        <div id="topic-format-mappings">
-                            <!-- Format mappings will be populated here dynamically -->
-                        </div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Default Message Format</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="default-format" value="json" checked>
+                            <span class="text-xs">JSON</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="default-format" value="csv">
+                            <span class="text-xs">CSV</span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="default-format" value="keyvalue">
+                            <span class="text-xs">Key-Value Pairs</span>
+                        </label>
                     </div>
-                    <p class="help-text">Configure different message formats for different topics</p>
+                    <p class="help-text">Default format for all messages</p>
                 </div>
                 
-                <!-- Format Templates -->
-                <div id="format-templates-container">
-                    <!-- Templates will be shown here based on topic selection -->
-                    <div class="p-4 border border-slate-200 rounded bg-slate-50">
-                        <p class="text-xs text-slate-500 text-center">Select a topic to configure its message format</p>
-                    </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">JSON Template</label>
+                    <textarea id="field-json-template" 
+                              class="w-full compact-input font-mono text-xs h-32"
+                              placeholder='{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}'>{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}</textarea>
+                    <p class="help-text">Use placeholders like %TAG_NAME%, %TIMESTAMP%, %DEVICE_ID%</p>
                 </div>
             </div>
         </div>
         
         <div class="flex justify-end">
-            <button onclick="saveMqttTopicSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+            <button onclick="window.mqttFormLogic.saveMqttTopicSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
                 <i class="fa-solid fa-save mr-1"></i> Save Topics & Format
             </button>
         </div>
@@ -301,204 +252,128 @@
             <h5 class="form-section-title">Tag Selection</h5>
             <div class="space-y-4">
                 <div class="flex justify-between items-center">
-                    <span class="text-xs font-medium text-slate-700" id="tag-selection-title">Select Tags to Publish</span>
+                    <span class="text-xs font-medium text-slate-700">Select Tags to Publish</span>
                     <div class="flex gap-2">
                         <button type="button" 
-                                onclick="showAddTagModal()"
+                                onclick="window.mqttFormLogic.showAddTagModal()"
                                 class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
                             <i class="fa-solid fa-plus mr-1"></i> Add Tags
                         </button>
                         <button type="button"
-                                onclick="removeSelectedMqttTags()"
+                                onclick="window.mqttFormLogic.removeSelectedMqttTags()"
                                 class="compact-button border border-red-300 text-red-700 hover:bg-red-50 text-xs">
                             <i class="fa-solid fa-trash mr-1"></i> Remove Selected
                         </button>
                     </div>
                 </div>
                 
-                <!-- DEFAULT TAG TABLE (For On Value Change mode) -->
-                <div id="tag-table-onchange" class="border border-slate-200 rounded overflow-hidden">
+                <!-- TAG TABLE -->
+                <div class="border border-slate-200 rounded overflow-hidden">
                     <table class="w-full text-xs">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags-onchange" onchange="toggleAllTags('onchange')"></th>
+                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags" onchange="window.mqttFormLogic.toggleAllTags()"></th>
                                 <th class="p-2 text-left">Tag Name</th>
                                 <th class="p-2 text-left">Topic</th>
                                 <th class="p-2 text-left">Publish Rate</th>
-                                <th class="p-2 text-left">QoS</th>
-                                <th class="p-2 text-left">Format</th>
                                 <th class="p-2 text-left">Enabled</th>
                             </tr>
                         </thead>
-                        <tbody id="mqtt-tags-table-onchange">
+                        <tbody id="mqtt-tags-table">
                             <!-- Rows will be populated dynamically -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- PERIODIC TAG TABLE (For Periodic Interval mode) -->
-                <div id="tag-table-periodic" class="border border-slate-200 rounded overflow-hidden" style="display: none;">
-                    <table class="w-full text-xs">
-                        <thead class="bg-slate-50">
-                            <tr>
-                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags-periodic" onchange="toggleAllTags('periodic')"></th>
-                                <th class="p-2 text-left">Tag Name</th>
-                                <th class="p-2 text-left">Topic</th>
-                                <th class="p-2 text-left">Data Type</th>
-                                <th class="p-2 text-left">Priority</th>
-                                <th class="p-2 text-left">Format</th>
-                                <th class="p-2 text-left">Include in Batch</th>
-                                <th class="p-2 text-left">Enabled</th>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2 font-mono">Hoist_Load</td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs topic-select">
+                                        <option value="factory/crane/001">factory/crane/001 (base)</option>
+                                        <option value="factory/crane/001/telemetry" selected>factory/crane/001/telemetry</option>
+                                        <option value="factory/crane/001/alarms">factory/crane/001/alarms</option>
+                                        <option value="factory/crane/001/status">factory/crane/001/status</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs publish-rate-select">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="100">100 ms</option>
+                                        <option value="500">500 ms</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" class="enabled-toggle" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody id="mqtt-tags-table-periodic">
-                            <!-- Rows will be populated dynamically -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- EVENT TAG TABLE (For Event Based mode) -->
-                <div id="tag-table-event" class="border border-slate-200 rounded overflow-hidden" style="display: none;">
-                    <table class="w-full text-xs">
-                        <thead class="bg-slate-50">
-                            <tr>
-                                <th class="p-2 text-left"><input type="checkbox" id="select-all-tags-event" onchange="toggleAllTags('event')"></th>
-                                <th class="p-2 text-left">Event Name</th>
-                                <th class="p-2 text-left">Topic</th>
-                                <th class="p-2 text-left">Event Type</th>
-                                <th class="p-2 text-left">Severity</th>
-                                <th class="p-2 text-left">Format</th>
-                                <th class="p-2 text-left">Trigger Condition</th>
-                                <th class="p-2 text-left">Enabled</th>
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2 font-mono">Boom_Angle</td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs topic-select">
+                                        <option value="factory/crane/001">factory/crane/001 (base)</option>
+                                        <option value="factory/crane/001/telemetry" selected>factory/crane/001/telemetry</option>
+                                        <option value="factory/crane/001/alarms">factory/crane/001/alarms</option>
+                                        <option value="factory/crane/001/status">factory/crane/001/status</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs publish-rate-select">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="100">100 ms</option>
+                                        <option value="500">500 ms</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" class="enabled-toggle" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody id="mqtt-tags-table-event">
-                            <!-- Rows will be populated dynamically -->
+                            <tr class="border-t border-slate-100">
+                                <td class="p-2"><input type="checkbox" class="tag-select"></td>
+                                <td class="p-2 font-mono">WindSpeed</td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs topic-select">
+                                        <option value="factory/crane/001">factory/crane/001 (base)</option>
+                                        <option value="factory/crane/001/telemetry">factory/crane/001/telemetry</option>
+                                        <option value="factory/crane/001/alarms" selected>factory/crane/001/alarms</option>
+                                        <option value="factory/crane/001/status">factory/crane/001/status</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <select class="w-full compact-select text-xs publish-rate-select">
+                                        <option value="onChange" selected>On Change</option>
+                                        <option value="100">100 ms</option>
+                                        <option value="500">500 ms</option>
+                                        <option value="1000">1 sec</option>
+                                        <option value="5000">5 sec</option>
+                                    </select>
+                                </td>
+                                <td class="p-2">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" class="enabled-toggle" checked>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
                 
                 <div class="text-xs text-slate-500">
                     <p><i class="fa-solid fa-info-circle mr-1"></i> Total items selected: <span id="selected-tags-count">0</span></p>
-                    <p class="mt-1"><i class="fa-solid fa-lightbulb mr-1"></i> Topics and formats are configured in the "Topics & Format" tab</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <h5 class="form-section-title">Publishing Options</h5>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Publish Mode</label>
-                    <div class="radio-group">
-                        <label class="radio-option">
-                            <input type="radio" name="field-publishMode" value="onChange" checked>
-                            <span class="text-xs">On Value Change (default)</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="field-publishMode" value="periodic">
-                            <span class="text-xs">Periodic Interval</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="field-publishMode" value="event">
-                            <span class="text-xs">Event Based</span>
-                        </label>
-                    </div>
-                    <p class="help-text" id="publish-mode-help">Publish individual tag values when they change</p>
-                </div>
-                
-                <div id="periodic-options" class="space-y-2" style="display: none;">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Publish Interval</label>
-                        <div class="flex items-center gap-2">
-                            <input type="number" id="field-publish-interval" 
-                                   class="w-full compact-input"
-                                   value="1000"
-                                   min="100"
-                                   max="60000">
-                            <span class="text-xs text-slate-500">milliseconds</span>
-                        </div>
-                        <p class="help-text">How often to publish batched data (100-60000 ms)</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Batch Threshold</label>
-                        <input type="number" id="field-batch-threshold" 
-                               class="w-full compact-input"
-                               value="50"
-                               min="1"
-                               max="1000">
-                        <p class="help-text">Maximum number of data points per batch</p>
-                    </div>
-                </div>
-                
-                <div id="event-options" class="space-y-2" style="display: none;">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Event Triggers</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-option">
-                                <input type="checkbox" name="field-event-triggers" value="alarm" checked>
-                                <span class="text-xs">Alarm Events</span>
-                            </label>
-                            <label class="checkbox-option">
-                                <input type="checkbox" name="field-event-triggers" value="threshold">
-                                <span class="text-xs">Threshold Breaches</span>
-                            </label>
-                            <label class="checkbox-option">
-                                <input type="checkbox" name="field-event-triggers" value="state">
-                                <span class="text-xs">State Changes</span>
-                            </label>
-                            <label class="checkbox-option">
-                                <input type="checkbox" name="field-event-triggers" value="custom">
-                                <span class="text-xs">Custom Events</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Event Severity Filter</label>
-                        <select id="field-event-severity" class="w-full compact-select">
-                            <option value="all">All Severities</option>
-                            <option value="high">High Only</option>
-                            <option value="medium">Medium & High</option>
-                            <option value="low" selected>Low, Medium & High</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Batch Publishing</label>
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs text-slate-600">Enable message batching</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="field-enableBatching">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    <div id="batching-options" class="mt-2 ml-4 space-y-2" style="display: none;">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Batch Size</label>
-                            <input type="number" id="field-batchSize" 
-                                   class="w-full compact-input"
-                                   value="10"
-                                   min="1"
-                                   max="100">
-                            <p class="help-text">Number of messages per batch</p>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Batch Timeout (ms)</label>
-                            <input type="number" id="field-batchTimeout" 
-                                   class="w-full compact-input"
-                                   value="1000"
-                                   min="10"
-                                   max="10000">
-                            <p class="help-text">Maximum time to wait before sending batch</p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
         
         <div class="flex justify-end">
-            <button onclick="saveMqttPublishingSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+            <button onclick="window.mqttFormLogic.saveMqttPublishingSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
                 <i class="fa-solid fa-save mr-1"></i> Save Publishing
             </button>
         </div>
@@ -594,7 +469,7 @@
                                     class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
                                 <i class="fa-solid fa-upload mr-1"></i> Upload CA Certificate
                             </button>
-                            <input type="file" id="field-advanced-ca-cert" style="display: none;" onchange="handleCertificateUpload(this, 'advanced-ca-cert-name')">
+                            <input type="file" id="field-advanced-ca-cert" style="display: none;" onchange="window.mqttFormLogic.handleCertificateUpload(this, 'advanced-ca-cert-name')">
                             <span id="advanced-ca-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
                         </div>
                         
@@ -604,7 +479,7 @@
                                     class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
                                 <i class="fa-solid fa-key mr-1"></i> Upload Private Key
                             </button>
-                            <input type="file" id="field-advanced-private-key" style="display: none;" onchange="handleCertificateUpload(this, 'advanced-private-key-name')">
+                            <input type="file" id="field-advanced-private-key" style="display: none;" onchange="window.mqttFormLogic.handleCertificateUpload(this, 'advanced-private-key-name')">
                             <span id="advanced-private-key-name" class="file-name text-xs text-slate-500">No file selected</span>
                         </div>
                         
@@ -614,7 +489,7 @@
                                     class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 w-full text-left">
                                 <i class="fa-solid fa-certificate mr-1"></i> Upload Client Certificate
                             </button>
-                            <input type="file" id="field-advanced-client-cert" style="display: none;" onchange="handleCertificateUpload(this, 'advanced-client-cert-name')">
+                            <input type="file" id="field-advanced-client-cert" style="display: none;" onchange="window.mqttFormLogic.handleCertificateUpload(this, 'advanced-client-cert-name')">
                             <span id="advanced-client-cert-name" class="file-name text-xs text-slate-500">No file selected</span>
                         </div>
                     </div>
@@ -837,10 +712,9 @@
         </div>
         
         <div class="flex justify-end">
-            <button onclick="saveMqttAdvancedSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
+            <button onclick="window.mqttFormLogic.saveMqttAdvancedSettings()" class="compact-button bg-primary hover:bg-primaryHover text-white">
                 <i class="fa-solid fa-save mr-1"></i> Save Advanced
             </button>
         </div>
     </div>
 </div>
-

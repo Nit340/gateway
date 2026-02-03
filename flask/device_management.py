@@ -1,322 +1,534 @@
-# device_management.py - Device management API
+# device_management.py - Device management API for Modbus and Loadcell
 import asyncio
 import json
-import datetime
 import random
-import csv
-import io
 import uuid
 import sqlite3
 from aiohttp import web
 
-from models import (
-    device_status_tracker, active_scans, pairing_sessions,
-    device_websockets
-)
+from models import device_status_tracker, device_websockets
 from websocket_handler import broadcast_device_status
-from database import DB_FILE
+from database import DB_FILE, get_service_by_name
+
+# ============================================================================
+# GET ALL DEVICES (Both Modbus and Loadcell)
+# ============================================================================
 
 async def get_all_devices(request):
-    """GET all devices"""
+    """GET all devices (modbus + loadcell)"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
+        devices = []
+        
+        # Get Modbus devices
         cursor.execute('''
-            SELECT d.id, d.name, d.type, d.protocol, d.address, 
-                   g.name as group_name, g.color, d.config_json
-            FROM device_management d
-            LEFT JOIN device_groups g ON d.group_id = g.id
-            ORDER BY CAST(d.id AS INTEGER)
+            SELECT m.id, m.name, m.device_type, m.ip_address, m.port, m.serial_port,
+                   g.name as group_name, g.color, m.enabled, s.name as service_name
+            FROM modbus_device m
+            LEFT JOIN device_groups g ON m.group_id = g.id
+            LEFT JOIN services s ON m.service_id = s.id
+            ORDER BY CAST(m.id AS INTEGER)
         ''')
         
-        devices = []
         for row in cursor.fetchall():
-            device_id, name, type_, protocol, address, group_name, color, config_json = row
+            device_id, name, device_type, ip, port, serial_port, group_name, color, enabled, service_name = row
             
-            # Get real-time status (not from database)
-            status = device_status_tracker.get(device_id, {'status': 'Online', 'last_poll': 'Just now'})
+            # Determine address display
+            if device_type == 'tcp':
+                address = f"{ip}:{port}" if ip else "Not configured"
+                protocol = "modbus-tcp"
+            else:  # rtu
+                address = serial_port or "Not configured"
+                protocol = "modbus-rtu"
+            
+            # Get real-time status
+            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
             
             devices.append({
                 'id': device_id,
                 'name': name,
-                'type': type_,
+                'type': 'Modbus',
                 'protocol': protocol,
                 'address': address,
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'group': group_name or 'None',
-                'details': {
-                    'status': status['status'],
-                    'lastResponse': status['last_poll'],
-                    'retries': 0,
-                    'signalStrength': 'N/A'
-                }
+                'enabled': bool(enabled),
+                'service': service_name
+            })
+        
+        # Get Loadcell devices
+        cursor.execute('''
+            SELECT l.id, l.name, l.device_path, 
+                   g.name as group_name, g.color, l.enabled, s.name as service_name
+            FROM loadcell_device l
+            LEFT JOIN device_groups g ON l.group_id = g.id
+            LEFT JOIN services s ON l.service_id = s.id
+            ORDER BY CAST(l.id AS INTEGER)
+        ''')
+        
+        for row in cursor.fetchall():
+            device_id, name, device_path, group_name, color, enabled, service_name = row
+            
+            # Get real-time status
+            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            
+            devices.append({
+                'id': device_id,
+                'name': name,
+                'type': 'Loadcell',
+                'protocol': 'loadcell',
+                'address': device_path,
+                'status': status['status'],
+                'lastPoll': status['last_poll'],
+                'group': group_name or 'None',
+                'enabled': bool(enabled),
+                'service': service_name
             })
         
         conn.close()
         return web.json_response({'devices': devices})
         
     except Exception as e:
-        print("Error getting devices: {}".format(e))
+        print(f"Error getting devices: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# GET DEVICE DETAILS
+# ============================================================================
+
 async def get_device_details(request):
-    """GET device details"""
+    """GET device details by ID"""
     try:
         device_id = request.match_info['device_id']
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
+        # Try Modbus first
         cursor.execute('''
-            SELECT d.id, d.name, d.type, d.protocol, d.address, 
-                   g.name as group_name, g.color, d.config_json
-            FROM device_management d
-            LEFT JOIN device_groups g ON d.group_id = g.id
-            WHERE d.id = ?
+            SELECT m.id, m.name, m.device_type, m.group_id,
+                   m.slave_id, m.timeout_ms, m.retry_count, m.polling_interval_ms,
+                   m.ip_address, m.port,
+                   m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
+                   m.enabled, g.name as group_name, s.name as service_name
+            FROM modbus_device m
+            LEFT JOIN device_groups g ON m.group_id = g.id
+            LEFT JOIN services s ON m.service_id = s.id
+            WHERE m.id = ?
         ''', (device_id,))
         
         row = cursor.fetchone()
-        if not row:
-            return web.json_response({'error': 'Device not found'}, status=404)
         
-        device_id, name, type_, protocol, address, group_name, color, config_json = row
-        config = json.loads(config_json) if config_json else {}
+        if row:
+            # It's a Modbus device
+            (dev_id, name, device_type, group_id, slave_id, timeout_ms, retry_count, 
+             polling_interval_ms, ip_address, port, serial_port, baud_rate, parity, 
+             data_bits, stop_bits, enabled, group_name, service_name) = row
+            
+            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            
+            details = {
+                'id': dev_id,
+                'name': name,
+                'type': 'Modbus',
+                'device_type': device_type,
+                'group': group_name or 'None',
+                'group_id': group_id,
+                'service': service_name,
+                'enabled': bool(enabled),
+                'status': status['status'],
+                'lastPoll': status['last_poll'],
+                'config': {
+                    'slave_id': slave_id,
+                    'timeout_ms': timeout_ms,
+                    'retry_count': retry_count,
+                    'polling_interval_ms': polling_interval_ms
+                }
+            }
+            
+            if device_type == 'tcp':
+                details['config']['ip_address'] = ip_address
+                details['config']['port'] = port
+                details['protocol'] = 'modbus-tcp'
+            else:  # rtu
+                details['config']['serial_port'] = serial_port
+                details['config']['baud_rate'] = baud_rate
+                details['config']['parity'] = parity
+                details['config']['data_bits'] = data_bits
+                details['config']['stop_bits'] = stop_bits
+                details['protocol'] = 'modbus-rtu'
+            
+            conn.close()
+            return web.json_response(details)
         
-        # Get real-time status
-        status = device_status_tracker.get(device_id, {'status': 'Online', 'last_poll': 'Just now'})
+        # Try Loadcell
+        cursor.execute('''
+            SELECT l.id, l.name, l.group_id, l.device_path, l.channel,
+                   l.tare_offset, l.known_weight, l.known_weight_raw, l.shift_bits,
+                   l.unit, l.capacity, l.capacity_name,
+                   l.pipeline_server, l.pipeline_port, l.log_level, l.polling_interval_ms,
+                   l.lowpass_filter_enabled, l.filter_cutoff_frequency, l.filter_activation_delta_min,
+                   l.moving_avg_enabled, l.moving_avg_window,
+                   l.median_filter_enabled, l.median_filter_window,
+                   l.autotare_enabled, l.autotare_trigger_delta_grams,
+                   l.adaptive_deadband_enabled, l.adaptive_deadband_min, l.adaptive_deadband_max,
+                   l.adaptive_deadband_grow_rate, l.adaptive_deadband_shrink_rate,
+                   l.publish_step_grams, l.overload_threshold, l.overload_relay,
+                   l.overload_action, l.overload_cooldown_ms, l.confirm_count,
+                   l.enabled, g.name as group_name, s.name as service_name
+            FROM loadcell_device l
+            LEFT JOIN device_groups g ON l.group_id = g.id
+            LEFT JOIN services s ON l.service_id = s.id
+            WHERE l.id = ?
+        ''', (device_id,))
         
-        # Ensure config has all necessary fields for Modbus TCP
-        if type_ == 'Modbus TCP':
-            config.setdefault('ip_address', '192.168.1.100')
-            config.setdefault('port', 502)
-            config.setdefault('slave_address', 1)
-            config.setdefault('polling_interval', 1000)
-            config.setdefault('timeout', 5000)
-            config.setdefault('retry_count', 3)
+        row = cursor.fetchone()
         
-        details = {
-            'name': name,
-            'type': type_,
-            'protocol': protocol,
-            'address': address,
-            'group': group_name,
-            'config': config,
-            'status': status['status'],
-            'last_response': status['last_poll']
-        }
+        if row:
+            # It's a Loadcell device
+            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            
+            details = {
+                'id': row[0],
+                'name': row[1],
+                'type': 'Loadcell',
+                'protocol': 'loadcell',
+                'group': row[36] or 'None',
+                'group_id': row[2],
+                'service': row[37],
+                'enabled': bool(row[35]),
+                'status': status['status'],
+                'lastPoll': status['last_poll'],
+                'config': {
+                    'device_path': row[3],
+                    'channel': row[4],
+                    'calibration': {
+                        'tare_offset': row[5],
+                        'known_weight': row[6],
+                        'known_weight_raw': row[7],
+                        'shift_bits': row[8],
+                        'unit': row[9],
+                        'capacity': row[10],
+                        'capacity_name': row[11]
+                    },
+                    'service': {
+                        'pipeline_server': row[12],
+                        'pipeline_port': row[13],
+                        'log_level': row[14],
+                        'polling_interval_ms': row[15]
+                    },
+                    'filters': {
+                        'lowpass_filter_enabled': bool(row[16]),
+                        'filter_cutoff_frequency': row[17],
+                        'filter_activation_delta_min': row[18],
+                        'moving_avg_enabled': bool(row[19]),
+                        'moving_avg_window': row[20],
+                        'median_filter_enabled': bool(row[21]),
+                        'median_filter_window': row[22],
+                        'autotare_enabled': bool(row[23]),
+                        'autotare_trigger_delta_grams': row[24],
+                        'adaptive_deadband_enabled': bool(row[25]),
+                        'adaptive_deadband_min': row[26],
+                        'adaptive_deadband_max': row[27],
+                        'adaptive_deadband_grow_rate': row[28],
+                        'adaptive_deadband_shrink_rate': row[29],
+                        'publish_step_grams': row[30],
+                        'overload_threshold': row[31],
+                        'overload_relay': row[32],
+                        'overload_action': row[33],
+                        'overload_cooldown_ms': row[34],
+                        'confirm_count': row[35]
+                    }
+                }
+            }
+            
+            conn.close()
+            return web.json_response(details)
         
         conn.close()
-        return web.json_response(details)
+        return web.json_response({'error': 'Device not found'}, status=404)
         
     except Exception as e:
-        print("Error getting device details: {}".format(e))
+        print(f"Error getting device details: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# ADD DEVICE
+# ============================================================================
+
 async def add_device(request):
-    """POST add new device"""
+    """POST - Add a new device (Modbus or Loadcell)"""
     try:
         data = await request.json()
         
-        if not data.get('name') or not data.get('type'):
-            return web.json_response({'error': 'Name and type are required'}, status=400)
+        device_type = data.get('type', '').lower()
+        protocol = data.get('protocol', '').lower()
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Get the next device number
-        cursor.execute('SELECT COUNT(*) FROM device_management')
-        device_count = cursor.fetchone()[0]
-        device_id = str(device_count + 1)  # Simple sequential number
+        # Generate device ID
+        if device_type == 'loadcell':
+            cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+        else:  # modbus
+            cursor.execute('SELECT COUNT(*) FROM modbus_device')
         
-        # Find group ID
+        count = cursor.fetchone()[0]
+        device_id = str(count + 1)
+        
+        # Get group_id if group name is provided
         group_id = None
-        if data.get('group'):
+        if data.get('group') and data['group'] != 'None':
             cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['group'],))
-            group = cursor.fetchone()
-            if group:
-                group_id = group[0]
+            group_row = cursor.fetchone()
+            if group_row:
+                group_id = group_row[0]
         
-        config = data.get('config', {})
+        # Get service_id
+        service_name = 'loadcell' if device_type == 'loadcell' else 'modbus'
+        service_id = get_service_by_name(service_name)
         
-        # Determine protocol based on type or explicit protocol field
-        if 'protocol' in data:
-            protocol = data['protocol']
-        elif data.get('type') == 'Modbus TCP':
-            protocol = 'modbus-tcp'
-        elif data.get('type') == 'Modbus RTU':
-            protocol = 'modbus-rtu'
-        elif data.get('type') == 'CAN':
-            protocol = 'can'
-        elif data.get('type') == 'Wireless':
-            protocol = 'wireless'
-        elif data.get('type') == 'ACS Sensor':
-            protocol = 'acs-sensor'
-        elif data.get('type') == 'EtherNet/IP':
-            protocol = 'ethernet-ip'
-        else:
-            protocol = 'modbus-tcp'  # Default
-        
-        # FIX: Ensure Modbus TCP has all required fields
-        if data.get('type') == 'Modbus TCP' or protocol == 'modbus-tcp':
-            # Validate and set defaults for all TCP fields
-            config.setdefault('ip_address', '192.168.1.100')
-            config.setdefault('port', 502)
-            config.setdefault('slave_address', 1)
-            config.setdefault('polling_interval', 1000)
-            config.setdefault('timeout', 5000)
-            config.setdefault('retry_count', 3)
+        if device_type == 'loadcell':
+            # Add Loadcell device
+            config = data.get('config', {})
             
-            print("Saving Modbus TCP device with config:", config)
-        
-        cursor.execute('''
-            INSERT INTO device_management (id, name, type, protocol, address, group_id, config_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            device_id,
-            data['name'],
-            data['type'],
-            protocol,
-            data.get('address', 'N/A'),
-            group_id,
-            json.dumps(config)
-        ))
+            cursor.execute('''
+                INSERT INTO loadcell_device (
+                    id, name, group_id, service_id, device_path, channel,
+                    capacity, capacity_name
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                device_id,
+                data.get('name', 'Loadcell Device'),
+                group_id,
+                service_id,
+                config.get('device_path', '/dev/spidev0.0'),
+                config.get('channel', 0),
+                config.get('capacity', 40000.0),
+                config.get('capacity_name', 'capacity')
+            ))
+            
+            # Automatically create 'load' and 'capacity' datapoints
+            cursor.execute('''
+                INSERT INTO loadcell_datapoints (device_id, name)
+                VALUES (?, 'load'), (?, ?)
+            ''', (device_id, device_id, config.get('capacity_name', 'capacity')))
+            
+        else:  # Modbus (TCP or RTU)
+            config = data.get('config', {})
+            
+            # Determine device_type from protocol
+            modbus_type = 'tcp' if 'tcp' in protocol else 'rtu'
+            
+            cursor.execute('''
+                INSERT INTO modbus_device (
+                    id, name, device_type, group_id, service_id,
+                    slave_id, timeout_ms, retry_count, polling_interval_ms,
+                    ip_address, port,
+                    serial_port, baud_rate, parity, data_bits, stop_bits
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                device_id,
+                data.get('name', 'Modbus Device'),
+                modbus_type,
+                group_id,
+                service_id,
+                config.get('slave_id', 1),
+                config.get('timeout_ms', 1000),
+                config.get('retry_count', 3),
+                config.get('polling_interval_ms', 100),
+                config.get('ip_address') if modbus_type == 'tcp' else None,
+                config.get('port', 502) if modbus_type == 'tcp' else None,
+                config.get('serial_port', '/dev/ttymxc2') if modbus_type == 'rtu' else None,
+                config.get('baud_rate', 9600) if modbus_type == 'rtu' else None,
+                config.get('parity', 'N') if modbus_type == 'rtu' else None,
+                config.get('data_bits', 8) if modbus_type == 'rtu' else None,
+                config.get('stop_bits', 1) if modbus_type == 'rtu' else None
+            ))
         
         conn.commit()
         conn.close()
         
-        # Initialize status
+        # Initialize status tracker
         device_status_tracker[device_id] = {'status': 'Online', 'last_poll': 'Just now'}
         
         return web.json_response({
             'success': True,
-            'device': {
-                'id': device_id,
-                'name': data['name'],
-                'type': data['type'],
-                'protocol': protocol,
-                'address': data.get('address', 'N/A'),
-                'status': 'Online'
-            }
-        }, status=201)
+            'message': 'Device added successfully',
+            'device_id': device_id
+        })
         
     except Exception as e:
-        print("Error adding device: {}".format(e))
+        print(f"Error adding device: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# UPDATE DEVICE
+# ============================================================================
+
 async def update_device(request):
-    """PUT update device"""
+    """PUT - Update device"""
     try:
         device_id = request.match_info['device_id']
-        
-        # Read and parse JSON with better error handling
-        try:
-            data = await request.json()
-        except json.JSONDecodeError as e:
-            print(f"JSON decode error for device {device_id}: {e}")
-            return web.json_response({'error': 'Invalid JSON format'}, status=400)
-        
-        print(f"Updating device {device_id} with data: {data}")
+        data = await request.json()
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Check if device exists
-        cursor.execute('SELECT id FROM device_management WHERE id = ?', (device_id,))
-        if not cursor.fetchone():
-            return web.json_response({'error': 'Device not found'}, status=404)
+        # Check if it's Modbus or Loadcell
+        cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (device_id,))
+        is_modbus = cursor.fetchone() is not None
         
-        # Build update query
-        updates = []
-        params = []
+        # Get group_id if group name is provided
+        group_id = None
+        if data.get('group') and data['group'] != 'None':
+            cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['group'],))
+            group_row = cursor.fetchone()
+            if group_row:
+                group_id = group_row[0]
         
-        if 'name' in data:
-            updates.append('name = ?')
-            params.append(data['name'])
-        
-        if 'type' in data:
-            updates.append('type = ?')
-            params.append(data['type'])
-        
-        if 'protocol' in data:
-            updates.append('protocol = ?')
-            params.append(data['protocol'])
-        
-        if 'address' in data:
-            updates.append('address = ?')
-            params.append(data['address'])
-        
-        if 'group' in data:
-            group_id = None
-            if data['group'] and data['group'] != 'None':
-                cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['group'],))
-                group = cursor.fetchone()
-                if group:
-                    group_id = group[0]
-            updates.append('group_id = ?')
-            params.append(group_id)
-        
-        if 'config' in data:
-            config = data['config']
-            # Ensure Modbus TCP has all required fields
-            if data.get('type', '') == 'Modbus TCP' or data.get('protocol', '') == 'modbus-tcp':
-                config.setdefault('ip_address', '192.168.1.100')
-                config.setdefault('port', 502)
-                config.setdefault('slave_address', 1)
-                config.setdefault('polling_interval', 1000)
-                config.setdefault('timeout', 5000)
-                config.setdefault('retry_count', 3)
-                print("Updating Modbus TCP device with config:", config)
+        if is_modbus:
+            # Update Modbus device
+            config = data.get('config', {})
+            device_type = data.get('device_type', 'tcp')
             
-            # Validate config is valid JSON
-            try:
-                config_json = json.dumps(config)
-            except Exception as e:
-                print(f"Error serializing config for device {device_id}: {e}")
-                return web.json_response({'error': 'Invalid configuration format'}, status=400)
+            update_fields = ['name = ?', 'device_type = ?', 'group_id = ?']
+            values = [data.get('name'), device_type, group_id]
             
-            updates.append('config_json = ?')
-            params.append(config_json)
+            # Common fields
+            if 'slave_id' in config:
+                update_fields.append('slave_id = ?')
+                values.append(config['slave_id'])
+            if 'timeout_ms' in config:
+                update_fields.append('timeout_ms = ?')
+                values.append(config['timeout_ms'])
+            if 'retry_count' in config:
+                update_fields.append('retry_count = ?')
+                values.append(config['retry_count'])
+            if 'polling_interval_ms' in config:
+                update_fields.append('polling_interval_ms = ?')
+                values.append(config['polling_interval_ms'])
+            
+            # TCP specific
+            if device_type == 'tcp':
+                if 'ip_address' in config:
+                    update_fields.append('ip_address = ?')
+                    values.append(config['ip_address'])
+                if 'port' in config:
+                    update_fields.append('port = ?')
+                    values.append(config['port'])
+            
+            # RTU specific
+            if device_type == 'rtu':
+                if 'serial_port' in config:
+                    update_fields.append('serial_port = ?')
+                    values.append(config['serial_port'])
+                if 'baud_rate' in config:
+                    update_fields.append('baud_rate = ?')
+                    values.append(config['baud_rate'])
+                if 'parity' in config:
+                    update_fields.append('parity = ?')
+                    values.append(config['parity'])
+                if 'data_bits' in config:
+                    update_fields.append('data_bits = ?')
+                    values.append(config['data_bits'])
+                if 'stop_bits' in config:
+                    update_fields.append('stop_bits = ?')
+                    values.append(config['stop_bits'])
+            
+            values.append(device_id)
+            
+            query = f'''
+                UPDATE modbus_device 
+                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            '''
+            
+            cursor.execute(query, values)
         
-        if updates:
-            updates.append('updated_at = CURRENT_TIMESTAMP')
-            query = 'UPDATE device_management SET {} WHERE id = ?'.format(', '.join(updates))
-            params.append(device_id)
+        else:
+            # Update Loadcell device
+            config = data.get('config', {})
             
-            print(f"Executing query: {query}")
-            print(f"With params: {params}")
+            update_fields = ['name = ?', 'group_id = ?']
+            values = [data.get('name'), group_id]
             
-            cursor.execute(query, params)
-            conn.commit()
+            # Device connection
+            if 'device_path' in config:
+                update_fields.append('device_path = ?')
+                values.append(config['device_path'])
+            if 'channel' in config:
+                update_fields.append('channel = ?')
+                values.append(config['channel'])
+            
+            # Calibration
+            if 'calibration' in config:
+                cal = config['calibration']
+                if 'capacity' in cal:
+                    update_fields.append('capacity = ?')
+                    values.append(cal['capacity'])
+                if 'capacity_name' in cal:
+                    update_fields.append('capacity_name = ?')
+                    values.append(cal['capacity_name'])
+                if 'tare_offset' in cal:
+                    update_fields.append('tare_offset = ?')
+                    values.append(cal['tare_offset'])
+                if 'known_weight' in cal:
+                    update_fields.append('known_weight = ?')
+                    values.append(cal['known_weight'])
+                if 'known_weight_raw' in cal:
+                    update_fields.append('known_weight_raw = ?')
+                    values.append(cal['known_weight_raw'])
+                if 'shift_bits' in cal:
+                    update_fields.append('shift_bits = ?')
+                    values.append(cal['shift_bits'])
+                if 'unit' in cal:
+                    update_fields.append('unit = ?')
+                    values.append(cal['unit'])
+            
+            values.append(device_id)
+            
+            query = f'''
+                UPDATE loadcell_device 
+                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            '''
+            
+            cursor.execute(query, values)
         
+        conn.commit()
         conn.close()
         
         return web.json_response({
             'success': True,
-            'device': {
-                'id': device_id,
-                'name': data.get('name', ''),
-                'type': data.get('type', ''),
-                'protocol': data.get('protocol', '')
-            }
+            'message': 'Device updated successfully'
         })
         
     except Exception as e:
-        print("Error updating device:", str(e))
-        import traceback
-        traceback.print_exc()
+        print(f"Error updating device: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# DELETE DEVICE
+# ============================================================================
+
 async def delete_device(request):
-    """DELETE device"""
+    """DELETE - Delete device"""
     try:
         device_id = request.match_info['device_id']
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        cursor.execute('DELETE FROM device_management WHERE id = ?', (device_id,))
+        # Try deleting from both tables (cascade will handle datapoints)
+        cursor.execute('DELETE FROM modbus_device WHERE id = ?', (device_id,))
+        cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
+        
         conn.commit()
         conn.close()
         
@@ -326,722 +538,133 @@ async def delete_device(request):
         
         return web.json_response({
             'success': True,
-            'device_id': device_id
+            'message': 'Device deleted successfully'
         })
         
     except Exception as e:
-        print("Error deleting device: {}".format(e))
+        print(f"Error deleting device: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# DEVICE OPERATIONS (Test, Disable, etc.)
+# ============================================================================
+
 async def test_device(request):
-    """POST ping device test"""
+    """POST - Test device connection"""
     try:
         device_id = request.match_info['device_id']
         
-        # Simulate ping response
-        await asyncio.sleep(0.1)  # Simulate network delay
+        # Simulate connection test
+        await asyncio.sleep(0.5)
+        success = random.choice([True, True, True, False])  # 75% success rate
         
-        return web.json_response({
-            'success': True,
-            'ping_time_ms': random.randint(1, 10),
-            'status': device_status_tracker.get(device_id, {}).get('status', 'Online')
-        })
-        
+        if success:
+            device_status_tracker[device_id] = {'status': 'Online', 'last_poll': 'Just now'}
+            return web.json_response({
+                'success': True,
+                'message': 'Device connection successful'
+            })
+        else:
+            device_status_tracker[device_id] = {'status': 'Offline', 'last_poll': 'Failed'}
+            return web.json_response({
+                'success': False,
+                'message': 'Device connection failed'
+            }, status=400)
+            
     except Exception as e:
-        print("Error testing device: {}".format(e))
+        print(f"Error testing device: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 async def disable_device(request):
-    """POST disable/enable device"""
+    """POST - Enable/Disable device"""
     try:
         device_id = request.match_info['device_id']
         data = await request.json()
-        
-        disabled = data.get('disabled', True)
-        
-        if device_id in device_status_tracker:
-            device_status_tracker[device_id]['status'] = 'Disabled' if disabled else 'Online'
-        else:
-            device_status_tracker[device_id] = {
-                'status': 'Disabled' if disabled else 'Online',
-                'last_poll': 'Just now'
-            }
-        
-        return web.json_response({
-            'success': True,
-            'status': 'Disabled' if disabled else 'Online'
-        })
-        
-    except Exception as e:
-        print("Error disabling device: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def duplicate_device(request):
-    """POST duplicate device with all its tag mappings"""
-    try:
-        device_id = request.match_info['device_id']
+        enabled = data.get('enabled', True)
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Get original device
-        cursor.execute('''
-            SELECT name, type, protocol, address, group_id, config_json
-            FROM device_management WHERE id = ?
-        ''', (device_id,))
-        
-        row = cursor.fetchone()
-        if not row:
-            conn.close()
-            return web.json_response({'error': 'Device not found'}, status=404)
-        
-        name, type_, protocol, address, group_id, config_json = row
-        
-        # Find the next available device ID
-        # Get all existing IDs and find the maximum
-        cursor.execute('SELECT id FROM device_management')
-        existing_ids = [int(row[0]) for row in cursor.fetchall() if row[0].isdigit()]
-        
-        if existing_ids:
-            new_device_id = str(max(existing_ids) + 1)
-        else:
-            new_device_id = "1"
-        
-        # Generate new device name with suffix like -001, -002, etc.
-        base_name = name
-        suffix_number = 1
-        
-        # Check if the name already ends with a pattern like " -001"
-        import re
-        match = re.search(r'^(.*?)\s*-(\d+)$', name)
-        if match:
-            base_name = match.group(1).strip()
-            try:
-                suffix_number = int(match.group(2)) + 1
-            except ValueError:
-                suffix_number = 1
-        
-        # Find next available suffix
-        max_attempts = 100
-        while max_attempts > 0:
-            new_name = f"{base_name} -{suffix_number:03d}"
-            cursor.execute('SELECT id FROM device_management WHERE name = ?', (new_name,))
-            if not cursor.fetchone():
-                break
-            suffix_number += 1
-            max_attempts -= 1
-        
-        if max_attempts == 0:
-            conn.close()
-            return web.json_response({'error': 'Could not generate unique device name'}, status=400)
-        
-        # Insert the duplicated device
-        cursor.execute('''
-            INSERT INTO device_management (id, name, type, protocol, address, group_id, config_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (new_device_id, new_name, type_, protocol, address, group_id, config_json))
-        
-        # Duplicate all tag mappings from the original device
-        cursor.execute('''
-            SELECT tag_name, config_json
-            FROM tag_mappings
-            WHERE device_id = ?
-        ''', (device_id,))
-        
-        tags = cursor.fetchall()
-        tags_duplicated = 0
-        for tag_row in tags:
-            tag_name, tag_config_json = tag_row
-            
-            # Check if tag name already exists for the new device
-            # If it does, add a suffix
-            cursor.execute('''
-                SELECT id FROM tag_mappings 
-                WHERE device_id = ? AND tag_name = ?
-            ''', (new_device_id, tag_name))
-            
-            if cursor.fetchone():
-                # Tag name already exists, add suffix
-                tag_suffix = 1
-                while True:
-                    new_tag_name = f"{tag_name}_{tag_suffix:03d}"
-                    cursor.execute('''
-                        SELECT id FROM tag_mappings 
-                        WHERE device_id = ? AND tag_name = ?
-                    ''', (new_device_id, new_tag_name))
-                    if not cursor.fetchone():
-                        break
-                    tag_suffix += 1
-            else:
-                new_tag_name = tag_name
-            
-            cursor.execute('''
-                INSERT INTO tag_mappings (device_id, tag_name, config_json)
-                VALUES (?, ?, ?)
-            ''', (new_device_id, new_tag_name, tag_config_json))
-            tags_duplicated += 1
+        # Update both tables
+        cursor.execute('UPDATE modbus_device SET enabled = ? WHERE id = ?', (enabled, device_id))
+        cursor.execute('UPDATE loadcell_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         
         conn.commit()
         conn.close()
         
-        # Initialize status for new device
-        device_status_tracker[new_device_id] = {'status': 'Online', 'last_poll': 'Just now'}
-        
         return web.json_response({
             'success': True,
-            'new_device_id': new_device_id,
-            'new_device': {
-                'id': new_device_id,
-                'name': new_name,
-                'type': type_,
-                'protocol': protocol
-            },
-            'tags_duplicated': tags_duplicated
+            'message': f"Device {'enabled' if enabled else 'disabled'} successfully"
         })
         
-    except sqlite3.IntegrityError as e:
-        print("Database integrity error duplicating device:", str(e))
-        return web.json_response({'error': f'Database error: {str(e)}'}, status=500)
     except Exception as e:
-        print("Error duplicating device:", str(e))
-        import traceback
-        traceback.print_exc()
+        print(f"Error disabling device: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
-async def get_device_packets(request):
-    """GET last 10 packets for device"""
-    try:
-        device_id = request.match_info['device_id']
-        
-        # Simulate packet data
-        packets = []
-        for i in range(10):
-            timestamp = (datetime.datetime.now() - datetime.timedelta(seconds=i)).isoformat()
-            direction = 'tx' if i % 2 == 0 else 'rx'
-            data_hex = ' '.join(["{:02X}".format(random.randint(0, 255)) for _ in range(8)])
-            
-            packets.append({
-                'timestamp': timestamp,
-                'direction': direction,
-                'data_hex': data_hex
-            })
-        
-        return web.json_response({'packets': packets})
-        
-    except Exception as e:
-        print("Error getting packets: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
+# ============================================================================
+# DEVICE GROUPS
+# ============================================================================
 
 async def get_all_groups(request):
-    """GET all groups"""
+    """GET all device groups"""
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT g.id, g.name, g.color, g.description,
-                   COUNT(d.id) as device_count
-            FROM device_groups g
-            LEFT JOIN device_management d ON g.id = d.group_id
-            GROUP BY g.id
-            ORDER BY g.name
-        ''')
-        
-        groups = []
-        for row in cursor.fetchall():
-            id_, name, color, description, device_count = row
-            groups.append({
-                'id': id_,
-                'name': name,
-                'device_count': device_count,
-                'color': color,
-                'description': description or ''
-            })
-        
-        conn.close()
+        from database import get_all_device_groups
+        groups = get_all_device_groups()
         return web.json_response({'groups': groups})
-        
     except Exception as e:
-        print("Error getting groups: {}".format(e))
+        print(f"Error getting groups: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 async def add_group(request):
-    """POST add new group"""
+    """POST - Add new group"""
     try:
         data = await request.json()
         
-        if not data.get('name'):
-            return web.json_response({'error': 'Group name is required'}, status=400)
-        
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        # Check if group already exists
-        cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['name'],))
-        if cursor.fetchone():
-            return web.json_response({'error': 'Group already exists'}, status=400)
-        
-        cursor.execute('''
-            INSERT INTO device_groups (name, color, description)
-            VALUES (?, ?, ?)
-        ''', (
-            data['name'],
+        from database import add_device_group
+        group_id = add_device_group(
+            data.get('name'),
             data.get('color', 'blue'),
             data.get('description', '')
-        ))
+        )
         
-        group_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return web.json_response({
-            'success': True,
-            'group_id': group_id,
-            'group': {
-                'id': group_id,
-                'name': data['name'],
-                'device_count': 0,
-                'color': data.get('color', 'blue')
-            }
-        }, status=201)
-        
+        if group_id:
+            return web.json_response({
+                'success': True,
+                'message': 'Group created successfully',
+                'group_id': group_id
+            })
+        else:
+            return web.json_response({
+                'success': False,
+                'message': 'Failed to create group'
+            }, status=500)
+            
     except Exception as e:
-        print("Error adding group: {}".format(e))
+        print(f"Error adding group: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 async def assign_devices_to_group(request):
-    """POST assign devices to group"""
+    """POST - Assign devices to group"""
     try:
-        group_id = int(request.match_info['group_id'])
+        group_id = request.match_info['group_id']
         data = await request.json()
-        
-        if 'device_ids' not in data:
-            return web.json_response({'error': 'device_ids is required'}, status=400)
+        device_ids = data.get('device_ids', [])
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Check if group exists
-        cursor.execute('SELECT id FROM device_groups WHERE id = ?', (group_id,))
-        if not cursor.fetchone():
-            return web.json_response({'error': 'Group not found'}, status=404)
-        
-        # Update devices
-        assigned_count = 0
-        for device_id in data['device_ids']:
-            cursor.execute('UPDATE device_management SET group_id = ? WHERE id = ?', (group_id, device_id))
-            if cursor.rowcount > 0:
-                assigned_count += 1
+        for device_id in device_ids:
+            cursor.execute('UPDATE modbus_device SET group_id = ? WHERE id = ?', (group_id, device_id))
+            cursor.execute('UPDATE loadcell_device SET group_id = ? WHERE id = ?', (group_id, device_id))
         
         conn.commit()
         conn.close()
         
         return web.json_response({
             'success': True,
-            'assigned_count': assigned_count
+            'message': 'Devices assigned to group successfully'
         })
         
     except Exception as e:
-        print("Error assigning devices: {}".format(e))
+        print(f"Error assigning devices to group: {e}")
         return web.json_response({'error': str(e)}, status=500)
-
-async def scan_devices(request):
-    """POST scan for devices"""
-    try:
-        data = await request.json()
-        scan_type = data.get('scan_type', 'all')
-        
-        scan_id = "scan-{}".format(str(uuid.uuid4())[:8])
-        
-        # Store scan in memory
-        active_scans[scan_id] = {
-            'status': 'running',
-            'progress': 0,
-            'devices_found': [],
-            'scan_type': scan_type
-        }
-        
-        # Simulate scan in background
-        asyncio.ensure_future(simulate_scan(scan_id))
-        
-        return web.json_response({
-            'scan_id': scan_id,
-            'message': 'Scan started'
-        })
-        
-    except Exception as e:
-        print("Error starting scan: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def get_scan_status(request):
-    """GET scan status"""
-    try:
-        scan_id = request.match_info['scan_id']
-        
-        if scan_id not in active_scans:
-            return web.json_response({'error': 'Scan not found'}, status=404)
-        
-        scan_data = active_scans[scan_id]
-        
-        return web.json_response({
-            'scan_id': scan_id,
-            'status': scan_data['status'],
-            'progress': scan_data['progress'],
-            'devices_found': len(scan_data['devices_found'])
-        })
-        
-    except Exception as e:
-        print("Error getting scan status: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def scan_wireless(request):
-    """POST scan for wireless devices"""
-    try:
-        # Simulate wireless scan
-        devices_found = [
-            {
-                'rf_address': 'RF:0x09',
-                'signal_strength': random.randint(-80, -60),
-                'device_type': 'ACS Sensor'
-            },
-            {
-                'rf_address': 'RF:0x11',
-                'signal_strength': random.randint(-80, -60),
-                'device_type': 'Wireless IO'
-            }
-        ]
-        
-        return web.json_response({
-            'devices_found': devices_found
-        })
-        
-    except Exception as e:
-        print("Error scanning wireless: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def pair_wireless(request):
-    """POST pair wireless device"""
-    try:
-        data = await request.json()
-        rf_address = data.get('rf_address')
-        
-        if not rf_address:
-            return web.json_response({'error': 'RF address is required'}, status=400)
-        
-        pairing_code = "{}".format(random.randint(100000, 999999))
-        pairing_sessions[rf_address] = {
-            'code': pairing_code,
-            'expires': datetime.datetime.now() + datetime.timedelta(seconds=30)
-        }
-        
-        return web.json_response({
-            'success': True,
-            'pairing_code': pairing_code,
-            'timeout_seconds': 30
-        })
-        
-    except Exception as e:
-        print("Error pairing wireless: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def import_devices_csv(request):
-    """POST import devices from CSV with full configuration"""
-    try:
-        reader = await request.multipart()
-        
-        while True:
-            part = await reader.next()
-            if part is None:
-                break
-            
-            if part.name == 'file':
-                content = await part.read()
-                content_str = content.decode('utf-8')
-                
-                # Parse CSV
-                csv_reader = csv.DictReader(io.StringIO(content_str))
-                devices_added = 0
-                devices_updated = 0
-                devices_skipped = 0
-                row_num = 0
-                
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                
-                for row_num, row in enumerate(csv_reader, 1):
-                    try:
-                        # Check for required fields
-                        if not row.get('Device Name') or not row.get('Device Name').strip():
-                            print("Skipping row {}: Missing device name".format(row_num))
-                            devices_skipped += 1
-                            continue
-                        
-                        # Check if device already exists (by ID or name)
-                        device_id = row.get('Device ID', None)
-                        existing_device_id = None
-                        device_name = row['Device Name'].strip()
-                        
-                        if device_id and device_id.strip():
-                            # Check by ID
-                            cursor.execute('SELECT id FROM device_management WHERE id = ?', (device_id.strip(),))
-                            existing = cursor.fetchone()
-                            if existing:
-                                existing_device_id = existing[0]
-                        else:
-                            # Check by name
-                            cursor.execute('SELECT id FROM device_management WHERE name = ?', (device_name,))
-                            existing = cursor.fetchone()
-                            if existing:
-                                existing_device_id = existing[0]
-                        
-                        # Find group
-                        group_id = None
-                        group_name = row.get('Group', '')
-                        if group_name and group_name != 'None':
-                            cursor.execute('SELECT id FROM device_groups WHERE name = ?', (group_name,))
-                            group = cursor.fetchone()
-                            if group:
-                                group_id = group[0]
-                            else:
-                                # Create group if it doesn't exist
-                                cursor.execute(
-                                    'INSERT INTO device_groups (name, color) VALUES (?, ?)',
-                                    (group_name, 'blue')
-                                )
-                                group_id = cursor.lastrowid
-                                print("Created new group: {}".format(group_name))
-                        
-                        # Parse configuration JSON
-                        config_json = row.get('Configuration JSON', '{}')
-                        config = {}
-                        try:
-                            if config_json and config_json.strip():
-                                config = json.loads(config_json)
-                        except Exception as e:
-                            print("Error parsing config JSON for row {}: {}".format(row_num, e))
-                            # Create default config based on device type
-                            device_type = row.get('Type', 'Unknown').strip()
-                            if device_type == 'Modbus RTU':
-                                config = {
-                                    'slave_address': 1,
-                                    'baud_rate': 9600,
-                                    'parity': 'None',
-                                    'stop_bits': 1,
-                                    'polling_interval': 500
-                                }
-                            elif device_type == 'Modbus TCP':
-                                # Ensure all TCP fields are included
-                                config = {
-                                    'ip_address': row.get('Address/ID', '192.168.1.100').split(':')[0] if ':' in row.get('Address/ID', '') else '192.168.1.100',
-                                    'port': int(row.get('Address/ID', '502').split(':')[1]) if ':' in row.get('Address/ID', '') else 502,
-                                    'slave_address': 1,
-                                    'polling_interval': 1000,
-                                    'timeout': 5000,
-                                    'retry_count': 3
-                                }
-                            elif device_type == 'CAN':
-                                config = {
-                                    'can_id': row.get('Address/ID', '0x000'),
-                                    'protocol': 'CANOpen',
-                                    'bitrate': '500K'
-                                }
-                            elif device_type == 'Wireless':
-                                config = {
-                                    'rf_address': row.get('Address/ID', 'RF:0x00'),
-                                    'signal_strength': -70
-                                }
-                            elif device_type == 'ACS Sensor':
-                                config = {
-                                    'sensor_id': row.get('Address/ID', 'ACS-001'),
-                                    'sampling_rate': '10 Hz',
-                                    'sensitivity': 'Medium'
-                                }
-                        
-                        # Determine protocol
-                        if 'Protocol' in row and row['Protocol'].strip():
-                            protocol = row['Protocol'].strip()
-                        else:
-                            # Map type to protocol
-                            device_type = row.get('Type', 'Unknown').strip()
-                            if device_type == 'Modbus TCP':
-                                protocol = 'modbus-tcp'
-                            elif device_type == 'Modbus RTU':
-                                protocol = 'modbus-rtu'
-                            elif device_type == 'CAN':
-                                protocol = 'can'
-                            elif device_type == 'Wireless':
-                                protocol = 'wireless'
-                            elif device_type == 'ACS Sensor':
-                                protocol = 'acs-sensor'
-                            elif device_type == 'EtherNet/IP':
-                                protocol = 'ethernet-ip'
-                            else:
-                                protocol = 'modbus-tcp'  # Default
-                        
-                        if existing_device_id:
-                            # Update existing device
-                            cursor.execute('''
-                                UPDATE device_management 
-                                SET name = ?, type = ?, protocol = ?, address = ?, 
-                                    group_id = ?, config_json = ?, updated_at = CURRENT_TIMESTAMP
-                                WHERE id = ?
-                            ''', (
-                                device_name,
-                                row.get('Type', 'Unknown').strip(),
-                                protocol,
-                                row.get('Address/ID', 'N/A'),
-                                group_id,
-                                json.dumps(config),
-                                existing_device_id
-                            ))
-                            devices_updated += 1
-                            print("Updated device: {}".format(device_name))
-                        else:
-                            # Create new device
-                            if not device_id or not device_id.strip():
-                                # Get the next device number for imported devices
-                                cursor.execute('SELECT COUNT(*) FROM device_management')
-                                device_count = cursor.fetchone()[0]
-                                device_id = str(device_count + 1)  # Simple sequential number
-                            else:
-                                device_id = device_id.strip()
-                            
-                            cursor.execute('''
-                                INSERT INTO device_management 
-                                (id, name, type, protocol, address, group_id, config_json)
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                            ''', (
-                                device_id,
-                                device_name,
-                                row.get('Type', 'Unknown').strip(),
-                                protocol,
-                                row.get('Address/ID', 'N/A'),
-                                group_id,
-                                json.dumps(config)
-                            ))
-                            
-                            devices_added += 1
-                            device_status_tracker[device_id] = {
-                                'status': 'Online', 
-                                'last_poll': 'Just now'
-                            }
-                            print("Added device: {} (ID: {})".format(device_name, device_id))
-                        
-                    except Exception as e:
-                        print("Error importing row {}: {}".format(row_num, e))
-                        devices_skipped += 1
-                        continue
-                
-                conn.commit()
-                conn.close()
-                
-                return web.json_response({
-                    'success': True,
-                    'devices_added': devices_added,
-                    'devices_updated': devices_updated,
-                    'devices_skipped': devices_skipped,
-                    'total_processed': row_num
-                })
-        
-        return web.json_response({'error': 'No file provided'}, status=400)
-        
-    except Exception as e:
-        print("Error importing CSV: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def export_devices_csv(request):
-    """POST export devices to CSV with full configuration"""
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        
-        # Get all devices with their full configuration
-        cursor.execute('''
-            SELECT d.id, d.name, d.type, d.protocol, d.address,
-                   g.name as group_name, d.config_json
-            FROM device_management d
-            LEFT JOIN device_groups g ON d.group_id = g.id
-            ORDER BY CAST(d.id AS INTEGER)
-        ''')
-        
-        # Create CSV in memory
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        # Write comprehensive header (INCLUDES Protocol column)
-        writer.writerow([
-            'Device ID', 'Device Name', 'Type', 'Protocol', 'Address/ID', 
-            'Group', 'Configuration JSON'
-        ])
-        
-        # Write data
-        for row in cursor.fetchall():
-            device_id, name, type_, protocol, address, group_name, config_json = row
-            
-            # Get real-time status
-            status = device_status_tracker.get(device_id, {'status': 'Online', 'last_poll': 'Just now'})
-            
-            # Ensure config_json is not None
-            if config_json is None:
-                config_json = '{}'
-            
-            writer.writerow([
-                device_id,
-                name,
-                type_,
-                protocol,
-                address,
-                group_name or 'None',
-                config_json  # Include the full configuration JSON
-            ])
-        
-        conn.close()
-        
-        # Create filename with timestamp
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = 'devices_export_{}.csv'.format(timestamp)
-        
-        # Return CSV file
-        response = web.Response(body=output.getvalue().encode('utf-8'))
-        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
-        response.headers['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
-        
-        return response
-        
-    except Exception as e:
-        print("Error exporting CSV: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def simulate_scan(scan_id):
-    """Simulate device scanning"""
-    try:
-        from models import active_scans
-        scan_data = active_scans[scan_id]
-        
-        # Simulate progress
-        for i in range(1, 101, 10):
-            await asyncio.sleep(0.5)
-            scan_data['progress'] = i
-            
-            # Simulate finding devices
-            if i % 30 == 0:
-                device_types = ['Modbus RTU', 'Modbus TCP', 'CAN', 'Wireless', 'ACS Sensor']
-                device_type = random.choice(device_types)
-                
-                scan_data['devices_found'].append({
-                    'address': "Slave {}".format(random.randint(1, 247)) if device_type == 'Modbus RTU' else "0x{:03X}".format(random.randint(0x100, 0x3FF)),
-                    'type': device_type
-                })
-        
-        scan_data['status'] = 'completed'
-        scan_data['progress'] = 100
-        
-        # Clean up after 5 minutes
-        await asyncio.sleep(300)
-        if scan_id in active_scans:
-            del active_scans[scan_id]
-            
-    except Exception as e:
-        print("Error in scan simulation: {}".format(e))
-        if scan_id in active_scans:
-            active_scans[scan_id]['status'] = 'failed'

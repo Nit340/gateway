@@ -1,7 +1,6 @@
 # websocket_handler.py - All WebSocket handlers
 import asyncio
 import json
-import random
 import datetime
 from aiohttp import web
 import aiohttp
@@ -10,7 +9,6 @@ from models import (
     realtime_state, previous_state, connected_websockets,
     device_status_tracker, device_websockets
 )
-from database import get_configuration
 
 async def websocket_handler(request):
     """Handle WebSocket connections for real-time updates"""
@@ -18,32 +16,21 @@ async def websocket_handler(request):
     await ws.prepare(request)
     
     connected_websockets.add(ws)
-    print("WebSocket connected. Total clients: {}".format(len(connected_websockets)))
+    print(f"WebSocket connected. Total clients: {len(connected_websockets)}")
     
     try:
-        # Get current config
-        config = get_configuration()
-        network_mode = config.get('network', {}).get('mode', 'ethernet')
-        wifi_configured = network_mode == 'wifi' and config.get('network', {}).get('wifi', {}).get('ssid')
-        
-        # Prepare initial data
+        # Send initial data
         initial_data = {
             'type': 'initial',
             'current_date': realtime_state['current_date'],
             'current_time': realtime_state['current_time']
         }
         
-        # Only include signal strength if WiFi is configured
-        if wifi_configured:
-            initial_data['wifi_signal_strength'] = realtime_state['wifi_signal_strength']
-        
         await ws.send_json(initial_data)
         
         # Update previous state
         previous_state['current_date'] = realtime_state['current_date']
         previous_state['current_time'] = realtime_state['current_time']
-        previous_state['wifi_signal_strength'] = realtime_state['wifi_signal_strength'] if wifi_configured else None
-        previous_state['wifi_configured'] = wifi_configured
         
         async for msg in ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
@@ -90,10 +77,10 @@ async def websocket_handler(request):
                     })
                     
     except Exception as e:
-        print("WebSocket error: {}".format(e))
+        print(f"WebSocket error: {e}")
     finally:
         connected_websockets.remove(ws)
-        print("WebSocket disconnected. Total clients: {}".format(len(connected_websockets)))
+        print(f"WebSocket disconnected. Total clients: {len(connected_websockets)}")
     
     return ws
 
@@ -103,7 +90,7 @@ async def device_websocket_handler(request):
     await ws.prepare(request)
     
     device_websockets.add(ws)
-    print("Device WebSocket connected. Total clients: {}".format(len(device_websockets)))
+    print(f"Device WebSocket connected. Total clients: {len(device_websockets)}")
     
     try:
         # Send initial device status
@@ -130,10 +117,10 @@ async def device_websocket_handler(request):
                     })
                     
     except Exception as e:
-        print("Device WebSocket error: {}".format(e))
+        print(f"Device WebSocket error: {e}")
     finally:
         device_websockets.remove(ws)
-        print("Device WebSocket disconnected. Total clients: {}".format(len(device_websockets)))
+        print(f"Device WebSocket disconnected. Total clients: {len(device_websockets)}")
     
     return ws
 
@@ -148,7 +135,7 @@ async def broadcast_to_clients(data):
         try:
             await ws.send_json(data)
         except Exception as e:
-            print("Error sending to WebSocket client: {}".format(e))
+            print(f"Error sending to WebSocket client: {e}")
             disconnected_clients.add(ws)
     
     # Remove disconnected clients
@@ -173,7 +160,7 @@ async def broadcast_device_status(device_id, status, last_poll):
         try:
             await ws.send_json(data)
         except Exception as e:
-            print("Error sending device status to WebSocket: {}".format(e))
+            print(f"Error sending device status to WebSocket: {e}")
             disconnected_clients.add(ws)
     
     for ws in disconnected_clients:
