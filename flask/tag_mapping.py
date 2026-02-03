@@ -15,7 +15,7 @@ async def get_all_datapoints(request):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        datapoints = []
+        tags = []  # Changed from datapoints to tags
         
         # Get Modbus datapoints
         cursor.execute('''
@@ -29,7 +29,7 @@ async def get_all_datapoints(request):
         ''')
         
         for row in cursor.fetchall():
-            datapoints.append({
+            tags.append({  # Changed to tags
                 'id': row[0],
                 'device_id': row[1],
                 'device_name': row[13],
@@ -44,48 +44,67 @@ async def get_all_datapoints(request):
                 'offset': row[9],
                 'unit': row[10],
                 'description': row[11],
-                'enabled': bool(row[12])
+                'enabled': bool(row[12]),
+                'type': 'modbus'  # Added type field
             })
         
         # Get Loadcell datapoints
         cursor.execute('''
             SELECT ld.id, ld.device_id, ld.name,
-                   l.name as device_name
+                   l.name as device_name, l.unit
             FROM loadcell_datapoints ld
             JOIN loadcell_device l ON ld.device_id = l.id
             ORDER BY ld.device_id, ld.name
         ''')
         
         for row in cursor.fetchall():
-            datapoints.append({
+            tags.append({  # Changed to tags
                 'id': row[0],
                 'device_id': row[1],
                 'device_name': row[3],
                 'device_type': 'Loadcell',
                 'tag_name': row[2],
-                'unit': 'g' if row[2] == 'load' else 'g',
+                'unit': row[4] if row[2] == 'load' else 'g',
                 'description': f"Loadcell {row[2]}",
-                'enabled': True
+                'enabled': True,
+                'type': 'loadcell',  # Added type field
+                'data_type': 'float32'  # Default for loadcell
             })
         
         conn.close()
-        return web.json_response({'datapoints': datapoints})
+        return web.json_response({'tags': tags})  # Changed from datapoints to tags
         
     except Exception as e:
-        print(f"Error getting datapoints: {e}")
+        print(f"Error getting tags: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
-# ADD MODBUS DATAPOINT
+# ADD MODBUS DATAPOINT (TAG)
 # ============================================================================
 
 async def add_modbus_datapoint(request):
-    """POST - Add Modbus datapoint"""
+    """POST - Add Modbus datapoint (tag)"""
     try:
         data = await request.json()
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
+        
+        # Validate device exists
+        cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (data.get('device_id'),))
+        if not cursor.fetchone():
+            conn.close()
+            return web.json_response({'error': 'Device not found'}, status=404)
+        
+        # Check if tag name already exists for this device
+        cursor.execute('''
+            SELECT id FROM modbus_datapoints 
+            WHERE device_id = ? AND name = ?
+        ''', (data.get('device_id'), data.get('tag_name')))
+        
+        if cursor.fetchone():
+            conn.close()
+            return web.json_response({'error': 'Tag name already exists for this device'}, status=400)
         
         cursor.execute('''
             INSERT INTO modbus_datapoints (
@@ -114,26 +133,39 @@ async def add_modbus_datapoint(request):
         
         return web.json_response({
             'success': True,
-            'message': 'Modbus datapoint added successfully',
-            'id': datapoint_id
+            'message': 'Tag added successfully',
+            'id': datapoint_id,
+            'tag': {
+                'id': datapoint_id,
+                'device_id': data.get('device_id'),
+                'tag_name': data.get('tag_name'),
+                'device_type': 'Modbus',
+                'type': 'modbus'
+            }
         })
         
     except Exception as e:
-        print(f"Error adding modbus datapoint: {e}")
+        print(f"Error adding tag: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
-# UPDATE MODBUS DATAPOINT
+# UPDATE MODBUS TAG
 # ============================================================================
 
 async def update_modbus_datapoint(request):
-    """PUT - Update Modbus datapoint"""
+    """PUT - Update Modbus tag"""
     try:
-        datapoint_id = request.match_info['id']
+        tag_id = request.match_info['id']
         data = await request.json()
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
+        
+        # Check if tag exists
+        cursor.execute('SELECT id FROM modbus_datapoints WHERE id = ?', (tag_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return web.json_response({'error': 'Tag not found'}, status=404)
         
         update_fields = []
         values = []
@@ -172,7 +204,7 @@ async def update_modbus_datapoint(request):
             update_fields.append('enabled = ?')
             values.append(data['enabled'])
         
-        values.append(datapoint_id)
+        values.append(tag_id)
         
         query = f'''
             UPDATE modbus_datapoints 
@@ -186,59 +218,59 @@ async def update_modbus_datapoint(request):
         
         return web.json_response({
             'success': True,
-            'message': 'Modbus datapoint updated successfully'
+            'message': 'Tag updated successfully'
         })
         
     except Exception as e:
-        print(f"Error updating modbus datapoint: {e}")
+        print(f"Error updating tag: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
-# DELETE DATAPOINT
+# DELETE TAG
 # ============================================================================
 
 async def delete_datapoint(request):
-    """DELETE - Delete datapoint"""
+    """DELETE - Delete tag"""
     try:
-        datapoint_id = request.match_info['id']
-        datapoint_type = request.query.get('type', 'modbus')
+        tag_id = request.match_info['id']
+        tag_type = request.query.get('type', 'modbus')
         
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        if datapoint_type == 'loadcell':
-            # Don't allow deleting auto-created loadcell datapoints
-            cursor.execute('SELECT name FROM loadcell_datapoints WHERE id = ?', (datapoint_id,))
+        if tag_type == 'loadcell':
+            # Don't allow deleting auto-created loadcell tags
+            cursor.execute('SELECT name FROM loadcell_datapoints WHERE id = ?', (tag_id,))
             row = cursor.fetchone()
             if row and row[0] in ['load', 'capacity']:
                 conn.close()
                 return web.json_response({
                     'success': False,
-                    'message': 'Cannot delete auto-created loadcell datapoints'
+                    'message': 'Cannot delete auto-created loadcell tags'
                 }, status=400)
             
-            cursor.execute('DELETE FROM loadcell_datapoints WHERE id = ?', (datapoint_id,))
+            cursor.execute('DELETE FROM loadcell_datapoints WHERE id = ?', (tag_id,))
         else:
-            cursor.execute('DELETE FROM modbus_datapoints WHERE id = ?', (datapoint_id,))
+            cursor.execute('DELETE FROM modbus_datapoints WHERE id = ?', (tag_id,))
         
         conn.commit()
         conn.close()
         
         return web.json_response({
             'success': True,
-            'message': 'Datapoint deleted successfully'
+            'message': 'Tag deleted successfully'
         })
         
     except Exception as e:
-        print(f"Error deleting datapoint: {e}")
+        print(f"Error deleting tag: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
-# GET AVAILABLE DEVICES FOR DATAPOINT CREATION
+# GET AVAILABLE DEVICES FOR TAG CREATION
 # ============================================================================
 
 async def get_available_devices(request):
-    """GET devices available for creating datapoints"""
+    """GET devices available for creating tags"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -247,7 +279,9 @@ async def get_available_devices(request):
         
         # Get Modbus devices
         cursor.execute('''
-            SELECT id, name, device_type FROM modbus_device ORDER BY name
+            SELECT id, name, device_type, status FROM modbus_device 
+            WHERE enabled = 1 
+            ORDER BY name
         ''')
         
         for row in cursor.fetchall():
@@ -255,12 +289,15 @@ async def get_available_devices(request):
                 'id': row[0],
                 'name': row[1],
                 'type': f"Modbus {row[2].upper()}",
-                'protocol': f"modbus-{row[2]}"
+                'protocol': f"modbus-{row[2]}",
+                'status': row[3]
             })
         
         # Get Loadcell devices
         cursor.execute('''
-            SELECT id, name FROM loadcell_device ORDER BY name
+            SELECT id, name, status FROM loadcell_device 
+            WHERE enabled = 1 
+            ORDER BY name
         ''')
         
         for row in cursor.fetchall():
@@ -268,7 +305,8 @@ async def get_available_devices(request):
                 'id': row[0],
                 'name': row[1],
                 'type': 'Loadcell',
-                'protocol': 'loadcell'
+                'protocol': 'loadcell',
+                'status': row[2]
             })
         
         conn.close()
@@ -283,7 +321,7 @@ async def get_available_devices(request):
 # ============================================================================
 
 async def get_protocol_form(request):
-    """GET form schema for creating datapoint by protocol"""
+    """GET form schema for creating tag by protocol"""
     try:
         protocol = request.match_info['protocol']
         
@@ -295,70 +333,95 @@ async def get_protocol_form(request):
                         'name': 'tag_name',
                         'label': 'Tag Name',
                         'type': 'text',
-                        'required': True
+                        'required': True,
+                        'placeholder': 'e.g., temperature_sensor_1'
                     },
                     {
                         'name': 'register_address',
                         'label': 'Register Address',
                         'type': 'number',
-                        'required': True
+                        'required': True,
+                        'min': 0,
+                        'max': 65535
                     },
                     {
                         'name': 'register_type',
                         'label': 'Register Type',
                         'type': 'select',
-                        'options': ['holding', 'input', 'coil', 'discrete'],
+                        'options': [
+                            {'value': 'holding', 'label': 'Holding Register'},
+                            {'value': 'input', 'label': 'Input Register'},
+                            {'value': 'coil', 'label': 'Coil'},
+                            {'value': 'discrete', 'label': 'Discrete Input'}
+                        ],
                         'default': 'holding'
                     },
                     {
                         'name': 'data_type',
                         'label': 'Data Type',
                         'type': 'select',
-                        'options': ['int16', 'uint16', 'int32', 'uint32', 'float32', 'bool'],
+                        'options': [
+                            {'value': 'int16', 'label': 'INT16 (16-bit signed)'},
+                            {'value': 'uint16', 'label': 'UINT16 (16-bit unsigned)'},
+                            {'value': 'int32', 'label': 'INT32 (32-bit signed)'},
+                            {'value': 'uint32', 'label': 'UINT32 (32-bit unsigned)'},
+                            {'value': 'float32', 'label': 'FLOAT32 (32-bit float)'},
+                            {'value': 'bool', 'label': 'BOOL (boolean)'}
+                        ],
                         'default': 'int16'
                     },
                     {
                         'name': 'byte_order',
                         'label': 'Byte Order',
                         'type': 'select',
-                        'options': ['big', 'little'],
+                        'options': [
+                            {'value': 'big', 'label': 'Big Endian'},
+                            {'value': 'little', 'label': 'Little Endian'}
+                        ],
                         'default': 'big'
                     },
                     {
                         'name': 'word_order',
                         'label': 'Word Order',
                         'type': 'select',
-                        'options': ['big', 'little'],
+                        'options': [
+                            {'value': 'big', 'label': 'Big Endian'},
+                            {'value': 'little', 'label': 'Little Endian'}
+                        ],
                         'default': 'big'
                     },
                     {
                         'name': 'scale_factor',
                         'label': 'Scale Factor',
                         'type': 'number',
+                        'step': '0.001',
                         'default': 1.0
                     },
                     {
                         'name': 'offset',
                         'label': 'Offset',
                         'type': 'number',
+                        'step': '0.01',
                         'default': 0.0
                     },
                     {
                         'name': 'unit',
                         'label': 'Unit',
-                        'type': 'text'
+                        'type': 'text',
+                        'placeholder': 'e.g., °C, kg, RPM'
                     },
                     {
                         'name': 'description',
                         'label': 'Description',
-                        'type': 'textarea'
+                        'type': 'textarea',
+                        'placeholder': 'Description of this tag...'
                     }
                 ]
             }
         elif protocol == 'loadcell':
             form_schema = {
                 'protocol': protocol,
-                'message': 'Loadcell datapoints (load, capacity) are auto-created when device is added.',
+                'message': 'Loadcell tags (load, capacity) are auto-created when device is added.',
                 'fields': []
             }
         else:
