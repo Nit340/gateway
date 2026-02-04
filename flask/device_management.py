@@ -602,6 +602,197 @@ async def disable_device(request):
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
+# DUPLICATE DEVICE
+# ============================================================================
+
+async def duplicate_device(request):
+    """POST - Duplicate device with all its datapoints"""
+    try:
+        device_id = request.match_info['device_id']
+        
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Check if it's a Modbus device
+        cursor.execute('SELECT * FROM modbus_device WHERE id = ?', (device_id,))
+        modbus_row = cursor.fetchone()
+        
+        if modbus_row:
+            # It's a Modbus device - duplicate it
+            # Get column names
+            cursor.execute('PRAGMA table_info(modbus_device)')
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            # Create dictionary of old device data
+            old_device = dict(zip(columns, modbus_row))
+            
+            # Generate new device ID
+            cursor.execute('SELECT MAX(CAST(id AS INTEGER)) FROM modbus_device')
+            max_id = cursor.fetchone()[0]
+            new_device_id = str((max_id or 0) + 1)
+            
+            # Generate new device name
+            base_name = old_device['name']
+            cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', (f'{base_name}%',))
+            existing_names = [row[0] for row in cursor.fetchall()]
+            
+            counter = 1
+            numbers = []
+            for name in existing_names:
+                import re
+                match = re.search(r'-(\d+)$', name)
+                if match:
+                    numbers.append(int(match.group(1)))
+            
+            if numbers:
+                counter = max(numbers) + 1
+            else:
+                counter = len(existing_names) + 1
+            
+            new_name = f"{base_name}-{str(counter).zfill(3)}"
+            
+            # Insert new device
+            cursor.execute('''
+                INSERT INTO modbus_device (
+                    id, name, device_type, group_id, service_id,
+                    slave_id, timeout_ms, retry_count, polling_interval_ms,
+                    ip_address, port, serial_port, baud_rate, parity,
+                    data_bits, stop_bits, enabled
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                new_device_id, new_name, old_device['device_type'],
+                old_device['group_id'], old_device['service_id'],
+                old_device['slave_id'], old_device['timeout_ms'],
+                old_device['retry_count'], old_device['polling_interval_ms'],
+                old_device['ip_address'], old_device['port'],
+                old_device['serial_port'], old_device['baud_rate'],
+                old_device['parity'], old_device['data_bits'],
+                old_device['stop_bits'], old_device['enabled']
+            ))
+            
+            # Duplicate all Modbus datapoints
+            cursor.execute('''
+                SELECT name, register_address, register_type, data_type,
+                       byte_order, word_order, scale_factor, offset, unit, description
+                FROM modbus_datapoints
+                WHERE device_id = ?
+            ''', (device_id,))
+            
+            datapoints = cursor.fetchall()
+            for dp in datapoints:
+                cursor.execute('''
+                    INSERT INTO modbus_datapoints (
+                        device_id, name, register_address, register_type, data_type,
+                        byte_order, word_order, scale_factor, offset, unit, description
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (new_device_id,) + dp)
+            
+            conn.commit()
+            conn.close()
+            
+            return web.json_response({
+                'success': True,
+                'message': f'Device duplicated successfully as {new_name}',
+                'device_id': new_device_id,
+                'device_name': new_name,
+                'datapoints_copied': len(datapoints)
+            })
+        
+        else:
+            # Check if it's a Loadcell device
+            cursor.execute('SELECT * FROM loadcell_device WHERE id = ?', (device_id,))
+            loadcell_row = cursor.fetchone()
+            
+            if loadcell_row:
+                # It's a Loadcell device - duplicate it
+                cursor.execute('PRAGMA table_info(loadcell_device)')
+                columns = [col[1] for col in cursor.fetchall()]
+                
+                old_device = dict(zip(columns, loadcell_row))
+                
+                # Generate new device ID
+                cursor.execute('SELECT MAX(CAST(id AS INTEGER)) FROM loadcell_device')
+                max_id = cursor.fetchone()[0]
+                new_device_id = str((max_id or 0) + 1)
+                
+                # Generate new device name
+                base_name = old_device['name']
+                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', (f'{base_name}%',))
+                existing_names = [row[0] for row in cursor.fetchall()]
+                
+                counter = 1
+                numbers = []
+                for name in existing_names:
+                    import re
+                    match = re.search(r'-(\d+)$', name)
+                    if match:
+                        numbers.append(int(match.group(1)))
+                
+                if numbers:
+                    counter = max(numbers) + 1
+                else:
+                    counter = len(existing_names) + 1
+                
+                new_name = f"{base_name}-{str(counter).zfill(3)}"
+                
+                # Insert new loadcell device
+                cursor.execute('''
+                    INSERT INTO loadcell_device (
+                        id, name, group_id, service_id, device_path, channel,
+                        tare_offset, known_weight, known_weight_raw, shift_bits,
+                        unit, capacity, capacity_name, enabled
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    new_device_id, new_name, old_device['group_id'],
+                    old_device['service_id'], old_device['device_path'],
+                    old_device['channel'], old_device['tare_offset'],
+                    old_device['known_weight'], old_device['known_weight_raw'],
+                    old_device['shift_bits'], old_device['unit'],
+                    old_device['capacity'], old_device['capacity_name'],
+                    old_device['enabled']
+                ))
+                
+                # Duplicate all Loadcell datapoints
+                cursor.execute('''
+                    SELECT name
+                    FROM loadcell_datapoints
+                    WHERE device_id = ?
+                ''', (device_id,))
+                
+                datapoints = cursor.fetchall()
+                for dp in datapoints:
+                    cursor.execute('''
+                        INSERT INTO loadcell_datapoints (device_id, name)
+                        VALUES (?, ?)
+                    ''', (new_device_id, dp[0]))
+                
+                conn.commit()
+                conn.close()
+                
+                return web.json_response({
+                    'success': True,
+                    'message': f'Device duplicated successfully as {new_name}',
+                    'device_id': new_device_id,
+                    'device_name': new_name,
+                    'datapoints_copied': len(datapoints)
+                })
+            else:
+                conn.close()
+                return web.json_response({
+                    'success': False,
+                    'message': 'Device not found'
+                }, status=404)
+        
+    except Exception as e:
+        print(f"Error duplicating device: {e}")
+        import traceback
+        traceback.print_exc()
+        return web.json_response({'error': str(e)}, status=500)
+
+# ============================================================================
 # DEVICE GROUPS
 # ============================================================================
 
@@ -667,4 +858,359 @@ async def assign_devices_to_group(request):
         
     except Exception as e:
         print(f"Error assigning devices to group: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+# ADD THIS TO THE END OF device_management.py (after line 670)
+
+# ============================================================================
+# IMPORT / EXPORT DEVICES
+# ============================================================================
+
+import csv
+import io
+from datetime import datetime
+
+async def export_devices_csv(request):
+    """GET - Export all devices to CSV"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Type', 'Protocol', 'Group',
+            'IP Address', 'Port', 'Serial Port', 'Slave ID',
+            'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
+            'Device Path', 'Capacity', 'Enabled'
+        ])
+        
+        # Export Modbus devices
+        cursor.execute('''
+            SELECT m.id, m.name, m.device_type, g.name as group_name,
+                   m.ip_address, m.port, m.serial_port, m.slave_id,
+                   m.baud_rate, m.data_bits, m.parity, m.stop_bits, m.enabled
+            FROM modbus_device m
+            LEFT JOIN device_groups g ON m.group_id = g.id
+            ORDER BY CAST(m.id AS INTEGER)
+        ''')
+        
+        for row in cursor.fetchall():
+            device_id, name, device_type, group_name, ip, port, serial, slave_id, \
+                baud, data_bits, parity, stop_bits, enabled = row
+            
+            protocol = 'modbus-tcp' if device_type == 'tcp' else 'modbus-rtu'
+            
+            writer.writerow([
+                device_id, name, 'Modbus', protocol, group_name or '',
+                ip or '', port or '', serial or '', slave_id or '',
+                baud or '', data_bits or '', parity or '', stop_bits or '',
+                '', '', '1' if enabled else '0'
+            ])
+        
+        # Export Loadcell devices
+        cursor.execute('''
+            SELECT l.id, l.name, g.name as group_name,
+                   l.device_path, l.capacity, l.enabled
+            FROM loadcell_device l
+            LEFT JOIN device_groups g ON l.group_id = g.id
+            ORDER BY CAST(l.id AS INTEGER)
+        ''')
+        
+        for row in cursor.fetchall():
+            device_id, name, group_name, device_path, capacity, enabled = row
+            
+            writer.writerow([
+                device_id, name, 'Loadcell', 'loadcell', group_name or '',
+                '', '', '', '',
+                '', '', '', '',
+                device_path or '', capacity or '', '1' if enabled else '0'
+            ])
+        
+        conn.close()
+        
+        # Get CSV content
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Create filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'devices_export_{timestamp}.csv'
+        
+        # Return CSV file
+        return web.Response(
+            text=csv_content,
+            headers={
+                'Content-Type': 'text/csv',
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error exporting devices: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+async def import_devices_csv(request):
+    """POST - Import devices from CSV"""
+    try:
+        # Get multipart data
+        reader = await request.multipart()
+        field = await reader.next()
+        
+        if field.name != 'file':
+            return web.json_response({'error': 'No file provided'}, status=400)
+        
+        # Read CSV content
+        csv_content = await field.read(decode=True)
+        
+        # Parse CSV
+        csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
+        
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        imported_count = 0
+        errors = []
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (after header)
+            try:
+                name = row.get('Name', '').strip()
+                device_type = row.get('Type', '').strip()
+                protocol = row.get('Protocol', '').strip().lower()
+                group_name = row.get('Group', '').strip()
+                
+                if not name:
+                    errors.append(f"Row {row_num}: Missing device name")
+                    continue
+                
+                # Get or create group
+                group_id = None
+                if group_name:
+                    cursor.execute('SELECT id FROM device_groups WHERE name = ?', (group_name,))
+                    group_row = cursor.fetchone()
+                    if group_row:
+                        group_id = group_row[0]
+                    else:
+                        # Create group if it doesn't exist
+                        cursor.execute('INSERT INTO device_groups (name, color) VALUES (?, ?)', 
+                                     (group_name, 'blue'))
+                        group_id = cursor.lastrowid
+                
+                # Get service_id
+                service_name = 'loadcell' if device_type.lower() == 'loadcell' else 'modbus'
+                service_id = get_service_by_name(service_name)
+                
+                # Generate device ID
+                if device_type.lower() == 'loadcell':
+                    cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+                else:
+                    cursor.execute('SELECT COUNT(*) FROM modbus_device')
+                
+                count = cursor.fetchone()[0]
+                device_id = str(count + 1)
+                
+                if device_type.lower() == 'loadcell':
+                    # Import Loadcell device
+                    device_path = row.get('Device Path', '/dev/spidev0.0').strip()
+                    capacity = float(row.get('Capacity', '40000'))
+                    enabled = row.get('Enabled', '1').strip() == '1'
+                    
+                    cursor.execute('''
+                        INSERT INTO loadcell_device (
+                            id, name, group_id, service_id, device_path, 
+                            channel, capacity, capacity_name, enabled
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        device_id, name, group_id, service_id, device_path,
+                        0, capacity, 'capacity', enabled
+                    ))
+                    
+                    # Create default datapoints
+                    cursor.execute('''
+                        INSERT INTO loadcell_datapoints (device_id, name)
+                        VALUES (?, 'load'), (?, 'capacity')
+                    ''', (device_id, device_id))
+                    
+                else:
+                    # Import Modbus device
+                    modbus_type = 'tcp' if 'tcp' in protocol else 'rtu'
+                    
+                    slave_id = int(row.get('Slave ID', '1') or '1')
+                    enabled = row.get('Enabled', '1').strip() == '1'
+                    
+                    if modbus_type == 'tcp':
+                        ip_address = row.get('IP Address', '').strip()
+                        port = int(row.get('Port', '502') or '502')
+                        
+                        cursor.execute('''
+                            INSERT INTO modbus_device (
+                                id, name, device_type, group_id, service_id,
+                                slave_id, timeout_ms, retry_count, polling_interval_ms,
+                                ip_address, port, enabled
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            device_id, name, modbus_type, group_id, service_id,
+                            slave_id, 1000, 3, 100,
+                            ip_address, port, enabled
+                        ))
+                    else:  # RTU
+                        serial_port = row.get('Serial Port', '/dev/ttymxc2').strip()
+                        baud_rate = int(row.get('Baud Rate', '9600') or '9600')
+                        data_bits = int(row.get('Data Bits', '8') or '8')
+                        parity = row.get('Parity', 'N').strip()
+                        stop_bits = int(row.get('Stop Bits', '1') or '1')
+                        
+                        cursor.execute('''
+                            INSERT INTO modbus_device (
+                                id, name, device_type, group_id, service_id,
+                                slave_id, timeout_ms, retry_count, polling_interval_ms,
+                                serial_port, baud_rate, parity, data_bits, stop_bits, enabled
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            device_id, name, modbus_type, group_id, service_id,
+                            slave_id, 1000, 3, 100,
+                            serial_port, baud_rate, parity, data_bits, stop_bits, enabled
+                        ))
+                
+                imported_count += 1
+                
+            except Exception as e:
+                errors.append(f"Row {row_num}: {str(e)}")
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        response_data = {
+            'success': True,
+            'message': f'Successfully imported {imported_count} device(s)',
+            'imported_count': imported_count,
+            'errors': errors
+        }
+        
+        return web.json_response(response_data)
+        
+    except Exception as e:
+        print(f"Error importing devices: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+async def download_csv_template(request):
+    """GET - Download CSV template for device import"""
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Name', 'Type', 'Protocol', 'Group',
+            'IP Address', 'Port', 'Serial Port', 'Slave ID',
+            'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
+            'Device Path', 'Capacity', 'Enabled'
+        ])
+        
+        # Write example rows
+        writer.writerow([
+            '', 'Example Modbus TCP', 'Modbus', 'modbus-tcp', 'Crane-01',
+            '192.168.1.100', '502', '', '1',
+            '', '', '', '',
+            '', '', '1'
+        ])
+        
+        writer.writerow([
+            '', 'Example Modbus RTU', 'Modbus', 'modbus-rtu', 'Crane-01',
+            '', '', '/dev/ttyUSB0', '1',
+            '9600', '8', 'None', '1',
+            '', '', '1'
+        ])
+        
+        writer.writerow([
+            '', 'Example Loadcell', 'Loadcell', 'loadcell', 'Safety Sensors',
+            '', '', '', '',
+            '', '', '', '',
+            '/dev/spidev0.0', '40000', '1'
+        ])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        return web.Response(
+            text=csv_content,
+            headers={
+                'Content-Type': 'text/csv',
+                'Content-Disposition': 'attachment; filename="device_import_template.csv"'
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error generating template: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+# ============================================================================
+# GET DEVICE DATAPOINTS
+# ============================================================================
+
+async def get_device_datapoints(request):
+    """GET datapoints for a specific device"""
+    try:
+        device_id = request.match_info['device_id']
+        
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Check device type
+        cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (device_id,))
+        is_modbus = cursor.fetchone() is not None
+        
+        datapoints = []
+        
+        if is_modbus:
+            # Get Modbus datapoints
+            cursor.execute('''
+                SELECT id, name, register_address, register_type, data_type,
+                       byte_order, word_order, scale_factor, offset, unit, description
+                FROM modbus_datapoints
+                WHERE device_id = ?
+                ORDER BY name
+            ''', (device_id,))
+            
+            for row in cursor.fetchall():
+                datapoints.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'register_address': row[2],
+                    'register_type': row[3],
+                    'data_type': row[4],
+                    'byte_order': row[5],
+                    'word_order': row[6],
+                    'scale_factor': row[7],
+                    'offset': row[8],
+                    'unit': row[9],
+                    'description': row[10],
+                    'type': 'Modbus'
+                })
+        else:
+            # Get Loadcell datapoints
+            cursor.execute('''
+                SELECT id, name
+                FROM loadcell_datapoints
+                WHERE device_id = ?
+                ORDER BY name
+            ''', (device_id,))
+            
+            for row in cursor.fetchall():
+                datapoints.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'type': 'Loadcell'
+                })
+        
+        conn.close()
+        return web.json_response({'datapoints': datapoints})
+        
+    except Exception as e:
+        print(f"Error getting device datapoints: {e}")
         return web.json_response({'error': str(e)}, status=500)

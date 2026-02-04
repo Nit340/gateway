@@ -7,11 +7,16 @@ import json
 # Import modules
 from database import init_database, DB_FILE, get_database_stats
 from general_config import get_config_handler, put_config_handler
+
 from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
-    delete_device, test_device, disable_device,
-    get_all_groups, add_group, assign_devices_to_group
+    delete_device, test_device, disable_device, duplicate_device,
+    get_all_groups, add_group, assign_devices_to_group,
+    export_devices_csv, import_devices_csv, download_csv_template  ,get_device_datapoints
 )
+
+
+
 from tag_mapping import (
     get_all_datapoints, add_modbus_datapoint, update_modbus_datapoint,
     delete_datapoint, get_available_devices, get_protocol_form
@@ -362,6 +367,9 @@ def create_app():
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
     
+    # ADD THESE ROUTES TO main.py in the create_app() function
+
+
     # Device Management endpoints
     app.router.add_get('/api/devices', get_all_devices)
     app.router.add_post('/api/devices', add_device)
@@ -370,6 +378,12 @@ def create_app():
     app.router.add_delete('/api/devices/{device_id}', delete_device)
     app.router.add_post('/api/devices/{device_id}/test', test_device)
     app.router.add_post('/api/devices/{device_id}/disable', disable_device)
+    app.router.add_post('/api/devices/{device_id}/duplicate', duplicate_device)
+    
+    # Import/Export endpoints - ADD THESE NEW ROUTES
+    app.router.add_get('/api/devices/export/csv', export_devices_csv)
+    app.router.add_post('/api/devices/import/csv', import_devices_csv)
+    app.router.add_get('/api/devices/template/csv', download_csv_template)
     
     # Group operations
     app.router.add_get('/api/groups', get_all_groups)
@@ -383,7 +397,7 @@ def create_app():
     app.router.add_delete('/api/datapoints/{id}', delete_datapoint)
     app.router.add_get('/api/datapoints/devices', get_available_devices)
     app.router.add_get('/api/datapoints/protocol-form/{protocol}', get_protocol_form)
-    
+    app.router.add_get('/api/devices/{device_id}/datapoints', get_device_datapoints)
     # Database Viewer route
     app.router.add_get('/db', database_viewer_handler)
     

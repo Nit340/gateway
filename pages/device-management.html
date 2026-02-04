@@ -42,7 +42,7 @@
                     <label class="block text-sm font-medium text-slate-700 mb-1">Device Name <span class="text-red-500">*</span></label>
                     <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter device name" id="deviceNameInput">
                 </div>
-                <div id="deviceGroupContainer">
+                <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Group (Optional)</label>
                     <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceGroupSelect">
                         <option value="">None</option>
@@ -58,13 +58,15 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus RTU Settings</h3>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
-                        <input type="text" value="/dev/ttyUSB0" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="serialPort">
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
                         <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
                     </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
+                        <input type="text" value="/dev/ttyUSB0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="serialPort">
+                    </div>
+                    
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
@@ -81,9 +83,12 @@
                             <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="dataBits">
                                 <option>8</option>
                                 <option>7</option>
+                                <option>6</option>
+                                <option>5</option>
                             </select>
                         </div>
                     </div>
+                    
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
@@ -109,16 +114,18 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus TCP Settings</h3>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
-                        <input type="text" placeholder="192.168.1.100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="ipAddress">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
+                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpSlaveAddress">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
-                        <input type="number" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpPort">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
-                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="slaveId">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                            <input type="text" value="192.168.1.100" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpIp">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                            <input type="number" min="1" max="65535" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpPort">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -128,525 +135,450 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Loadcell Settings</h3>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Path <span class="text-red-500">*</span></label>
-                        <input type="text" placeholder="/dev/ttyUSB0" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="devicePath">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Path</label>
+                        <input type="text" value="/dev/spidev0.0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="devicePath">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Capacity (kg)</label>
-                        <input type="number" placeholder="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="loadcellCapacity">
-                    </div>
-                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p class="text-xs text-blue-800"><i class="fa-solid fa-info-circle mr-1"></i> Load and capacity datapoints will be auto-created for this device.</p>
+                        <input type="number" step="0.1" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="capacity">
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Action Buttons -->
-        <div class="flex items-center justify-end space-x-3 mt-6 pt-6 border-t border-slate-200">
-            <button class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" id="cancelAddDevice">
+        <!-- Panel Actions -->
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+            <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelAddDevice">
                 Cancel
             </button>
-            <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg" id="saveDeviceBtn">
-                <i class="fa-solid fa-save mr-2"></i> Save Device
+            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveDeviceBtn">
+                Save Device
             </button>
         </div>
     </div>
 </div>
 
-<!-- Main Content Area -->
-<div id="deviceManagementContent">
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Header Section -->
-        <div class="mb-8">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-900">Device Management</h1>
-                    <p class="text-slate-500 text-sm mt-1">Configure and manage connected devices</p>
-                </div>
-                <div class="flex items-center space-x-3">
-                    <button class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" id="scanDevicesBtn">
-                        <i class="fa-solid fa-radar mr-2"></i> Scan Devices
-                    </button>
-                    <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg shadow-lg shadow-blue-500/30" id="addDeviceBtn">
-                        <i class="fa-solid fa-plus mr-2"></i> Add Device
-                    </button>
+<!-- Edit Device Modal -->
+<div class="modal-overlay" id="editDeviceModal">
+    <div class="modal p-6" style="max-width: 600px;">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-slate-800">Edit Device</h2>
+            <button class="text-slate-400 hover:text-slate-600" id="closeEditModal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <div id="editDeviceContent">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+        
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+            <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelEditBtn">
+                Cancel
+            </button>
+            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveEditBtn">
+                Save Changes
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- View Device Details Modal -->
+<div class="modal-overlay" id="viewDeviceModal">
+    <div class="modal p-6" style="max-width: 700px;">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-slate-800">Device Details</h2>
+            <button class="text-slate-400 hover:text-slate-600" id="closeViewModal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <div id="deviceDetailsContent">
+            <!-- Content will be populated by JavaScript -->
+            <div class="text-center py-8 text-slate-500">
+                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                <p>Loading device details...</p>
+            </div>
+        </div>
+        
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between">
+            <div class="flex space-x-2">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm flex items-center" id="duplicateDeviceBtn" title="Duplicate Device">
+                    <i class="fa-solid fa-copy mr-2"></i> Duplicate
+                </button>
+            </div>
+            <div class="flex space-x-3">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="closeViewDetailsBtn">
+                    Close
+                </button>
+                <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm flex items-center" id="editFromViewBtn">
+                    <i class="fa-solid fa-edit mr-2"></i> Edit
+                </button>
+                <button class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm flex items-center" id="deleteFromViewBtn">
+                    <i class="fa-solid fa-trash mr-2"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Group Modal -->
+<div class="modal-overlay" id="addGroupModal">
+    <div class="modal p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-slate-800">Add New Group</h2>
+            <button class="text-slate-400 hover:text-slate-600" id="closeGroupModal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Group Name</label>
+                <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter group name" id="groupNameInput">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+                <textarea class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary h-24" placeholder="Group description..." id="groupDescription"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">Color Tag</label>
+                <div class="flex space-x-2">
+                    <button class="w-8 h-8 rounded-full bg-blue-500 border-2 border-blue-700 hover:border-blue-300 transition-colors" data-color="blue"></button>
+                    <button class="w-8 h-8 rounded-full bg-green-500 border-2 border-transparent hover:border-green-300 transition-colors" data-color="green"></button>
+                    <button class="w-8 h-8 rounded-full bg-purple-500 border-2 border-transparent hover:border-purple-300 transition-colors" data-color="purple"></button>
+                    <button class="w-8 h-8 rounded-full bg-orange-500 border-2 border-transparent hover:border-orange-300 transition-colors" data-color="orange"></button>
+                    <button class="w-8 h-8 rounded-full bg-red-500 border-2 border-transparent hover:border-red-300 transition-colors" data-color="red"></button>
                 </div>
             </div>
         </div>
-
-        <!-- Devices Table Section -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 mb-8">
-            <div class="p-6 border-b border-slate-200 flex items-center justify-between">
-                <h2 class="text-lg font-semibold text-slate-800">
-                    <i class="fa-solid fa-microchip mr-2 text-primary"></i>
-                    Connected Devices
-                </h2>
-                <div class="flex items-center space-x-3">
-                    <div class="relative">
-                        <input type="text" placeholder="Search devices..." class="pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary w-64" id="searchDevices">
-                        <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
-                    </div>
-                    <button class="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" id="importCsvBtn">
-                        <i class="fa-solid fa-file-import mr-2"></i> Import
-                    </button>
-                    <button class="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" id="exportCsvBtn">
-                        <i class="fa-solid fa-file-export mr-2"></i> Export
-                    </button>
-                </div>
-            </div>
-            
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Device Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Connection</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Last Poll</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200" id="devicesTableBody">
-                        <!-- Populated by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="p-4 border-t border-slate-200 bg-slate-50 text-sm text-slate-500">
-                Showing <span class="font-medium text-slate-900" id="deviceCount">0</span> devices
-            </div>
-        </section>
-
-        <!-- Import/Export Section -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div class="p-6 border-b border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-file-csv mr-2 text-primary"></i>
-                    Import / Export Configuration
-                </h2>
-                <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full inline-block mt-2">
-                    CSV Format
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
-                <!-- Export Section -->
-                <div class="space-y-4">
-                    <h3 class="text-sm font-semibold text-slate-900">Export Devices</h3>
-                    <p class="text-sm text-slate-600">Export device configuration for backup or deployment.</p>
-                    
-                    <div class="space-y-3">
-                        <div class="space-y-2">
-                            <div class="flex items-center">
-                                <input type="checkbox" id="export-all-devices" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
-                                <label for="export-all-devices" class="ml-2 text-sm text-slate-700">Export all devices</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" id="export-configuration" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
-                                <label for="export-configuration" class="ml-2 text-sm text-slate-700">Include device configuration</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" id="export-timestamp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
-                                <label for="export-timestamp" class="ml-2 text-sm text-slate-700">Include timestamp in filename</label>
-                            </div>
-                        </div>
-                        
-                        <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center" id="exportDevicesBtn">
-                            <i class="fa-solid fa-download mr-2"></i> Export to CSV
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Import Section -->
-                <div class="space-y-4">
-                    <h3 class="text-sm font-semibold text-slate-900">Import Devices</h3>
-                    <p class="text-sm text-slate-600">Import device configuration from CSV file.</p>
-                    
-                    <div class="space-y-3">
-                        <!-- File Upload Area -->
-                        <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition-colors cursor-pointer" id="dropArea">
-                            <input type="file" id="fileInput" accept=".csv" class="hidden">
-                            <i class="fa-solid fa-file-csv text-2xl text-slate-400 mb-3"></i>
-                            <p class="text-sm text-slate-600 mb-1">Drag & drop CSV file here</p>
-                            <p class="text-xs text-slate-500">or</p>
-                            <button class="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="browseFilesBtn">
-                                Browse Files
-                            </button>
-                            <p class="text-xs text-slate-400 mt-2" id="selectedFileName">Supports: CSV files only</p>
-                        </div>
-                        
-                        <!-- Import Options -->
-                        <div class="space-y-2">
-                            <div class="flex items-center">
-                                <input type="checkbox" id="import-overwrite" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
-                                <label for="import-overwrite" class="ml-2 text-sm text-slate-700">Overwrite existing devices</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" id="import-validate" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked>
-                                <label for="import-validate" class="ml-2 text-sm text-slate-700">Validate before import</label>
-                            </div>
-                        </div>
-                        
-                        <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center disabled:bg-slate-300 disabled:cursor-not-allowed" id="importDevicesBtn" disabled>
-                            <i class="fa-solid fa-upload mr-2"></i> Import from CSV
-                        </button>
-                        
-                        <!-- Quick Template -->
-                        <div class="mt-4">
-                            <p class="text-xs text-slate-500 mb-2">Need a template?</p>
-                            <button class="text-xs px-3 py-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded" id="downloadTemplateBtn">
-                                <i class="fa-solid fa-file-arrow-down mr-1"></i> Download CSV Template
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Import Status -->
-            <div id="importStatus" class="hidden mx-6 mb-6 p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-slate-700" id="statusText">Importing...</span>
-                    <span class="text-xs text-slate-500" id="statusCount">0/0 devices</span>
-                </div>
-                <div class="h-1 bg-slate-200 rounded-full overflow-hidden">
-                    <div class="h-full bg-primary transition-all duration-300" id="progressBar" style="width: 0%"></div>
-                </div>
-            </div>
-        </section>
-    </main>
+        
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+            <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelGroupBtn">
+                Cancel
+            </button>
+            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveGroupBtn">
+                Create Group
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Scan Devices Modal -->
 <div class="modal-overlay" id="scanDevicesModal">
-    <div class="modal max-w-2xl">
-        <div class="p-6">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-lg font-semibold text-slate-800">Scan for Devices</h2>
-                <button class="text-slate-400 hover:text-slate-600" id="closeScanModal">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
+    <div class="modal p-6" style="max-width: 800px;">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-slate-800">Scan for Devices</h2>
+            <button class="text-slate-400 hover:text-slate-600" id="closeScanModal">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-700 mb-3">Select Scan Type</label>
+            <div class="grid grid-cols-3 gap-3">
+                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
+                    <input type="radio" name="scan-type" value="modbus-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                    <div class="ml-3">
+                        <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
+                    </div>
+                </label>
+                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
+                    <input type="radio" name="scan-type" value="modbus-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                    <div class="ml-3">
+                        <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
+                    </div>
+                </label>
+                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
+                    <input type="radio" name="scan-type" value="loadcell" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                    <div class="ml-3">
+                        <div class="font-medium text-sm text-slate-900">Loadcell</div>
+                    </div>
+                </label>
             </div>
-            
-            <!-- Scan Type Selection -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-slate-700 mb-3">Scan Type</label>
-                <div class="grid grid-cols-3 gap-3">
-                    <label class="flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
-                        <input type="radio" name="scan-type" value="modbus-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                        <div class="ml-3">
-                            <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
-                            <div class="text-xs text-slate-500">Serial ports</div>
-                        </div>
-                    </label>
-                    <label class="flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
-                        <input type="radio" name="scan-type" value="modbus-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <div class="ml-3">
-                            <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
-                            <div class="text-xs text-slate-500">Network scan</div>
-                        </div>
-                    </label>
-                    <label class="flex items-center p-3 border-2 border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
-                        <input type="radio" name="scan-type" value="loadcell" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <div class="ml-3">
-                            <div class="font-medium text-sm text-slate-900">Loadcell</div>
-                            <div class="text-xs text-slate-500">Serial devices</div>
-                        </div>
-                    </label>
-                </div>
-            </div>
-            
-            <!-- Scan Parameters -->
-            <div id="scanParameters" class="mb-6">
-                <!-- Modbus RTU Scan Parameters -->
-                <div id="modbusRtuScanParams" class="scan-params active space-y-4">
+        </div>
+        
+        <!-- Scan Parameters -->
+        <div id="scanParameters">
+            <!-- Modbus RTU Scan -->
+            <div id="rtu-scan-params" class="scan-params active">
+                <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Serial Ports to Scan</label>
-                        <div class="space-y-2">
-                            <div class="flex items-center">
-                                <input type="checkbox" id="scan-usb0" class="h-4 w-4 text-primary" checked>
-                                <label for="scan-usb0" class="ml-2 text-sm text-slate-700">/dev/ttyUSB0</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" id="scan-usb1" class="h-4 w-4 text-primary" checked>
-                                <label for="scan-usb1" class="ml-2 text-sm text-slate-700">/dev/ttyUSB1</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" id="scan-ama0" class="h-4 w-4 text-primary">
-                                <label for="scan-ama0" class="ml-2 text-sm text-slate-700">/dev/ttyAMA0</label>
-                            </div>
-                        </div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
+                        <input type="text" value="/dev/ttyUSB0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanSerialPort">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address Range</label>
-                            <div class="flex items-center space-x-2">
-                                <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="rtuSlaveStart">
-                                <span class="text-slate-500">to</span>
-                                <input type="number" min="1" max="247" value="10" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="rtuSlaveEnd">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rates</label>
-                            <select multiple class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="rtuBaudRates" size="3">
-                                <option selected>9600</option>
-                                <option selected>19200</option>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm bg-white" id="scanBaudRate">
+                                <option>9600</option>
+                                <option>19200</option>
                                 <option>38400</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Address Range</label>
+                            <input type="text" value="1-10" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanAddressRange">
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Modbus TCP Scan Parameters -->
-                <div id="modbusTcpScanParams" class="scan-params space-y-4">
+            </div>
+            
+            <!-- Modbus TCP Scan -->
+            <div id="tcp-scan-params" class="scan-params">
+                <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">IP Range</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="text" value="192.168.1.1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="tcpIpStart" placeholder="192.168.1.1">
-                            <span class="text-slate-500">to</span>
-                            <input type="text" value="192.168.1.254" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="tcpIpEnd" placeholder="192.168.1.254">
-                        </div>
+                        <input type="text" value="192.168.1.1-192.168.1.254" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanIpRange">
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
-                            <input type="number" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="tcpPort">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Timeout (ms)</label>
-                            <input type="number" value="1000" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="tcpTimeout">
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Loadcell Scan Parameters -->
-                <div id="loadcellScanParams" class="scan-params space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Serial Ports to Scan</label>
-                        <div class="space-y-2">
-                            <div class="flex items-center">
-                                <input type="checkbox" id="scan-lc-usb0" class="h-4 w-4 text-primary" checked>
-                                <label for="scan-lc-usb0" class="ml-2 text-sm text-slate-700">/dev/ttyUSB0</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input type="checkbox" id="scan-lc-usb1" class="h-4 w-4 text-primary" checked>
-                                <label for="scan-lc-usb1" class="ml-2 text-sm text-slate-700">/dev/ttyUSB1</label>
-                            </div>
-                        </div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                        <input type="number" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanPort">
                     </div>
                 </div>
             </div>
             
-            <!-- Scan Results -->
-            <div id="scanResults" class="mb-6 hidden">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-semibold text-slate-900">Scan Results</h3>
-                    <span class="text-xs text-slate-500" id="scanResultCount">0 devices found</span>
-                </div>
-                <div class="max-h-64 overflow-y-auto border border-slate-200 rounded-lg">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-50 sticky top-0">
-                            <tr>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500">
-                                    <input type="checkbox" id="selectAllScanned" class="h-4 w-4 text-primary">
-                                </th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500">Connection</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500">Type</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500">Address</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200" id="scanResultsBody">
-                            <!-- Populated by JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Scan Status -->
-            <div id="scanStatus" class="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-lg hidden">
-                <div class="flex items-center space-x-3">
-                    <i class="fa-solid fa-spinner fa-spin text-primary"></i>
-                    <div class="flex-1">
-                        <div class="text-sm font-medium text-slate-900" id="scanStatusText">Scanning...</div>
-                        <div class="text-xs text-slate-500" id="scanStatusDetail">Initializing scan...</div>
+            <!-- Loadcell Scan -->
+            <div id="loadcell-scan-params" class="scan-params">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Pattern</label>
+                        <input type="text" value="/dev/spidev*" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanDevicePattern">
                     </div>
                 </div>
-                <div class="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div class="h-full bg-primary transition-all duration-300" id="scanProgressBar" style="width: 0%"></div>
-                </div>
             </div>
-            
-            <!-- Action Buttons -->
-            <div class="flex items-center justify-end space-x-3">
-                <button class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" id="cancelScanBtn">
+        </div>
+        
+        <!-- Scan Results -->
+        <div id="scanResults" class="mt-6 hidden">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-slate-900">Scan Results</h3>
+                <label class="flex items-center text-sm">
+                    <input type="checkbox" class="mr-2" id="selectAllScanned">
+                    Select All
+                </label>
+            </div>
+            <div class="border border-slate-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="p-3 text-left"><input type="checkbox" id="selectAllScanned"></th>
+                            <th class="p-3 text-left">Type</th>
+                            <th class="p-3 text-left">Address</th>
+                            <th class="p-3 text-left">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scanResultsBody">
+                        <!-- Results populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between">
+            <div id="scanStatus" class="text-sm text-slate-600"></div>
+            <div class="flex space-x-3">
+                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelScanBtn">
                     Cancel
                 </button>
-                <button class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg" id="startScanBtn">
+                <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="startScanBtn">
                     <i class="fa-solid fa-radar mr-2"></i> Start Scan
                 </button>
-                <button class="hidden px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg" id="addScannedDevicesBtn">
-                    <i class="fa-solid fa-plus mr-2"></i> Add Selected Devices
+                <button class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm hidden" id="addScannedDevicesBtn">
+                    <i class="fa-solid fa-plus mr-2"></i> Add Selected
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal-overlay" id="deleteConfirmModal">
-    <div class="modal max-w-md">
-        <div class="p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-slate-800">Confirm Delete</h2>
-                <button class="text-slate-400 hover:text-slate-600" id="closeDeleteModal">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
+<div class="main-content-with-sidebar">
+    <main class="flex-grow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold text-slate-900">Device Management</h1>
+                        <p class="text-slate-500 text-sm mt-1">Register, configure, monitor, and manage all Field devices connected to the Univa IoT Gateway.</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="scanDevicesBtn">
+                            <i class="fa-solid fa-wifi mr-2"></i> Scan Devices
+                        </button>
+                        <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addDeviceBtn">
+                            <i class="fa-solid fa-plus mr-2"></i> Add Device
+                        </button>
+                    </div>
+                </div>
             </div>
-            <p class="text-sm text-slate-600 mb-6">Are you sure you want to delete this device? This action cannot be undone.</p>
-            <div class="flex items-center justify-end space-x-3">
-                <button class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50" id="cancelDeleteBtn">
-                    Cancel
-                </button>
-                <button class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg" id="confirmDeleteBtn">
-                    <i class="fa-solid fa-trash mr-2"></i> Delete Device
-                </button>
+
+            <div class="space-y-8">
+                
+                <!-- SECTION A: Device Overview Table -->
+                <section id="section-devices" class="bg-white rounded-xl shadow-sm border border-border">
+                    <div class="p-6 border-b border-border">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-list mr-2 text-primary"></i> 
+                                <span class="mr-2">Device Overview Table</span>
+                                <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                            </h2>
+                            <!-- Refresh button added here -->
+                            <button id="refreshBtn" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm flex items-center transition-colors" title="Refresh Devices">
+                                <i class="fa-solid fa-rotate mr-2"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <p class="text-slate-500 text-sm mt-2">View all connected devices with status, communication health, and last polled timestamp.</p>
+                    </div>
+                    
+                    <!-- Device Filters -->
+                    <div class="p-4 border-b border-border bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="relative">
+                                <input type="text" placeholder="Search devices..." class="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg w-64 focus:ring-2 focus:ring-primary focus:border-primary" id="searchDevices">
+                                <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Devices Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full" id="devicesTable">
+                            <thead class="bg-slate-50 border-b border-border">
+                                <tr class="text-left text-xs text-slate-500 uppercase tracking-wider">
+                                    <th class="p-4 font-medium">Device Name</th>
+                                    <th class="p-4 font-medium">Type</th>
+                                    <th class="p-4 font-medium">Address/ID</th>
+                                    <th class="p-4 font-medium">Status</th>
+                                    <th class="p-4 font-medium">Last Poll</th>
+                                    <th class="p-4 font-medium text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border" id="devicesTableBody">
+                                <!-- Devices will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SECTION D: Device Group Management -->
+                <section id="section-groups" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-layer-group mr-2 text-primary"></i> 
+                            <span class="mr-2">Device Group Management</span>
+                            <span class="text-xs font-normal text-slate-500">SECTION D</span>
+                        </h2>
+                        <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addGroupBtn">
+                            <i class="fa-solid fa-plus mr-2"></i> Add New Group
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="groupsContainer">
+                        <!-- Groups will be populated by JavaScript -->
+                    </div>
+                    <p class="text-sm text-slate-500 mt-4">Assign/unassign devices quickly for organized management.</p>
+                </section>
+
+                <!-- SECTION E: Import / Export - CSV ONLY -->
+                <section id="section-import-export" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-file-export mr-2 text-primary"></i> 
+                            <span class="mr-2">Import / Export</span>
+                            <span class="text-xs font-normal text-slate-500">SECTION E</span>
+                        </h2>
+                        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                            CSV Format
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Export Section -->
+                        <div class="space-y-4">
+                            <h3 class="text-sm font-semibold text-slate-900">Export Devices</h3>
+                            <p class="text-sm text-slate-600">Export device configuration for backup or deployment to other gateways.</p>
+                            
+                            <div class="space-y-3">
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="export-all-devices" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked disabled>
+                                        <label for="export-all-devices" class="ml-2 text-sm text-slate-700">Export all devices</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="export-configuration" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked disabled>
+                                        <label for="export-configuration" class="ml-2 text-sm text-slate-700">Include device configuration</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="export-timestamp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked disabled>
+                                        <label for="export-timestamp" class="ml-2 text-sm text-slate-700">Include timestamp in filename</label>
+                                    </div>
+                                </div>
+                                
+                                <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center" id="exportBtn">
+                                    <i class="fa-solid fa-download mr-2"></i> Export to CSV
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Import Section -->
+                        <div class="space-y-4">
+                            <h3 class="text-sm font-semibold text-slate-900">Import Devices</h3>
+                            <p class="text-sm text-slate-600">Import device configuration from CSV file.</p>
+                            
+                            <div class="space-y-3">
+                                <!-- File Upload Area -->
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition-colors cursor-pointer" id="dropArea">
+                                    <input type="file" id="fileInput" accept=".csv" class="hidden">
+                                    <i class="fa-solid fa-file-csv text-2xl text-slate-400 mb-3"></i>
+                                    <p class="text-sm text-slate-600 mb-1">Drag & drop CSV file here</p>
+                                    <p class="text-xs text-slate-500">or</p>
+                                    <button type="button" class="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="browseFilesBtn">
+                                        Browse Files
+                                    </button>
+                                    <p class="text-xs text-slate-400 mt-2">Supports: CSV files only</p>
+                                </div>
+                                
+                                <!-- Import Options -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="import-overwrite" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
+                                        <label for="import-overwrite" class="ml-2 text-sm text-slate-700">Create new devices (IDs will be auto-generated)</label>
+                                    </div>
+                                </div>
+                                
+                                <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center disabled:bg-slate-300 disabled:cursor-not-allowed" id="importBtn" disabled>
+                                    <i class="fa-solid fa-upload mr-2"></i> Import from CSV
+                                </button>
+                                
+                                <!-- Quick Template -->
+                                <div class="mt-4">
+                                    <p class="text-xs text-slate-500 mb-2">Need a template?</p>
+                                    <button type="button" class="text-xs px-3 py-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded" id="downloadCsvTemplateBtn">
+                                        <i class="fa-solid fa-file-arrow-down mr-1"></i> Download CSV Template
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Import Status -->
+                    <div id="importStatus" class="hidden mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-700" id="statusText">Importing...</span>
+                            <span class="text-xs text-slate-500" id="statusCount">0/0 devices</span>
+                        </div>
+                        <div class="mt-2">
+                            <div class="h-1 bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-primary transition-all duration-300" id="progressBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm text-slate-500 mt-4">Export device configuration in CSV format for easy spreadsheet editing and import.</p>
+                </section>
             </div>
         </div>
-    </div>
+    </main>
 </div>
-
-<style>
-/* Add Device Panel */
-.add-device-panel {
-    position: fixed;
-    right: -400px;
-    top: 0;
-    width: 400px;
-    height: 100vh;
-    background: white;
-    border-left: 1px solid #E2E8F0;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.1);
-    transition: right 0.3s ease;
-    z-index: 1050;
-    overflow-y: auto;
-}
-
-.add-device-panel.active {
-    right: 0;
-}
-
-/* Modal Overlay */
-.modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0,0,0,0.5);
-    z-index: 1060;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-
-.modal-overlay.active {
-    display: flex;
-}
-
-.modal {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    animation: modalSlideIn 0.3s ease;
-}
-
-@keyframes modalSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Protocol Config Sections */
-.protocol-config {
-    display: none;
-}
-
-.protocol-config.active {
-    display: block;
-}
-
-/* Scan Parameters */
-.scan-params {
-    display: none;
-}
-
-.scan-params.active {
-    display: block;
-}
-
-/* Device Type Selection */
-.device-type-option input:checked + div {
-    color: #2563EB;
-}
-
-.device-type-option:has(input:checked) {
-    border-color: #2563EB;
-    background-color: #EFF6FF;
-}
-
-/* Scan Type Selection */
-.scan-type-option input:checked + div {
-    color: #2563EB;
-}
-
-.scan-type-option:has(input:checked) {
-    border-color: #2563EB;
-    background-color: #EFF6FF;
-}
-
-/* Status Indicators */
-.status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 6px;
-}
-
-.status-online { background-color: #10B981; }
-.status-offline { background-color: #EF4444; }
-.status-warning { background-color: #F59E0B; }
-
-/* Device Type Badges */
-.device-type-badge {
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.type-modbus-tcp {
-    background-color: #DBEAFE;
-    color: #1E40AF;
-}
-
-.type-modbus-rtu {
-    background-color: #D1FAE5;
-    color: #065F46;
-}
-
-.type-loadcell {
-    background-color: #FEF3C7;
-    color: #92400E;
-}
-</style>
