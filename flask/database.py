@@ -21,11 +21,12 @@ def init_database():
     print("Database initialized with new schema")
     print("✓ General configuration table (no JSON)")
     print("✓ Services table (modbus, loadcell)")
-    print("✓ Modbus_device table (tcp/rtu with connection details)")
-    print("✓ Loadcell_device table (with calibration)")
+    print("✓ Modbus_device table (tcp/rtu with connection details) - NO status column")
+    print("✓ Loadcell_device table (with calibration) - NO status column")
     print("✓ Modbus_datapoints table")
     print("✓ Loadcell_datapoints table (auto-created: load, capacity)")
     print("✓ Dynamic device groups")
+    print("✓ Status and last_poll handled via WebSocket real-time only")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
@@ -83,7 +84,7 @@ def create_tables(cursor):
         )
     ''')
     
-    # Modbus device table - with ALL connection details
+    # Modbus device table - NO STATUS COLUMN (status is real-time via WebSocket)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS modbus_device (
             id TEXT PRIMARY KEY,
@@ -109,9 +110,8 @@ def create_tables(cursor):
             data_bits INTEGER DEFAULT 8,
             stop_bits INTEGER DEFAULT 1,
             
-            -- Status
+            -- Only enabled flag, no status
             enabled BOOLEAN DEFAULT 1,
-            status TEXT DEFAULT 'offline',
             
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -120,7 +120,7 @@ def create_tables(cursor):
         )
     ''')
     
-    # Loadcell device table - with ALL calibration details
+    # Loadcell device table - NO STATUS COLUMN (status is real-time via WebSocket)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_device (
             id TEXT PRIMARY KEY,
@@ -169,9 +169,8 @@ def create_tables(cursor):
             confirm_count INTEGER DEFAULT 3,
             capacity_name TEXT DEFAULT 'capacity',
             
-            -- Status
+            -- Only enabled flag, no status
             enabled BOOLEAN DEFAULT 1,
-            status TEXT DEFAULT 'offline',
             
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -221,25 +220,31 @@ def insert_default_data(cursor):
     # Insert general configuration
     cursor.execute('SELECT COUNT(*) FROM general_configuration')
     if cursor.fetchone()[0] == 0:
-        cursor.execute('''
-            INSERT INTO general_configuration (id) VALUES (1)
-        ''')
+        cursor.execute('INSERT INTO general_configuration (id) VALUES (1)')
     
-    # Insert services
-    services = [
-        ('modbus', 'Modbus RTU/TCP service'),
-        ('loadcell', 'Load cell service')
-    ]
-    
-    for service in services:
+    # Insert default services
+    for service in [
+        ('modbus', 'Modbus Protocol Service'),
+        ('loadcell', 'Loadcell Service')
+    ]:
         cursor.execute('''
             INSERT OR IGNORE INTO services (name, description)
             VALUES (?, ?)
         ''', service)
+    
+    # Insert default device groups
+    for group in [
+        ('Crane-01', 'blue', 'Main Crane Devices'),
+        ('Safety Sensors', 'red', 'Safety-critical sensors'),
+        ('RTU Devices', 'green', 'RTU Communication Devices')
+    ]:
+        cursor.execute('''
+            INSERT OR IGNORE INTO device_groups (name, color, description)
+            VALUES (?, ?, ?)
+        ''', group)
 
-# Database operations for general configuration
 def get_general_configuration():
-    """Get general configuration as dictionary"""
+    """Get general configuration"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -249,39 +254,41 @@ def get_general_configuration():
                    latitude, longitude, asset_id, mac_address,
                    timezone, ntp_server, date_format, time_format, language,
                    heartbeat_interval, offline_threshold
-            FROM general_configuration 
-            WHERE id = 1
+            FROM general_configuration WHERE id = 1
         ''')
         
         row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return {}
+        
+        config = {
+            'gateway_identity': {
+                'name': row[0],
+                'serial_number': row[1],
+                'deployment_site': row[2],
+                'location_mode': row[3],
+                'latitude': row[4],
+                'longitude': row[5],
+                'asset_id': row[6]
+            },
+            'date_time': {
+                'timezone': row[8],
+                'ntp_server': row[9],
+                'date_format': row[10],
+                'time_format': row[11],
+                'language': row[12]
+            },
+            'heartbeat': {
+                'interval': row[13],
+                'offline_threshold': row[14]
+            },
+            'mac_address': row[7]
+        }
+        
         conn.close()
-        
-        if row:
-            return {
-                'gateway_identity': {
-                    'name': row[0],
-                    'serial_number': row[1],
-                    'deployment_site': row[2],
-                    'location_mode': row[3],
-                    'latitude': row[4],
-                    'longitude': row[5],
-                    'asset_id': row[6]
-                },
-                'date_time': {
-                    'timezone': row[8],
-                    'ntp_server': row[9],
-                    'date_format': row[10],
-                    'time_format': row[11],
-                    'language': row[12]
-                },
-                'heartbeat': {
-                    'interval': row[13],
-                    'offline_threshold': row[14]
-                },
-                'mac_address': row[7]
-            }
-        
-        return {}
+        return config
     except Exception as e:
         print(f"Error getting general config: {e}")
         return {}

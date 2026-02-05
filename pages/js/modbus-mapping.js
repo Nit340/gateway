@@ -1,713 +1,640 @@
-// modbus-mapping.js - JavaScript for Tag Mapping page
-let currentMappings = [];
-let allDevices = [];
-let allTags = [];
-let currentDevice = null;
-let currentStep = 1;
-let currentProtocol = '';
+// modbus-mapping.js - Fixed with proper device loading and click handling
+let devices = [];
+let tags = [];
+let selectedDeviceId = null;
+let selectedDeviceData = null;
 
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
+// ==================== INITIALIZATION ====================
 
 function initializeModbusMapping() {
-    console.log('Initializing Modbus Mapping...');
+    console.log('🚀 Initializing Tag Mapping...');
     
-    // Load devices and tags
-    loadDevices();
-    loadTags();
+    // Check if modal exists, if not create it
+    ensureModalExists();
+    
+    // Load data first
+    loadDevicesAndTags();
     
     // Setup event listeners
     setupEventListeners();
     
-    // Initialize UI components
-    initializeUI();
-    
-    console.log('Modbus Mapping initialized');
+    console.log('✅ Tag Mapping initialized');
 }
 
-function initializeUI() {
-    // Initialize device filter dropdown
-    initializeDeviceFilter();
+function ensureModalExists() {
+    let modal = document.getElementById('createTagModal');
     
-    // Initialize protocol tabs if needed
-    initializeProtocolTabs();
+    if (!modal) {
+        console.log('Modal not found, creating it...');
+        createModalHTML();
+        modal = document.getElementById('createTagModal');
+    }
+    
+    return modal;
 }
+
+function createModalHTML() {
+    // Remove any existing modal
+    const existingModal = document.getElementById('createTagModal');
+    if (existingModal) existingModal.remove();
+    
+    const modalHTML = `
+    <div class="modal-overlay" id="createTagModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+        <div class="modal" style="background: white; border-radius: 8px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+            <div class="p-6">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        <i class="fa-solid fa-plus mr-2 text-blue-600"></i>
+                        Create New Tag
+                    </h2>
+                    <button class="text-gray-400 hover:text-gray-600" id="closeCreateTagModal">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                
+                <!-- Step 1: Device Selection -->
+                <div class="modal-step active" id="deviceSelectionStep">
+                    <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+                        <i class="fa-solid fa-info-circle mr-2"></i>
+                        First, select the device you want to create a tag for
+                    </div>
+                    
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Select Device <span class="text-red-500">*</span>
+                        </label>
+                        <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm" id="modalDeviceSelect">
+                            <option value="">-- Choose a device --</option>
+                            <!-- Devices will be populated -->
+                        </select>
+                    </div>
+                    
+                    <!-- Device Info (shown when device selected) -->
+                    <div class="hidden mb-5 p-4 bg-gray-50 rounded-lg border border-gray-200" id="modalDeviceInfo">
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <div class="text-xs text-gray-500 mb-1">Device Type</div>
+                                <div class="font-medium text-gray-900" id="modalDeviceType">-</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-gray-500 mb-1">Protocol</div>
+                                <div class="font-medium text-gray-900" id="modalDeviceProtocol">-</div>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-xs text-gray-600" id="modalDeviceHint"></div>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="flex justify-end space-x-2 pt-4 border-t border-gray-200">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" id="cancelDeviceSelection">
+                            Cancel
+                        </button>
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" id="proceedToForm" disabled>
+                            Next: Configure Tag <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 2a: Load Cell Form -->
+                <div class="modal-step" id="loadcellFormStep" style="display: none;">
+                    <!-- Load cell form content -->
+                    <div class="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div class="text-xs text-green-700 mb-1">Selected Device</div>
+                        <div class="text-sm font-medium text-green-900" id="loadcellFormDeviceName">-</div>
+                    </div>
+                    
+                    <div class="mb-6 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+                        <i class="fa-solid fa-info-circle mr-2"></i>
+                        Load cell tags are auto-created when device is added. These values cannot be edited.
+                    </div>
+                    
+                    <div class="flex justify-between space-x-2 pt-4 border-t border-gray-200">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" id="backFromLoadcell">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                        </button>
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" id="closeFromLoadcell">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 2b: Modbus Form -->
+                <div class="modal-step" id="modbusFormStep" style="display: none;">
+                    <!-- Modbus form content -->
+                    <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="text-xs text-blue-700 mb-1">Selected Device</div>
+                                <div class="text-sm font-medium text-blue-900" id="modbusFormDeviceName">-</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-blue-700 mb-1">Protocol</div>
+                                <div class="text-sm font-medium text-blue-900" id="modbusFormProtocol">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-6 p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm text-amber-800">
+                        <i class="fa-solid fa-lightbulb mr-2"></i>
+                        <strong>Auto-Detection:</strong> Register type will be detected from the address you enter
+                    </div>
+                    
+                    <form id="modbusCreateForm">
+                        <!-- Form fields -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Tag Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                                   id="modbusFormTagName" placeholder="e.g., temperature_sensor_1" required>
+                        </div>
+                        
+                        <div class="flex justify-between space-x-2 pt-4 border-t border-gray-200">
+                            <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" id="backFromModbus">
+                                <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                            </button>
+                            <div class="flex space-x-2">
+                                <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" id="cancelFromModbus">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700">
+                                    <i class="fa-solid fa-check mr-2"></i> Create Tag
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    console.log('✅ Modal HTML created');
+}
+
+// ==================== LOAD DATA ====================
+
+async function loadDevicesAndTags() {
+    try {
+        console.log('📥 Loading devices and tags...');
+        
+        // Load devices
+        const devicesResponse = await fetch('/api/datapoints/devices');
+        const devicesData = await devicesResponse.json();
+        devices = devicesData.devices || [];
+        console.log(`Loaded ${devices.length} devices`);
+        
+        // Load tags
+        const tagsResponse = await fetch('/api/datapoints');
+        const tagsData = await tagsResponse.json();
+        tags = tagsData.tags || [];
+        console.log(`Loaded ${tags.length} tags`);
+        
+        // Populate device select dropdown
+        populateDeviceSelectDropdown();
+        
+        // Render tables
+        renderTagsTable();
+        renderTagsBrowser();
+        updateTagCount();
+        
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showTagNotification('Failed to load data', 'error');
+    }
+}
+
+function populateDeviceSelectDropdown() {
+    const select = document.getElementById('modalDeviceSelect');
+    if (!select) {
+        console.error('Device select dropdown not found');
+        return;
+    }
+    
+    // Clear and add options
+    select.innerHTML = '<option value="">-- Choose a device --</option>';
+    
+    devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.id;
+        option.textContent = `${device.name} (${device.type})`;
+        option.dataset.protocol = device.protocol;
+        select.appendChild(option);
+    });
+    
+    console.log(`Populated dropdown with ${devices.length} devices`);
+}
+
+// ==================== EVENT LISTENERS ====================
 
 function setupEventListeners() {
-    // Add Mapping Button
-    document.getElementById('addMappingBtn')?.addEventListener('click', showAddMappingModal);
-    document.getElementById('addFirstMappingBtn')?.addEventListener('click', showAddMappingModal);
+    console.log('🔧 Setting up event listeners...');
     
-    // Modal controls
-    document.getElementById('closeEditMappingModal')?.addEventListener('click', closeEditMappingModal);
-    document.getElementById('cancelEditMapping')?.addEventListener('click', closeEditMappingModal);
+    // 1. Add Mapping button
+    const addMappingBtn = document.getElementById('addMappingBtn');
+    if (addMappingBtn) {
+        console.log('Found Add Mapping button');
+        
+        // Remove existing listeners and reattach
+        const newBtn = addMappingBtn.cloneNode(true);
+        addMappingBtn.parentNode.replaceChild(newBtn, addMappingBtn);
+        
+        newBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Add Mapping button clicked');
+            openCreateTagModal();
+        });
+    }
     
-    // Step navigation
-    document.getElementById('nextStep1Btn')?.addEventListener('click', () => goToStep(2));
-    document.getElementById('nextStep2Btn')?.addEventListener('click', () => goToStep(3));
-    document.getElementById('prevStep2Btn')?.addEventListener('click', () => goToStep(1));
-    document.getElementById('prevStep3Btn')?.addEventListener('click', () => goToStep(2));
+    // 2. Modal close buttons
+    document.getElementById('closeCreateTagModal')?.addEventListener('click', closeModal);
+    document.getElementById('cancelDeviceSelection')?.addEventListener('click', closeModal);
+    document.getElementById('closeFromLoadcell')?.addEventListener('click', closeModal);
+    document.getElementById('cancelFromModbus')?.addEventListener('click', closeModal);
     
-    // Save mapping
-    document.getElementById('saveMappingBtn')?.addEventListener('click', saveMapping);
+    // 3. Device selection
+    const deviceSelect = document.getElementById('modalDeviceSelect');
+    if (deviceSelect) {
+        deviceSelect.addEventListener('change', function(e) {
+            console.log('Device selection changed:', e.target.value);
+            handleDeviceSelection(e);
+        });
+    }
     
-    // Device filter
-    document.getElementById('deviceFilter')?.addEventListener('change', filterMappingsByDevice);
+    // 4. Proceed button
+    const proceedBtn = document.getElementById('proceedToForm');
+    if (proceedBtn) {
+        proceedBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Proceed button clicked');
+            proceedToDeviceForm();
+        });
+    }
     
-    // Tag search
-    document.getElementById('tagSearch')?.addEventListener('input', filterTags);
-    document.getElementById('tagCategoryFilter')?.addEventListener('change', filterTags);
-    document.getElementById('tagDeviceFilter')?.addEventListener('change', filterTags);
+    // 5. Back buttons
+    document.getElementById('backFromLoadcell')?.addEventListener('click', backToDeviceSelection);
+    document.getElementById('backFromModbus')?.addEventListener('click', backToDeviceSelection);
     
-    // Poll interval custom input
-    document.getElementById('mappingPollPreset')?.addEventListener('change', handlePollPresetChange);
+    // 6. Modbus form submission
+    const modbusForm = document.getElementById('modbusCreateForm');
+    if (modbusForm) {
+        modbusForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            console.log('Modbus form submitted');
+            handleModbusTagCreate(e);
+        });
+    }
     
-    // Footer buttons
-    document.getElementById('save-btn')?.addEventListener('click', saveConfiguration);
-    document.getElementById('cancel-btn')?.addEventListener('click', cancelChanges);
-    document.getElementById('testDeviceBtn')?.addEventListener('click', testSelectedDevice);
-    document.getElementById('validateAllBtn')?.addEventListener('click', validateAllMappings);
+    // 7. Modal overlay click to close
+    const modal = document.getElementById('createTagModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    }
+    
+    // 8. Escape key to close
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('createTagModal');
+            if (modal && modal.style.display === 'flex') {
+                closeModal();
+            }
+        }
+    });
+    
+    console.log('✅ Event listeners setup complete');
 }
 
-// ============================================================================
-// DATA LOADING
-// ============================================================================
+// ==================== MODAL FUNCTIONS ====================
 
-async function loadDevices() {
-    try {
-        const response = await fetch('/api/datapoints/devices');
-        if (!response.ok) throw new Error('Failed to load devices');
-        
-        const data = await response.json();
-        allDevices = data.devices || [];
-        
-        // Populate device filters
-        populateDeviceFilters();
-    } catch (error) {
-        console.error('Error loading devices:', error);
-        showNotification('Failed to load devices', 'error');
+function openCreateTagModal() {
+    console.log('🎯 Opening create tag modal...');
+    
+    const modal = ensureModalExists();
+    
+    if (!modal) {
+        console.error('Cannot open modal - not found');
+        showTagNotification('Cannot open modal', 'error');
+        return;
+    }
+    
+    // Reset state
+    selectedDeviceId = null;
+    selectedDeviceData = null;
+    
+    // Reset UI
+    document.getElementById('modalDeviceSelect').value = '';
+    document.getElementById('modalDeviceInfo').classList.add('hidden');
+    document.getElementById('proceedToForm').disabled = true;
+    
+    // Show first step
+    showModalStep('deviceSelectionStep');
+    
+    // Display modal
+    modal.style.display = 'flex';
+    setTimeout(() => {
+        modal.style.opacity = '1';
+    }, 10);
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+    
+    console.log('✅ Modal opened');
+}
+
+function closeModal() {
+    console.log('Closing modal...');
+    
+    const modal = document.getElementById('createTagModal');
+    if (modal) {
+        modal.style.opacity = '0';
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+    
+    // Restore body scroll
+    document.body.style.overflow = '';
+    
+    console.log('✅ Modal closed');
+}
+
+function showModalStep(stepId) {
+    console.log(`Showing step: ${stepId}`);
+    
+    // Hide all steps
+    const steps = document.querySelectorAll('.modal-step');
+    steps.forEach(step => {
+        step.style.display = 'none';
+        step.classList.remove('active');
+    });
+    
+    // Show the requested step
+    const step = document.getElementById(stepId);
+    if (step) {
+        step.style.display = 'block';
+        step.classList.add('active');
     }
 }
 
-async function loadTags() {
-    try {
-        const response = await fetch('/api/datapoints');
-        if (!response.ok) throw new Error('Failed to load tags');
+function handleDeviceSelection(event) {
+    const deviceId = event.target.value;
+    const deviceInfo = document.getElementById('modalDeviceInfo');
+    const proceedBtn = document.getElementById('proceedToForm');
+    
+    console.log(`Device selected: ${deviceId}`);
+    
+    if (!deviceId) {
+        selectedDeviceId = null;
+        selectedDeviceData = null;
+        deviceInfo?.classList.add('hidden');
+        proceedBtn.disabled = true;
+        return;
+    }
+    
+    // Find device
+    const device = devices.find(d => d.id == deviceId);
+    if (!device) {
+        console.error(`Device ${deviceId} not found`);
+        return;
+    }
+    
+    selectedDeviceId = deviceId;
+    selectedDeviceData = device;
+    
+    // Update device info display
+    if (deviceInfo) {
+        document.getElementById('modalDeviceType').textContent = device.type;
+        document.getElementById('modalDeviceProtocol').textContent = device.protocol.toUpperCase();
         
-        const data = await response.json();
-        allTags = data.tags || [];
-        currentMappings = allTags;
+        // Set hint
+        const hint = document.getElementById('modalDeviceHint');
+        if (device.protocol === 'loadcell') {
+            hint.innerHTML = '<i class="fa-solid fa-scale-balanced mr-1 text-green-600"></i> Load cell tags are auto-created. You can view the configuration.';
+        } else {
+            hint.innerHTML = '<i class="fa-solid fa-microchip mr-1 text-blue-600"></i> Configure Modbus register address and data type.';
+        }
         
-        // Update UI
-        updateMappingTable();
-        updateTagsList();
-        updateTagCount();
-    } catch (error) {
-        console.error('Error loading tags:', error);
-        showNotification('Failed to load tags', 'error');
+        deviceInfo.classList.remove('hidden');
+    }
+    
+    // Enable proceed button
+    if (proceedBtn) {
+        proceedBtn.disabled = false;
+    }
+    
+    console.log(`Device selected: ${device.name} (${device.protocol})`);
+}
+
+function proceedToDeviceForm() {
+    console.log('Proceeding to device form...');
+    
+    if (!selectedDeviceData) {
+        showTagNotification('Please select a device first', 'error');
+        return;
+    }
+    
+    console.log(`Selected protocol: ${selectedDeviceData.protocol}`);
+    
+    if (selectedDeviceData.protocol === 'loadcell') {
+        showLoadcellForm();
+    } else if (selectedDeviceData.protocol === 'modbus-tcp' || selectedDeviceData.protocol === 'modbus-rtu') {
+        showModbusForm();
+    } else {
+        showTagNotification('Unknown device protocol', 'error');
     }
 }
 
-// ============================================================================
-// UI UPDATES
-// ============================================================================
+function backToDeviceSelection() {
+    console.log('Going back to device selection');
+    showModalStep('deviceSelectionStep');
+}
 
-function updateMappingTable() {
-    const tableBody = document.getElementById('mappingTableBody');
-    if (!tableBody) return;
+function showLoadcellForm() {
+    console.log('Showing loadcell form');
     
-    tableBody.innerHTML = '';
+    // Update device name
+    const deviceNameEl = document.getElementById('loadcellFormDeviceName');
+    if (deviceNameEl) {
+        deviceNameEl.textContent = selectedDeviceData.name;
+    }
     
-    if (currentMappings.length === 0) {
-        tableBody.innerHTML = `
+    // Show the form
+    showModalStep('loadcellFormStep');
+}
+
+function showModbusForm() {
+    console.log('Showing modbus form');
+    
+    // Update device info
+    const deviceNameEl = document.getElementById('modbusFormDeviceName');
+    const protocolEl = document.getElementById('modbusFormProtocol');
+    
+    if (deviceNameEl) deviceNameEl.textContent = selectedDeviceData.name;
+    if (protocolEl) protocolEl.textContent = selectedDeviceData.protocol.toUpperCase();
+    
+    // Reset form
+    const form = document.getElementById('modbusCreateForm');
+    if (form) form.reset();
+    
+    // Show the form
+    showModalStep('modbusFormStep');
+}
+
+// ==================== FORM HANDLING ====================
+
+async function handleModbusTagCreate(event) {
+    event.preventDefault();
+    console.log('Handling modbus tag creation...');
+    
+    // Get form values
+    const tagName = document.getElementById('modbusFormTagName')?.value;
+    const registerAddress = document.getElementById('modbusFormAddress')?.value;
+    
+    if (!tagName || !registerAddress) {
+        showTagNotification('Please fill all required fields', 'error');
+        return;
+    }
+    
+    const tagData = {
+        device_id: selectedDeviceId,
+        tag_name: tagName,
+        register_address: parseInt(registerAddress),
+        register_type: 'holding', // Default
+        data_type: 'int16',
+        byte_order: 'big',
+        word_order: 'big',
+        scale_factor: 1.0,
+        offset: 0.0,
+        unit: '',
+        description: '',
+        enabled: true
+    };
+    
+    console.log('Creating tag:', tagData);
+    
+    try {
+        const response = await fetch('/api/datapoints/modbus', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(tagData)
+        });
+        
+        if (response.ok) {
+            showTagNotification('Tag created successfully', 'success');
+            closeModal();
+            // Reload tags
+            loadDevicesAndTags();
+        } else {
+            const error = await response.json();
+            showTagNotification(error.error || 'Failed to create tag', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating tag:', error);
+        showTagNotification('Failed to create tag', 'error');
+    }
+}
+
+// ==================== RENDER FUNCTIONS ====================
+
+function renderTagsTable() {
+    const tbody = document.getElementById('mappingTableBody');
+    if (!tbody) return;
+    
+    if (tags.length === 0) {
+        tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center py-8 text-slate-500">
-                    <i class="fa-solid fa-tags text-2xl mb-2 block"></i>
-                    No tags found. Click "Add Mapping" to create your first tag.
+                <td colspan="8" class="text-center py-8 text-gray-500">
+                    <i class="fa-solid fa-tags text-4xl mb-3 text-gray-300"></i>
+                    <p class="text-sm">No tags configured. Click "Add Mapping" to create your first tag.</p>
                 </td>
             </tr>
         `;
         return;
     }
     
-    currentMappings.forEach(mapping => {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-slate-50 transition-colors';
-        
-        // Protocol badge
-        let protocolBadge = '';
-        if (mapping.type === 'modbus') {
-            const protocolType = mapping.device_type?.toLowerCase().includes('tcp') ? 'tcp' : 'rtu';
-            protocolBadge = `<span class="protocol-badge modbus">Modbus ${protocolType.toUpperCase()}</span>`;
-        } else if (mapping.type === 'loadcell') {
-            protocolBadge = `<span class="protocol-badge serial">Loadcell</span>`;
-        }
-        
-        // Data type badge
-        const dataTypeBadge = mapping.data_type ? 
-            `<span class="data-type-badge ${mapping.data_type.toLowerCase()}">${mapping.data_type.toUpperCase()}</span>` : 
-            '<span class="text-slate-400 text-xs">-</span>';
-        
-        // Status indicator
-        const statusIndicator = mapping.enabled ? 
-            '<span class="status-indicator online">Online</span>' : 
-            '<span class="status-indicator offline">Disabled</span>';
-        
-        // Actions
-        const actions = `
-            <div class="flex justify-end space-x-1">
-                <button class="text-blue-600 hover:text-blue-800" onclick="editMapping('${mapping.id}', '${mapping.type}')">
-                    <i class="fa-solid fa-pen text-xs"></i>
+    tbody.innerHTML = '';
+    tags.forEach(tag => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="font-medium text-gray-900">${tag.device_name || 'Unknown'}</td>
+            <td>
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium ${tag.type === 'loadcell' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}">
+                    ${tag.device_type || 'Unknown'}
+                </span>
+            </td>
+            <td class="text-gray-600">${tag.register_address || '-'}</td>
+            <td class="font-mono text-sm text-gray-900">${tag.tag_name}</td>
+            <td class="text-gray-600">${tag.data_type || '-'}</td>
+            <td class="text-gray-600">${tag.unit || '-'}</td>
+            <td>
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium ${tag.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">
+                    ${tag.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+            </td>
+            <td class="text-right">
+                <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, '${tag.type}')" title="Edit">
+                    <i class="fa-solid fa-pencil text-sm"></i>
                 </button>
-                <button class="text-red-600 hover:text-red-800" onclick="deleteMapping('${mapping.id}', '${mapping.type}')">
-                    <i class="fa-solid fa-trash text-xs"></i>
+                <button class="text-red-600 hover:text-red-800" onclick="deleteTag(${tag.id}, '${tag.type}')" title="Delete">
+                    <i class="fa-solid fa-trash text-sm"></i>
                 </button>
-            </div>
+            </td>
         `;
-        
-        row.innerHTML = `
-            <td class="py-2">
-                <div class="font-medium text-slate-900 text-xs">${mapping.device_name || 'Unknown'}</div>
-                <div class="text-slate-500 text-xs">${mapping.device_id || ''}</div>
-            </td>
-            <td class="py-2">${protocolBadge}</td>
-            <td class="py-2">
-                ${mapping.register_address !== undefined ? `<code class="text-xs font-mono">${mapping.register_address}</code>` : '-'}
-            </td>
-            <td class="py-2">
-                <div class="font-medium text-slate-900">${mapping.tag_name}</div>
-                ${mapping.description ? `<div class="text-slate-500 text-xs truncate max-w-xs">${mapping.description}</div>` : ''}
-            </td>
-            <td class="py-2">${dataTypeBadge}</td>
-            <td class="py-2">${mapping.unit || '-'}</td>
-            <td class="py-2">${statusIndicator}</td>
-            <td class="py-2">${actions}</td>
-        `;
-        
-        tableBody.appendChild(row);
+        tbody.appendChild(tr);
     });
 }
 
-function updateTagsList() {
-    const tagsList = document.getElementById('tagsList');
-    const emptyState = document.getElementById('tagsEmptyState');
+function renderTagsBrowser() {
+    const container = document.getElementById('tagsList');
+    if (!container) return;
     
-    if (!tagsList) return;
-    
-    if (allTags.length === 0) {
-        tagsList.innerHTML = '';
-        if (emptyState) emptyState.classList.remove('hidden');
-        return;
-    }
-    
-    if (emptyState) emptyState.classList.add('hidden');
-    tagsList.innerHTML = '';
-    
-    allTags.forEach(tag => {
-        const tagCard = document.createElement('div');
-        tagCard.className = 'tag-card';
-        
-        // Category color
-        const categoryColors = {
-            'Sensors': 'bg-blue-100 text-blue-800',
-            'Motor': 'bg-green-100 text-green-800',
-            'Safety': 'bg-red-100 text-red-800',
-            'Diagnostic': 'bg-yellow-100 text-yellow-800',
-            'Load Monitoring': 'bg-purple-100 text-purple-800',
-            'Position Tracking': 'bg-indigo-100 text-indigo-800',
-            'Status': 'bg-gray-100 text-gray-800',
-            'Configuration': 'bg-orange-100 text-orange-800'
-        };
-        
-        const categoryClass = categoryColors[tag.category] || 'bg-gray-100 text-gray-800';
-        
-        tagCard.innerHTML = `
-            <div class="flex items-start justify-between mb-2">
-                <div>
-                    <h3 class="font-medium text-slate-900 text-sm">${tag.tag_name}</h3>
-                    <div class="text-xs text-slate-500">${tag.device_name}</div>
-                </div>
-                <span class="text-xs px-2 py-0.5 rounded-full ${categoryClass}">${tag.category || 'Uncategorized'}</span>
-            </div>
-            
-            <div class="mb-3">
-                <div class="text-xs text-slate-600 mb-1">Address</div>
-                <div class="font-mono text-xs bg-slate-50 p-1 rounded">
-                    ${tag.register_address !== undefined ? `Reg ${tag.register_address}` : 'Auto-generated'}
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                    <div class="text-slate-600">Type</div>
-                    <div class="font-medium">${tag.data_type || 'N/A'}</div>
-                </div>
-                <div>
-                    <div class="text-slate-600">Unit</div>
-                    <div class="font-medium">${tag.unit || '-'}</div>
-                </div>
-            </div>
-            
-            ${tag.description ? `
-                <div class="mt-3 pt-2 border-t border-slate-200">
-                    <div class="text-xs text-slate-500 italic">${tag.description}</div>
-                </div>
-            ` : ''}
-        `;
-        
-        tagCard.addEventListener('click', () => {
-            highlightMappingRow(tag.id);
-        });
-        
-        tagsList.appendChild(tagCard);
-    });
+    // Similar to renderTagsTable but for the grid view
 }
 
 function updateTagCount() {
-    const countElement = document.getElementById('mappingCount');
-    if (countElement) {
-        countElement.textContent = currentMappings.length;
+    const countEl = document.getElementById('mappingCount');
+    if (countEl) {
+        countEl.textContent = tags.length;
     }
 }
 
-// ============================================================================
-// FILTER FUNCTIONS
-// ============================================================================
+// ==================== NOTIFICATIONS ====================
 
-function filterMappingsByDevice() {
-    const deviceFilter = document.getElementById('deviceFilter');
-    const selectedDevice = deviceFilter.value;
+function showTagNotification(message, type = 'info') {
+    console.log(`Notification (${type}): ${message}`);
     
-    if (selectedDevice === 'All Devices') {
-        currentMappings = allTags;
-    } else {
-        currentMappings = allTags.filter(tag => tag.device_name === selectedDevice);
-    }
+    // Simple alert for now - you can replace with your notification system
+    alert(`${type.toUpperCase()}: ${message}`);
+}
+
+// ==================== TAG ACTIONS ====================
+
+function editTag(tagId, tagType) {
+    console.log(`Edit tag ${tagId} (${tagType})`);
+    showTagNotification('Edit functionality coming soon', 'info');
+}
+
+async function deleteTag(tagId, tagType) {
+    if (!confirm('Are you sure you want to delete this tag?')) return;
     
-    updateMappingTable();
-    updateTagCount();
+    console.log(`Delete tag ${tagId} (${tagType})`);
+    showTagNotification('Delete functionality coming soon', 'info');
 }
 
-function filterTags() {
-    const searchTerm = document.getElementById('tagSearch').value.toLowerCase();
-    const categoryFilter = document.getElementById('tagCategoryFilter').value;
-    const deviceFilter = document.getElementById('tagDeviceFilter').value;
-    
-    let filteredTags = allTags;
-    
-    // Search by tag name or description
-    if (searchTerm) {
-        filteredTags = filteredTags.filter(tag => 
-            tag.tag_name.toLowerCase().includes(searchTerm) ||
-            (tag.description && tag.description.toLowerCase().includes(searchTerm))
-        );
-    }
-    
-    // Filter by category
-    if (categoryFilter) {
-        filteredTags = filteredTags.filter(tag => tag.category === categoryFilter);
-    }
-    
-    // Filter by device
-    if (deviceFilter) {
-        filteredTags = filteredTags.filter(tag => tag.device_name === deviceFilter);
-    }
-    
-    // Update UI
-    allTags = filteredTags;
-    updateTagsList();
-}
+// ==================== EXPORT FUNCTIONS ====================
 
-// ============================================================================
-// MODAL FUNCTIONS
-// ============================================================================
-
-function showAddMappingModal() {
-    const modal = document.getElementById('editMappingModal');
-    if (modal) {
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-        
-        // Reset form
-        resetMappingForm();
-        goToStep(1);
-        updateModalTitle('Add New Tag');
-    }
-}
-
-function closeEditMappingModal() {
-    const modal = document.getElementById('editMappingModal');
-    if (modal) {
-        modal.classList.remove('active');
-        document.body.style.overflow = '';
-    }
-}
-
-function goToStep(step) {
-    currentStep = step;
-    
-    // Update step indicators
-    for (let i = 1; i <= 3; i++) {
-        const stepCircle = document.getElementById(`step${i}`);
-        const stepContent = document.getElementById(`step${i}-content`);
-        
-        if (stepCircle) {
-            stepCircle.className = i === step ? 'step-circle active' : 'step-circle inactive';
-        }
-        
-        if (stepContent) {
-            stepContent.className = i === step ? 'dynamic-section active' : 'dynamic-section';
-        }
-    }
-}
-
-function resetMappingForm() {
-    // Reset all form fields
-    document.getElementById('mappingTagName').value = '';
-    document.getElementById('mappingRegisterAddress').value = '';
-    document.getElementById('mappingDataType').value = 'int16';
-    document.getElementById('mappingUnit').value = '';
-    document.getElementById('mappingDescription').value = '';
-    document.getElementById('mappingScale').value = '1';
-    document.getElementById('mappingOffset').value = '0';
-    document.getElementById('mappingPollPreset').value = '200';
-    document.getElementById('mappingCategory').value = 'Sensors';
-    
-    // Clear device selection
-    currentDevice = null;
-    currentProtocol = '';
-    
-    // Update UI
-    document.getElementById('mappingDeviceName').textContent = '-';
-    document.getElementById('mappingProtocol').textContent = '-';
-}
-
-// ============================================================================
-// DEVICE SELECTION
-// ============================================================================
-
-function selectDevice(deviceId) {
-    const device = allDevices.find(d => d.id === deviceId);
-    if (!device) return;
-    
-    currentDevice = device;
-    currentProtocol = device.protocol;
-    
-    // Update UI
-    document.getElementById('mappingDeviceName').textContent = device.name;
-    document.getElementById('mappingProtocol').textContent = device.type;
-    
-    // Load protocol-specific form
-    loadProtocolForm(device.protocol);
-}
-
-function loadProtocolForm(protocol) {
-    const tabsContainer = document.getElementById('protocolTabsContainer');
-    
-    if (protocol.startsWith('modbus')) {
-        tabsContainer.innerHTML = `
-            <div class="flex space-x-1 border-b border-slate-200">
-                <div class="tab active" data-tab="address">Address</div>
-                <div class="tab" data-tab="polling">Polling</div>
-                <div class="tab" data-tab="advanced">Advanced</div>
-            </div>
-        `;
-        
-        // Load modbus form
-        loadModbusForm();
-    } else if (protocol === 'loadcell') {
-        tabsContainer.innerHTML = `
-            <div class="text-sm text-slate-600 p-2">
-                Loadcell tags are auto-created. Edit device settings to configure loadcell parameters.
-            </div>
-        `;
-    }
-}
-
-function loadModbusForm() {
-    const addressTypeContainer = document.getElementById('address-type-container');
-    const addressValueContainer = document.getElementById('address-value-container');
-    const protocolFields = document.getElementById('protocol-specific-fields');
-    
-    if (addressTypeContainer) {
-        addressTypeContainer.innerHTML = `
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Register Type</label>
-                <select class="w-full compact-select bg-white" id="mappingRegisterType">
-                    <option value="holding">Holding Register</option>
-                    <option value="input">Input Register</option>
-                    <option value="coil">Coil</option>
-                    <option value="discrete">Discrete Input</option>
-                </select>
-            </div>
-        `;
-    }
-    
-    if (addressValueContainer) {
-        addressValueContainer.innerHTML = `
-            <div>
-                <label class="block text-xs font-medium text-slate-700 mb-1">Register Address *</label>
-                <input type="number" class="w-full compact-input" placeholder="0-65535" id="mappingRegisterAddress" min="0" max="65535">
-            </div>
-        `;
-    }
-    
-    if (protocolFields) {
-        protocolFields.innerHTML = `
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Slave ID</label>
-                    <input type="number" class="w-full compact-input" value="1" min="1" max="247" id="mappingSlaveId">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-700 mb-1">Function Code</label>
-                    <select class="w-full compact-select bg-white" id="mappingFunctionCode">
-                        <option value="3">03 - Read Holding Registers</option>
-                        <option value="4">04 - Read Input Registers</option>
-                        <option value="1">01 - Read Coils</option>
-                        <option value="2">02 - Read Discrete Inputs</option>
-                        <option value="5">05 - Write Single Coil</option>
-                        <option value="6">06 - Write Single Register</option>
-                    </select>
-                </div>
-            </div>
-        `;
-    }
-}
-
-// ============================================================================
-// SAVE/UPDATE FUNCTIONS
-// ============================================================================
-
-async function saveMapping() {
-    try {
-        const deviceId = currentDevice?.id;
-        if (!deviceId) {
-            showNotification('Please select a device first', 'warning');
-            return;
-        }
-        
-        const tagData = {
-            device_id: deviceId,
-            tag_name: document.getElementById('mappingTagName').value.trim(),
-            register_address: parseInt(document.getElementById('mappingRegisterAddress').value) || 0,
-            register_type: document.getElementById('mappingRegisterType')?.value || 'holding',
-            data_type: document.getElementById('mappingDataType').value,
-            byte_order: 'big', // Default for now
-            word_order: 'big', // Default for now
-            scale_factor: parseFloat(document.getElementById('mappingScale').value) || 1.0,
-            offset: parseFloat(document.getElementById('mappingOffset').value) || 0.0,
-            unit: document.getElementById('mappingUnit').value || '',
-            description: document.getElementById('mappingDescription').value || '',
-            enabled: true
-        };
-        
-        // Validate required fields
-        if (!tagData.tag_name) {
-            showNotification('Tag name is required', 'warning');
-            return;
-        }
-        
-        if (tagData.register_address === undefined || tagData.register_address < 0) {
-            showNotification('Valid register address is required', 'warning');
-            return;
-        }
-        
-        const response = await fetch('/api/datapoints/modbus', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(tagData)
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to save tag');
-        }
-        
-        const result = await response.json();
-        showNotification(result.message || 'Tag saved successfully', 'success');
-        
-        // Reload tags and close modal
-        await loadTags();
-        closeEditMappingModal();
-        
-    } catch (error) {
-        console.error('Error saving tag:', error);
-        showNotification(error.message || 'Failed to save tag', 'error');
-    }
-}
-
-async function editMapping(tagId, tagType) {
-    try {
-        // For now, just show the edit modal
-        // You would fetch the tag details here
-        showNotification('Edit functionality coming soon', 'info');
-    } catch (error) {
-        console.error('Error editing tag:', error);
-        showNotification('Failed to edit tag', 'error');
-    }
-}
-
-async function deleteMapping(tagId, tagType) {
-    if (!confirm('Are you sure you want to delete this tag?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/datapoints/${tagId}?type=${tagType}`, {
-            method: 'DELETE'
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to delete tag');
-        }
-        
-        const result = await response.json();
-        showNotification(result.message || 'Tag deleted successfully', 'success');
-        
-        // Reload tags
-        await loadTags();
-        
-    } catch (error) {
-        console.error('Error deleting tag:', error);
-        showNotification(error.message || 'Failed to delete tag', 'error');
-    }
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function populateDeviceFilters() {
-    const deviceFilter = document.getElementById('deviceFilter');
-    const tagDeviceFilter = document.getElementById('tagDeviceFilter');
-    
-    if (deviceFilter) {
-        deviceFilter.innerHTML = '<option>All Devices</option>';
-        allDevices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.name;
-            option.textContent = `${device.name} (${device.type})`;
-            deviceFilter.appendChild(option);
-        });
-    }
-    
-    if (tagDeviceFilter) {
-        tagDeviceFilter.innerHTML = '<option value="">All Devices</option>';
-        allDevices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.name;
-            option.textContent = device.name;
-            tagDeviceFilter.appendChild(option);
-        });
-    }
-}
-
-function highlightMappingRow(tagId) {
-    // Remove highlight from all rows
-    document.querySelectorAll('#mappingTableBody tr').forEach(row => {
-        row.classList.remove('selected-device-row');
-    });
-    
-    // Find and highlight the row
-    const rows = document.querySelectorAll('#mappingTableBody tr');
-    for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        // This is a simplified approach - you'd need to match the tag ID
-        if (row.textContent.includes(tagId.toString())) {
-            row.classList.add('selected-device-row');
-            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            break;
-        }
-    }
-}
-
-function handlePollPresetChange() {
-    const preset = document.getElementById('mappingPollPreset');
-    const customInput = document.getElementById('mappingPollInterval');
-    
-    if (preset.value === 'custom') {
-        customInput.style.display = 'block';
-        customInput.value = '';
-        customInput.focus();
-    } else {
-        customInput.style.display = 'none';
-    }
-}
-
-function updateModalTitle(title) {
-    const titleElement = document.getElementById('modalTitle');
-    if (titleElement) {
-        titleElement.textContent = title;
-    }
-}
-
-function toggleSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    const chevron = document.getElementById(sectionId.replace('section', 'chevron'));
-    
-    if (section && chevron) {
-        const isHidden = section.classList.contains('hidden');
-        section.classList.toggle('hidden');
-        chevron.className = isHidden ? 
-            'fa-solid fa-chevron-up text-xs text-slate-400' : 
-            'fa-solid fa-chevron-down text-xs text-slate-400';
-    }
-}
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-function showNotification(message, type = 'info') {
-    // You can implement your notification system here
-    console.log(`${type.toUpperCase()}: ${message}`);
-    alert(`${type.toUpperCase()}: ${message}`); // Simple alert for now
-}
-
-async function saveConfiguration() {
-    showNotification('Configuration saved successfully!', 'success');
-    // Implement actual save logic here
-}
-
-function cancelChanges() {
-    if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-        location.reload(); // Reload the page
-    }
-}
-
-async function testSelectedDevice() {
-    showNotification('Testing device connection...', 'info');
-    // Implement device testing logic here
-}
-
-async function validateAllMappings() {
-    showNotification('Validating all mappings...', 'info');
-    // Implement validation logic here
-}
-
-function importCSV() {
-    showNotification('Import CSV functionality coming soon', 'info');
-}
-
-function exportCSV() {
-    showNotification('Export CSV functionality coming soon', 'info');
-}
-
-// ============================================================================
-// INITIALIZE WHEN PAGE LOADS
-// ============================================================================
-
-// Expose function globally for router
 window.initializeModbusMapping = initializeModbusMapping;
-
-// Auto-initialize if script is loaded directly
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeModbusMapping);
-} else {
-    initializeModbusMapping();
-}
+window.editTag = editTag;
+window.deleteTag = deleteTag;
+window.importCSV = function() { showTagNotification('CSV import coming soon', 'info'); };
+window.exportCSV = function() { showTagNotification('CSV export coming soon', 'info'); };
+window.openCreateTagModal = openCreateTagModal; // For debugging

@@ -741,4 +741,329 @@
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     }
 }
+
+/* Tag Card Styles */
+.tag-card {
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    background: white;
+    transition: all 0.2s;
+}
+
+.tag-card:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+}
+
+.tag-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 0.75rem;
+}
+
+.tag-card-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.875rem;
+}
+
+.tag-card-badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-weight: 500;
+}
+
+.tag-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.tag-card-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.tag-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.modal-sm {
+    max-width: 500px;
+}
+
+.modal-step {
+    display: none;
+}
+
+.modal-step.active {
+    display: block;
+}
 </style>
+
+<!-- Create Tag Modal - Starts with Device Selection -->
+<div class="modal-overlay" id="createTagModal">
+    <div class="modal">
+        <div class="p-5">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="text-base font-semibold text-slate-800">
+                    <i class="fa-solid fa-plus mr-2 text-blue-600"></i>
+                    <span id="createTagModalTitle">Create New Tag</span>
+                </h2>
+                <button class="text-slate-400 hover:text-slate-600" id="closeCreateTagModal">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+            
+            <!-- Step 1: Device Selection -->
+            <div class="modal-step active" id="deviceSelectionStep">
+                <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+                    <i class="fa-solid fa-info-circle mr-2"></i>
+                    First, select the device you want to create a tag for
+                </div>
+                
+                <div class="mb-5">
+                    <label class="block text-xs font-medium text-slate-700 mb-2">
+                        Select Device <span class="text-red-500">*</span>
+                    </label>
+                    <select class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm" id="modalDeviceSelect">
+                        <option value="">-- Choose a device --</option>
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+                
+                <!-- Device Info (shown when device selected) -->
+                <div class="hidden mb-5 p-4 bg-slate-50 rounded-lg border border-slate-200" id="modalDeviceInfo">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <div class="text-xs text-slate-500 mb-1">Device Type</div>
+                            <div class="font-medium text-slate-900" id="modalDeviceType">-</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-500 mb-1">Protocol</div>
+                            <div class="font-medium text-slate-900" id="modalDeviceProtocol">-</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-xs text-slate-600" id="modalDeviceHint">
+                        <!-- Dynamic hint based on device type -->
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="flex justify-end space-x-2 pt-4 border-t border-slate-200">
+                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelDeviceSelection">
+                        Cancel
+                    </button>
+                    <button class="compact-button bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed" id="proceedToForm" disabled>
+                        Next: Configure Tag <i class="fa-solid fa-arrow-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 2a: Load Cell Form (Read-Only Info) -->
+            <div class="modal-step" id="loadcellFormStep">
+                <!-- Device Info -->
+                <div class="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div class="text-xs text-green-700 mb-1">Selected Device</div>
+                    <div class="text-sm font-medium text-green-900" id="loadcellFormDeviceName">-</div>
+                </div>
+                
+                <!-- Info Message -->
+                <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+                    <i class="fa-solid fa-info-circle mr-2"></i>
+                    Load cell tags are auto-created when device is added. These values cannot be edited.
+                </div>
+                
+                <!-- Tag Name -->
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-slate-700 mb-1.5">Tag Name</label>
+                    <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-slate-50" 
+                           id="loadcellFormTagName" value="load" readonly>
+                    <p class="text-xs text-slate-500 mt-1">Default tags: load, capacity</p>
+                </div>
+                
+                <!-- Current Values (Read-only) -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Data Type</label>
+                        <div class="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded border border-slate-200">FLOAT32</div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Unit</label>
+                        <div class="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded border border-slate-200" id="loadcellFormUnit">kg</div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="flex justify-between space-x-2 pt-4 border-t border-slate-200">
+                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="backFromLoadcell">
+                        <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                    </button>
+                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="closeFromLoadcell">
+                        Close
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Step 2b: Modbus Form (Full Configuration) -->
+            <div class="modal-step" id="modbusFormStep">
+                <!-- Device Info -->
+                <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="text-xs text-blue-700 mb-1">Selected Device</div>
+                            <div class="text-sm font-medium text-blue-900" id="modbusFormDeviceName">-</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-blue-700 mb-1">Protocol</div>
+                            <div class="text-sm font-medium text-blue-900" id="modbusFormProtocol">-</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Register Type Auto-Detection Info -->
+                <div class="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm text-amber-800">
+                    <i class="fa-solid fa-lightbulb mr-2"></i>
+                    <strong>Auto-Detection:</strong> Register type will be detected from the address you enter
+                </div>
+                
+                <form id="modbusCreateForm">
+                    <!-- Tag Name -->
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5">
+                            Tag Name <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" 
+                               id="modbusFormTagName" placeholder="e.g., temperature_sensor_1" required>
+                    </div>
+                    
+                    <!-- Register Address & Type Detection -->
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">
+                                Register Address <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" 
+                                   id="modbusFormAddress" placeholder="0-65535" min="0" max="65535" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">
+                                Detected Type <i class="fa-solid fa-wand-magic-sparkles text-xs text-blue-500"></i>
+                            </label>
+                            <div class="px-3 py-2 text-sm bg-slate-100 rounded-lg font-medium text-slate-700 border border-slate-300" id="modbusFormDetectedType">
+                                Enter address...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Register Type Reference Table -->
+                    <div class="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <div class="text-xs font-semibold text-slate-700 mb-2 flex items-center">
+                            <i class="fa-solid fa-table mr-2"></i> Register Type Reference
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div class="bg-white p-2 rounded border border-slate-200">
+                                <div class="font-medium text-blue-700">Coil (R/W)</div>
+                                <div class="text-slate-600">0 - 9999</div>
+                            </div>
+                            <div class="bg-white p-2 rounded border border-slate-200">
+                                <div class="font-medium text-green-700">Discrete Input (R)</div>
+                                <div class="text-slate-600">10000 - 19999</div>
+                            </div>
+                            <div class="bg-white p-2 rounded border border-slate-200">
+                                <div class="font-medium text-purple-700">Holding Register (R/W)</div>
+                                <div class="text-slate-600">40000 - 49999</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Type -->
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-slate-700 mb-1.5">
+                            Data Type <span class="text-red-500">*</span>
+                        </label>
+                        <select class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="modbusFormDataType" required>
+                            <option value="int16">INT16 (16-bit signed)</option>
+                            <option value="uint16">UINT16 (16-bit unsigned)</option>
+                            <option value="int32">INT32 (32-bit signed)</option>
+                            <option value="uint32">UINT32 (32-bit unsigned)</option>
+                            <option value="float32">FLOAT32 (32-bit float)</option>
+                            <option value="bool">BOOL (boolean)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Byte/Word Order -->
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Byte Order</label>
+                            <select class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white" id="modbusFormByteOrder">
+                                <option value="big">Big Endian</option>
+                                <option value="little">Little Endian</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Word Order</label>
+                            <select class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white" id="modbusFormWordOrder">
+                                <option value="big">Big Endian</option>
+                                <option value="little">Little Endian</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Scale & Offset -->
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Scale Factor</label>
+                            <input type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
+                                   id="modbusFormScale" value="1.0" step="0.001">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Offset</label>
+                            <input type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
+                                   id="modbusFormOffset" value="0.0" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <!-- Unit & Description -->
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Unit</label>
+                            <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
+                                   id="modbusFormUnit" placeholder="e.g., °C, kg, RPM">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Description</label>
+                            <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
+                                   id="modbusFormDescription" placeholder="Tag description">
+                        </div>
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                        <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="backFromModbus">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                        </button>
+                        <div class="flex space-x-2">
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelFromModbus">
+                                Cancel
+                            </button>
+                            <button type="submit" class="compact-button bg-blue-600 hover:bg-blue-700 text-white">
+                                <i class="fa-solid fa-check mr-2"></i> Create Tag
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

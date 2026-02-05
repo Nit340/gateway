@@ -4,18 +4,22 @@ import json
 import random
 import uuid
 import sqlite3
+import io
+import csv
+from datetime import datetime
 from aiohttp import web
 
 from models import device_status_tracker, device_websockets
 from websocket_handler import broadcast_device_status
 from database import DB_FILE, get_service_by_name
+from utils import initialize_device_status, remove_device_status, update_device_status
 
 # ============================================================================
 # GET ALL DEVICES (Both Modbus and Loadcell)
 # ============================================================================
 
 async def get_all_devices(request):
-    """GET all devices (modbus + loadcell)"""
+    """GET all devices (modbus + loadcell) with real-time status"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -43,8 +47,13 @@ async def get_all_devices(request):
                 address = serial_port or "Not configured"
                 protocol = "modbus-rtu"
             
-            # Get real-time status
-            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            # Get or initialize real-time status
+            if device_id not in device_status_tracker:
+                # Initialize with random status for demo
+                initial_status = 'Online' if random.random() > 0.3 else 'Offline'
+                initialize_device_status(device_id, initial_status)
+            
+            status = device_status_tracker[device_id]
             
             devices.append({
                 'id': device_id,
@@ -72,8 +81,13 @@ async def get_all_devices(request):
         for row in cursor.fetchall():
             device_id, name, device_path, group_name, color, enabled, service_name = row
             
-            # Get real-time status
-            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            # Get or initialize real-time status
+            if device_id not in device_status_tracker:
+                # Initialize with random status for demo
+                initial_status = 'Online' if random.random() > 0.3 else 'Offline'
+                initialize_device_status(device_id, initial_status)
+            
+            status = device_status_tracker[device_id]
             
             devices.append({
                 'id': device_id,
@@ -100,7 +114,7 @@ async def get_all_devices(request):
 # ============================================================================
 
 async def get_device_details(request):
-    """GET device details by ID"""
+    """GET device details by ID with real-time status"""
     try:
         device_id = request.match_info['device_id']
         
@@ -128,7 +142,11 @@ async def get_device_details(request):
              polling_interval_ms, ip_address, port, serial_port, baud_rate, parity, 
              data_bits, stop_bits, enabled, group_name, service_name) = row
             
-            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            # Get or initialize status
+            if device_id not in device_status_tracker:
+                initialize_device_status(device_id, 'Offline')
+            
+            status = device_status_tracker[device_id]
             
             details = {
                 'id': dev_id,
@@ -188,60 +206,84 @@ async def get_device_details(request):
         row = cursor.fetchone()
         
         if row:
-            # It's a Loadcell device
-            status = device_status_tracker.get(device_id, {'status': 'Offline', 'last_poll': 'Never'})
+            # Get or initialize status
+            if device_id not in device_status_tracker:
+                initialize_device_status(device_id, 'Offline')
+            
+            status = device_status_tracker[device_id]
+            
+            # Build loadcell details
+            (dev_id, name, group_id, device_path, channel,
+             tare_offset, known_weight, known_weight_raw, shift_bits,
+             unit, capacity, capacity_name,
+             pipeline_server, pipeline_port, log_level, polling_interval_ms,
+             lowpass_filter_enabled, filter_cutoff_frequency, filter_activation_delta_min,
+             moving_avg_enabled, moving_avg_window,
+             median_filter_enabled, median_filter_window,
+             autotare_enabled, autotare_trigger_delta_grams,
+             adaptive_deadband_enabled, adaptive_deadband_min, adaptive_deadband_max,
+             adaptive_deadband_grow_rate, adaptive_deadband_shrink_rate,
+             publish_step_grams, overload_threshold, overload_relay,
+             overload_action, overload_cooldown_ms, confirm_count,
+             enabled, group_name, service_name) = row
             
             details = {
-                'id': row[0],
-                'name': row[1],
+                'id': dev_id,
+                'name': name,
                 'type': 'Loadcell',
                 'protocol': 'loadcell',
-                'group': row[36] or 'None',
-                'group_id': row[2],
-                'service': row[37],
-                'enabled': bool(row[35]),
+                'group': group_name or 'None',
+                'group_id': group_id,
+                'service': service_name,
+                'enabled': bool(enabled),
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'config': {
-                    'device_path': row[3],
-                    'channel': row[4],
+                    'device_path': device_path,
+                    'channel': channel,
+                    'capacity': capacity,
+                    'capacity_name': capacity_name,
+                    'unit': unit,
+                    'polling_interval_ms': polling_interval_ms,
                     'calibration': {
-                        'tare_offset': row[5],
-                        'known_weight': row[6],
-                        'known_weight_raw': row[7],
-                        'shift_bits': row[8],
-                        'unit': row[9],
-                        'capacity': row[10],
-                        'capacity_name': row[11]
-                    },
-                    'service': {
-                        'pipeline_server': row[12],
-                        'pipeline_port': row[13],
-                        'log_level': row[14],
-                        'polling_interval_ms': row[15]
+                        'tare_offset': tare_offset,
+                        'known_weight': known_weight,
+                        'known_weight_raw': known_weight_raw,
+                        'shift_bits': shift_bits
                     },
                     'filters': {
-                        'lowpass_filter_enabled': bool(row[16]),
-                        'filter_cutoff_frequency': row[17],
-                        'filter_activation_delta_min': row[18],
-                        'moving_avg_enabled': bool(row[19]),
-                        'moving_avg_window': row[20],
-                        'median_filter_enabled': bool(row[21]),
-                        'median_filter_window': row[22],
-                        'autotare_enabled': bool(row[23]),
-                        'autotare_trigger_delta_grams': row[24],
-                        'adaptive_deadband_enabled': bool(row[25]),
-                        'adaptive_deadband_min': row[26],
-                        'adaptive_deadband_max': row[27],
-                        'adaptive_deadband_grow_rate': row[28],
-                        'adaptive_deadband_shrink_rate': row[29],
-                        'publish_step_grams': row[30],
-                        'overload_threshold': row[31],
-                        'overload_relay': row[32],
-                        'overload_action': row[33],
-                        'overload_cooldown_ms': row[34],
-                        'confirm_count': row[35]
-                    }
+                        'lowpass_filter_enabled': bool(lowpass_filter_enabled),
+                        'filter_cutoff_frequency': filter_cutoff_frequency,
+                        'filter_activation_delta_min': filter_activation_delta_min,
+                        'moving_avg_enabled': bool(moving_avg_enabled),
+                        'moving_avg_window': moving_avg_window,
+                        'median_filter_enabled': bool(median_filter_enabled),
+                        'median_filter_window': median_filter_window
+                    },
+                    'autotare': {
+                        'enabled': bool(autotare_enabled),
+                        'trigger_delta_grams': autotare_trigger_delta_grams
+                    },
+                    'adaptive_deadband': {
+                        'enabled': bool(adaptive_deadband_enabled),
+                        'min': adaptive_deadband_min,
+                        'max': adaptive_deadband_max,
+                        'grow_rate': adaptive_deadband_grow_rate,
+                        'shrink_rate': adaptive_deadband_shrink_rate
+                    },
+                    'overload': {
+                        'threshold': overload_threshold,
+                        'relay': overload_relay,
+                        'action': overload_action,
+                        'cooldown_ms': overload_cooldown_ms
+                    },
+                    'pipeline': {
+                        'server': pipeline_server,
+                        'port': pipeline_port,
+                        'log_level': log_level
+                    },
+                    'publish_step_grams': publish_step_grams,
+                    'confirm_count': confirm_count
                 }
             }
             
@@ -355,7 +397,7 @@ async def add_device(request):
         conn.close()
         
         # Initialize status tracker
-        device_status_tracker[device_id] = {'status': 'Online', 'last_poll': 'Just now'}
+        initialize_device_status(device_id, 'Online')
         
         return web.json_response({
             'success': True,
@@ -533,8 +575,7 @@ async def delete_device(request):
         conn.close()
         
         # Remove from status tracker
-        if device_id in device_status_tracker:
-            del device_status_tracker[device_id]
+        remove_device_status(device_id)
         
         return web.json_response({
             'success': True,
@@ -559,13 +600,13 @@ async def test_device(request):
         success = random.choice([True, True, True, False])  # 75% success rate
         
         if success:
-            device_status_tracker[device_id] = {'status': 'Online', 'last_poll': 'Just now'}
+            update_device_status(device_id, 'Online', 'Just now')
             return web.json_response({
                 'success': True,
                 'message': 'Device connection successful'
             })
         else:
-            device_status_tracker[device_id] = {'status': 'Offline', 'last_poll': 'Failed'}
+            update_device_status(device_id, 'Offline', 'Failed')
             return web.json_response({
                 'success': False,
                 'message': 'Device connection failed'
@@ -591,6 +632,12 @@ async def disable_device(request):
         
         conn.commit()
         conn.close()
+        
+        # Update status based on enabled state
+        if enabled:
+            update_device_status(device_id, 'Online', 'Just now')
+        else:
+            update_device_status(device_id, 'Disabled', 'Now')
         
         return web.json_response({
             'success': True,
@@ -689,6 +736,9 @@ async def duplicate_device(request):
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (new_device_id,) + dp)
             
+            # Initialize status for new device
+            initialize_device_status(new_device_id, 'Online')
+            
             conn.commit()
             conn.close()
             
@@ -768,6 +818,9 @@ async def duplicate_device(request):
                         INSERT INTO loadcell_datapoints (device_id, name)
                         VALUES (?, ?)
                     ''', (new_device_id, dp[0]))
+                
+                # Initialize status for new device
+                initialize_device_status(new_device_id, 'Online')
                 
                 conn.commit()
                 conn.close()
@@ -859,15 +912,10 @@ async def assign_devices_to_group(request):
     except Exception as e:
         print(f"Error assigning devices to group: {e}")
         return web.json_response({'error': str(e)}, status=500)
-# ADD THIS TO THE END OF device_management.py (after line 670)
 
 # ============================================================================
 # IMPORT / EXPORT DEVICES
 # ============================================================================
-
-import csv
-import io
-from datetime import datetime
 
 async def export_devices_csv(request):
     """GET - Export all devices to CSV"""
@@ -1034,6 +1082,9 @@ async def import_devices_csv(request):
                         VALUES (?, 'load'), (?, 'capacity')
                     ''', (device_id, device_id))
                     
+                    # Initialize status
+                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
+                    
                 else:
                     # Import Modbus device
                     modbus_type = 'tcp' if 'tcp' in protocol else 'rtu'
@@ -1076,6 +1127,9 @@ async def import_devices_csv(request):
                             slave_id, 1000, 3, 100,
                             serial_port, baud_rate, parity, data_bits, stop_bits, enabled
                         ))
+                    
+                    # Initialize status
+                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                 
                 imported_count += 1
                 
@@ -1149,6 +1203,7 @@ async def download_csv_template(request):
     except Exception as e:
         print(f"Error generating template: {e}")
         return web.json_response({'error': str(e)}, status=500)
+
 # ============================================================================
 # GET DEVICE DATAPOINTS
 # ============================================================================
@@ -1213,4 +1268,34 @@ async def get_device_datapoints(request):
         
     except Exception as e:
         print(f"Error getting device datapoints: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+# ============================================================================
+# MANUAL STATUS UPDATE (for testing/debugging)
+# ============================================================================
+
+async def update_device_status_api(request):
+    """POST - Manually update device status (for testing)"""
+    try:
+        device_id = request.match_info['device_id']
+        data = await request.json()
+        
+        status = data.get('status', 'Offline')
+        last_poll = data.get('last_poll')
+        
+        # Update status
+        result = update_device_status(device_id, status, last_poll)
+        
+        # Broadcast to all connected clients
+        await broadcast_device_status(device_id, result['status'], result['last_poll'])
+        
+        return web.json_response({
+            'success': True,
+            'device_id': device_id,
+            'status': result['status'],
+            'last_poll': result['last_poll']
+        })
+        
+    except Exception as e:
+        print(f"Error updating device status: {e}")
         return web.json_response({'error': str(e)}, status=500)

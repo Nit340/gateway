@@ -1,5 +1,4 @@
-// device-management.js - Complete Fixed Version with Import/Export and View Details
-// Matches backend API structure exactly
+// device-management.js - Complete Fixed Version with Import/Export, View Details, and Real-time Updates
 
 if (typeof window.deviceManagementLoaded === 'undefined') {
     window.deviceManagementLoaded = true;
@@ -27,6 +26,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         let currentViewingDeviceId = null;
         let currentViewingDevice = null;
         let eventListenersSetup = false; // Flag to prevent duplicate listeners
+        let isRefreshing = false;
 
         // ==================== STYLES ====================
         function addDeviceManagementStyles() {
@@ -316,6 +316,160 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             });
         }
 
+        // ==================== REFRESH FUNCTIONALITY ====================
+        async function refreshData() {
+            if (isRefreshing) {
+                console.log('Refresh already in progress');
+                return;
+            }
+            
+            isRefreshing = true;
+            const refreshBtn = document.getElementById('refreshBtn');
+            const refreshIcon = refreshBtn?.querySelector('i');
+            
+            try {
+                // Add spinning animation to refresh icon
+                if (refreshIcon) {
+                    refreshIcon.classList.add('fa-spin');
+                }
+                
+                console.log('Refreshing device data...');
+                
+                // Fetch fresh data from server
+                await Promise.all([
+                    loadDevices(),
+                    loadGroups()
+                ]);
+                
+                // Re-render the UI without page reload
+                renderDevicesTable();
+                renderGroups();
+                updateGroupSelect();
+                
+                showNotification('Data refreshed successfully', 'success', 2000);
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                showNotification('Failed to refresh data', 'error');
+            } finally {
+                // Remove spinning animation
+                if (refreshIcon) {
+                    refreshIcon.classList.remove('fa-spin');
+                }
+                isRefreshing = false;
+            }
+        }
+
+        // ==================== WEBSOCKET FOR REAL-TIME UPDATES ====================
+        function connectDeviceWebSocket() {
+            if (deviceWsConnection && deviceWsConnection.readyState === WebSocket.OPEN) {
+                console.log('Device WebSocket already connected');
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/devices`;
+            
+            console.log('Connecting to device WebSocket:', wsUrl);
+            
+            try {
+                deviceWsConnection = new WebSocket(wsUrl);
+                
+                deviceWsConnection.onopen = () => {
+                    console.log('Device WebSocket connected');
+                    showNotification('Real-time updates enabled', 'success', 2000);
+                };
+                
+                deviceWsConnection.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleDeviceStatusUpdate(data);
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                    }
+                };
+                
+                deviceWsConnection.onerror = (error) => {
+                    console.error('Device WebSocket error:', error);
+                };
+                
+                deviceWsConnection.onclose = () => {
+                    console.log('Device WebSocket disconnected');
+                    // Attempt to reconnect after 5 seconds
+                    setTimeout(() => {
+                        if (document.getElementById('devicesTableBody')) {
+                            connectDeviceWebSocket();
+                        }
+                    }, 5000);
+                };
+            } catch (error) {
+                console.error('WebSocket connection error:', error);
+            }
+        }
+
+        function handleDeviceStatusUpdate(data) {
+            if (data.type === 'device_status') {
+                const deviceId = data.device_id;
+                const status = data.status;
+                const lastPoll = data.last_poll;
+                
+                console.log(`Device ${deviceId} status update:`, status, lastPoll);
+                
+                // Update in-memory device data
+                const device = devices.find(d => d.id === deviceId);
+                if (device) {
+                    device.status = status;
+                    device.lastPoll = lastPoll;
+                }
+                
+                // Update UI if device row exists
+                updateDeviceRowUI(deviceId, status, lastPoll);
+                
+                // Update modal if viewing this device
+                if (currentViewingDeviceId === deviceId) {
+                    updateViewModalStatus(status, lastPoll);
+                }
+            }
+        }
+
+        function updateDeviceRowUI(deviceId, status, lastPoll) {
+            // Find the row for this device
+            const row = document.querySelector(`tr[id="device-${deviceId}"]`);
+            if (!row) return;
+            
+            // Update status cell
+            const statusCell = row.querySelector('.device-status-cell');
+            if (statusCell) {
+                statusCell.innerHTML = getStatusBadge({ status: status, lastPoll: lastPoll });
+            }
+            
+            // Update last poll cell
+            const pollCell = row.querySelector('.device-poll-cell');
+            if (pollCell) {
+                pollCell.textContent = lastPoll || 'Never';
+            }
+        }
+
+        function updateViewModalStatus(status, lastPoll) {
+            const statusElement = document.getElementById('viewDeviceStatus');
+            const pollElement = document.getElementById('viewDeviceLastPoll');
+            
+            if (statusElement) {
+                const statusDotClass = status === 'Online' ? 'status-online' : 
+                                     status === 'Warning' ? 'status-warning' : 'status-offline';
+                statusElement.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="status-dot ${statusDotClass}"></span>
+                        <span class="text-sm text-slate-700">${status}</span>
+                    </div>
+                `;
+            }
+            
+            if (pollElement) {
+                pollElement.textContent = lastPoll || 'Never';
+            }
+        }
+
         // ==================== RENDERING ====================
         function renderDevicesTable() {
             const tbody = document.getElementById('devicesTableBody');
@@ -337,7 +491,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     <tr>
                         <td colspan="6" class="px-6 py-8 text-center text-slate-500">
                             <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
-                            <p>No devices found</p>
+                            <p>${searchTerm ? 'No devices match your search' : 'No devices found'}</p>
                         </td>
                     </tr>
                 `;
@@ -367,10 +521,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="text-sm text-slate-700 font-mono text-xs">${escapeHtml(address)}</div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="px-6 py-4 whitespace-nowrap device-status-cell">
                         ${statusBadge}
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 device-poll-cell">
                         ${escapeHtml(lastPoll)}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -539,7 +693,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Status</div>
-                                    <div class="detail-value">${statusBadge}</div>
+                                    <div class="detail-value" id="viewDeviceStatus">${statusBadge}</div>
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Device ID</div>
@@ -551,7 +705,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Last Polled</div>
-                                    <div class="detail-value">${escapeHtml(device.lastPoll || 'Never')}</div>
+                                    <div class="detail-value" id="viewDeviceLastPoll">${escapeHtml(device.lastPoll || 'Never')}</div>
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Protocol</div>
@@ -644,7 +798,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Status</div>
-                                    <div class="detail-value">${statusBadge}</div>
+                                    <div class="detail-value" id="viewDeviceStatus">${statusBadge}</div>
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Device ID</div>
@@ -656,7 +810,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Last Polled</div>
-                                    <div class="detail-value">${escapeHtml(device.lastPoll || 'Never')}</div>
+                                    <div class="detail-value" id="viewDeviceLastPoll">${escapeHtml(device.lastPoll || 'Never')}</div>
                                 </div>
                                 <div class="detail-item">
                                     <div class="detail-label">Protocol</div>
@@ -739,7 +893,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">Status</div>
-                                <div class="detail-value">${statusBadge}</div>
+                                <div class="detail-value" id="viewDeviceStatus">${statusBadge}</div>
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">Protocol</div>
@@ -747,7 +901,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                             </div>
                             <div class="detail-item">
                                 <div class="detail-label">Last Polled</div>
-                                <div class="detail-value">${escapeHtml(device.lastPoll || 'Never')}</div>
+                                <div class="detail-value" id="viewDeviceLastPoll">${escapeHtml(device.lastPoll || 'Never')}</div>
                             </div>
                         </div>
                         <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
@@ -794,9 +948,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     
                     closeViewModal();
                     
-                    // Reload devices
-                    await loadDevices();
-                    renderDevicesTable();
+                    // Refresh data to show new device
+                    await refreshData();
                 } else {
                     showNotification('Failed to duplicate device: ' + (result.message || result.error), 'error');
                 }
@@ -804,152 +957,6 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             } catch (error) {
                 console.error('Error duplicating device:', error);
                 showNotification('Error duplicating device: ' + error.message, 'error');
-            }
-        }
-
-        // ==================== DUPLICATE MODBUS DATAPOINTS ====================
-        async function duplicateModbusDatapoints(sourceDeviceId, targetDeviceId) {
-            try {
-                console.log(`Duplicating datapoints from device ${sourceDeviceId} to ${targetDeviceId}`);
-                
-                // Load ALL datapoints to filter by source device
-                const response = await fetch('/api/datapoints');
-                const data = await response.json();
-                
-                if (!data.datapoints) {
-                    console.log('No datapoints found to duplicate');
-                    return;
-                }
-                
-                // Filter datapoints for the source device
-                const sourceDatapoints = data.datapoints.filter(dp => 
-                    dp.device_id === sourceDeviceId && dp.type === 'Modbus'
-                );
-                
-                console.log(`Found ${sourceDatapoints.length} datapoints to duplicate`);
-                
-                // For each datapoint, create a new one with SAME name
-                for (const datapoint of sourceDatapoints) {
-                    // Keep the same datapoint name
-                    const datapointName = datapoint.name;
-                    
-                    // Create new datapoint
-                    const datapointData = {
-                        device_id: targetDeviceId,
-                        tag_name: datapointName,
-                        register_address: datapoint.register_address,
-                        register_type: datapoint.register_type,
-                        data_type: datapoint.data_type,
-                        byte_order: datapoint.byte_order || 'big',
-                        word_order: datapoint.word_order || 'big',
-                        scale_factor: datapoint.scale_factor || 1.0,
-                        offset: datapoint.offset || 0.0,
-                        unit: datapoint.unit || '',
-                        description: datapoint.description || ''
-                    };
-                    
-                    console.log(`Creating datapoint: ${datapointName} for device ${targetDeviceId}`);
-                    
-                    const createResponse = await fetch('/api/datapoints/modbus', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(datapointData)
-                    });
-                    
-                    const result = await createResponse.json();
-                    
-                    if (!createResponse.ok || !result.success) {
-                        console.warn(`Failed to duplicate datapoint ${datapoint.name}:`, result.message);
-                    } else {
-                        console.log(`Successfully duplicated datapoint: ${datapointName}`);
-                    }
-                }
-                
-                console.log('Datapoints duplication completed');
-                
-            } catch (error) {
-                console.error('Error duplicating datapoints:', error);
-                // Don't show error notification to user as device was created successfully
-            }
-        }
-
-        // ==================== DUPLICATE LOADCELL DATAPOINTS ====================
-        async function duplicateLoadcellDatapoints(sourceDeviceId, targetDeviceId) {
-            try {
-                console.log(`Duplicating loadcell datapoints from device ${sourceDeviceId} to ${targetDeviceId}`);
-                
-                // Get datapoints for the source device
-                const response = await fetch(`/api/devices/${sourceDeviceId}/datapoints`);
-                const data = await response.json();
-                
-                if (!data.datapoints || data.datapoints.length === 0) {
-                    console.log('No loadcell datapoints found to duplicate');
-                    return;
-                }
-                
-                console.log(`Found ${data.datapoints.length} loadcell datapoints to duplicate`);
-                
-                // For each datapoint, create a new one with SAME name
-                for (const datapoint of data.datapoints) {
-                    // Keep the same datapoint name
-                    const datapointName = datapoint.name;
-                    
-                    // Create new datapoint
-                    const datapointData = {
-                        device_id: targetDeviceId,
-                        tag_name: datapointName
-                    };
-                    
-                    console.log(`Creating loadcell datapoint: ${datapointName} for device ${targetDeviceId}`);
-                    
-                    const createResponse = await fetch('/api/datapoints/loadcell', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(datapointData)
-                    });
-                    
-                    const result = await createResponse.json();
-                    
-                    if (!createResponse.ok || !result.success) {
-                        console.warn(`Failed to duplicate loadcell datapoint ${datapoint.name}:`, result.message);
-                    } else {
-                        console.log(`Successfully duplicated loadcell datapoint: ${datapointName}`);
-                    }
-                }
-                
-                console.log('Loadcell datapoints duplication completed');
-                
-            } catch (error) {
-                console.error('Error duplicating loadcell datapoints:', error);
-                // Don't show error notification to user as device was created successfully
-            }
-        }
-
-        // ==================== REFRESH FUNCTION ====================
-        async function refreshData() {
-            const refreshBtn = document.getElementById('refreshBtn');
-            if (refreshBtn) {
-                refreshBtn.classList.add('spinning');
-                refreshBtn.disabled = true;
-            }
-            
-            try {
-                await Promise.all([
-                    loadDevices(),
-                    loadGroups()
-                ]);
-                
-                renderDevicesTable();
-                renderGroups();
-                showNotification('Data refreshed successfully', 'success');
-            } catch (error) {
-                console.error('Error refreshing data:', error);
-                showNotification('Failed to refresh data', 'error');
-            } finally {
-                if (refreshBtn) {
-                    refreshBtn.classList.remove('spinning');
-                    refreshBtn.disabled = false;
-                }
             }
         }
 
@@ -1076,8 +1083,9 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                         'success'
                     );
                     closeAddDevicePanel();
-                    await loadDevices();
-                    renderDevicesTable();
+                    
+                    // Refresh data to show updated/added device
+                    await refreshData();
                 } else {
                     showNotification('Failed to save device: ' + (result.message || result.error || 'Unknown error'), 'error');
                 }
@@ -1234,8 +1242,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     
                     if (response.ok && result.success) {
                         showNotification('Device deleted successfully', 'success');
-                        await loadDevices();
-                        renderDevicesTable();
+                        // Refresh data to remove deleted device
+                        await refreshData();
                     } else {
                         showNotification('Failed to delete device: ' + (result.message || result.error), 'error');
                     }
@@ -1252,7 +1260,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 
                 // Note: Add group delete API call when backend supports it
                 showNotification('Group delete not yet implemented', 'warning');
-            }
+            },
+
+            // Expose refresh function
+            refreshData: refreshData
         };
 
         // ==================== GROUP MANAGEMENT ====================
@@ -1306,8 +1317,11 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 if (response.ok && result.success) {
                     showNotification('Group created successfully', 'success');
                     closeAddGroupModal();
+                    
+                    // Refresh groups data
                     await loadGroups();
                     renderGroups();
+                    updateGroupSelect();
                 } else {
                     showNotification('Failed to create group: ' + (result.message || result.error), 'error');
                 }
@@ -1425,9 +1439,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     
                     showNotification(message, 'success', 5000);
                     
-                    // Reload devices
-                    await loadDevices();
-                    renderDevicesTable();
+                    // Refresh data to show imported devices
+                    await refreshData();
                     
                     // Clear file input
                     fileInput.value = '';
@@ -1559,47 +1572,6 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     }
                 });
                 dropArea.hasListener = true;
-            }
-        }
-
-        // ==================== WEBSOCKET ====================
-        function connectDeviceWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/devices`;
-            
-            try {
-                deviceWsConnection = new WebSocket(wsUrl);
-                
-                deviceWsConnection.onopen = () => {
-                    console.log('Device WebSocket connected');
-                };
-                
-                deviceWsConnection.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        if (data.type === 'device_status') {
-                            updateDeviceStatus(data.device_id, data.status, data.last_poll);
-                        }
-                    } catch (error) {
-                        console.error('WebSocket message error:', error);
-                    }
-                };
-                
-                deviceWsConnection.onclose = () => {
-                    console.log('Device WebSocket disconnected, reconnecting...');
-                    setTimeout(connectDeviceWebSocket, 5000);
-                };
-            } catch (error) {
-                console.error('WebSocket connection error:', error);
-            }
-        }
-
-        function updateDeviceStatus(deviceId, status, lastPoll) {
-            const device = devices.find(d => d.id.toString() === deviceId.toString());
-            if (device) {
-                device.status = status;
-                device.lastPoll = lastPoll;
-                renderDevicesTable();
             }
         }
 

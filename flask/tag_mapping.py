@@ -277,9 +277,9 @@ async def get_available_devices(request):
         
         devices = []
         
-        # Get Modbus devices
+        # Get Modbus devices (NO status - it's real-time via WebSocket)
         cursor.execute('''
-            SELECT id, name, device_type, status FROM modbus_device 
+            SELECT id, name, device_type FROM modbus_device 
             WHERE enabled = 1 
             ORDER BY name
         ''')
@@ -289,13 +289,12 @@ async def get_available_devices(request):
                 'id': row[0],
                 'name': row[1],
                 'type': f"Modbus {row[2].upper()}",
-                'protocol': f"modbus-{row[2]}",
-                'status': row[3]
+                'protocol': f"modbus-{row[2]}"
             })
         
-        # Get Loadcell devices
+        # Get Loadcell devices (NO status - it's real-time via WebSocket)
         cursor.execute('''
-            SELECT id, name, status FROM loadcell_device 
+            SELECT id, name FROM loadcell_device 
             WHERE enabled = 1 
             ORDER BY name
         ''')
@@ -305,8 +304,7 @@ async def get_available_devices(request):
                 'id': row[0],
                 'name': row[1],
                 'type': 'Loadcell',
-                'protocol': 'loadcell',
-                'status': row[2]
+                'protocol': 'loadcell'
             })
         
         conn.close()
