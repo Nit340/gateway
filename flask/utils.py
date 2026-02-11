@@ -1,15 +1,15 @@
-# utils.py - Utility functions and background tasks
+# utils.py - Optimized utility functions and background tasks
 import asyncio
 import random
 import datetime
 from models import (
     realtime_state, previous_state,
-    device_status_tracker, connected_websockets
+    device_status_tracker, connected_websockets, device_websockets
 )
 from websocket_handler import broadcast_to_clients, broadcast_device_status
 
 async def periodic_updates():
-    """Update real-time state only when changes occur"""
+    """Update real-time state only when changes occur - OPTIMIZED"""
     while True:
         try:
             # Update time
@@ -26,7 +26,7 @@ async def periodic_updates():
                 previous_state['current_date'] = new_date
                 previous_state['current_time'] = new_time
                 
-                # Broadcast time update only if changed
+                # Broadcast time update ONLY if changed AND clients are connected
                 if connected_websockets and (date_changed or time_changed):
                     await broadcast_to_clients({
                         'type': 'time_update',
@@ -34,58 +34,55 @@ async def periodic_updates():
                         'current_time': new_time
                     })
             
-            # Sleep with different intervals based on activity
+            # Smart sleep interval - check every minute when no clients
             if connected_websockets:
-                # If clients are connected, check more frequently
-                await asyncio.sleep(0.5)
+                # Clients connected - check every 30 seconds
+                await asyncio.sleep(30)
             else:
-                # No clients connected, check less frequently
-                await asyncio.sleep(5)
+                # No clients - check every minute
+                await asyncio.sleep(60)
             
         except Exception as e:
             print(f"Error in periodic updates: {e}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(60)
 
 async def device_status_updater():
-    """Update device status periodically with realistic behavior"""
+    """Update device status periodically - OPTIMIZED to only broadcast changes"""
     while True:
         try:
-            # Only update if there are devices being tracked
-            if not device_status_tracker:
-                await asyncio.sleep(5)
+            # Only update if there are devices AND clients listening
+            if not device_status_tracker or not device_websockets:
+                await asyncio.sleep(10)
                 continue
             
-            # Update device status with more realistic patterns
+            # Track which devices had status changes
+            changed_devices = []
+            
+            # Update device status with realistic patterns
             for device_id in list(device_status_tracker.keys()):
                 device_info = device_status_tracker[device_id]
                 current_status = device_info['status']
+                previous_status = device_info.get('previous_status', current_status)
+                previous_poll = device_info.get('previous_poll', device_info['last_poll'])
                 
-                # Simulate realistic device behavior
                 if current_status == 'Online':
                     # Online devices poll regularly
-                    seconds_ago = random.choice([1, 2, 3, 5, 10])
+                    seconds_ago = random.choice([2, 3, 5, 8, 10])
                     device_info['last_poll'] = f"{seconds_ago} sec ago"
                     
-                    # Small chance to go offline (1% per update)
-                    if random.random() < 0.01:
+                    # Very small chance to go offline (0.5% per update)
+                    if random.random() < 0.005:
+                        device_info['previous_status'] = device_info['status']
+                        device_info['previous_poll'] = device_info['last_poll']
                         device_info['status'] = 'Offline'
                         device_info['last_poll'] = 'Connection lost'
-                        
-                        # Broadcast status change
-                        await broadcast_device_status(
-                            device_id,
-                            device_info['status'],
-                            device_info['last_poll']
-                        )
+                        changed_devices.append(device_id)
                     else:
-                        # Just update poll time (no need to broadcast every time)
-                        # Only broadcast every 10 seconds or on status change
-                        if random.random() < 0.2:  # 20% chance to broadcast poll update
-                            await broadcast_device_status(
-                                device_id,
-                                device_info['status'],
-                                device_info['last_poll']
-                            )
+                        # Only broadcast poll updates occasionally (every 30 seconds on average)
+                        if random.random() < 0.1:  # 10% chance = ~10 seconds average
+                            if device_info['last_poll'] != previous_poll:
+                                device_info['previous_poll'] = device_info['last_poll']
+                                changed_devices.append(device_id)
                 
                 elif current_status == 'Offline':
                     # Offline devices have static last poll
@@ -96,41 +93,57 @@ async def device_status_updater():
                     offline_duration = (datetime.datetime.now() - device_info['last_offline_time']).seconds
                     
                     if offline_duration < 60:
-                        device_info['last_poll'] = f"{offline_duration} sec ago"
+                        new_poll = f"{offline_duration} sec ago"
                     elif offline_duration < 3600:
                         minutes = offline_duration // 60
-                        device_info['last_poll'] = f"{minutes} min ago"
+                        new_poll = f"{minutes} min ago"
                     else:
                         hours = offline_duration // 3600
-                        device_info['last_poll'] = f"{hours} hr ago"
+                        new_poll = f"{hours} hr ago"
                     
-                    # Small chance to come back online (5% per update)
-                    if random.random() < 0.05:
+                    # Only update if the time description changed
+                    if new_poll != device_info['last_poll']:
+                        device_info['previous_poll'] = device_info['last_poll']
+                        device_info['last_poll'] = new_poll
+                        # Don't broadcast every second change for offline devices
+                        if offline_duration % 60 == 0:  # Only every minute
+                            changed_devices.append(device_id)
+                    
+                    # Small chance to come back online (2% per update)
+                    if random.random() < 0.02:
+                        device_info['previous_status'] = device_info['status']
+                        device_info['previous_poll'] = device_info['last_poll']
                         device_info['status'] = 'Online'
                         device_info['last_poll'] = 'Just now'
                         if 'last_offline_time' in device_info:
                             del device_info['last_offline_time']
-                        
-                        # Broadcast status change
-                        await broadcast_device_status(
-                            device_id,
-                            device_info['status'],
-                            device_info['last_poll']
-                        )
+                        changed_devices.append(device_id)
             
-            # Update every 5 seconds
-            await asyncio.sleep(5)
+            # Broadcast ONLY devices that changed
+            if changed_devices and device_websockets:
+                for device_id in changed_devices:
+                    device_info = device_status_tracker[device_id]
+                    await broadcast_device_status(
+                        device_id,
+                        device_info['status'],
+                        device_info['last_poll']
+                    )
+            
+            # Update every 10 seconds (less aggressive)
+            await asyncio.sleep(10)
             
         except Exception as e:
             print(f"Error in device status updater: {e}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
 def initialize_device_status(device_id, initial_status='Offline'):
     """Initialize device status when device is created"""
     if device_id not in device_status_tracker:
         device_status_tracker[device_id] = {
             'status': initial_status,
-            'last_poll': 'Never' if initial_status == 'Offline' else 'Just now'
+            'last_poll': 'Never' if initial_status == 'Offline' else 'Just now',
+            'previous_status': initial_status,
+            'previous_poll': 'Never' if initial_status == 'Offline' else 'Just now'
         }
         if initial_status == 'Offline':
             device_status_tracker[device_id]['last_offline_time'] = datetime.datetime.now()
@@ -141,6 +154,8 @@ def update_device_status(device_id, status, last_poll=None):
     if device_id not in device_status_tracker:
         initialize_device_status(device_id, status)
     else:
+        device_status_tracker[device_id]['previous_status'] = device_status_tracker[device_id]['status']
+        device_status_tracker[device_id]['previous_poll'] = device_status_tracker[device_id]['last_poll']
         device_status_tracker[device_id]['status'] = status
         
         if last_poll:

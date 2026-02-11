@@ -5,9 +5,15 @@ from datetime import datetime
 
 DB_FILE = 'gateway_config.db'
 
+def get_db_connection():
+    """Get a database connection with proper timeout and WAL mode for concurrency"""
+    conn = sqlite3.connect(DB_FILE, timeout=10.0)
+    conn.execute('PRAGMA journal_mode=WAL')  # Write-Ahead Logging for better concurrency
+    return conn
+
 def init_database():
     """Initialize SQLite database with new schema"""
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Create all tables
@@ -246,7 +252,7 @@ def insert_default_data(cursor):
 def get_general_configuration():
     """Get general configuration"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -296,7 +302,7 @@ def get_general_configuration():
 def update_general_configuration(config_data):
     """Update general configuration"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Extract fields from nested structure
@@ -377,7 +383,7 @@ def update_general_configuration(config_data):
 def get_all_device_groups():
     """Get all device groups"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -405,7 +411,7 @@ def get_all_device_groups():
 def add_device_group(name, color='blue', description=''):
     """Add a new device group"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -421,11 +427,31 @@ def add_device_group(name, color='blue', description=''):
         print(f"Error adding device group: {e}")
         return None
 
+def delete_device_group(group_id):
+    """Delete a device group and unassign devices"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # First, unassign all devices from this group (set group_id to NULL)
+        cursor.execute('UPDATE modbus_device SET group_id = NULL WHERE group_id = ?', (group_id,))
+        cursor.execute('UPDATE loadcell_device SET group_id = NULL WHERE group_id = ?', (group_id,))
+        
+        # Then delete the group
+        cursor.execute('DELETE FROM device_groups WHERE id = ?', (group_id,))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Error deleting device group: {e}")
+        return False
+
 # Services operations
 def get_all_services():
     """Get all services"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -452,7 +478,7 @@ def get_all_services():
 def get_service_by_name(name):
     """Get service ID by name"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('SELECT id FROM services WHERE name = ?', (name,))
@@ -468,7 +494,7 @@ def get_service_by_name(name):
 def get_database_stats():
     """Get database statistics"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('SELECT COUNT(*) FROM modbus_device')

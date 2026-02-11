@@ -28,6 +28,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         let eventListenersSetup = false; // Flag to prevent duplicate listeners
         let isRefreshing = false;
 
+        // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
+        let wsConnectionAttempts = 0;
+        let wsReconnectTimeout = null;
+
         // ==================== STYLES ====================
         function addDeviceManagementStyles() {
             if (document.getElementById('device-management-styles')) return;
@@ -264,6 +268,15 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             connectDeviceWebSocket();
             
             console.log('Device Management initialized successfully');
+            
+            // Register cleanup on page unload
+            window.addEventListener('beforeunload', cleanupWebSocket);
+            window.addEventListener('pagehide', cleanupWebSocket);
+            
+            // Also cleanup when navigating away (for SPA behavior)
+            if (typeof window.addEventListener !== 'undefined') {
+                window.addEventListener('popstate', cleanupWebSocket);
+            }
         }
 
         // ==================== DATA LOADING ====================
@@ -360,11 +373,20 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             }
         }
 
-        // ==================== WEBSOCKET FOR REAL-TIME UPDATES ====================
+        // ==================== WEBSOCKET CONNECTION (FIXED) ====================
         function connectDeviceWebSocket() {
-            if (deviceWsConnection && deviceWsConnection.readyState === WebSocket.OPEN) {
-                console.log('Device WebSocket already connected');
+            // Prevent multiple connections
+            if (deviceWsConnection && 
+                (deviceWsConnection.readyState === WebSocket.OPEN || 
+                 deviceWsConnection.readyState === WebSocket.CONNECTING)) {
+                console.log('Device WebSocket already connected or connecting');
                 return;
+            }
+
+            // Clear any pending reconnection
+            if (wsReconnectTimeout) {
+                clearTimeout(wsReconnectTimeout);
+                wsReconnectTimeout = null;
             }
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -377,13 +399,28 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 
                 deviceWsConnection.onopen = () => {
                     console.log('Device WebSocket connected');
+                    wsConnectionAttempts = 0; // Reset connection attempts
                     showNotification('Real-time updates enabled', 'success', 2000);
                 };
                 
                 deviceWsConnection.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        handleDeviceStatusUpdate(data);
+                        
+                        // Handle initial device data (all devices at once)
+                        if (data.type === 'initial_devices' && data.devices) {
+                            console.log('Received initial device status:', data.devices.length, 'devices');
+                            data.devices.forEach(device => {
+                                handleDeviceStatusUpdate({
+                                    type: 'device_status',
+                                    device_id: device.device_id,
+                                    status: device.status,
+                                    last_poll: device.last_poll
+                                });
+                            });
+                        } else {
+                            handleDeviceStatusUpdate(data);
+                        }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);
                     }
@@ -395,16 +432,46 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 
                 deviceWsConnection.onclose = () => {
                     console.log('Device WebSocket disconnected');
-                    // Attempt to reconnect after 5 seconds
-                    setTimeout(() => {
-                        if (document.getElementById('devicesTableBody')) {
+                    deviceWsConnection = null;
+                    
+                    // Only reconnect if we're still on the device management page
+                    // and haven't exceeded max attempts
+                    if (document.getElementById('devicesTableBody') && wsConnectionAttempts < 5) {
+                        wsConnectionAttempts++;
+                        const delay = Math.min(1000 * Math.pow(2, wsConnectionAttempts), 30000); // Exponential backoff, max 30s
+                        console.log(`Reconnecting in ${delay/1000}s (attempt ${wsConnectionAttempts}/5)`);
+                        
+                        wsReconnectTimeout = setTimeout(() => {
                             connectDeviceWebSocket();
-                        }
-                    }, 5000);
+                        }, delay);
+                    } else if (wsConnectionAttempts >= 5) {
+                        console.log('Max WebSocket reconnection attempts reached');
+                        showNotification('Real-time updates disconnected', 'warning', 3000);
+                    }
                 };
             } catch (error) {
                 console.error('WebSocket connection error:', error);
             }
+        }
+
+        // WEBSOCKET CLEANUP FUNCTION
+        function cleanupWebSocket() {
+            if (wsReconnectTimeout) {
+                clearTimeout(wsReconnectTimeout);
+                wsReconnectTimeout = null;
+            }
+            
+            if (deviceWsConnection) {
+                console.log('Closing WebSocket connection...');
+                try {
+                    deviceWsConnection.close();
+                } catch (e) {
+                    console.error('Error closing WebSocket:', e);
+                }
+                deviceWsConnection = null;
+            }
+            
+            wsConnectionAttempts = 0;
         }
 
         function handleDeviceStatusUpdate(data) {
@@ -413,10 +480,13 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 const status = data.status;
                 const lastPoll = data.last_poll;
                 
-                console.log(`Device ${deviceId} status update:`, status, lastPoll);
+                // Only log status changes, not every poll update
+                const device = devices.find(d => d.id === deviceId);
+                if (device && device.status !== status) {
+                    console.log(`Device ${deviceId} status changed: ${device.status} -> ${status}`);
+                }
                 
                 // Update in-memory device data
-                const device = devices.find(d => d.id === deviceId);
                 if (device) {
                     device.status = status;
                     device.lastPoll = lastPoll;
@@ -1038,8 +1108,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                         parity: document.getElementById('parity')?.value || 'None',
                         stop_bits: parseInt(document.getElementById('stopBits')?.value) || 1,
                         timeout_ms: 1000,
-                        retry_count: 3,
-                        polling_interval_ms: 100
+                        retry_count: parseInt(document.getElementById('retryCount')?.value) || 3,
+                        polling_interval_ms: parseInt(document.getElementById('pollingInterval')?.value) || 100
                     };
                 } else if (deviceType === 'modbus-tcp') {
                     requestData.type = 'modbus';
@@ -1050,8 +1120,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                         port: parseInt(document.getElementById('modbusTcpPort')?.value) || 502,
                         slave_id: parseInt(document.getElementById('modbusTcpSlaveAddress')?.value) || 1,
                         timeout_ms: 1000,
-                        retry_count: 3,
-                        polling_interval_ms: 100
+                        retry_count: parseInt(document.getElementById('tcpRetryCount')?.value) || 3,
+                        polling_interval_ms: parseInt(document.getElementById('tcpPollingInterval')?.value) || 100
                     };
                 } else if (deviceType === 'loadcell') {
                     requestData.type = 'loadcell';
@@ -1207,6 +1277,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                                 document.getElementById('parity').value = config.parity || 'None';
                             if (document.getElementById('stopBits')) 
                                 document.getElementById('stopBits').value = config.stop_bits || 1;
+                            if (document.getElementById('retryCount')) 
+                                document.getElementById('retryCount').value = config.retry_count || 3;
+                            if (document.getElementById('pollingInterval')) 
+                                document.getElementById('pollingInterval').value = config.polling_interval_ms || 100;
                         } else if (deviceTypeValue === 'modbus-tcp') {
                             if (document.getElementById('modbusTcpIp')) 
                                 document.getElementById('modbusTcpIp').value = config.ip_address || '192.168.1.100';
@@ -1214,6 +1288,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                                 document.getElementById('modbusTcpPort').value = config.port || 502;
                             if (document.getElementById('modbusTcpSlaveAddress')) 
                                 document.getElementById('modbusTcpSlaveAddress').value = config.slave_id || 1;
+                            if (document.getElementById('tcpRetryCount')) 
+                                document.getElementById('tcpRetryCount').value = config.retry_count || 3;
+                            if (document.getElementById('tcpPollingInterval')) 
+                                document.getElementById('tcpPollingInterval').value = config.polling_interval_ms || 100;
                         } else if (deviceTypeValue === 'loadcell') {
                             if (document.getElementById('devicePath')) 
                                 document.getElementById('devicePath').value = config.device_path || '/dev/spidev0.0';
@@ -1229,7 +1307,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             },
 
             deleteDevice: async function(deviceId) {
-                if (!confirm('Are you sure you want to delete this device? This action cannot be undone.')) {
+                if (!confirm('Are you sure you want to delete this device?\n\nThis will also delete all associated datapoints/tags.\n\nThis action cannot be undone.')) {
                     return;
                 }
                 
@@ -1241,7 +1319,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     const result = await response.json();
                     
                     if (response.ok && result.success) {
-                        showNotification('Device deleted successfully', 'success');
+                        showNotification('Device and associated datapoints deleted successfully', 'success');
                         // Refresh data to remove deleted device
                         await refreshData();
                     } else {
@@ -1254,12 +1332,28 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             },
 
             deleteGroup: async function(groupId) {
-                if (!confirm('Are you sure you want to delete this group?')) {
+                if (!confirm('Are you sure you want to delete this group?\n\nDevices in this group will be unassigned (moved to "None").\n\nThis action cannot be undone.')) {
                     return;
                 }
                 
-                // Note: Add group delete API call when backend supports it
-                showNotification('Group delete not yet implemented', 'warning');
+                try {
+                    const response = await fetch(`/api/groups/${groupId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && result.success) {
+                        showNotification('Group deleted successfully', 'success');
+                        // Refresh data to update group list and device assignments
+                        await refreshData();
+                    } else {
+                        showNotification('Failed to delete group: ' + (result.message || result.error), 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting group:', error);
+                    showNotification('Error deleting group: ' + error.message, 'error');
+                }
             },
 
             // Expose refresh function

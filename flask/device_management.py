@@ -15,13 +15,23 @@ from database import DB_FILE, get_service_by_name
 from utils import initialize_device_status, remove_device_status, update_device_status
 
 # ============================================================================
+# DATABASE CONNECTION HELPER
+# ============================================================================
+
+def get_db_connection():
+    """Get a database connection with proper timeout and WAL mode for concurrency"""
+    conn = sqlite3.connect(DB_FILE, timeout=10.0)
+    conn.execute('PRAGMA journal_mode=WAL')  # Write-Ahead Logging for better concurrency
+    return conn
+
+# ============================================================================
 # GET ALL DEVICES (Both Modbus and Loadcell)
 # ============================================================================
 
 async def get_all_devices(request):
     """GET all devices (modbus + loadcell) with real-time status"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         devices = []
@@ -118,7 +128,7 @@ async def get_device_details(request):
     try:
         device_id = request.match_info['device_id']
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Try Modbus first
@@ -309,7 +319,7 @@ async def add_device(request):
         device_type = data.get('type', '').lower()
         protocol = data.get('protocol', '').lower()
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Generate device ID
@@ -354,11 +364,20 @@ async def add_device(request):
                 config.get('capacity_name', 'capacity')
             ))
             
-            # Automatically create 'load' and 'capacity' datapoints
+            # Automatically create 'load' and 'capacity' datapoints (use INSERT OR IGNORE to prevent duplicates)
+            capacity_name = config.get('capacity_name', 'capacity')
+            
+            # Insert load datapoint
             cursor.execute('''
-                INSERT INTO loadcell_datapoints (device_id, name)
-                VALUES (?, 'load'), (?, ?)
-            ''', (device_id, device_id, config.get('capacity_name', 'capacity')))
+                INSERT OR IGNORE INTO loadcell_datapoints (device_id, name)
+                VALUES (?, 'load')
+            ''', (device_id,))
+            
+            # Insert capacity datapoint
+            cursor.execute('''
+                INSERT OR IGNORE INTO loadcell_datapoints (device_id, name)
+                VALUES (?, ?)
+            ''', (device_id, capacity_name))
             
         else:  # Modbus (TCP or RTU)
             config = data.get('config', {})
@@ -405,6 +424,9 @@ async def add_device(request):
             'device_id': device_id
         })
         
+    except sqlite3.IntegrityError as e:
+        print(f"Database integrity error: {e}")
+        return web.json_response({'error': f'Database constraint violation: {str(e)}'}, status=400)
     except Exception as e:
         print(f"Error adding device: {e}")
         return web.json_response({'error': str(e)}, status=500)
@@ -419,7 +441,7 @@ async def update_device(request):
         device_id = request.match_info['device_id']
         data = await request.json()
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Check if it's Modbus or Loadcell
@@ -564,7 +586,7 @@ async def delete_device(request):
     try:
         device_id = request.match_info['device_id']
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Try deleting from both tables (cascade will handle datapoints)
@@ -623,7 +645,7 @@ async def disable_device(request):
         data = await request.json()
         enabled = data.get('enabled', True)
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Update both tables
@@ -657,7 +679,7 @@ async def duplicate_device(request):
     try:
         device_id = request.match_info['device_id']
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Check if it's a Modbus device
@@ -887,6 +909,29 @@ async def add_group(request):
         print(f"Error adding group: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
+async def delete_group(request):
+    """DELETE - Delete group"""
+    try:
+        group_id = request.match_info['group_id']
+        
+        from database import delete_device_group
+        success = delete_device_group(group_id)
+        
+        if success:
+            return web.json_response({
+                'success': True,
+                'message': 'Group deleted successfully'
+            })
+        else:
+            return web.json_response({
+                'success': False,
+                'message': 'Failed to delete group'
+            }, status=500)
+            
+    except Exception as e:
+        print(f"Error deleting group: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
 async def assign_devices_to_group(request):
     """POST - Assign devices to group"""
     try:
@@ -894,7 +939,7 @@ async def assign_devices_to_group(request):
         data = await request.json()
         device_ids = data.get('device_ids', [])
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         for device_id in device_ids:
@@ -920,7 +965,7 @@ async def assign_devices_to_group(request):
 async def export_devices_csv(request):
     """GET - Export all devices to CSV"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Create CSV in memory
@@ -1016,7 +1061,7 @@ async def import_devices_csv(request):
         # Parse CSV
         csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         imported_count = 0
@@ -1213,7 +1258,7 @@ async def get_device_datapoints(request):
     try:
         device_id = request.match_info['device_id']
         
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         # Check device type

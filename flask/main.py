@@ -11,8 +11,8 @@ from general_config import get_config_handler, put_config_handler
 from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
     delete_device, test_device, disable_device, duplicate_device,
-    get_all_groups, add_group, assign_devices_to_group,
-    export_devices_csv, import_devices_csv, download_csv_template  ,get_device_datapoints
+    get_all_groups, add_group, delete_group, assign_devices_to_group,
+    export_devices_csv, import_devices_csv, download_csv_template, get_device_datapoints
 )
 
 
@@ -388,6 +388,7 @@ def create_app():
     # Group operations
     app.router.add_get('/api/groups', get_all_groups)
     app.router.add_post('/api/groups', add_group)
+    app.router.add_delete('/api/groups/{group_id}', delete_group)
     app.router.add_post('/api/groups/{group_id}/assign-devices', assign_devices_to_group)
     
     # Datapoint Management endpoints

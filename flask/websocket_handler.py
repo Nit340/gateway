@@ -1,4 +1,4 @@
-# websocket_handler.py - All WebSocket handlers
+# websocket_handler.py - Optimized WebSocket handlers
 import asyncio
 import json
 import datetime
@@ -54,11 +54,7 @@ async def websocket_handler(request):
                                 'current_time': new_time
                             }
                             
-                            for client in connected_websockets:
-                                try:
-                                    await client.send_json(broadcast_data)
-                                except:
-                                    pass
+                            await broadcast_to_clients(broadcast_data)
                         
                         # Send confirmation
                         await ws.send_json({
@@ -75,33 +71,45 @@ async def websocket_handler(request):
                         'type': 'error',
                         'message': 'Invalid JSON format'
                     })
+            elif msg.type == aiohttp.WSMsgType.ERROR:
+                print(f'WebSocket connection closed with exception {ws.exception()}')
+                break
                     
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:
-        connected_websockets.remove(ws)
+        connected_websockets.discard(ws)
         print(f"WebSocket disconnected. Total clients: {len(connected_websockets)}")
     
     return ws
 
 async def device_websocket_handler(request):
-    """WebSocket for real-time device status updates"""
-    ws = web.WebSocketResponse()
+    """WebSocket for real-time device status updates - ONE CONNECTION PER PAGE"""
+    ws = web.WebSocketResponse(heartbeat=30)  # Add heartbeat to detect dead connections
     await ws.prepare(request)
     
+    # Check if there's already a connection from this session
+    # Only allow one device WebSocket connection at a time
     device_websockets.add(ws)
     print(f"Device WebSocket connected. Total clients: {len(device_websockets)}")
     
     try:
-        # Send initial device status
+        # Send initial device status for ALL devices
+        initial_devices = []
         for device_id, status in device_status_tracker.items():
-            await ws.send_json({
-                'type': 'device_status',
+            initial_devices.append({
                 'device_id': device_id,
                 'status': status['status'],
                 'last_poll': status['last_poll']
             })
         
+        if initial_devices:
+            await ws.send_json({
+                'type': 'initial_devices',
+                'devices': initial_devices
+            })
+        
+        # Listen for messages (mainly ping/pong)
         async for msg in ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 try:
@@ -115,35 +123,34 @@ async def device_websocket_handler(request):
                         'type': 'error',
                         'message': 'Invalid JSON format'
                     })
+            elif msg.type == aiohttp.WSMsgType.ERROR:
+                print(f'Device WebSocket connection closed with exception {ws.exception()}')
+                break
                     
     except Exception as e:
         print(f"Device WebSocket error: {e}")
     finally:
-        device_websockets.remove(ws)
+        device_websockets.discard(ws)
         print(f"Device WebSocket disconnected. Total clients: {len(device_websockets)}")
     
     return ws
 
 async def broadcast_to_clients(data):
-    """Helper to broadcast data to all connected WebSocket clients"""
+    """Helper to broadcast data to all connected WebSocket clients - NON-BLOCKING"""
     if not connected_websockets:
         return
     
-    disconnected_clients = set()
+    # Use asyncio.gather for parallel sending without blocking
+    tasks = []
+    for ws in list(connected_websockets):
+        if not ws.closed:
+            tasks.append(safe_send(ws, data))
     
-    for ws in connected_websockets:
-        try:
-            await ws.send_json(data)
-        except Exception as e:
-            print(f"Error sending to WebSocket client: {e}")
-            disconnected_clients.add(ws)
-    
-    # Remove disconnected clients
-    for ws in disconnected_clients:
-        connected_websockets.remove(ws)
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 async def broadcast_device_status(device_id, status, last_poll):
-    """Broadcast device status updates to all WebSocket clients"""
+    """Broadcast device status updates to all WebSocket clients - NON-BLOCKING"""
     if not device_websockets:
         return
     
@@ -154,14 +161,22 @@ async def broadcast_device_status(device_id, status, last_poll):
         'last_poll': last_poll
     }
     
-    disconnected_clients = set()
+    # Use asyncio.gather for parallel sending without blocking
+    tasks = []
+    for ws in list(device_websockets):
+        if not ws.closed:
+            tasks.append(safe_send(ws, data))
     
-    for ws in device_websockets:
-        try:
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+async def safe_send(ws, data):
+    """Safely send data to a WebSocket, removing it if closed"""
+    try:
+        if not ws.closed:
             await ws.send_json(data)
-        except Exception as e:
-            print(f"Error sending device status to WebSocket: {e}")
-            disconnected_clients.add(ws)
-    
-    for ws in disconnected_clients:
-        device_websockets.remove(ws)
+    except Exception as e:
+        print(f"Error sending to WebSocket: {e}")
+        # Remove from sets if it's there
+        device_websockets.discard(ws)
+        connected_websockets.discard(ws)
