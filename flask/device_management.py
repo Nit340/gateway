@@ -324,15 +324,37 @@ async def add_device(request):
         
         # Generate device ID with unique prefix to prevent collisions
         if device_type == 'loadcell':
-            # LoadCell devices get LC prefix
-            cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-            count = cursor.fetchone()[0]
-            device_id = f'LC{count + 1}'
+            # LoadCell devices get LC prefix - find max existing ID number
+            cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
+            existing_ids = [row[0] for row in cursor.fetchall()]
+            
+            # Extract numbers from IDs and find max
+            max_num = 0
+            for existing_id in existing_ids:
+                try:
+                    num = int(existing_id[2:])  # Skip 'LC' prefix
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+            
+            device_id = f'LC{max_num + 1}'
         else:  # modbus
-            # Modbus devices get MB prefix
-            cursor.execute('SELECT COUNT(*) FROM modbus_device')
-            count = cursor.fetchone()[0]
-            device_id = f'MB{count + 1}'
+            # Modbus devices get MB prefix - find max existing ID number
+            cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
+            existing_ids = [row[0] for row in cursor.fetchall()]
+            
+            # Extract numbers from IDs and find max
+            max_num = 0
+            for existing_id in existing_ids:
+                try:
+                    num = int(existing_id[2:])  # Skip 'MB' prefix
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+            
+            device_id = f'MB{max_num + 1}'
         
         # Get group_id if group name is provided
         group_id = None
@@ -385,8 +407,17 @@ async def add_device(request):
         else:  # Modbus (TCP or RTU)
             config = data.get('config', {})
             
-            # Determine device_type from protocol
-            modbus_type = 'tcp' if 'tcp' in protocol else 'rtu'
+            # Determine device_type from protocol - handle various formats
+            protocol_lower = protocol.lower()
+            if 'tcp' in protocol_lower:
+                modbus_type = 'tcp'
+            elif 'rtu' in protocol_lower:
+                modbus_type = 'rtu'
+            else:
+                # Fallback: check if IP address is provided (indicates TCP)
+                modbus_type = 'tcp' if config.get('ip_address') else 'rtu'
+            
+            print(f"Creating Modbus device - Protocol received: '{protocol}', Type determined: '{modbus_type}'")
             
             cursor.execute('''
                 INSERT INTO modbus_device (
@@ -698,20 +729,34 @@ async def duplicate_device(request):
             # Create dictionary of old device data
             old_device = dict(zip(columns, modbus_row))
             
-            # Generate new device ID with MB prefix
-            cursor.execute('SELECT COUNT(*) FROM modbus_device')
-            count = cursor.fetchone()[0]
-            new_device_id = f'MB{count + 1}'
+            # Generate new device ID with MB prefix - find max existing ID number
+            cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
+            existing_ids = [row[0] for row in cursor.fetchall()]
             
-            # Generate new device name
+            # Extract numbers from IDs and find max
+            max_num = 0
+            for existing_id in existing_ids:
+                try:
+                    num = int(existing_id[2:])  # Skip 'MB' prefix
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+            
+            new_device_id = f'MB{max_num + 1}'
+            
+            # Generate new device name with -001, -002 suffix
             base_name = old_device['name']
-            cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', (f'{base_name}%',))
+            # Remove any existing -XXX suffix from base name
+            import re
+            base_name_clean = re.sub(r'-\d+$', '', base_name)
+            
+            cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', (f'{base_name_clean}%',))
             existing_names = [row[0] for row in cursor.fetchall()]
             
             counter = 1
             numbers = []
             for name in existing_names:
-                import re
                 match = re.search(r'-(\d+)$', name)
                 if match:
                     numbers.append(int(match.group(1)))
@@ -719,10 +764,10 @@ async def duplicate_device(request):
             if numbers:
                 counter = max(numbers) + 1
             else:
-                # First duplicate should be -001, not -002
+                # First duplicate should be -001
                 counter = 1
             
-            new_name = f"{base_name}-{str(counter).zfill(3)}"
+            new_name = f"{base_name_clean}-{str(counter).zfill(3)}"
             
             # Insert new device
             cursor.execute('''
@@ -788,20 +833,34 @@ async def duplicate_device(request):
                 
                 old_device = dict(zip(columns, loadcell_row))
                 
-                # Generate new device ID with LC prefix
-                cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-                count = cursor.fetchone()[0]
-                new_device_id = f'LC{count + 1}'
+                # Generate new device ID with LC prefix - find max existing ID number
+                cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
+                existing_ids = [row[0] for row in cursor.fetchall()]
                 
-                # Generate new device name
+                # Extract numbers from IDs and find max
+                max_num = 0
+                for existing_id in existing_ids:
+                    try:
+                        num = int(existing_id[2:])  # Skip 'LC' prefix
+                        if num > max_num:
+                            max_num = num
+                    except ValueError:
+                        continue
+                
+                new_device_id = f'LC{max_num + 1}'
+                
+                # Generate new device name with -001, -002 suffix
                 base_name = old_device['name']
-                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', (f'{base_name}%',))
+                # Remove any existing -XXX suffix from base name
+                import re
+                base_name_clean = re.sub(r'-\d+$', '', base_name)
+                
+                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', (f'{base_name_clean}%',))
                 existing_names = [row[0] for row in cursor.fetchall()]
                 
                 counter = 1
                 numbers = []
                 for name in existing_names:
-                    import re
                     match = re.search(r'-(\d+)$', name)
                     if match:
                         numbers.append(int(match.group(1)))
@@ -809,10 +868,10 @@ async def duplicate_device(request):
                 if numbers:
                     counter = max(numbers) + 1
                 else:
-                    # First duplicate should be -001, not -002
+                    # First duplicate should be -001
                     counter = 1
                 
-                new_name = f"{base_name}-{str(counter).zfill(3)}"
+                new_name = f"{base_name_clean}-{str(counter).zfill(3)}"
                 
                 # Insert new loadcell device
                 cursor.execute('''
@@ -1051,7 +1110,7 @@ async def export_devices_csv(request):
         return web.json_response({'error': str(e)}, status=500)
 
 async def import_devices_csv(request):
-    """POST - Import devices from CSV"""
+    """POST - Import devices from CSV with duplicate detection"""
     try:
         # Get multipart data
         reader = await request.multipart()
@@ -1063,16 +1122,74 @@ async def import_devices_csv(request):
         # Read CSV content
         csv_content = await field.read(decode=True)
         
+        # Check if this is a confirmation request (skip_existing parameter)
+        skip_existing = request.rel_url.query.get('skip_existing', 'false').lower() == 'true'
+        replace_existing = request.rel_url.query.get('replace_existing', 'false').lower() == 'true'
+        
         # Parse CSV
         csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # First pass: Check for duplicates
+        duplicates = []
+        new_devices = []
+        
+        for row_num, row in enumerate(csv_reader, start=2):
+            try:
+                name = row.get('Name', '').strip()
+                device_type = row.get('Type', '').strip()
+                
+                if not name:
+                    continue
+                
+                # Check if device with same name already exists
+                if device_type.lower() == 'loadcell':
+                    cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
+                else:
+                    cursor.execute('SELECT id, name FROM modbus_device WHERE name = ?', (name,))
+                
+                existing = cursor.fetchone()
+                
+                if existing:
+                    duplicates.append({
+                        'row': row_num,
+                        'name': name,
+                        'type': device_type,
+                        'existing_id': existing[0]
+                    })
+                else:
+                    new_devices.append({
+                        'row': row_num,
+                        'name': name,
+                        'data': row
+                    })
+                    
+            except Exception as e:
+                continue
+        
+        # If duplicates found and user hasn't confirmed action
+        if duplicates and not skip_existing and not replace_existing:
+            conn.close()
+            return web.json_response({
+                'success': False,
+                'requires_confirmation': True,
+                'duplicates': duplicates,
+                'new_devices_count': len(new_devices),
+                'message': f'Found {len(duplicates)} duplicate device(s). Please choose how to proceed.'
+            })
+        
+        # Second pass: Import devices based on user choice
         imported_count = 0
+        replaced_count = 0
+        skipped_count = 0
         errors = []
         
-        for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (after header)
+        # Reset CSV reader
+        csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
+        
+        for row_num, row in enumerate(csv_reader, start=2):
             try:
                 name = row.get('Name', '').strip()
                 device_type = row.get('Type', '').strip()
@@ -1082,6 +1199,35 @@ async def import_devices_csv(request):
                 if not name:
                     errors.append(f"Row {row_num}: Missing device name")
                     continue
+                
+                # Check if device exists
+                if device_type.lower() == 'loadcell':
+                    cursor.execute('SELECT id FROM loadcell_device WHERE name = ?', (name,))
+                else:
+                    cursor.execute('SELECT id FROM modbus_device WHERE name = ?', (name,))
+                
+                existing_device = cursor.fetchone()
+                
+                if existing_device:
+                    if skip_existing:
+                        skipped_count += 1
+                        continue
+                    elif replace_existing:
+                        # Delete existing device
+                        device_id = existing_device[0]
+                        if device_type.lower() == 'loadcell':
+                            cursor.execute('DELETE FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
+                            cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
+                        else:
+                            cursor.execute('DELETE FROM modbus_datapoints WHERE device_id = ?', (device_id,))
+                            cursor.execute('DELETE FROM modbus_device WHERE id = ?', (device_id,))
+                        
+                        remove_device_status(device_id)
+                        replaced_count += 1
+                    else:
+                        # Should not reach here if confirmation flow works
+                        skipped_count += 1
+                        continue
                 
                 # Get or create group
                 group_id = None
@@ -1100,14 +1246,31 @@ async def import_devices_csv(request):
                 service_name = 'loadcell' if device_type.lower() == 'loadcell' else 'modbus'
                 service_id = get_service_by_name(service_name)
                 
-                # Generate device ID
+                # Generate device ID using max ID logic
                 if device_type.lower() == 'loadcell':
-                    cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+                    cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
+                    existing_ids = [r[0] for r in cursor.fetchall()]
+                    max_num = 0
+                    for existing_id in existing_ids:
+                        try:
+                            num = int(existing_id[2:])
+                            if num > max_num:
+                                max_num = num
+                        except ValueError:
+                            continue
+                    device_id = f'LC{max_num + 1}'
                 else:
-                    cursor.execute('SELECT COUNT(*) FROM modbus_device')
-                
-                count = cursor.fetchone()[0]
-                device_id = str(count + 1)
+                    cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
+                    existing_ids = [r[0] for r in cursor.fetchall()]
+                    max_num = 0
+                    for existing_id in existing_ids:
+                        try:
+                            num = int(existing_id[2:])
+                            if num > max_num:
+                                max_num = num
+                        except ValueError:
+                            continue
+                    device_id = f'MB{max_num + 1}'
                 
                 if device_type.lower() == 'loadcell':
                     # Import Loadcell device
@@ -1190,10 +1353,20 @@ async def import_devices_csv(request):
         conn.commit()
         conn.close()
         
+        message_parts = []
+        if imported_count > 0:
+            message_parts.append(f'Successfully imported {imported_count} device(s)')
+        if replaced_count > 0:
+            message_parts.append(f'Replaced {replaced_count} existing device(s)')
+        if skipped_count > 0:
+            message_parts.append(f'Skipped {skipped_count} duplicate(s)')
+        
         response_data = {
             'success': True,
-            'message': f'Successfully imported {imported_count} device(s)',
+            'message': ', '.join(message_parts) if message_parts else 'No devices imported',
             'imported_count': imported_count,
+            'replaced_count': replaced_count,
+            'skipped_count': skipped_count,
             'errors': errors
         }
         
@@ -1201,6 +1374,8 @@ async def import_devices_csv(request):
         
     except Exception as e:
         print(f"Error importing devices: {e}")
+        import traceback
+        traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
 
 async def download_csv_template(request):

@@ -1233,7 +1233,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     
                     // Fill common fields
                     document.getElementById('deviceNameInput').value = device.name || '';
-                    document.getElementById('deviceGroupSelect').value = device.group || '';
+                    // FIXED: Use group_id instead of group name to properly select the group
+                    document.getElementById('deviceGroupSelect').value = device.group_id || '';
                     
                     // Determine device type from protocol and device_type
                     let deviceTypeValue = 'modbus-rtu';
@@ -1485,7 +1486,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             }
             
             try {
-                showNotification('Importing devices...', 'info');
+                showNotification('Checking for duplicates...', 'info');
                 
                 // Show import status
                 const statusDiv = document.getElementById('importStatus');
@@ -1495,7 +1496,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 
                 if (statusDiv) {
                     statusDiv.classList.remove('hidden');
-                    statusText.textContent = 'Importing...';
+                    statusText.textContent = 'Checking...';
                     statusCount.textContent = '0/0 devices';
                     progressBar.style.width = '0%';
                 }
@@ -1504,7 +1505,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                // Upload file
+                // First upload to check for duplicates
                 const response = await fetch('/api/devices/import/csv', {
                     method: 'POST',
                     body: formData
@@ -1512,53 +1513,165 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                 
                 const result = await response.json();
                 
-                if (response.ok && result.success) {
-                    // Update progress
-                    if (progressBar) {
-                        progressBar.style.width = '100%';
-                    }
-                    if (statusText) {
-                        statusText.textContent = 'Import Complete';
-                    }
-                    if (statusCount) {
-                        statusCount.textContent = `${result.imported_count} devices imported`;
-                    }
+                // Check if duplicates were found
+                if (result.requires_confirmation && result.duplicates && result.duplicates.length > 0) {
+                    // Show confirmation dialog
+                    const action = await showDuplicateConfirmation(result.duplicates, result.new_devices_count);
                     
-                    // Show success message
-                    let message = `Successfully imported ${result.imported_count} device(s)`;
-                    if (result.errors && result.errors.length > 0) {
-                        message += `\nWarnings: ${result.errors.length} row(s) had errors`;
-                        console.warn('Import errors:', result.errors);
+                    if (action === 'cancel') {
+                        showNotification('Import cancelled', 'info');
+                        if (statusDiv) statusDiv.classList.add('hidden');
+                        return;
                     }
                     
-                    showNotification(message, 'success', 5000);
+                    // Re-upload with user's choice
+                    const formData2 = new FormData();
+                    formData2.append('file', file);
                     
-                    // Refresh data to show imported devices
-                    await refreshData();
+                    const confirmUrl = action === 'skip' 
+                        ? '/api/devices/import/csv?skip_existing=true'
+                        : '/api/devices/import/csv?replace_existing=true';
                     
-                    // Clear file input
-                    fileInput.value = '';
+                    statusText.textContent = 'Importing...';
                     
-                    // Hide status after delay
-                    setTimeout(() => {
-                        if (statusDiv) {
-                            statusDiv.classList.add('hidden');
-                        }
-                    }, 3000);
+                    const response2 = await fetch(confirmUrl, {
+                        method: 'POST',
+                        body: formData2
+                    });
                     
+                    const result2 = await response2.json();
+                    
+                    if (response2.ok && result2.success) {
+                        handleImportSuccess(result2, fileInput, statusDiv, statusText, statusCount, progressBar);
+                    } else {
+                        throw new Error(result2.error || 'Import failed');
+                    }
+                } else if (response.ok && result.success) {
+                    // No duplicates, import succeeded
+                    handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
                 } else {
                     throw new Error(result.error || 'Import failed');
                 }
                 
             } catch (error) {
                 console.error('Import error:', error);
-                showNotification('Failed to import devices: ' + error.message, 'error');
+                showNotification(`Import failed: ${error.message}`, 'error');
                 
                 const statusDiv = document.getElementById('importStatus');
                 if (statusDiv) {
                     statusDiv.classList.add('hidden');
                 }
             }
+        }
+        
+        function handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar) {
+            // Update progress
+            if (progressBar) {
+                progressBar.style.width = '100%';
+            }
+            if (statusText) {
+                statusText.textContent = 'Import Complete';
+            }
+            if (statusCount) {
+                let countText = '';
+                if (result.imported_count > 0) countText += `${result.imported_count} imported`;
+                if (result.replaced_count > 0) countText += `, ${result.replaced_count} replaced`;
+                if (result.skipped_count > 0) countText += `, ${result.skipped_count} skipped`;
+                statusCount.textContent = countText || '0 devices';
+            }
+            
+            // Show success message
+            let message = result.message;
+            if (result.errors && result.errors.length > 0) {
+                message += `\nWarnings: ${result.errors.length} row(s) had errors`;
+                console.warn('Import errors:', result.errors);
+            }
+            
+            showNotification(message, 'success', 5000);
+            
+            // Refresh data to show imported devices
+            refreshData();
+            
+            // Clear file input
+            if (fileInput) fileInput.value = '';
+            
+            // Hide status after delay
+            setTimeout(() => {
+                if (statusDiv) {
+                    statusDiv.classList.add('hidden');
+                }
+            }, 3000);
+        }
+        
+        function showDuplicateConfirmation(duplicates, newDevicesCount) {
+            return new Promise((resolve) => {
+                const duplicateNames = duplicates.map(d => `• ${d.name} (${d.type})`).slice(0, 10).join('\n');
+                const moreText = duplicates.length > 10 ? `\n... and ${duplicates.length - 10} more` : '';
+                
+                const message = `Found ${duplicates.length} duplicate device(s) with the same name:\n\n${duplicateNames}${moreText}\n\n${newDevicesCount} new device(s) will be imported.\n\nHow would you like to proceed?`;
+                
+                // Create custom confirmation dialog
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10000;
+                `;
+                
+                const dialog = document.createElement('div');
+                dialog.style.cssText = `
+                    background: white;
+                    padding: 24px;
+                    border-radius: 8px;
+                    max-width: 500px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                `;
+                
+                dialog.innerHTML = `
+                    <h3 style="margin: 0 0 16px 0; color: #f59e0b;">⚠️ Duplicate Devices Found</h3>
+                    <p style="white-space: pre-wrap; margin: 16px 0; font-family: monospace; font-size: 13px; color: #666;">${escapeHtml(message)}</p>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button id="replaceBtn" style="flex: 1; padding: 10px 16px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            Replace Existing
+                        </button>
+                        <button id="skipBtn" style="flex: 1; padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            Skip Duplicates
+                        </button>
+                        <button id="cancelBtn" style="flex: 1; padding: 10px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            Cancel Import
+                        </button>
+                    </div>
+                `;
+                
+                overlay.appendChild(dialog);
+                document.body.appendChild(overlay);
+                
+                const replaceBtn = dialog.querySelector('#replaceBtn');
+                const skipBtn = dialog.querySelector('#skipBtn');
+                const cancelBtn = dialog.querySelector('#cancelBtn');
+                
+                replaceBtn.onclick = () => {
+                    document.body.removeChild(overlay);
+                    resolve('replace');
+                };
+                
+                skipBtn.onclick = () => {
+                    document.body.removeChild(overlay);
+                    resolve('skip');
+                };
+                
+                cancelBtn.onclick = () => {
+                    document.body.removeChild(overlay);
+                    resolve('cancel');
+                };
+            });
         }
 
         async function downloadCsvTemplate() {

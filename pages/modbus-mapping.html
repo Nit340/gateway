@@ -1,41 +1,38 @@
-<!-- modbus-mapping.html - This file contains ONLY the content -->
+<!-- modbus-mapping.html -->
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-8">
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-bold text-slate-900">Tag Mapping</h1>
+                <h1 class="text-2xl font-bold text-slate-900">Add Tag</h1>
                 <p class="text-slate-500 text-sm mt-1">Map device registers to tags for data processing</p>
             </div>
             <div class="flex items-center space-x-2">
-                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" onclick="importCSV()">
+                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="importCSVBtn">
                     <i class="fa-solid fa-file-import mr-2 text-sm"></i> Import CSV
                 </button>
-                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" onclick="exportCSV()">
+                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" id="exportCSVBtn">
                     <i class="fa-solid fa-file-export mr-2 text-sm"></i> Export CSV
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Tag Mapping Table -->
+    <!-- TAG MAPPING TABLE -->
     <section class="bg-white rounded-xl shadow-sm border border-border mb-8">
         <div class="p-6 border-b border-border flex items-center justify-between">
             <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                <i class="fa-solid fa-table mr-2 text-primary"></i> 
+                <i class="fa-solid fa-table mr-2 text-primary"></i>
                 Tag Mapping
             </h2>
             <div class="flex items-center space-x-3">
                 <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceFilter">
-                    <option>All Devices</option>
-                    <!-- Devices will be populated dynamically -->
+                    <option value="">All Devices</option>
                 </select>
                 <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center" id="addMappingBtn">
-                    <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Mapping
+                    <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Tag
                 </button>
             </div>
         </div>
-        
-        <!-- Mapping Table -->
         <div class="overflow-x-auto">
             <table class="w-full compact-table">
                 <thead class="bg-slate-50 border-b border-border">
@@ -46,95 +43,61 @@
                         <th class="text-left">Tag</th>
                         <th class="text-left">Type</th>
                         <th class="text-left">Unit</th>
-                        <th class="text-left">Poll</th>
+                        <th class="text-left">Status</th>
                         <th class="text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-border" id="mappingTableBody">
-                    <!-- Populated by JS -->
-                </tbody>
+                <tbody class="divide-y divide-border" id="mappingTableBody"></tbody>
             </table>
         </div>
-        
-        <!-- Table Info -->
         <div class="p-4 border-t border-border bg-slate-50 text-sm text-slate-500">
-            Showing <span class="font-medium text-slate-900" id="mappingCount">0</span> mappings
+            Showing <span class="font-medium text-slate-900" id="mappingCount">0</span> tags
         </div>
     </section>
 
-    <!-- Tag Browser - Full Width Section -->
+    <!-- TAG BROWSER -->
     <section class="bg-white rounded-xl shadow-sm border border-border">
         <div class="p-6 border-b border-border flex items-center justify-between">
             <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                <i class="fa-solid fa-tags mr-2 text-primary"></i> 
+                <i class="fa-solid fa-tags mr-2 text-primary"></i>
                 Tag Browser
             </h2>
             <div class="flex items-center space-x-2">
                 <div class="relative">
-                    <input type="text" placeholder="Search tags..." class="pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary w-64" id="tagSearch">
+                    <input type="text" placeholder="Search tags…" class="pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary w-56" id="tagSearch">
                     <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-sm"></i>
                 </div>
-                <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="tagCategoryFilter">
-                    <option value="">All Categories</option>
-                    <option value="Sensors">Sensors</option>
-                    <option value="Motor">Motor</option>
-                    <option value="Safety">Safety</option>
-                    <option value="Diagnostic">Diagnostic</option>
-                    <option value="Load Monitoring">Load Monitoring</option>
-                    <option value="Position Tracking">Position Tracking</option>
-                    <option value="Status">Status</option>
-                    <option value="Configuration">Configuration</option>
-                </select>
                 <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="tagDeviceFilter">
                     <option value="">All Devices</option>
-                    <!-- Devices will be populated dynamically -->
                 </select>
             </div>
         </div>
-        
         <div class="p-6">
-            <!-- Tags Grid -->
-            <div class="tags-grid" id="tagsList">
-                <!-- Populated by JS -->
-            </div>
-            
-            <!-- Empty State -->
+            <div class="tags-grid" id="tagsList"></div>
             <div id="tagsEmptyState" class="hidden text-center py-12">
                 <i class="fa-solid fa-tags text-4xl text-slate-300 mb-4"></i>
-                <h3 class="text-lg font-medium text-slate-900 mb-2">No tags found</h3>
-                <p class="text-slate-500 mb-4">Create your first tag by clicking "Add Mapping"</p>
-                <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center mx-auto" id="addFirstMappingBtn">
-                    <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Your First Mapping
-                </button>
+                <h3 class="text-lg font-medium text-slate-900 mb-2">No tags yet</h3>
+                <p class="text-slate-500">Click <strong>Add Tag</strong> to create your first tag</p>
             </div>
         </div>
     </section>
 </div>
 
-<!-- Footer with Action Buttons -->
+<!-- FOOTER -->
 <footer id="footer" class="mt-8 pb-8">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
             <div class="text-sm text-slate-500">
                 <p><i class="fa-solid fa-circle-info mr-1"></i> Fields marked with <span class="text-red-500">*</span> are required for gateway operation.</p>
             </div>
-            <div class="flex items-center space-x-4">
-                <button type="button" id="testDeviceBtn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center">
+            <div class="flex items-center space-x-3">
+                <button type="button" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center">
                     <i class="fa-solid fa-bolt mr-2 text-slate-400"></i> Test Device
                 </button>
-                <button type="button" id="validateAllBtn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary flex items-center">
+                <button type="button" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center">
                     <i class="fa-solid fa-check-circle mr-2 text-slate-400"></i> Validate All
                 </button>
-            </div>
-            <div class="flex items-center space-x-3">
-                <button type="button" class="text-slate-500 hover:text-red-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-red-50 transition-colors flex items-center">
-                    <i class="fa-solid fa-rotate-left mr-2"></i> Reset to Default
-                </button>
-                <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                <button type="button" class="text-red-600 hover:text-red-700 hover:bg-red-50 font-medium text-sm px-4 py-2 rounded-lg transition-colors flex items-center">
-                    <i class="fa-solid fa-power-off mr-2"></i> Reboot Gateway
-                </button>
-                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                <div class="h-6 w-px bg-slate-200"></div>
                 <button type="button" id="cancel-btn" class="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm px-5 py-2 rounded-lg shadow-sm transition-colors">
                     Cancel
                 </button>
@@ -146,853 +109,105 @@
     </div>
 </footer>
 
-<!-- Edit Mapping Modal -->
-<div class="modal-overlay" id="editMappingModal">
-    <div class="modal">
+
+<!-- ======================================================================
+     ADD TAG MODAL
+     Step 1 → Device selection list
+     Step 2a → Modbus form (modbus-tcp / modbus-rtu)
+     Step 2b → Load Cell info (read-only, auto tags)
+     ====================================================================== -->
+<div id="addTagModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:10px;width:92%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
         <div class="p-5">
+
+            <!-- Header -->
             <div class="flex items-center justify-between mb-5">
                 <h2 class="text-base font-semibold text-slate-800">
-                    <span id="modalTitle">Add New Mapping</span>
+                    <i class="fa-solid fa-tag mr-2 text-blue-600"></i> Add Tag
                 </h2>
-                <button class="text-slate-400 hover:text-slate-600" id="closeEditMappingModal">
-                    <i class="fa-solid fa-xmark text-base"></i>
+                <button class="text-slate-400 hover:text-slate-600 text-lg leading-none" id="closeAddTagModal">
+                    <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            
-            <!-- Step Indicator -->
-            <div class="step-indicator mb-6">
-                <div class="step">
-                    <div class="step-circle active" id="step1">1</div>
-                    <div class="step-label active">Device & Address</div>
-                </div>
-                <div class="step-line"></div>
-                <div class="step">
-                    <div class="step-circle inactive" id="step2">2</div>
-                    <div class="step-label">Data Type</div>
-                </div>
-                <div class="step-line"></div>
-                <div class="step">
-                    <div class="step-circle inactive" id="step3">3</div>
-                    <div class="step-label">Tag Definition</div>
-                </div>
-            </div>
-            
-            <!-- Device Selection (Always visible) -->
-            <div class="mb-5 p-3 bg-slate-50 rounded-lg text-sm">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <div class="text-xs text-slate-600 mb-1">Selected Device</div>
-                        <div class="text-sm font-medium text-slate-900" id="mappingDeviceName">-</div>
-                    </div>
-                    <div>
-                        <div class="text-xs text-slate-600 mb-1">Protocol</div>
-                        <div class="text-sm" id="mappingProtocol">-</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Protocol-specific tabs (Will be dynamically loaded based on device protocol) -->
-            <div class="tab-container mb-5" id="protocolTabsContainer">
-                <!-- Tabs will be dynamically loaded here -->
-            </div>
-            
-            <!-- Dynamic Form Content -->
-            <div id="modalContent">
-                <!-- Step 1: Address Configuration -->
-                <div class="dynamic-section active" id="step1-content">
-                    <div class="space-y-4">
-                        <div>
-                            <h3 class="text-xs font-semibold text-slate-900 mb-2">Address Configuration</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div id="address-type-container">
-                                    <!-- Dynamically loaded based on protocol -->
-                                </div>
-                                <div id="address-value-container">
-                                    <!-- Dynamically loaded -->
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Protocol-specific fields -->
-                        <div id="protocol-specific-fields">
-                            <!-- Dynamically loaded -->
-                        </div>
-                        
-                        <!-- Next button -->
-                        <div class="mt-6 pt-4 border-t border-slate-200 flex justify-end">
-                            <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="nextStep1Btn">
-                                Next: Data Type <i class="fa-solid fa-arrow-right ml-1"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Step 2: Data Type Configuration -->
-                <div class="dynamic-section" id="step2-content">
-                    <div class="space-y-4">
-                        <div>
-                            <h3 class="text-xs font-semibold text-slate-900 mb-2">Data Type & Decoding</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Data Type</label>
-                                    <select class="w-full compact-select bg-white" id="mappingDataType">
-                                        <option value="INT16">INT16 (16-bit signed)</option>
-                                        <option value="UINT16">UINT16 (16-bit unsigned)</option>
-                                        <option value="INT32">INT32 (32-bit signed)</option>
-                                        <option value="UINT32">UINT32 (32-bit unsigned)</option>
-                                        <option value="FLOAT32">FLOAT32 (32-bit float)</option>
-                                        <option value="FLOAT64">FLOAT64 (64-bit float)</option>
-                                        <option value="BOOL">BOOL (1-bit boolean)</option>
-                                        <option value="BYTE">BYTE (8-bit)</option>
-                                        <option value="STRING">STRING (ASCII)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Endianness</label>
-                                    <select class="w-full compact-select bg-white" id="mappingEndianness">
-                                        <option value="big-endian">Big Endian (ABCD)</option>
-                                        <option value="little-endian">Little Endian (DCBA)</option>
-                                        <option value="big-endian-byte-swap">Big Endian Byte Swap (BADC)</option>
-                                        <option value="little-endian-byte-swap">Little Endian Byte Swap (CDAB)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Dynamic data type options -->
-                        <div id="data-type-options">
-                            <!-- Will be populated based on data type selection -->
-                        </div>
-                        
-                        <!-- Navigation buttons -->
-                        <div class="mt-6 pt-4 border-t border-slate-200 flex justify-between">
-                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="prevStep2Btn">
-                                <i class="fa-solid fa-arrow-left mr-1"></i> Back
-                            </button>
-                            <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="nextStep2Btn">
-                                Next: Tag Definition <i class="fa-solid fa-arrow-right ml-1"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Step 3: Tag Definition -->
-                <div class="dynamic-section" id="step3-content">
-                    <div class="space-y-4">
-                        <div>
-                            <h3 class="text-xs font-semibold text-slate-900 mb-2">Tag Definition</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Tag Name *</label>
-                                    <input type="text" class="w-full compact-input" placeholder="e.g., Hoist_Load" id="mappingTagName">
-                                    <div class="text-xs text-slate-500 mt-1">Use underscores, no spaces</div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Engineering Unit</label>
-                                    <select class="w-full compact-select bg-white" id="mappingUnit">
-                                        <option value="">None</option>
-                                        <optgroup label="Weight">
-                                            <option value="tons">tons</option>
-                                            <option value="kg">kg</option>
-                                            <option value="lbs">lbs</option>
-                                        </optgroup>
-                                        <optgroup label="Temperature">
-                                            <option value="°C">°C</option>
-                                            <option value="°F">°F</option>
-                                            <option value="K">K</option>
-                                        </optgroup>
-                                        <optgroup label="Speed">
-                                            <option value="m/s">m/s</option>
-                                            <option value="km/h">km/h</option>
-                                            <option value="RPM">RPM</option>
-                                        </optgroup>
-                                        <optgroup label="Pressure">
-                                            <option value="PSI">PSI</option>
-                                            <option value="bar">bar</option>
-                                            <option value="kPa">kPa</option>
-                                        </optgroup>
-                                        <optgroup label="Angle">
-                                            <option value="degrees">degrees</option>
-                                            <option value="radians">radians</option>
-                                        </optgroup>
-                                        <optgroup label="Other">
-                                            <option value="%">%</option>
-                                            <option value="V">Volts</option>
-                                            <option value="A">Amps</option>
-                                            <option value="Hz">Hz</option>
-                                            <option value="flag">Flag</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Description</label>
-                            <textarea class="w-full compact-input h-16" placeholder="Description of this measurement..." id="mappingDescription"></textarea>
-                        </div>
-                        
-                        <!-- Scaling -->
-                        <div>
-                            <h3 class="text-xs font-semibold text-slate-900 mb-2">Scaling & Transformation</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Scale Factor</label>
-                                    <input type="number" step="0.001" value="1" class="w-full compact-input" id="mappingScale">
-                                    <div class="text-xs text-slate-500 mt-1">Raw value × scale</div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Offset</label>
-                                    <input type="number" step="0.01" value="0" class="w-full compact-input" id="mappingOffset">
-                                    <div class="text-xs text-slate-500 mt-1">(Raw × scale) + offset</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Polling & Category -->
-                        <div>
-                            <h3 class="text-xs font-semibold text-slate-900 mb-2">Polling & Category</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Poll Interval (ms)</label>
-                                    <div class="flex items-center space-x-2">
-                                        <select class="flex-1 compact-select bg-white" id="mappingPollPreset">
-                                            <option value="100">Fast (100ms)</option>
-                                            <option value="200" selected>Standard (200ms)</option>
-                                            <option value="500">Medium (500ms)</option>
-                                            <option value="1000">Slow (1s)</option>
-                                            <option value="5000">Very Slow (5s)</option>
-                                            <option value="custom">Custom...</option>
-                                        </select>
-                                        <input type="number" value="200" class="w-20 compact-input" id="mappingPollInterval" style="display: none;">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-700 mb-1">Category</label>
-                                    <select class="w-full compact-select bg-white" id="mappingCategory">
-                                        <option value="Sensors">Sensors</option>
-                                        <option value="Motor">Motor</option>
-                                        <option value="Safety">Safety</option>
-                                        <option value="Diagnostic">Diagnostic</option>
-                                        <option value="Load Monitoring">Load Monitoring</option>
-                                        <option value="Position Tracking">Position Tracking</option>
-                                        <option value="Status">Status</option>
-                                        <option value="Configuration">Configuration</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Validation (optional) -->
-                        <div class="collapse-section">
-                            <div class="flex items-center justify-between cursor-pointer" onclick="toggleSection('validation-section')">
-                                <h3 class="text-xs font-semibold text-slate-900">Validation & Alarms (Optional)</h3>
-                                <i class="fa-solid fa-chevron-down text-xs text-slate-400" id="validation-chevron"></i>
-                            </div>
-                            <div id="validation-section" class="mt-3 space-y-3 hidden">
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Min Valid Value</label>
-                                        <input type="number" class="w-full compact-input" placeholder="Minimum" id="mappingMinValue">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Max Valid Value</label>
-                                        <input type="number" class="w-full compact-input" placeholder="Maximum" id="mappingMaxValue">
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Warning Threshold</label>
-                                        <input type="number" class="w-full compact-input" placeholder="Warning level" id="mappingWarning">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-700 mb-1">Alarm Threshold</label>
-                                        <input type="number" class="w-full compact-input" placeholder="Alarm level" id="mappingAlarm">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Navigation buttons -->
-                        <div class="mt-6 pt-4 border-t border-slate-200 flex justify-between">
-                            <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="prevStep3Btn">
-                                <i class="fa-solid fa-arrow-left mr-1"></i> Back
-                            </button>
-                            <div class="flex space-x-2">
-                                <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelEditMapping">
-                                    Cancel
-                                </button>
-                                <button class="compact-button bg-primary hover:bg-primaryHover text-white" id="saveMappingBtn">
-                                    <i class="fa-solid fa-save mr-1"></i> Save Mapping
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<style>
-    /* Protocol Mapping specific styles */
-.compact-table {
-    font-size: 12px;
-}
 
-.compact-table th {
-    padding: 8px 12px;
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.compact-table td {
-    padding: 8px 12px;
-    font-size: 12px;
-}
-
-.protocol-badge {
-    font-size: 9px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    font-weight: 600;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.protocol-badge.modbus {
-    background: #EFF6FF;
-    color: #2563EB;
-    border: 1px solid #BFDBFE;
-}
-
-.protocol-badge.can {
-    background: #FEF3C7;
-    color: #D97706;
-    border: 1px solid #FDE68A;
-}
-
-.protocol-badge.ethernet {
-    background: #F3E8FF;
-    color: #7C3AED;
-    border: 1px solid #E9D5FF;
-}
-
-.protocol-badge.serial {
-    background: #DCFCE7;
-    color: #166534;
-    border: 1px solid #BBF7D0;
-}
-
-.data-type-badge {
-    font-size: 9px;
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.data-type-badge.int16 {
-    background: #DBEAFE;
-    color: #1E40AF;
-}
-
-.data-type-badge.int32 {
-    background: #BFDBFE;
-    color: #1E3A8A;
-}
-
-.data-type-badge.float32 {
-    background: #F3E8FF;
-    color: #5B21B6;
-}
-
-.data-type-badge.uint16 {
-    background: #DCFCE7;
-    color: #166534;
-}
-
-.data-type-badge.bool {
-    background: #FEF3C7;
-    color: #92400E;
-}
-
-.device-badge {
-    font-size: 9px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    font-weight: 600;
-    background: #F1F5F9;
-    color: #475569;
-    border: 1px solid #CBD5E1;
-    white-space: nowrap;
-}
-
-.status-indicator {
-    display: inline-flex;
-    align-items: center;
-    font-size: 12px;
-}
-
-.status-indicator.online::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #10B981;
-    margin-right: 4px;
-    animation: pulse 2s infinite;
-}
-
-.status-indicator.offline::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #EF4444;
-    margin-right: 4px;
-}
-
-.status-indicator.warning::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #F59E0B;
-    margin-right: 4px;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-.tag-card {
-    padding: 12px;
-    border-radius: 6px;
-    background: white;
-    border: 1px solid #E2E8F0;
-    font-size: 13px;
-    transition: all 0.2s;
-}
-
-.tag-card:hover {
-    border-color: #2563EB;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
-}
-
-.modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0,0,0,0.5);
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal-overlay.active {
-    display: flex;
-}
-
-.modal {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-    width: 90%;
-    max-width: 550px;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.dynamic-section {
-    display: none;
-}
-
-.dynamic-section.active {
-    display: block;
-}
-
-.compact-input {
-    padding: 6px 10px;
-    font-size: 13px;
-    border-radius: 6px;
-    border: 1px solid #E2E8F0;
-}
-
-.compact-input:focus {
-    outline: none;
-    border-color: #2563EB;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-}
-
-.compact-select {
-    padding: 6px 10px;
-    font-size: 13px;
-    border-radius: 6px;
-    border: 1px solid #E2E8F0;
-}
-
-.compact-select:focus {
-    outline: none;
-    border-color: #2563EB;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-}
-
-.compact-button {
-    padding: 6px 12px;
-    font-size: 13px;
-    border-radius: 6px;
-}
-
-.tab-container {
-    border-bottom: 1px solid #E2E8F0;
-}
-
-.tab {
-    padding: 8px 16px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #64748B;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.tab:hover {
-    color: #2563EB;
-}
-
-.tab.active {
-    color: #2563EB;
-    border-bottom-color: #2563EB;
-}
-
-.step-indicator {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 16px;
-}
-
-.step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-
-.step-circle {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-.step-circle.active {
-    background: #2563EB;
-    color: white;
-}
-
-.step-circle.inactive {
-    background: #E2E8F0;
-    color: #64748B;
-}
-
-.step-line {
-    height: 2px;
-    width: 40px;
-    background: #E2E8F0;
-}
-
-.step-label {
-    font-size: 10px;
-    color: #64748B;
-    white-space: nowrap;
-}
-
-.step-label.active {
-    color: #2563EB;
-    font-weight: 500;
-}
-
-.selected-device-row {
-    background-color: #EFF6FF !important;
-    border-left: 2px solid #2563EB !important;
-}
-
-.tags-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-}
-
-@media (min-width: 1536px) {
-    .tags-grid {
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    }
-}
-
-/* Tag Card Styles */
-.tag-card {
-    padding: 1rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    background: white;
-    transition: all 0.2s;
-}
-
-.tag-card:hover {
-    border-color: #3b82f6;
-    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
-}
-
-.tag-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
-    margin-bottom: 0.75rem;
-}
-
-.tag-card-name {
-    font-weight: 600;
-    color: #1e293b;
-    font-size: 0.875rem;
-}
-
-.tag-card-badge {
-    font-size: 0.625rem;
-    padding: 0.125rem 0.5rem;
-    border-radius: 9999px;
-    font-weight: 500;
-}
-
-.tag-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    font-size: 0.75rem;
-    color: #64748b;
-}
-
-.tag-card-row {
-    display: flex;
-    justify-content: space-between;
-}
-
-.tag-card-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid #e2e8f0;
-}
-
-.modal-sm {
-    max-width: 500px;
-}
-
-.modal-step {
-    display: none;
-}
-
-.modal-step.active {
-    display: block;
-}
-</style>
-
-<!-- Create Tag Modal - Starts with Device Selection -->
-<div class="modal-overlay" id="createTagModal">
-    <div class="modal">
-        <div class="p-5">
-            <!-- Modal Header -->
-            <div class="flex items-center justify-between mb-5">
-                <h2 class="text-base font-semibold text-slate-800">
-                    <i class="fa-solid fa-plus mr-2 text-blue-600"></i>
-                    <span id="createTagModalTitle">Create New Tag</span>
-                </h2>
-                <button class="text-slate-400 hover:text-slate-600" id="closeCreateTagModal">
-                    <i class="fa-solid fa-xmark text-base"></i>
-                </button>
-            </div>
-            
-            <!-- Step 1: Device Selection -->
-            <div class="modal-step active" id="deviceSelectionStep">
+            <!-- STEP 1: Device selection -->
+            <div id="stepDeviceSelect">
                 <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
                     <i class="fa-solid fa-info-circle mr-2"></i>
-                    First, select the device you want to create a tag for
+                    Select the device you want to add a tag to
                 </div>
-                
-                <div class="mb-5">
-                    <label class="block text-xs font-medium text-slate-700 mb-2">
-                        Select Device <span class="text-red-500">*</span>
-                    </label>
-                    <select class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm" id="modalDeviceSelect">
-                        <option value="">-- Choose a device --</option>
-                        <!-- Populated dynamically -->
-                    </select>
+
+                <div id="modalDeviceList" class="space-y-2 max-h-64 overflow-y-auto mb-4 pr-0.5">
+                    <!-- Built by JS -->
                 </div>
-                
-                <!-- Device Info (shown when device selected) -->
-                <div class="hidden mb-5 p-4 bg-slate-50 rounded-lg border border-slate-200" id="modalDeviceInfo">
-                    <div class="grid grid-cols-2 gap-4 text-sm">
+
+                <div id="modalSelectedPreview" class="hidden mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-xs text-slate-500 mb-1">Device Type</div>
-                            <div class="font-medium text-slate-900" id="modalDeviceType">-</div>
+                            <div class="text-xs text-slate-500 mb-0.5">Selected</div>
+                            <div class="font-semibold text-slate-900" id="previewDeviceName">—</div>
                         </div>
-                        <div>
-                            <div class="text-xs text-slate-500 mb-1">Protocol</div>
-                            <div class="font-medium text-slate-900" id="modalDeviceProtocol">-</div>
-                        </div>
-                    </div>
-                    <div class="mt-3 text-xs text-slate-600" id="modalDeviceHint">
-                        <!-- Dynamic hint based on device type -->
+                        <div id="previewDeviceProtocol"></div>
                     </div>
                 </div>
-                
-                <!-- Footer -->
+
                 <div class="flex justify-end space-x-2 pt-4 border-t border-slate-200">
-                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelDeviceSelection">
-                        Cancel
-                    </button>
-                    <button class="compact-button bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed" id="proceedToForm" disabled>
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelAddTag">Cancel</button>
+                    <button type="button" class="compact-button bg-blue-600 text-white" id="proceedToTagForm" disabled style="opacity:0.4;cursor:not-allowed;">
                         Next: Configure Tag <i class="fa-solid fa-arrow-right ml-1"></i>
                     </button>
                 </div>
             </div>
-            
-            <!-- Step 2a: Load Cell Form (Read-Only Info) -->
-            <div class="modal-step" id="loadcellFormStep">
-                <!-- Device Info -->
-                <div class="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                    <div class="text-xs text-green-700 mb-1">Selected Device</div>
-                    <div class="text-sm font-medium text-green-900" id="loadcellFormDeviceName">-</div>
-                </div>
-                
-                <!-- Info Message -->
-                <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
-                    <i class="fa-solid fa-info-circle mr-2"></i>
-                    Load cell tags are auto-created when device is added. These values cannot be edited.
-                </div>
-                
-                <!-- Tag Name -->
-                <div class="mb-4">
-                    <label class="block text-xs font-medium text-slate-700 mb-1.5">Tag Name</label>
-                    <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-slate-50" 
-                           id="loadcellFormTagName" value="load" readonly>
-                    <p class="text-xs text-slate-500 mt-1">Default tags: load, capacity</p>
-                </div>
-                
-                <!-- Current Values (Read-only) -->
-                <div class="grid grid-cols-2 gap-3 mb-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Data Type</label>
-                        <div class="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded border border-slate-200">FLOAT32</div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Unit</label>
-                        <div class="text-sm font-medium text-slate-900 bg-slate-50 px-3 py-2 rounded border border-slate-200" id="loadcellFormUnit">kg</div>
-                    </div>
-                </div>
-                
-                <!-- Footer -->
-                <div class="flex justify-between space-x-2 pt-4 border-t border-slate-200">
-                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="backFromLoadcell">
-                        <i class="fa-solid fa-arrow-left mr-1"></i> Back
-                    </button>
-                    <button class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="closeFromLoadcell">
-                        Close
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Step 2b: Modbus Form (Full Configuration) -->
-            <div class="modal-step" id="modbusFormStep">
-                <!-- Device Info -->
+
+            <!-- STEP 2A: Modbus form -->
+            <div id="stepModbusForm" style="display:none;">
                 <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div class="grid grid-cols-2 gap-3">
+                    <div class="flex items-center justify-between text-sm">
                         <div>
-                            <div class="text-xs text-blue-700 mb-1">Selected Device</div>
-                            <div class="text-sm font-medium text-blue-900" id="modbusFormDeviceName">-</div>
+                            <div class="text-xs text-blue-700 mb-0.5">Device</div>
+                            <div class="font-semibold text-blue-900" id="modbusCtxDevice">—</div>
                         </div>
-                        <div>
-                            <div class="text-xs text-blue-700 mb-1">Protocol</div>
-                            <div class="text-sm font-medium text-blue-900" id="modbusFormProtocol">-</div>
+                        <div class="text-right">
+                            <div class="text-xs text-blue-700 mb-0.5">Protocol</div>
+                            <div class="font-semibold text-blue-900" id="modbusCtxProtocol">—</div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Register Type Auto-Detection Info -->
-                <div class="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm text-amber-800">
-                    <i class="fa-solid fa-lightbulb mr-2"></i>
-                    <strong>Auto-Detection:</strong> Register type will be detected from the address you enter
+
+                <div class="mb-4 p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-800">
+                    <i class="fa-solid fa-lightbulb mr-1"></i>
+                    <strong>Auto-Detection:</strong> Register type is detected from the address you enter.
                 </div>
-                
-                <form id="modbusCreateForm">
-                    <!-- Tag Name -->
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-slate-700 mb-1.5">
-                            Tag Name <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" 
-                               id="modbusFormTagName" placeholder="e.g., temperature_sensor_1" required>
+
+                <form id="modbusTagForm" novalidate>
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Tag Name <span class="text-red-500">*</span></label>
+                        <input type="text" id="mbTagName" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., temperature_sensor_1" required>
                     </div>
-                    
-                    <!-- Register Address & Type Detection -->
-                    <div class="grid grid-cols-2 gap-3 mb-4">
+
+                    <div class="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">
-                                Register Address <span class="text-red-500">*</span>
-                            </label>
-                            <input type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" 
-                                   id="modbusFormAddress" placeholder="0-65535" min="0" max="65535" required>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Register Address <span class="text-red-500">*</span></label>
+                            <input type="number" id="mbRegAddress" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="0 – 65535" min="0" max="65535" required>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">
-                                Detected Type <i class="fa-solid fa-wand-magic-sparkles text-xs text-blue-500"></i>
-                            </label>
-                            <div class="px-3 py-2 text-sm bg-slate-100 rounded-lg font-medium text-slate-700 border border-slate-300" id="modbusFormDetectedType">
-                                Enter address...
-                            </div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Detected Type <i class="fa-solid fa-wand-magic-sparkles text-xs text-blue-500"></i></label>
+                            <div id="mbDetectedType" class="px-3 py-2 text-xs bg-slate-100 rounded-lg font-medium border border-slate-200" style="min-height:38px;display:flex;align-items:center;color:#94a3b8;">Enter address…</div>
                         </div>
                     </div>
-                    
-                    <!-- Register Type Reference Table -->
-                    <div class="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <div class="text-xs font-semibold text-slate-700 mb-2 flex items-center">
-                            <i class="fa-solid fa-table mr-2"></i> Register Type Reference
-                        </div>
-                        <div class="grid grid-cols-3 gap-2 text-xs">
-                            <div class="bg-white p-2 rounded border border-slate-200">
-                                <div class="font-medium text-blue-700">Coil (R/W)</div>
-                                <div class="text-slate-600">0 - 9999</div>
-                            </div>
-                            <div class="bg-white p-2 rounded border border-slate-200">
-                                <div class="font-medium text-green-700">Discrete Input (R)</div>
-                                <div class="text-slate-600">10000 - 19999</div>
-                            </div>
-                            <div class="bg-white p-2 rounded border border-slate-200">
-                                <div class="font-medium text-purple-700">Holding Register (R/W)</div>
-                                <div class="text-slate-600">40000 - 49999</div>
-                            </div>
+
+                    <div class="mb-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+                        <div class="font-semibold text-slate-600 mb-1.5"><i class="fa-solid fa-table mr-1"></i> Register Type Reference</div>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <div class="bg-white p-1.5 rounded border border-slate-200"><div class="font-medium text-blue-700">Coil (R/W)</div><div class="text-slate-500">0–9999</div></div>
+                            <div class="bg-white p-1.5 rounded border border-slate-200"><div class="font-medium text-green-700">Discrete (R)</div><div class="text-slate-500">10000–19999</div></div>
+                            <div class="bg-white p-1.5 rounded border border-slate-200"><div class="font-medium text-purple-700">Holding (R/W)</div><div class="text-slate-500">40000–49999</div></div>
                         </div>
                     </div>
-                    
-                    <!-- Data Type -->
-                    <div class="mb-4">
-                        <label class="block text-xs font-medium text-slate-700 mb-1.5">
-                            Data Type <span class="text-red-500">*</span>
-                        </label>
-                        <select class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="modbusFormDataType" required>
+
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Data Type <span class="text-red-500">*</span></label>
+                        <select id="mbDataType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" required>
                             <option value="int16">INT16 (16-bit signed)</option>
                             <option value="uint16">UINT16 (16-bit unsigned)</option>
                             <option value="int32">INT32 (32-bit signed)</option>
@@ -1001,69 +216,291 @@
                             <option value="bool">BOOL (boolean)</option>
                         </select>
                     </div>
-                    
-                    <!-- Byte/Word Order -->
-                    <div class="grid grid-cols-2 gap-3 mb-4">
+
+                    <div class="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Byte Order</label>
-                            <select class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white" id="modbusFormByteOrder">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Byte Order</label>
+                            <select id="mbByteOrder" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
                                 <option value="big">Big Endian</option>
                                 <option value="little">Little Endian</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Word Order</label>
-                            <select class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white" id="modbusFormWordOrder">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Word Order</label>
+                            <select id="mbWordOrder" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
                                 <option value="big">Big Endian</option>
                                 <option value="little">Little Endian</option>
                             </select>
                         </div>
                     </div>
-                    
-                    <!-- Scale & Offset -->
-                    <div class="grid grid-cols-2 gap-3 mb-4">
+
+                    <div class="grid grid-cols-2 gap-3 mb-3">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Scale Factor</label>
-                            <input type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
-                                   id="modbusFormScale" value="1.0" step="0.001">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Scale Factor</label>
+                            <input type="number" id="mbScale" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" value="1.0" step="0.001">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Offset</label>
-                            <input type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
-                                   id="modbusFormOffset" value="0.0" step="0.01">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Offset</label>
+                            <input type="number" id="mbOffset" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" value="0.0" step="0.01">
                         </div>
                     </div>
-                    
-                    <!-- Unit & Description -->
+
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Unit</label>
-                            <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
-                                   id="modbusFormUnit" placeholder="e.g., °C, kg, RPM">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
+                            <input type="text" id="mbUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="°C, kg, RPM…">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1.5">Description</label>
-                            <input type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" 
-                                   id="modbusFormDescription" placeholder="Tag description">
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Description</label>
+                            <input type="text" id="mbDescription" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="Tag description">
                         </div>
                     </div>
-                    
-                    <!-- Footer -->
+
                     <div class="flex justify-between items-center pt-4 border-t border-slate-200">
-                        <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="backFromModbus">
+                        <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="modbusFormBack">
                             <i class="fa-solid fa-arrow-left mr-1"></i> Back
                         </button>
                         <div class="flex space-x-2">
-                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="cancelFromModbus">
-                                Cancel
-                            </button>
+                            <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="modbusFormCancel">Cancel</button>
                             <button type="submit" class="compact-button bg-blue-600 hover:bg-blue-700 text-white">
-                                <i class="fa-solid fa-check mr-2"></i> Create Tag
+                                <i class="fa-solid fa-check mr-1"></i> Create Tag
                             </button>
                         </div>
                     </div>
                 </form>
             </div>
+
+            <!-- STEP 2B: Load Cell info (read-only) -->
+            <div id="stepLoadcellInfo" style="display:none;">
+                <div class="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div class="text-xs text-green-700 mb-0.5">Selected Device</div>
+                    <div class="text-sm font-semibold text-green-900" id="lcCtxDevice">—</div>
+                </div>
+
+                <div class="mb-5 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+                    <i class="fa-solid fa-info-circle mr-2"></i>
+                    Load cell tags (<strong>load</strong>, <strong>capacity</strong>) are <strong>auto-created</strong> when the device is added and cannot be manually created here.
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-5">
+                    <div class="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                        <div class="text-xs text-slate-500 mb-1">Auto Tag</div>
+                        <div class="font-semibold text-slate-900 text-sm">load</div>
+                        <div class="text-xs text-slate-500 mt-1">FLOAT32 · <span id="lcUnitDisplay">kg</span></div>
+                    </div>
+                    <div class="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                        <div class="text-xs text-slate-500 mb-1">Auto Tag</div>
+                        <div class="font-semibold text-slate-900 text-sm">capacity</div>
+                        <div class="text-xs text-slate-500 mt-1">FLOAT32 · g</div>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="lcFormBack">
+                        <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                    </button>
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="lcFormClose">Close</button>
+                </div>
+            </div>
+
+        </div><!-- /p-5 -->
+    </div>
+</div><!-- /addTagModal -->
+
+
+<!-- ======================================================================
+     EDIT MODBUS TAG MODAL
+     ====================================================================== -->
+<div id="editModbusModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:10px;width:92%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <div class="p-5">
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="text-base font-semibold text-slate-800">
+                    <i class="fa-solid fa-pencil mr-2 text-blue-600"></i> Edit Modbus Tag
+                </h2>
+                <button class="text-slate-400 hover:text-slate-600 text-lg leading-none" id="closeEditModbusModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Device context -->
+            <div class="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div class="flex items-center justify-between text-sm">
+                    <div>
+                        <div class="text-xs text-slate-500 mb-0.5">Device</div>
+                        <div class="font-semibold text-slate-900" id="editMbCtxDevice">—</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
+                        <div id="editMbCtxProtocol">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <form id="editModbusForm" novalidate>
+                <input type="hidden" id="editMbTagId">
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Tag Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="editMbTagName" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Register Address <span class="text-red-500">*</span></label>
+                        <input type="number" id="editMbRegAddress" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" min="0" max="65535" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Detected Type <i class="fa-solid fa-wand-magic-sparkles text-xs text-blue-500"></i></label>
+                        <div id="editMbDetectedType" class="px-3 py-2 text-xs bg-slate-100 rounded-lg font-medium border border-slate-200" style="min-height:38px;display:flex;align-items:center;">—</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Data Type <span class="text-red-500">*</span></label>
+                    <select id="editMbDataType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" required>
+                        <option value="int16">INT16 (16-bit signed)</option>
+                        <option value="uint16">UINT16 (16-bit unsigned)</option>
+                        <option value="int32">INT32 (32-bit signed)</option>
+                        <option value="uint32">UINT32 (32-bit unsigned)</option>
+                        <option value="float32">FLOAT32 (32-bit float)</option>
+                        <option value="bool">BOOL (boolean)</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Byte Order</label>
+                        <select id="editMbByteOrder" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                            <option value="big">Big Endian</option><option value="little">Little Endian</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Word Order</label>
+                        <select id="editMbWordOrder" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                            <option value="big">Big Endian</option><option value="little">Little Endian</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Scale Factor</label>
+                        <input type="number" id="editMbScale" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" step="0.001">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Offset</label>
+                        <input type="number" id="editMbOffset" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" step="0.01">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
+                        <input type="text" id="editMbUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="°C, kg, RPM…">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Description</label>
+                        <input type="text" id="editMbDescription" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg">
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="editModbusCancel">Cancel</button>
+                    <button type="submit" class="compact-button bg-blue-600 hover:bg-blue-700 text-white">
+                        <i class="fa-solid fa-save mr-1"></i> Save Changes
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
-</div>
+</div><!-- /editModbusModal -->
+
+
+<!-- ======================================================================
+     EDIT LOAD CELL TAG MODAL (unit only — read-only info)
+     ====================================================================== -->
+<div id="editLcModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:white;border-radius:10px;width:92%;max-width:440px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <div class="p-5">
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="text-base font-semibold text-slate-800">
+                    <i class="fa-solid fa-scale-balanced mr-2 text-green-600"></i> Load Cell Tag
+                </h2>
+                <button class="text-slate-400 hover:text-slate-600 text-lg leading-none" id="closeEditLcModal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                <div class="text-xs text-green-700 mb-0.5">Device</div>
+                <div class="text-sm font-semibold text-green-900" id="editLcCtxDevice">—</div>
+            </div>
+
+            <form id="editLcForm" novalidate>
+                <input type="hidden" id="editLcTagId">
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Tag Name</label>
+                    <input type="text" id="editLcTagName" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-500" readonly>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Data Type</label>
+                    <div class="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-500" id="editLcDataType">float32</div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
+                    <input type="text" id="editLcUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., kg, g, lbs">
+                </div>
+
+                <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="editLcCancel">Cancel</button>
+                    <button type="submit" class="compact-button bg-green-600 hover:bg-green-700 text-white">
+                        <i class="fa-solid fa-save mr-1"></i> Save Unit
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div><!-- /editLcModal -->
+
+
+<style>
+/* Add Tag / Tag Mapping styles */
+.compact-table { font-size:12px; }
+.compact-table th { padding:8px 12px; font-size:11px; white-space:nowrap; }
+.compact-table td { padding:8px 12px; font-size:12px; }
+
+.protocol-badge {
+    font-size:9px; padding:2px 7px; border-radius:8px;
+    font-weight:600; text-transform:uppercase; white-space:nowrap; display:inline-block;
+}
+.protocol-badge.modbus-tcp { background:#EFF6FF; color:#2563EB; border:1px solid #BFDBFE; }
+.protocol-badge.modbus-rtu { background:#F5F3FF; color:#7C3AED; border:1px solid #DDD6FE; }
+.protocol-badge.loadcell   { background:#F0FDF4; color:#16A34A; border:1px solid #BBF7D0; }
+
+.compact-button {
+    padding:6px 12px; font-size:13px; border-radius:6px; cursor:pointer;
+    display:inline-flex; align-items:center; font-weight:500;
+}
+
+/* Modal device list items */
+.modal-device-item {
+    padding:10px 12px; border:1.5px solid #E2E8F0; border-radius:8px;
+    background:white; cursor:pointer; transition:all 0.15s;
+    display:flex; align-items:center; justify-content:space-between;
+}
+.modal-device-item:hover  { border-color:#3b82f6; background:#F8FAFF; }
+.modal-device-item.active { border-color:#2563EB; background:#EFF6FF; }
+
+.tags-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+.tag-card { padding:1rem; border:1px solid #e2e8f0; border-radius:0.5rem; background:white; transition:all 0.2s; }
+.tag-card:hover { border-color:#3b82f6; box-shadow:0 4px 6px -1px rgba(59,130,246,0.1); }
+.tag-card-header { display:flex; justify-content:space-between; align-items:start; margin-bottom:0.75rem; }
+.tag-card-name { font-weight:600; color:#1e293b; font-size:0.875rem; }
+.tag-card-body { display:flex; flex-direction:column; gap:0.5rem; font-size:0.75rem; color:#64748b; }
+.tag-card-row { display:flex; justify-content:space-between; }
+.tag-card-actions { display:flex; gap:0.5rem; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid #e2e8f0; }
+</style>
