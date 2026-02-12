@@ -43,7 +43,7 @@ async def get_all_devices(request):
             FROM modbus_device m
             LEFT JOIN device_groups g ON m.group_id = g.id
             LEFT JOIN services s ON m.service_id = s.id
-            ORDER BY CAST(m.id AS INTEGER)
+            ORDER BY m.id
         ''')
         
         for row in cursor.fetchall():
@@ -85,7 +85,7 @@ async def get_all_devices(request):
             FROM loadcell_device l
             LEFT JOIN device_groups g ON l.group_id = g.id
             LEFT JOIN services s ON l.service_id = s.id
-            ORDER BY CAST(l.id AS INTEGER)
+            ORDER BY l.id
         ''')
         
         for row in cursor.fetchall():
@@ -322,14 +322,17 @@ async def add_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Generate device ID
+        # Generate device ID with unique prefix to prevent collisions
         if device_type == 'loadcell':
+            # LoadCell devices get LC prefix
             cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+            count = cursor.fetchone()[0]
+            device_id = f'LC{count + 1}'
         else:  # modbus
+            # Modbus devices get MB prefix
             cursor.execute('SELECT COUNT(*) FROM modbus_device')
-        
-        count = cursor.fetchone()[0]
-        device_id = str(count + 1)
+            count = cursor.fetchone()[0]
+            device_id = f'MB{count + 1}'
         
         # Get group_id if group name is provided
         group_id = None
@@ -695,10 +698,10 @@ async def duplicate_device(request):
             # Create dictionary of old device data
             old_device = dict(zip(columns, modbus_row))
             
-            # Generate new device ID
-            cursor.execute('SELECT MAX(CAST(id AS INTEGER)) FROM modbus_device')
-            max_id = cursor.fetchone()[0]
-            new_device_id = str((max_id or 0) + 1)
+            # Generate new device ID with MB prefix
+            cursor.execute('SELECT COUNT(*) FROM modbus_device')
+            count = cursor.fetchone()[0]
+            new_device_id = f'MB{count + 1}'
             
             # Generate new device name
             base_name = old_device['name']
@@ -716,7 +719,8 @@ async def duplicate_device(request):
             if numbers:
                 counter = max(numbers) + 1
             else:
-                counter = len(existing_names) + 1
+                # First duplicate should be -001, not -002
+                counter = 1
             
             new_name = f"{base_name}-{str(counter).zfill(3)}"
             
@@ -784,10 +788,10 @@ async def duplicate_device(request):
                 
                 old_device = dict(zip(columns, loadcell_row))
                 
-                # Generate new device ID
-                cursor.execute('SELECT MAX(CAST(id AS INTEGER)) FROM loadcell_device')
-                max_id = cursor.fetchone()[0]
-                new_device_id = str((max_id or 0) + 1)
+                # Generate new device ID with LC prefix
+                cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+                count = cursor.fetchone()[0]
+                new_device_id = f'LC{count + 1}'
                 
                 # Generate new device name
                 base_name = old_device['name']
@@ -805,7 +809,8 @@ async def duplicate_device(request):
                 if numbers:
                     counter = max(numbers) + 1
                 else:
-                    counter = len(existing_names) + 1
+                    # First duplicate should be -001, not -002
+                    counter = 1
                 
                 new_name = f"{base_name}-{str(counter).zfill(3)}"
                 

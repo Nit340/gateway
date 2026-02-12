@@ -12,7 +12,14 @@ def get_db_connection():
     return conn
 
 def init_database():
-    """Initialize SQLite database with new schema"""
+    """Initialize SQLite database with new schema
+    
+    DEVICE ID SYSTEM:
+    - LoadCell devices use ID prefix: LC1, LC2, LC3, etc.
+    - Modbus devices use ID prefix: MB1, MB2, MB3, etc.
+    - This prevents ID collisions between different device types
+    - IDs are generated in device_management.py during device creation
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -33,6 +40,7 @@ def init_database():
     print("✓ Loadcell_datapoints table (auto-created: load, capacity)")
     print("✓ Dynamic device groups")
     print("✓ Status and last_poll handled via WebSocket real-time only")
+    print("✓ Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
