@@ -293,6 +293,9 @@ class Router {
                 break;
                 
             case 'device-management':
+                // Remove from initialized pages set so it can re-initialize
+                this.initializedPages.delete(page);
+                
                 // Clean up WebSocket
                 if (typeof window.deviceWsConnection !== 'undefined' && window.deviceWsConnection) {
                     try {
@@ -302,9 +305,6 @@ class Router {
                     }
                     window.deviceWsConnection = null;
                 }
-                
-                // Clear global flag
-                delete window.device_management_initialized;
                 
                 // Call cleanup function if it exists
                 if (typeof window.cleanupDeviceManagement === 'function') {
@@ -491,8 +491,8 @@ class Router {
                     if (typeof window.initializeDeviceManagement === 'function') {
                         console.log('Initializing Device Management');
                         window.initializeDeviceManagement();
-                        this.initializedPages.add(page);
-                        window.device_management_initialized = true;
+                        // Let the page manage its own initialization state
+                        // Router should orchestrate, not control
                     } else {
                         console.warn('initializeDeviceManagement function not found');
                     }
@@ -657,7 +657,7 @@ class Router {
             }
             
             this.currentInitializationTimer = null;
-        }, 150); // 150ms delay to ensure DOM is ready
+        }, 250); // 250ms delay to ensure DOM is fully ready and styles applied
     }
     
     cleanupPreviousPage() {

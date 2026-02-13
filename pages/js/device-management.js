@@ -1,19 +1,85 @@
 // device-management.js - Complete Fixed Version with Import/Export, View Details, and Real-time Updates
 
-if (typeof window.deviceManagementLoaded === 'undefined') {
-    window.deviceManagementLoaded = true;
+console.log('🔵 device-management.js file loaded');
+console.log('🔵 Timestamp:', new Date().toISOString());
+
+// NUCLEAR FIX: Force cleanup and complete reload every time
+// This ensures no stale closures or event listeners
+if (typeof window.cleanupDeviceManagement === 'function') {
+    console.log('🧹 Previous instance detected - forcing cleanup');
+    try {
+        window.cleanupDeviceManagement();
+    } catch(e) {
+        console.log('Cleanup error:', e);
+    }
+}
+
+// Always run the module - no guards
+console.log('🟢 Starting fresh module initialization');
+
+(function() {
+    'use strict';
     
-    (function() {
-        'use strict';
+    console.log('🟢 IIFE started - setting up clean module');
         
         window.initializeDeviceManagement = function() {
-            console.log('Device Management page initialized');
-            initDeviceManagementApp();
+            console.log('====================================');
+            console.log('🚀 initializeDeviceManagement called');
+            console.log('- DOM ready state:', document.readyState);
+            console.log('- isInitialized:', isInitialized);
+            console.log('- eventListenersSetup:', eventListenersSetup);
+            console.log('- deviceWsConnection:', deviceWsConnection ? 'exists' : 'null');
+            console.log('- isPageActive:', isPageActive);
+            console.log('====================================');
+            
+            // Ensure DOM is ready
+            if (document.readyState === 'loading') {
+                console.log('⚠️ DOM not ready, waiting...');
+                document.addEventListener('DOMContentLoaded', () => {
+                    console.log('✅ DOM ready, initializing...');
+                    initDeviceManagementApp();
+                });
+            } else {
+                console.log('✅ DOM already ready, initializing immediately');
+                initDeviceManagementApp();
+            }
         };
 
         function initDeviceManagementApp() {
+            console.log('📦 initDeviceManagementApp called');
+            console.log('📦 Checking for required DOM elements...');
+            
+            // Check for critical DOM elements
+            const criticalElements = {
+                'devicesTableBody': document.getElementById('devicesTableBody'),
+                'groupsContainer': document.getElementById('groupsContainer'),
+                'addDevicePanel': document.getElementById('addDevicePanel'),
+                'pageContent': document.getElementById('pageContent')
+            };
+            
+            console.log('📦 Element check:', {
+                'devicesTableBody': criticalElements.devicesTableBody ? '✅' : '❌',
+                'groupsContainer': criticalElements.groupsContainer ? '✅' : '❌',
+                'addDevicePanel': criticalElements.addDevicePanel ? '✅' : '❌',
+                'pageContent': criticalElements.pageContent ? '✅' : '❌'
+            });
+            
+            const missingElements = Object.entries(criticalElements)
+                .filter(([name, el]) => !el)
+                .map(([name]) => name);
+            
+            if (missingElements.length > 0) {
+                console.error('❌ Missing critical DOM elements:', missingElements);
+                console.error('❌ Cannot initialize - HTML not loaded properly!');
+                showNotification('Failed to initialize: Page elements not found', 'error');
+                return;
+            }
+            
+            console.log('📦 About to add styles...');
             addDeviceManagementStyles();
+            console.log('📦 Styles added, calling initApp...');
             initApp();
+            console.log('📦 initDeviceManagementApp completed');
         }
 
         // ==================== STATE ====================
@@ -27,10 +93,34 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         let currentViewingDevice = null;
         let eventListenersSetup = false; // Flag to prevent duplicate listeners
         let isRefreshing = false;
+        let pageUnloadListenersAdded = false; // Flag to prevent duplicate page unload listeners
+        let isInitialized = false; // Internal flag to track if we've actually initialized
+        let isPageActive = false; // Track if we're currently on this page
 
         // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
         let wsConnectionAttempts = 0;
         let wsReconnectTimeout = null;
+        
+        // Function to reset all state variables (called during cleanup)
+        function resetAllState() {
+            console.log('🔄 resetAllState() called');
+            devices = [];
+            groups = [];
+            selectedDeviceId = null;
+            selectedColor = 'blue';
+            isSaving = false;
+            deviceWsConnection = null;
+            currentViewingDeviceId = null;
+            currentViewingDevice = null;
+            eventListenersSetup = false;
+            isRefreshing = false;
+            pageUnloadListenersAdded = false;
+            isInitialized = false;
+            isPageActive = false; // Mark page as inactive
+            wsConnectionAttempts = 0;
+            wsReconnectTimeout = null;
+            console.log('🔄 All state variables reset to defaults');
+        }
 
         // ==================== STYLES ====================
         function addDeviceManagementStyles() {
@@ -258,25 +348,67 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
 
         // ==================== INITIALIZATION ====================
         async function initApp() {
-            console.log('Initializing Device Management...');
+            console.log('⚙️ initApp called');
+            console.log('⚙️ Current state:', {
+                isInitialized,
+                isPageActive,
+                eventListenersSetup,
+                deviceWsConnection: deviceWsConnection ? 'exists' : 'null',
+                devicesCount: devices.length,
+                groupsCount: groups.length
+            });
             
+            // Prevent double initialization using internal flag
+            if (isInitialized) {
+                console.log('⚠️ Already initialized, exiting early');
+                console.log('⚠️ THIS IS THE PROBLEM - Page won\'t initialize!');
+                return;
+            }
+            
+            console.log('✅ Not initialized yet, proceeding...');
+            console.log('⚙️ Setting isPageActive to true');
+            
+            // Mark page as active
+            isPageActive = true;
+            
+            console.log('⚙️ Loading devices...');
             await loadDevices();
+            console.log('⚙️ Devices loaded:', devices.length);
+            
+            console.log('⚙️ Loading groups...');
             await loadGroups();
+            console.log('⚙️ Groups loaded:', groups.length);
+            
+            console.log('⚙️ Rendering devices table...');
             renderDevicesTable();
+            
+            console.log('⚙️ Rendering groups...');
             renderGroups();
+            
+            console.log('⚙️ Setting up event listeners...');
             setupEventListeners();
+            
+            console.log('⚙️ Connecting WebSocket...');
             connectDeviceWebSocket();
             
-            console.log('Device Management initialized successfully');
+            // Set internal flag
+            isInitialized = true;
+            console.log('✅ isInitialized set to true');
             
-            // Register cleanup on page unload
-            window.addEventListener('beforeunload', cleanupWebSocket);
-            window.addEventListener('pagehide', cleanupWebSocket);
+            console.log('✅ Device Management initialized successfully');
             
-            // Also cleanup when navigating away (for SPA behavior)
-            if (typeof window.addEventListener !== 'undefined') {
-                window.addEventListener('popstate', cleanupWebSocket);
+            // Register cleanup on page unload (only once)
+            if (!pageUnloadListenersAdded) {
+                console.log('⚙️ Registering page unload listeners...');
+                window.addEventListener('beforeunload', window.cleanupDeviceManagement);
+                window.addEventListener('pagehide', window.cleanupDeviceManagement);
+                pageUnloadListenersAdded = true;
+                console.log('✅ Page unload listeners registered');
+            } else {
+                console.log('ℹ️ Page unload listeners already registered');
             }
+            
+            console.log('🎉 initApp completed successfully!');
         }
 
         // ==================== DATA LOADING ====================
@@ -375,16 +507,27 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
 
         // ==================== WEBSOCKET CONNECTION (FIXED) ====================
         function connectDeviceWebSocket() {
+            console.log('🔌 connectDeviceWebSocket() called');
+            console.log('🔌 isPageActive:', isPageActive);
+            
+            // Check if page is still active
+            if (!isPageActive) {
+                console.log('❌ Page not active, aborting WebSocket connection');
+                return;
+            }
+            
             // Prevent multiple connections
             if (deviceWsConnection && 
                 (deviceWsConnection.readyState === WebSocket.OPEN || 
                  deviceWsConnection.readyState === WebSocket.CONNECTING)) {
-                console.log('Device WebSocket already connected or connecting');
+                console.log('⚠️ Device WebSocket already connected or connecting');
+                console.log('🔌 ReadyState:', deviceWsConnection.readyState);
                 return;
             }
 
             // Clear any pending reconnection
             if (wsReconnectTimeout) {
+                console.log('🔌 Clearing pending reconnection timeout');
                 clearTimeout(wsReconnectTimeout);
                 wsReconnectTimeout = null;
             }
@@ -392,24 +535,42 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/devices`;
             
-            console.log('Connecting to device WebSocket:', wsUrl);
+            console.log('🔌 Connecting to device WebSocket:', wsUrl);
+            console.log('🔌 Attempt:', wsConnectionAttempts + 1);
             
             try {
+                console.log('🔌 Creating new WebSocket instance...');
                 deviceWsConnection = new WebSocket(wsUrl);
+                console.log('✅ WebSocket instance created');
                 
                 deviceWsConnection.onopen = () => {
-                    console.log('Device WebSocket connected');
+                    console.log('🔌 WebSocket onopen fired');
+                    // Don't proceed if page is no longer active
+                    if (!isPageActive) {
+                        console.log('❌ Page inactive, closing WebSocket immediately');
+                        if (deviceWsConnection) deviceWsConnection.close();
+                        return;
+                    }
+                    console.log('✅ Device WebSocket connected successfully');
                     wsConnectionAttempts = 0; // Reset connection attempts
+                    console.log('🔌 Connection attempts reset to 0');
                     showNotification('Real-time updates enabled', 'success', 2000);
                 };
                 
                 deviceWsConnection.onmessage = (event) => {
+                    // Don't process messages if page is no longer active
+                    if (!isPageActive) {
+                        console.log('⚠️ Ignoring WebSocket message - page not active');
+                        return;
+                    }
+                    console.log('🔌 WebSocket message received');
                     try {
                         const data = JSON.parse(event.data);
+                        console.log('🔌 Message type:', data.type);
                         
                         // Handle initial device data (all devices at once)
                         if (data.type === 'initial_devices' && data.devices) {
-                            console.log('Received initial device status:', data.devices.length, 'devices');
+                            console.log('🔌 Received initial device status:', data.devices.length, 'devices');
                             data.devices.forEach(device => {
                                 handleDeviceStatusUpdate({
                                     type: 'device_status',
@@ -422,27 +583,46 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                             handleDeviceStatusUpdate(data);
                         }
                     } catch (error) {
-                        console.error('Error parsing WebSocket message:', error);
+                        console.error('❌ Error parsing WebSocket message:', error);
                     }
                 };
                 
                 deviceWsConnection.onerror = (error) => {
-                    console.error('Device WebSocket error:', error);
+                    console.error('❌ Device WebSocket error:', error);
+                    console.log('🔌 Error details:', {
+                        isPageActive,
+                        readyState: deviceWsConnection ? deviceWsConnection.readyState : 'N/A',
+                        wsConnectionAttempts
+                    });
                 };
                 
                 deviceWsConnection.onclose = () => {
-                    console.log('Device WebSocket disconnected');
+                    console.log('🔌 WebSocket onclose fired');
+                    console.log('🔌 Close details:', {
+                        isPageActive,
+                        wsConnectionAttempts,
+                        maxAttempts: 5
+                    });
+                    
                     deviceWsConnection = null;
                     
-                    // Only reconnect if we're still on the device management page
-                    // and haven't exceeded max attempts
-                    if (document.getElementById('devicesTableBody') && wsConnectionAttempts < 5) {
+                    // Only reconnect if:
+                    // 1. Page is still active (we haven't navigated away)
+                    // 2. Haven't exceeded max attempts
+                    if (isPageActive && wsConnectionAttempts < 5) {
                         wsConnectionAttempts++;
                         const delay = Math.min(1000 * Math.pow(2, wsConnectionAttempts), 30000); // Exponential backoff, max 30s
-                        console.log(`Reconnecting in ${delay/1000}s (attempt ${wsConnectionAttempts}/5)`);
+                        console.log(`🔌 Scheduling reconnection in ${delay/1000}s (attempt ${wsConnectionAttempts}/5)`);
                         
                         wsReconnectTimeout = setTimeout(() => {
-                            connectDeviceWebSocket();
+                            console.log('🔌 Reconnection timer fired');
+                            // Double-check page is still active before reconnecting
+                            if (isPageActive) {
+                                console.log('✅ Page still active, reconnecting...');
+                                connectDeviceWebSocket();
+                            } else {
+                                console.log('❌ Page no longer active, canceling reconnection');
+                            }
                         }, delay);
                     } else if (wsConnectionAttempts >= 5) {
                         console.log('Max WebSocket reconnection attempts reached');
@@ -456,25 +636,148 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
 
         // WEBSOCKET CLEANUP FUNCTION
         function cleanupWebSocket() {
+            console.log('🔌 cleanupWebSocket() called');
+            console.log('🔌 Current WebSocket state:', {
+                exists: deviceWsConnection ? 'yes' : 'no',
+                readyState: deviceWsConnection ? deviceWsConnection.readyState : 'N/A',
+                wsReconnectTimeout: wsReconnectTimeout ? 'exists' : 'null',
+                wsConnectionAttempts
+            });
+            
+            // Clear reconnection timeout
             if (wsReconnectTimeout) {
+                console.log('🔌 Clearing reconnection timeout');
                 clearTimeout(wsReconnectTimeout);
                 wsReconnectTimeout = null;
+                console.log('✅ Reconnection timeout cleared');
+            } else {
+                console.log('ℹ️ No reconnection timeout to clear');
             }
             
+            // Close WebSocket connection
             if (deviceWsConnection) {
-                console.log('Closing WebSocket connection...');
+                console.log('🔌 Closing WebSocket connection...');
+                console.log('🔌 WebSocket readyState:', deviceWsConnection.readyState);
+                console.log('🔌 States: CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3');
+                
                 try {
-                    deviceWsConnection.close();
+                    // Remove event listeners before closing to prevent memory leaks
+                    console.log('🔌 Removing WebSocket event handlers');
+                    deviceWsConnection.onopen = null;
+                    deviceWsConnection.onmessage = null;
+                    deviceWsConnection.onerror = null;
+                    deviceWsConnection.onclose = null;
+                    console.log('✅ Event handlers removed');
+                    
+                    // Close if still open or connecting
+                    if (deviceWsConnection.readyState === WebSocket.OPEN || 
+                        deviceWsConnection.readyState === WebSocket.CONNECTING) {
+                        console.log('🔌 Calling close() on WebSocket');
+                        deviceWsConnection.close(1000, 'Page navigation');
+                        console.log('✅ Close() called');
+                    } else {
+                        console.log('ℹ️ WebSocket already closing or closed, skipping close()');
+                    }
                 } catch (e) {
-                    console.error('Error closing WebSocket:', e);
+                    console.error('❌ Error closing WebSocket:', e);
                 }
                 deviceWsConnection = null;
+                console.log('✅ WebSocket reference cleared');
+            } else {
+                console.log('ℹ️ No WebSocket connection to close');
             }
             
+            // Reset connection attempts
             wsConnectionAttempts = 0;
+            console.log('✅ Connection attempts reset to 0');
+            
+            console.log('✅ WebSocket cleanup complete');
         }
 
+        // Global cleanup function called by router when navigating away from this page
+        window.cleanupDeviceManagement = function() {
+            console.log('════════════════════════════════════');
+            console.log('🧹 CLEANUP STARTED');
+            console.log('🧹 Timestamp:', new Date().toISOString());
+            console.log('🧹 Current state before cleanup:', {
+                isInitialized,
+                isPageActive,
+                eventListenersSetup,
+                deviceWsConnection: deviceWsConnection ? 'exists' : 'null',
+                pageUnloadListenersAdded,
+                wsReconnectTimeout: wsReconnectTimeout ? 'exists' : 'null',
+                wsConnectionAttempts
+            });
+            
+            // CRITICAL: Mark page as inactive IMMEDIATELY to stop all async operations
+            console.log('🧹 Step 1: Setting isPageActive to FALSE');
+            isPageActive = false;
+            console.log('✅ isPageActive = false');
+            
+            // 1. Clear WebSocket and reconnection timer
+            console.log('🧹 Step 2: Calling cleanupWebSocket()');
+            cleanupWebSocket();
+            console.log('✅ WebSocket cleaned up');
+            
+            // 2. Remove page unload listeners to prevent accumulation
+            if (pageUnloadListenersAdded) {
+                console.log('🧹 Step 3: Removing page unload listeners');
+                window.removeEventListener('beforeunload', window.cleanupDeviceManagement);
+                window.removeEventListener('pagehide', window.cleanupDeviceManagement);
+                console.log('✅ Page unload listeners removed');
+            } else {
+                console.log('ℹ️ Step 3: No page unload listeners to remove');
+            }
+            
+            // 3. Close any open panels/modals
+            console.log('🧹 Step 4: Closing panels and modals');
+            const addPanel = document.getElementById('addDevicePanel');
+            if (addPanel) {
+                addPanel.classList.remove('active');
+                console.log('✅ Add device panel closed');
+            }
+            
+            const modalCount = document.querySelectorAll('.modal-overlay').length;
+            document.querySelectorAll('.modal-overlay').forEach(modal => {
+                modal.classList.remove('active');
+            });
+            console.log(`✅ Closed ${modalCount} modals`);
+            
+            document.body.classList.remove('modal-open');
+            console.log('✅ Body modal-open class removed');
+            
+            // 4. Reset all state variables (must be last)
+            console.log('🧹 Step 5: Resetting all state variables');
+            const beforeReset = {
+                isInitialized,
+                eventListenersSetup,
+                devicesCount: devices.length,
+                groupsCount: groups.length
+            };
+            console.log('🧹 State before reset:', beforeReset);
+            
+            resetAllState();
+            
+            console.log('🧹 State after reset:', {
+                isInitialized,
+                isPageActive,
+                eventListenersSetup,
+                deviceWsConnection,
+                devicesCount: devices.length,
+                groupsCount: groups.length
+            });
+            console.log('✅ All state reset');
+            
+            console.log('✅ CLEANUP COMPLETE');
+            console.log('════════════════════════════════════');
+        };
+
         function handleDeviceStatusUpdate(data) {
+            // Don't process updates if page is not active
+            if (!isPageActive) {
+                return;
+            }
+            
             if (data.type === 'device_status') {
                 const deviceId = data.device_id;
                 const status = data.status;
@@ -503,6 +806,11 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         }
 
         function updateDeviceRowUI(deviceId, status, lastPoll) {
+            // Don't update UI if page is not active
+            if (!isPageActive) {
+                return;
+            }
+            
             // Find the row for this device
             const row = document.querySelector(`tr[id="device-${deviceId}"]`);
             if (!row) return;
@@ -1168,8 +1476,21 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         }
 
         // ==================== DEVICE ACTIONS ====================
-        window.deviceManagement = {
-            viewDevice: async function(deviceId) {
+        // CRITICAL FIX: Don't recreate window.deviceManagement object
+        // Update existing one or create if doesn't exist
+        // This prevents onclick handlers from referencing stale objects
+        if (!window.deviceManagement) {
+            window.deviceManagement = {};
+        }
+        
+        // Update methods (not recreate the object)
+        window.deviceManagement.viewDevice = async function(deviceId) {
+                // Don't execute if page is not active
+                if (!isPageActive) {
+                    console.log('⚠️ viewDevice called but page not active, ignoring');
+                    return;
+                }
+                
                 try {
                     // Show modal
                     const modal = document.getElementById('viewDeviceModal');
@@ -1210,9 +1531,15 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     console.error('Error loading device for view:', error);
                     showNotification('Failed to load device details', 'error');
                 }
-            },
+            };
 
-            editDevice: async function(deviceId) {
+            window.deviceManagement.editDevice = async function(deviceId) {
+                // Don't execute if page is not active
+                if (!isPageActive) {
+                    console.log('⚠️ editDevice called but page not active, ignoring');
+                    return;
+                }
+                
                 try {
                     // Get device details from API
                     const response = await fetch(`/api/devices/${deviceId}/details`);
@@ -1305,9 +1632,15 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     console.error('Error loading device for edit:', error);
                     showNotification('Failed to load device details', 'error');
                 }
-            },
+            };
 
-            deleteDevice: async function(deviceId) {
+            window.deviceManagement.deleteDevice = async function(deviceId) {
+                // Don't execute if page is not active
+                if (!isPageActive) {
+                    console.log('⚠️ deleteDevice called but page not active, ignoring');
+                    return;
+                }
+                
                 if (!confirm('Are you sure you want to delete this device?\n\nThis will also delete all associated datapoints/tags.\n\nThis action cannot be undone.')) {
                     return;
                 }
@@ -1330,9 +1663,15 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     console.error('Error deleting device:', error);
                     showNotification('Error deleting device: ' + error.message, 'error');
                 }
-            },
+            };
 
-            deleteGroup: async function(groupId) {
+            window.deviceManagement.deleteGroup = async function(groupId) {
+                // Don't execute if page is not active
+                if (!isPageActive) {
+                    console.log('⚠️ deleteGroup called but page not active, ignoring');
+                    return;
+                }
+                
                 if (!confirm('Are you sure you want to delete this group?\n\nDevices in this group will be unassigned (moved to "None").\n\nThis action cannot be undone.')) {
                     return;
                 }
@@ -1355,11 +1694,10 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                     console.error('Error deleting group:', error);
                     showNotification('Error deleting group: ' + error.message, 'error');
                 }
-            },
+            };
 
             // Expose refresh function
-            refreshData: refreshData
-        };
+            window.deviceManagement.refreshData = refreshData;
 
         // ==================== GROUP MANAGEMENT ====================
         function openAddGroupModal() {
@@ -1786,8 +2124,34 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         function setupEventListeners() {
             // Prevent duplicate event listeners
             if (eventListenersSetup) {
+                console.log('⚠️ Event listeners already set up, skipping to prevent duplicates...');
                 return;
             }
+            
+            console.log('Setting up event listeners...');
+            
+            // NUCLEAR FIX: Remove ALL existing event listeners by cloning elements
+            // This ensures no duplicate listeners from previous page visits
+            console.log('🧹 Removing any old event listeners by cloning elements...');
+            const elementsToClean = [
+                'refreshBtn', 'addDeviceBtn', 'closeAddDevicePanel', 
+                'cancelAddDevice', 'saveDeviceBtn', 'addGroupBtn',
+                'closeGroupModal', 'cancelGroupBtn', 'saveGroupBtn',
+                'closeViewModal', 'closeViewDetailsBtn', 'editFromViewBtn',
+                'deleteFromViewBtn', 'duplicateDeviceBtn', 'exportBtn',
+                'importBtn', 'browseFilesBtn', 'downloadCsvTemplateBtn'
+            ];
+            
+            let cleanedCount = 0;
+            elementsToClean.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.parentNode) {
+                    const newEl = el.cloneNode(true);
+                    el.parentNode.replaceChild(newEl, el);
+                    cleanedCount++;
+                }
+            });
+            console.log(`✅ Cleaned ${cleanedCount} elements of old listeners`);
             
             eventListenersSetup = true;
             
@@ -1935,48 +2299,18 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             return div.innerHTML;
         }
 
-        function showNotification(message, type = 'info', duration = 3000) {
-            const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 z-50 max-w-sm animate-fade-in';
-            
-            let bgColor = 'bg-blue-500';
-            let icon = 'fa-info-circle';
-            
-            switch (type) {
-                case 'success':
-                    bgColor = 'bg-green-500';
-                    icon = 'fa-check-circle';
-                    break;
-                case 'error':
-                    bgColor = 'bg-red-500';
-                    icon = 'fa-exclamation-circle';
-                    break;
-                case 'warning':
-                    bgColor = 'bg-yellow-500';
-                    icon = 'fa-exclamation-triangle';
-                    break;
-            }
-            
-            notification.innerHTML = `
-                <div class="rounded-lg shadow-lg ${bgColor} text-white p-4 flex items-start justify-between">
-                    <div class="flex items-center">
-                        <i class="fa-solid ${icon} mr-3"></i>
-                        <div class="text-sm font-medium">${message}</div>
-                    </div>
-                    <button class="ml-4 text-white hover:text-gray-200" onclick="this.parentElement.parentElement.remove()">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
-                </div>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.remove();
-                }
-            }, duration);
+        // Use global showNotification from common.js
+        // If not available, provide a fallback
+        if (typeof window.showNotification !== 'function') {
+            console.warn('Global showNotification not found, using fallback');
+            window.showNotification = function(message, type = 'info', duration = 3000) {
+                console.log(`[${type.toUpperCase()}] ${message}`);
+                alert(message);
+            };
         }
 
     })();
-}
+    
+    console.log('🟢 Module initialization complete');
+    console.log('🟢 window.initializeDeviceManagement:', typeof window.initializeDeviceManagement);
+    console.log('🟢 window.cleanupDeviceManagement:', typeof window.cleanupDeviceManagement);
