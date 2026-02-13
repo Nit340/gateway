@@ -1,239 +1,144 @@
-// http-form-logic.js
-// Initialize HTTP form
-window.initializeHttpForm = function() {
-    console.log('Initializing HTTP form');
-    
-    // Setup authentication type change
-    const authTypeSelect = document.getElementById('field-authType');
-    const basicAuthFields = document.getElementById('basic-auth-fields');
-    const tokenAuthFields = document.getElementById('token-auth-fields');
+// http-form-logic.js — UI-only logic for http-form.html
+// Save functions are overridden by mqtt-cloud.js after form injection.
+'use strict';
+
+window.initializeHttpForm = function () {
+    // Auth type show/hide
+    const authSel      = document.getElementById('field-authType');
+    const basicFields  = document.getElementById('basic-auth-fields');
+    const tokenFields  = document.getElementById('token-auth-fields');
     const oauth2Fields = document.getElementById('oauth2-fields');
-    
-    if (authTypeSelect) {
-        authTypeSelect.addEventListener('change', function() {
-            const authType = this.value;
-            
-            // Show/hide appropriate auth fields
-            if (basicAuthFields) basicAuthFields.style.display = authType === 'basic' ? 'block' : 'none';
-            if (tokenAuthFields) tokenAuthFields.style.display = authType === 'bearer' || authType === 'apiKey' ? 'block' : 'none';
-            if (oauth2Fields) oauth2Fields.style.display = authType === 'oauth2' ? 'block' : 'none';
-        });
-        
-        // Trigger initial state
-        authTypeSelect.dispatchEvent(new Event('change'));
+
+    function _applyAuth(val) {
+        if (basicFields)  basicFields.style.display  = val === 'basic'                    ? 'block' : 'none';
+        if (tokenFields)  tokenFields.style.display  = (val === 'bearer' || val === 'apiKey') ? 'block' : 'none';
+        if (oauth2Fields) oauth2Fields.style.display = val === 'oauth2'                   ? 'block' : 'none';
     }
-    
-    // Setup payload format change
-    const payloadRadios = document.querySelectorAll('input[name="field-payloadFormat"]');
-    const jsonOptions = document.getElementById('json-format-options');
-    const xmlOptions = document.getElementById('xml-format-options');
-    const customOptions = document.getElementById('custom-format-options');
-    
-    payloadRadios.forEach(radio => {
-        radio.addEventListener('change', function() {
-            const format = this.value;
-            
-            if (jsonOptions) jsonOptions.style.display = format === 'json' ? 'block' : 'none';
-            if (xmlOptions) xmlOptions.style.display = format === 'xml' ? 'block' : 'none';
-            if (customOptions) customOptions.style.display = format === 'custom' ? 'block' : 'none';
-        });
+
+    if (authSel) {
+        authSel.addEventListener('change', function () { _applyAuth(this.value); });
+        _applyAuth(authSel.value);
+    }
+
+    // Payload format show/hide
+    const jsonOpts   = document.getElementById('json-format-options');
+    const xmlOpts    = document.getElementById('xml-format-options');
+    const customOpts = document.getElementById('custom-format-options');
+
+    function _applyFormat(val) {
+        if (jsonOpts)   jsonOpts.style.display   = val === 'json'   ? 'block' : 'none';
+        if (xmlOpts)    xmlOpts.style.display    = val === 'xml'    ? 'block' : 'none';
+        if (customOpts) customOpts.style.display = val === 'custom' ? 'block' : 'none';
+    }
+
+    document.querySelectorAll('input[name="field-payloadFormat"]').forEach(r => {
+        r.addEventListener('change', function () { _applyFormat(this.value); });
     });
-    
-    // Setup publishing mode change
-    const publishRadios = document.querySelectorAll('input[name="field-publishMode"]');
-    const batchSettings = document.getElementById('batch-settings');
+    const checked = document.querySelector('input[name="field-payloadFormat"]:checked');
+    if (checked) _applyFormat(checked.value);
+
+    // Publish mode show/hide
+    const batchSettings       = document.getElementById('batch-settings');
     const conditionalSettings = document.getElementById('conditional-settings');
-    
-    publishRadios.forEach(radio => {
-        radio.addEventListener('change', function() {
-            const mode = this.value;
-            
-            if (batchSettings) batchSettings.style.display = mode === 'batch' ? 'block' : 'none';
-            if (conditionalSettings) conditionalSettings.style.display = mode === 'conditional' ? 'block' : 'none';
+
+    document.querySelectorAll('input[name="field-publishMode"]').forEach(r => {
+        r.addEventListener('change', function () {
+            if (batchSettings)       batchSettings.style.display       = this.value === 'batch'       ? 'block' : 'none';
+            if (conditionalSettings) conditionalSettings.style.display = this.value === 'conditional' ? 'block' : 'none';
         });
     });
-    
-    // Setup store & forward toggle
-    const storeForwardToggle = document.getElementById('field-storeForward');
-    const storeForwardOptions = document.getElementById('store-forward-options');
-    
-    if (storeForwardToggle && storeForwardOptions) {
-        storeForwardToggle.addEventListener('change', function() {
-            storeForwardOptions.style.display = this.checked ? 'block' : 'none';
-        });
-        
-        // Trigger initial state
-        storeForwardToggle.dispatchEvent(new Event('change'));
+
+    // Store & forward toggle
+    const sfToggle  = document.getElementById('field-storeForward');
+    const sfOptions = document.getElementById('store-forward-options');
+    if (sfToggle && sfOptions) {
+        sfToggle.addEventListener('change', function () { sfOptions.style.display = this.checked ? 'block' : 'none'; });
+        sfOptions.style.display = sfToggle.checked ? 'block' : 'none';
     }
-    
-    // Setup toggle switches
-    document.querySelectorAll('.toggle-switch input').forEach(toggle => {
-        toggle.addEventListener('change', function() {
-            const label = this.nextElementSibling;
-            if (label) {
-                label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
-            }
-        });
-        
-        // Set initial color
-        const label = toggle.nextElementSibling;
-        if (label) {
-            label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
-        }
-    });
-    
-    // Initialize tag selection
-    updateHttpSelectedTagsCount();
-    
-    console.log('HTTP form initialized successfully');
+
+    _updateHttpTagCount();
 };
 
-// Tab switching for HTTP form
-function switchHttpTab(tabName) {
-    // Hide all tab contents
-    document.querySelectorAll('.http-tab-content').forEach(tab => {
-        tab.style.display = 'none';
-    });
-    
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('active');
-    });
-    
-    // Show selected tab content
-    const tabContent = document.getElementById(`http-${tabName}-content`);
-    if (tabContent) {
-        tabContent.style.display = 'block';
-    }
-    
-    // Activate tab button
-    const tabButtons = document.querySelectorAll('.tab-button');
-    tabButtons.forEach(button => {
-        if (button.textContent.toLowerCase().includes(tabName)) {
-            button.classList.add('active');
-        }
+// Tab switching
+function switchHttpTab(name) {
+    document.querySelectorAll('.http-tab-content').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+    const content = document.getElementById(`http-${name}-content`);
+    if (content) content.style.display = 'block';
+    document.querySelectorAll('.tab-button').forEach(b => {
+        if (b.getAttribute('onclick')?.includes(`'${name}'`)) b.classList.add('active');
     });
 }
 
-// Tag management functions for HTTP form
 function toggleAllHttpTags() {
-    const selectAll = document.getElementById('http-select-all-tags');
-    const checkboxes = document.querySelectorAll('.http-tag-select');
-    checkboxes.forEach(cb => {
-        cb.checked = selectAll.checked;
-    });
-    updateHttpSelectedTagsCount();
+    const all = document.getElementById('http-select-all-tags');
+    document.querySelectorAll('.http-tag-select').forEach(cb => cb.checked = all?.checked);
+    _updateHttpTagCount();
 }
 
-function updateHttpSelectedTagsCount() {
-    const checkboxes = document.querySelectorAll('.http-tag-select:checked');
-    const countElement = document.getElementById('http-selected-tags-count');
-    if (countElement) {
-        countElement.textContent = checkboxes.length;
-    }
+function _updateHttpTagCount() {
+    const n  = document.querySelectorAll('.http-tag-select:checked').length;
+    const el = document.getElementById('http-selected-tags-count');
+    if (el) el.textContent = n;
 }
 
 function removeSelectedHttpTags() {
-    const selected = document.querySelectorAll('.http-tag-select:checked');
-    if (selected.length === 0) {
-        alert('Please select tags to remove.');
-        return;
-    }
-    
-    if (confirm(`Remove ${selected.length} selected tag(s)?`)) {
-        selected.forEach(checkbox => {
-            const row = checkbox.closest('tr');
-            if (row) row.remove();
-        });
-        updateHttpSelectedTagsCount();
-        alert(`${selected.length} tag(s) removed successfully.`);
+    const sel = document.querySelectorAll('.http-tag-select:checked');
+    if (!sel.length) { alert('Select tags to remove.'); return; }
+    if (confirm(`Remove ${sel.length} tag(s)?`)) {
+        sel.forEach(cb => cb.closest('tr')?.remove());
+        _updateHttpTagCount();
     }
 }
 
-// Add event listeners to tag checkboxes
-function setupHttpTagListeners() {
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('http-tag-select')) {
-            updateHttpSelectedTagsCount();
-        }
-    });
-}
-
-// Save functions for each tab
-function saveHttpConnectionSettings() {
-    alert('HTTP Connection settings saved!');
-}
-
-function saveHttpPayloadSettings() {
-    alert('HTTP Payload Format settings saved!');
-}
-
-function saveHttpPublishingSettings() {
-    alert('HTTP Publishing settings saved!');
-}
-
-function saveHttpAdvancedSettings() {
-    alert('HTTP Advanced settings saved!');
-}
-
-// Generate password
-function generateHttpPassword(fieldId) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 12; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const field = document.getElementById(fieldId);
-    if (field) {
-        field.value = password;
-    }
-}
-
-// Add key-value item
-function addKeyValueItemHttp(button) {
-    const list = button.closest('.key-value-list');
-    const div = document.createElement('div');
+function addKeyValueItemHttp(btn) {
+    const list = btn.closest('.key-value-list');
+    const div  = document.createElement('div');
     div.className = 'key-value-item';
     div.innerHTML = `
-        <input type="text" placeholder="Header Name" class="compact-input">
-        <input type="text" placeholder="Header Value" class="compact-input">
-        <button type="button" class="text-red-600 hover:text-red-700" onclick="window.httpFormLogic.removeKeyValueItem(this)">
-            <i class="fa-solid fa-trash"></i>
-        </button>
-    `;
-    
-    if (list) {
-        const addButtonContainer = list.querySelector('.p-2.text-center');
-        if (addButtonContainer) {
-            list.insertBefore(div, addButtonContainer);
-        }
-    }
+      <input type="text" placeholder="Header Name"  class="compact-input">
+      <input type="text" placeholder="Header Value" class="compact-input">
+      <button type="button" class="text-red-600 hover:text-red-700" onclick="window.httpFormLogic.removeKeyValueItem(this)">
+        <i class="fa-solid fa-trash"></i>
+      </button>`;
+    const addRow = list?.querySelector('.p-2.text-center');
+    if (addRow) list.insertBefore(div, addRow);
 }
 
-// Remove key-value item
-function removeKeyValueItem(button) {
-    const item = button.closest('.key-value-item');
-    if (item) {
-        item.remove();
-    }
+function removeKeyValueItem(btn) { btn.closest('.key-value-item')?.remove(); }
+
+function generateHttpPassword(fieldId) {
+    const el = document.getElementById(fieldId);
+    if (el) el.value = [...crypto.getRandomValues(new Uint8Array(12))].map(b =>
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b % 72]).join('');
 }
 
-// Export functions to global scope
+// showAddTagModal overridden by mqtt-cloud.js after form injection
+function showAddTagModal() { console.warn('showAddTagModal not yet wired'); }
+
+// Save stubs — overridden by mqtt-cloud.js _wireFormSaves()
+function saveHttpConnectionSettings() { console.log('save connection: not wired yet'); }
+function saveHttpPayloadSettings()    { console.log('save payload: not wired yet'); }
+function saveHttpPublishingSettings() { console.log('save publishing: not wired yet'); }
+function saveHttpAdvancedSettings()   { console.log('save advanced: not wired yet'); }
+
 window.httpFormLogic = {
     initializeHttpForm,
     switchHttpTab,
     toggleAllHttpTags,
     removeSelectedHttpTags,
-    generateHttpPassword,
     addKeyValueItemHttp,
     removeKeyValueItem,
+    generateHttpPassword,
+    showAddTagModal,
     saveHttpConnectionSettings,
     saveHttpPayloadSettings,
     saveHttpPublishingSettings,
-    saveHttpAdvancedSettings
+    saveHttpAdvancedSettings,
 };
 
-// Setup initial listeners when this file loads
-document.addEventListener('DOMContentLoaded', function() {
-    setupHttpTagListeners();
+document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('http-tag-select')) _updateHttpTagCount();
+    });
 });

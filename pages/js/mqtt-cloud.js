@@ -1,1480 +1,790 @@
-// mqtt-cloud.js
-// Initialize Cloud Connection Manager
-window.initMqttCloud = function() {
-    console.log('Cloud Connection Manager page initialized');
-    initCloudConnectionManager();
+// mqtt-cloud.js  — Cloud Connection Manager orchestrator
+// Flow: load list → select → inject form HTML → populate from DB → save back to DB
+'use strict';
+
+const API = '/api/cloud-integration';
+let _connections   = [];
+let _selectedId    = null;
+let _selectedType  = null;   // for Add modal
+let _availTags     = [];     // fetched when Add Tags modal opens
+
+// ─── ENTRY ───────────────────────────────────────────────────────────────────
+window.initMqttCloud = async function () {
+    _bindPageListeners();
+    await _loadConnections();
 };
 
-function initCloudConnectionManager() {
-    console.log('Setting up Cloud Connection Manager functionality');
-    
-    // Initialize the app
-    initApp();
-    
-    // Add styles for this page
-    addCloudConnectionStyles();
-    
-    // Expose functions globally - Use a different approach to avoid conflicts
-    if (!window.cloudConnections) {
-        window.cloudConnections = {};
-    }
-    
-    // Add all functions individually
-    Object.assign(window.cloudConnections, {
-        showConnectionManager,
-        showHelp,
-        switchTab,
-        refreshConnections,
-        cancelChanges,
-        saveAllConnections,
-        closeModal,
-        cancelConnectionForm,
-        saveNewConnection,
-        testConnection,
-        addKeyValueItem,
-        removeKeyValueItem,
-        selectConnection,
-        deleteConnection,
-        saveConnection
-    });
-    
-    console.log('cloudConnections functions exposed:', Object.keys(window.cloudConnections));
+// ─── LOAD LIST ───────────────────────────────────────────────────────────────
+async function _loadConnections() {
+    try {
+        const d = await _api('GET', `${API}/connections`);
+        _connections = d.connections || [];
+        _renderList();
+        // re-select previously selected or first
+        const target = _selectedId && _connections.find(c => c.id === _selectedId)
+            ? _selectedId : (_connections[0]?.id || null);
+        if (target) await _selectConnection(target);
+        else _showEmpty();
+    } catch (e) { _toast('Failed to load connections', 'error'); }
 }
 
-// Configuration - Keep as is
-const config = {
-    "app": {
-        "name": "Univa IoT Gateway",
-        "version": "2.4.1",
-        "maxConnections": 12
-    },
-    
-    "connectionTypes": {
-        "mqtt": {
-            "name": "MQTT Broker",
-            "description": "Standard IoT messaging protocol",
-            "icon": "fa-solid fa-cloud",
-            "color": "blue",
-            "defaultName": "MQTT Broker",
-            "formFile": "pages/connection-forms/mqtt-form.html"
-        },
-        
-        "http": {
-            "name": "HTTP Endpoint",
-            "description": "REST API endpoints",
-            "icon": "fa-solid fa-globe",
-            "color": "yellow",
-            "defaultName": "HTTP API",
-            "formFile": "pages/connection-forms/http-form.html"
-        }
-    },
-    
-    "defaultStats": {
-        "messages": 0,
-        "errors": 0,
-        "latency": 0,
-        "uptime": "0h 0m",
-        "lastActive": "Never",
-        "bandwidth": "0 MB",
-        "successRate": "0%"
-    },
-    
-    "defaultConnections": {
-        "mqtt": {
-            "id": "mqtt-primary",
-            "type": "mqtt",
-            "name": "Production MQTT Broker",
-            "enabled": true,
-            "config": {
-                "host": "broker.company.com",
-                "port": 8883,
-                "protocol": "mqtts",
-                "clientId": "univa-gw-01",
-                "qos": 1,
-                "username": "admin",
-                "password": "",
-                "tls": true,
-                "keepAlive": 60,
-                "cleanSession": true
-            },
-            "stats": {
-                "messages": 8953,
-                "errors": 0,
-                "latency": 95,
-                "uptime": "8h 12m",
-                "lastActive": "2.3s ago",
-                "bandwidth": "2.4 MB",
-                "successRate": "99.8%"
-            }
-        },
-        "http": {
-            "id": "http-analytics",
-            "type": "http",
-            "name": "Analytics API",
-            "enabled": true,
-            "config": {
-                "url": "https://api.company.com/v1/data",
-                "method": "POST",
-                "interval": 300,
-                "batchSize": 100,
-                "contentType": "application/json"
-            },
-            "stats": {
-                "messages": 3245,
-                "errors": 12,
-                "latency": 210,
-                "uptime": "1h 45m",
-                "lastActive": "5 min ago",
-                "bandwidth": "1.2 MB",
-                "successRate": "99.6%"
-            }
-        }
-    }
-};
+// ─── RENDER LIST ─────────────────────────────────────────────────────────────
+function _renderList() {
+    const list  = _el('connectionsList');
+    const empty = _el('connectionsEmpty');
+    if (!list) return;
+    list.querySelectorAll('.conn-item').forEach(n => n.remove());
+    _el('connectionCount').textContent = _connections.length;
+    if (!_connections.length) { if (empty) empty.style.display = ''; return; }
+    if (empty) empty.style.display = 'none';
 
-// Global state
-let connections = {};
-let selectedConnectionId = null;
-let selectedConnectionType = null;
-
-function addCloudConnectionStyles() {
-    // Add styles specific to cloud connection page
-    const style = document.createElement('style');
-    style.textContent = `
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        /* Compact Table Styles */
-        .compact-table {
-            font-size: 12px;
-        }
-        
-        .compact-table th {
-            padding: 8px 12px;
-            font-size: 11px;
-            white-space: nowrap;
-        }
-        
-        .compact-table td {
-            padding: 8px 12px;
-            font-size: 12px;
-        }
-        
-        /* Status Indicators */
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            font-size: 12px;
-        }
-        
-        .status-indicator.online::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #10B981;
-            margin-right: 4px;
-            animation: pulse 2s infinite;
-        }
-        
-        .status-indicator.offline::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #EF4444;
-            margin-right: 4px;
-        }
-        
-        .status-indicator.warning::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #F59E0B;
-            margin-right: 4px;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        /* Protocol Badges */
-        .protocol-badge {
-            font-size: 9px;
-            padding: 1px 6px;
-            border-radius: 8px;
-            font-weight: 600;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-        
-        .protocol-badge.mqtt {
-            background: #EFF6FF;
-            color: #2563EB;
-            border: 1px solid #BFDBFE;
-        }
-        
-        .protocol-badge.http {
-            background: #FEF3C7;
-            color: #D97706;
-            border: 1px solid #FDE68A;
-        }
-        
-        /* Card Styles */
-        .config-card {
-            background: white;
-            border: 1px solid #E2E8F0;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        
-        /* Form Styles */
-        .compact-input {
-            padding: 6px 10px;
-            font-size: 13px;
-            border-radius: 6px;
-            border: 1px solid #E2E8F0;
-            transition: all 0.2s;
-        }
-        
-        .compact-input:focus {
-            outline: none;
-            border-color: #2563EB;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-        }
-        
-        .compact-select {
-            padding: 6px 10px;
-            font-size: 13px;
-            border-radius: 6px;
-            border: 1px solid #E2E8F0;
-            transition: all 0.2s;
-        }
-        
-        .compact-select:focus {
-            outline: none;
-            border-color: #2563EB;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
-        }
-        
-        .compact-button {
-            padding: 6px 12px;
-            font-size: 13px;
-            border-radius: 6px;
-            transition: all 0.2s;
-            cursor: pointer;
-            border: none;
-        }
-        
-        /* Toggle Switch */
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 36px;
-            height: 20px;
-        }
-        
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #CBD5E1;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 14px;
-            width: 14px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .toggle-slider {
-            background-color: #10B981;
-        }
-        
-        input:checked + .toggle-slider:before {
-            transform: translateX(16px);
-        }
-        
-        /* Tab Styles */
-        .tab-button {
-            padding: 8px 16px;
-            font-size: 12px;
-            font-weight: 500;
-            color: #64748B;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .tab-button:hover {
-            color: #2563EB;
-            border-bottom-color: #E2E8F0;
-        }
-        
-        .tab-button.active {
-            color: #2563EB;
-            border-bottom-color: #2563EB;
-            font-weight: 600;
-        }
-        
-        /* Form Tabs */
-        .form-tab-content {
-            display: none;
-        }
-        
-        .form-tab-content.active {
-            display: block;
-        }
-        
-        /* Form section styling */
-        .form-section {
-            background: #F8FAFC;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-        
-        .form-section-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: #1E293B;
-            margin-bottom: 12px;
-        }
-        
-        .radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        .radio-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .key-value-list {
-            border: 1px solid #E2E8F0;
-            border-radius: 6px;
-            overflow: hidden;
-        }
-        
-        .key-value-item {
-            display: flex;
-            gap: 8px;
-            padding: 8px;
-            border-bottom: 1px solid #E2E8F0;
-            align-items: center;
-        }
-        
-        .key-value-item:last-child {
-            border-bottom: none;
-        }
-        
-        /* Connection Manager Styles */
-        .connection-type-card {
-            border: 2px solid #E2E8F0;
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: white;
-        }
-        
-        .connection-type-card:hover {
-            border-color: #2563EB;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
-            transform: translateY(-2px);
-        }
-        
-        .connection-type-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 12px;
-            font-size: 20px;
-        }
-        
-        .help-text {
-            font-size: 11px;
-            color: #64748B;
-            margin-top: 2px;
-            line-height: 1.4;
-        }
-        
-        .form-input-group {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-function initApp() {
-    connections = {};
-    selectedConnectionId = null;
-    selectedConnectionType = null;
-    
-    renderConnectionTypes();
-    loadConnections();
-    setupEventListeners();
-    
-    console.log('App initialized, connections loaded:', Object.keys(connections).length);
-    
-    // Debug: Check if connections are properly set up
-    setTimeout(() => {
-        console.log('Available connections:', Object.keys(connections));
-        if (window.cloudConnections) {
-            console.log('cloudConnections object:', window.cloudConnections);
-            console.log('selectConnection function exists:', typeof window.cloudConnections.selectConnection);
-        }
-    }, 500);
-}
-
-function setupEventListeners() {
-    // Handle gateway select
-    const gatewaySelect = document.getElementById('gateway-select');
-    if (gatewaySelect) {
-        gatewaySelect.addEventListener('change', function() {
-            if (confirm('Switch to another gateway? Unsaved changes will be lost.')) {
-                location.reload();
-            } else {
-                this.value = 'Univa-GW-01';
-            }
-        });
-    }
-}
-
-// Cloud Connection Manager Functions
-function showConnectionManager() {
-    showModal('connectionManagerModal');
-    showConnectionTypeSelection();
-}
-
-function showConnectionTypeSelection() {
-    document.getElementById('connectionTypeSelection').classList.remove('hidden');
-    document.getElementById('connectionFormContainer').classList.add('hidden');
-    selectedConnectionType = null;
-}
-
-function renderConnectionTypes() {
-    const grid = document.getElementById('connectionTypesGrid');
-    if (!grid) return;
-    
-    grid.innerHTML = '';
-    
-    Object.entries(config.connectionTypes).forEach(([type, connectionConfig]) => {
-        const card = document.createElement('div');
-        card.className = 'connection-type-card';
-        card.onclick = () => selectConnectionType(type);
-        
-        const colorMap = {
-            blue: '#3B82F6',
-            yellow: '#F59E0B',
-            purple: '#8B5CF6',
-            orange: '#F97316',
-            green: '#10B981'
-        };
-        
-        const color = colorMap[connectionConfig.color] || '#3B82F6';
-        
-        card.innerHTML = `
-            <div class="connection-type-icon" style="background-color: ${color}20; color: ${color};">
-                <i class="${connectionConfig.icon}"></i>
+    _connections.forEach(c => {
+        const s = c.statistics || {};
+        const div = document.createElement('div');
+        div.className = `conn-item ${c.type}${c.id === _selectedId ? ' active' : ''}`;
+        div.dataset.id = c.id;
+        div.innerHTML = `
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+              <i class="${c.type==='mqtt'?'fa-solid fa-cloud text-blue-500':'fa-solid fa-globe text-yellow-500'} text-xs"></i>
+              <span class="font-medium text-slate-900 text-sm truncate max-w-[130px]">${_esc(c.name)}</span>
             </div>
-            <h4 class="font-semibold text-slate-900 text-sm mb-2">${connectionConfig.name}</h4>
-            <p class="text-xs text-slate-600">${connectionConfig.description}</p>
-        `;
-        
+            <span class="text-xs text-slate-400 flex-shrink-0">${_esc(s.lastActive||'Never')}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="cc-badge ${c.type}">${c.type.toUpperCase()}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full ${c.enabled?'bg-green-100 text-green-800':'bg-slate-100 text-slate-500'}">
+              ${c.enabled?'Active':'Inactive'}
+            </span>
+          </div>`;
+        div.addEventListener('click', () => _selectConnection(c.id));
+        list.appendChild(div);
+    });
+}
+
+// ─── SELECT CONNECTION ────────────────────────────────────────────────────────
+async function _selectConnection(id) {
+    _selectedId = id;
+    document.querySelectorAll('.conn-item').forEach(el =>
+        el.classList.toggle('active', el.dataset.id === id)
+    );
+    let conn;
+    try {
+        conn = await _api('GET', `${API}/connections/${id}`);
+        const idx = _connections.findIndex(c => c.id === id);
+        if (idx !== -1) _connections[idx] = conn;
+    } catch { _toast('Failed to load connection', 'error'); return; }
+
+    _updateStatusBar(conn);
+    _updateDiagnostics(conn);
+    _showActionButtons(conn);
+    await _loadForm(conn);
+}
+
+// ─── LOAD FORM HTML ───────────────────────────────────────────────────────────
+async function _loadForm(conn) {
+    const ph = _el('formPlaceholder');
+    const fc = _el('formContent');
+    if (!fc) return;
+    ph.style.display = 'none';
+    fc.classList.remove('hidden');
+    fc.innerHTML = '<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-primary text-2xl"></i></div>';
+
+    const file = conn.type === 'mqtt'
+        ? 'pages/connection-forms/mqtt-form.html'
+        : 'pages/connection-forms/http-form.html';
+
+    try {
+        const r = await fetch(file);
+        if (!r.ok) throw new Error(`${r.status}`);
+        fc.innerHTML = await r.text();
+
+        // Init form UI logic (toggles, tab switching)
+        if (conn.type === 'mqtt' && typeof window.initializeMqttForm === 'function') window.initializeMqttForm();
+        if (conn.type === 'http' && typeof window.initializeHttpForm === 'function') window.initializeHttpForm();
+
+        // Populate every field from DB data
+        conn.type === 'mqtt' ? _populateMqtt(conn) : _populateHttp(conn);
+
+        // Override all Save buttons to call real API
+        _wireFormSaves(conn);
+
+        // Wire the "Add Tags" button inside the form
+        _wireAddTagsBtn(conn);
+
+    } catch (e) {
+        fc.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">
+          <i class="fa-solid fa-triangle-exclamation text-amber-400 text-2xl mb-2 block"></i>
+          Could not load form file: <code>${file}</code>
+        </div>`;
+    }
+}
+
+// ─── POPULATE MQTT FORM ───────────────────────────────────────────────────────
+function _populateMqtt(conn) {
+    const c = conn.config || {};
+    _sv('field-protocol',    c.protocol    ?? 'mqtts');
+    _sv('field-host',        c.host        ?? '');
+    _sv('field-port',        c.port        ?? 8883);
+    _sv('field-clientId',    c.clientId    ?? '');
+    _sv('field-keepAlive',   c.keepAlive   ?? 60);
+    _sv('field-username',    c.username    ?? '');
+    _sv('field-password',    c.password    ?? '');
+    _sc('field-tls',         c.tls         ?? true);
+    _sc('field-cleanSession',c.cleanSession ?? true);
+    _sc('field-retainMessages', c.retainMessages ?? false);
+    _radio('field-qos', String(c.qos ?? 1));
+
+    // Topics tab
+    _sv('field-baseTopic',    c.baseTopic    ?? '');
+    _sv('field-json-template',c.jsonTemplate ?? '{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}');
+
+    // Advanced tab
+    _sv('field-advanced-keep-alive',         c.keepAlive         ?? 60);
+    _sv('field-advanced-reconnect-interval', c.reconnectInterval ?? 5);
+    _sv('field-advanced-connect-timeout',    c.connectTimeout    ?? 30);
+    _sv('field-advanced-max-retries',        c.maxRetries        ?? 5);
+    _sc('field-advanced-auto-reconnect',     c.autoReconnect     ?? true);
+    _sc('field-advanced-store-forward',      c.storeForward      ?? false);
+    _sc('field-advanced-validate-certs',     c.validateCerts     ?? true);
+    _sv('field-advanced-log-level',          c.logLevel          ?? 'info');
+    _sv('field-advanced-max-log-size',       c.maxLogSize        ?? 10);
+    _sv('field-advanced-log-retention',      c.logRetention      ?? 7);
+    _sc('field-advanced-connection-logging', c.connLogging       ?? true);
+    _sc('field-advanced-message-logging',    c.msgLogging        ?? false);
+    _sv('field-advanced-max-inflight',       c.maxInflight       ?? 10);
+    _sv('field-advanced-queue-size',         c.queueSize         ?? 100);
+    _sv('field-advanced-buffer-size',        c.bufferSize        ?? 1024);
+    _sv('field-advanced-ping-timeout',       c.pingTimeout       ?? 10);
+    _sc('field-advanced-enable-compression', c.compression       ?? false);
+    _sv('field-advanced-compression-level',  c.compressionLevel  ?? 6);
+    _sv('field-advanced-min-compress-size',  c.minCompressSize   ?? 256);
+    _sv('field-advanced-tls-version',        c.tlsVersion        ?? 'auto');
+    _sv('field-advanced-cipher-suite',       c.cipherSuite       ?? 'default');
+    _sc('field-advanced-enable-lwt',         c.lwt               ?? false);
+    _sv('field-advanced-lwt-topic',          c.lwtTopic          ?? '');
+    _sv('field-advanced-lwt-message',        c.lwtMessage        ?? '');
+    _sv('field-advanced-lwt-qos',            c.lwtQos            ?? 1);
+    _sc('field-advanced-lwt-retain',         c.lwtRetain         ?? false);
+
+    // Populate tag publishing table from mqtt_datapoints
+    _renderMqttTagsTable(conn);
+}
+
+function _renderMqttTagsTable(conn) {
+    const tbody = _el('mqtt-tags-table');
+    if (!tbody) return;
+    const tags = conn.tags || [];
+    const base = conn.config?.baseTopic || '';
+    tbody.innerHTML = '';
+    if (!tags.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags" to publish data.</td></tr>';
+        return;
+    }
+    tags.forEach(tag => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100';
+        tr.dataset.tagName = tag.name;
+        tr.innerHTML = `
+          <td class="p-2"><input type="checkbox" class="tag-select"></td>
+          <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
+          <td class="p-2">
+            <input type="text" class="compact-input text-xs tag-topic" value="${_esc(tag.topic||base)}" placeholder="${_esc(base)}/...">
+          </td>
+          <td class="p-2">
+            <select class="compact-select text-xs tag-publish-mode">
+              <option value="onChange" ${tag.publishMode==='onChange'?'selected':''}>On Change</option>
+              <option value="100"  ${tag.publishMode==='100'?'selected':''}>100 ms</option>
+              <option value="500"  ${tag.publishMode==='500'?'selected':''}>500 ms</option>
+              <option value="1000" ${tag.publishMode==='1000'?'selected':''}>1 sec</option>
+              <option value="5000" ${tag.publishMode==='5000'?'selected':''}>5 sec</option>
+            </select>
+          </td>
+          <td class="p-2">
+            <div class="flex items-center gap-2">
+              <label class="toggle-switch">
+                <input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}>
+                <span class="toggle-slider"></span>
+              </label>
+              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ─── POPULATE HTTP FORM ───────────────────────────────────────────────────────
+function _populateHttp(conn) {
+    const c = conn.config || {};
+    _sv('field-url',         c.url         ?? '');
+    _sv('field-method',      c.method      ?? 'POST');
+    _sv('field-contentType', c.contentType ?? 'application/json');
+    _sv('field-authType',    c.authType    ?? 'none');
+    _sv('field-username',    c.username    ?? '');
+    _sv('field-password',    c.password    ?? '');
+    _sv('field-apiKey',      c.apiKey      ?? '');
+    _sv('field-oauth-clientId', c.oauthClientId ?? '');
+    _sv('field-oauth-secret',   c.oauthSecret   ?? '');
+    _sv('field-oauth-tokenUrl', c.oauthTokenUrl ?? '');
+
+    // Trigger auth-type show/hide
+    const authSel = _el('field-authType');
+    if (authSel) authSel.dispatchEvent(new Event('change'));
+
+    // Payload tab
+    _radio('field-payloadFormat', c.payloadFormat ?? 'json');
+    _sv('field-jsonTemplate',   c.jsonTemplate    ?? '');
+    _sv('field-timestampFormat',c.timestampFormat ?? 'epoch');
+    _sc('field-compression',    c.compression     ?? false);
+    _sc('field-encryption',     c.encryption      ?? false);
+    _sv('field-dataFilter',     c.dataFilter      ?? '');
+
+    // Trigger payload format show/hide
+    const checked = document.querySelector('input[name="field-payloadFormat"]:checked');
+    if (checked) checked.dispatchEvent(new Event('change'));
+
+    // Publishing tab
+    _radio('field-publishMode', c.publishMode ?? 'realtime');
+    _sv('field-batchSize',     c.batchSize    ?? 100);
+    _sv('field-batchInterval', c.batchInterval ?? 60);
+
+    // Advanced tab
+    _sv('field-timeout',    c.timeout    ?? 30);
+    _sv('field-retryCount', c.retryCount ?? 3);
+    _sv('field-retryDelay', c.retryDelay ?? 5);
+    _sc('field-sslVerify',  c.sslVerify  ?? true);
+    _sv('field-proxyServer',    c.proxyServer    ?? '');
+    _sv('field-proxyUsername',  c.proxyUsername  ?? '');
+    _sv('field-proxyPassword',  c.proxyPassword  ?? '');
+    _sv('field-rateLimit',  c.rateLimit  ?? 60);
+    _sc('field-throttle',   c.throttle   ?? true);
+    _sc('field-storeForward',c.storeForward ?? true);
+    _sv('field-maxStorage',     c.maxStorage     ?? 1000);
+    _sv('field-retentionPeriod',c.retentionPeriod ?? 24);
+
+    // Publishing tab tags table
+    _renderHttpTagsTable(conn);
+}
+
+function _renderHttpTagsTable(conn) {
+    const tbody = _el('http-tags-table');
+    if (!tbody) return;
+    const tags = conn.tags || [];
+    tbody.innerHTML = '';
+    if (!tags.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags" to publish data.</td></tr>';
+        return;
+    }
+    tags.forEach(tag => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100';
+        tr.dataset.tagName = tag.name;
+        tr.innerHTML = `
+          <td class="p-2"><input type="checkbox" class="http-tag-select"></td>
+          <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
+          <td class="p-2">
+            <select class="compact-select text-xs tag-publish-mode">
+              <option value="onChange" ${tag.publishMode==='onChange'?'selected':''}>On Change</option>
+              <option value="1000" ${tag.publishMode==='1000'?'selected':''}>1 sec</option>
+              <option value="5000" ${tag.publishMode==='5000'?'selected':''}>5 sec</option>
+              <option value="30000"${tag.publishMode==='30000'?'selected':''}>30 sec</option>
+            </select>
+          </td>
+          <td class="p-2 text-xs">
+            <select class="compact-select text-xs">
+              <option value="high">High</option>
+              <option value="medium" selected>Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </td>
+          <td class="p-2">
+            <div class="flex items-center gap-2">
+              <label class="toggle-switch">
+                <input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}>
+                <span class="toggle-slider"></span>
+              </label>
+              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ─── WIRE SAVE BUTTONS ────────────────────────────────────────────────────────
+function _wireFormSaves(conn) {
+    if (conn.type === 'mqtt') {
+        if (!window.mqttFormLogic) window.mqttFormLogic = {};
+        window.mqttFormLogic.saveMqttConnectionSettings = () => _saveMqttConnection(conn.id);
+        window.mqttFormLogic.saveMqttTopicSettings      = () => _saveMqttTopics(conn.id);
+        window.mqttFormLogic.saveMqttPublishingSettings = () => _saveMqttPublishing(conn.id);
+        window.mqttFormLogic.saveMqttAdvancedSettings   = () => _saveMqttAdvanced(conn.id);
+    } else {
+        if (!window.httpFormLogic) window.httpFormLogic = {};
+        window.httpFormLogic.saveHttpConnectionSettings = () => _saveHttpConnection(conn.id);
+        window.httpFormLogic.saveHttpPayloadSettings    = () => _saveHttpPayload(conn.id);
+        window.httpFormLogic.saveHttpPublishingSettings = () => _saveHttpPublishing(conn.id);
+        window.httpFormLogic.saveHttpAdvancedSettings   = () => _saveHttpAdvanced(conn.id);
+    }
+}
+
+// ─── WIRE ADD TAGS BUTTON ─────────────────────────────────────────────────────
+function _wireAddTagsBtn(conn) {
+    // Both forms call showAddTagModal() — we override it here
+    if (!window.mqttFormLogic) window.mqttFormLogic = {};
+    if (!window.httpFormLogic) window.httpFormLogic = {};
+    const openFn = () => _openTagsModal(conn);
+    window.mqttFormLogic.showAddTagModal = openFn;
+    window.httpFormLogic.showAddTagModal = openFn;
+    // Also override the raw global (http-form uses direct call)
+    window.showAddTagModal = openFn;
+    window.removeKeyValueItem = btn => btn.closest('.key-value-item')?.remove();
+    window.addKeyValueItem = btn => {
+        const list = btn.closest('.key-value-list');
+        const div = document.createElement('div');
+        div.className = 'key-value-item';
+        div.innerHTML = `<input type="text" placeholder="Header Name" class="compact-input"><input type="text" placeholder="Value" class="compact-input"><button type="button" class="text-red-600" onclick="window.removeKeyValueItem(this)"><i class="fa-solid fa-trash"></i></button>`;
+        list?.insertBefore(div, btn.closest('.p-2') || null);
+    };
+    window.generatePassword = id => {
+        const el = _el(id);
+        if (el) el.value = [...crypto.getRandomValues(new Uint8Array(12))].map(b=>'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b%72]).join('');
+    };
+}
+
+// ─── SAVE: MQTT ───────────────────────────────────────────────────────────────
+async function _saveMqttConnection(id) {
+    const cfg = {
+        protocol:       _gv('field-protocol'),
+        host:           _gv('field-host'),
+        port:           +_gv('field-port') || 8883,
+        clientId:       _gv('field-clientId'),
+        keepAlive:      +_gv('field-keepAlive') || 60,
+        username:       _gv('field-username'),
+        password:       _gv('field-password'),
+        tls:            _gc('field-tls'),
+        cleanSession:   _gc('field-cleanSession'),
+        retainMessages: _gc('field-retainMessages'),
+        qos:            +_gr('field-qos') || 1,
+    };
+    await _putCfg(id, cfg, 'Connection settings saved');
+}
+
+async function _saveMqttTopics(id) {
+    const conn = _connections.find(c => c.id === id);
+    const cfg  = { ...(conn?.config||{}), baseTopic: _gv('field-baseTopic'), jsonTemplate: _gv('field-json-template') };
+    await _putCfg(id, cfg, 'Topics & Format saved');
+}
+
+async function _saveMqttPublishing(id) {
+    // Collect rows from the rendered table and PUT to tags endpoint
+    const rows = document.querySelectorAll('#mqtt-tags-table tr[data-tag-name]');
+    const tags = [...rows].map(tr => ({
+        name:        tr.dataset.tagName,
+        topic:       tr.querySelector('.tag-topic')?.value || '',
+        publishMode: tr.querySelector('.tag-publish-mode')?.value || 'onChange',
+        enabled:     tr.querySelector('.tag-enabled')?.checked ?? true,
+    }));
+    try {
+        await _api('POST', `${API}/connections/${id}/tags`, { tags: tags.map(t=>t.name), publishMode: 'onChange', replace: true });
+        // Also update individual topic/mode per tag — batch update via config
+        const conn = _connections.find(c=>c.id===id);
+        if (conn) { conn.tags = tags; }
+        _toast('Publishing settings saved', 'success');
+    } catch { _toast('Save failed', 'error'); }
+}
+
+async function _saveMqttAdvanced(id) {
+    const conn = _connections.find(c => c.id === id);
+    const cfg  = { ...(conn?.config||{}),
+        keepAlive:         +_gv('field-advanced-keep-alive')         || 60,
+        reconnectInterval: +_gv('field-advanced-reconnect-interval') || 5,
+        connectTimeout:    +_gv('field-advanced-connect-timeout')    || 30,
+        maxRetries:        +_gv('field-advanced-max-retries')        || 5,
+        autoReconnect:     _gc('field-advanced-auto-reconnect'),
+        storeForward:      _gc('field-advanced-store-forward'),
+        validateCerts:     _gc('field-advanced-validate-certs'),
+        logLevel:          _gv('field-advanced-log-level'),
+        maxLogSize:        +_gv('field-advanced-max-log-size')       || 10,
+        logRetention:      +_gv('field-advanced-log-retention')      || 7,
+        connLogging:       _gc('field-advanced-connection-logging'),
+        msgLogging:        _gc('field-advanced-message-logging'),
+        maxInflight:       +_gv('field-advanced-max-inflight')       || 10,
+        queueSize:         +_gv('field-advanced-queue-size')         || 100,
+        bufferSize:        +_gv('field-advanced-buffer-size')        || 1024,
+        pingTimeout:       +_gv('field-advanced-ping-timeout')       || 10,
+        compression:       _gc('field-advanced-enable-compression'),
+        compressionLevel:  +_gv('field-advanced-compression-level')  || 6,
+        minCompressSize:   +_gv('field-advanced-min-compress-size')  || 256,
+        tlsVersion:        _gv('field-advanced-tls-version'),
+        cipherSuite:       _gv('field-advanced-cipher-suite'),
+        lwt:               _gc('field-advanced-enable-lwt'),
+        lwtTopic:          _gv('field-advanced-lwt-topic'),
+        lwtMessage:        _gv('field-advanced-lwt-message'),
+        lwtQos:            +_gv('field-advanced-lwt-qos')            || 1,
+        lwtRetain:         _gc('field-advanced-lwt-retain'),
+    };
+    await _putCfg(id, cfg, 'Advanced settings saved');
+}
+
+// ─── SAVE: HTTP ───────────────────────────────────────────────────────────────
+async function _saveHttpConnection(id) {
+    // Collect custom headers
+    const headers = {};
+    document.querySelectorAll('.key-value-item').forEach(item => {
+        const inputs = item.querySelectorAll('input');
+        if (inputs[0]?.value) headers[inputs[0].value] = inputs[1]?.value || '';
+    });
+    const cfg = {
+        url:           _gv('field-url'),
+        method:        _gv('field-method'),
+        contentType:   _gv('field-contentType'),
+        authType:      _gv('field-authType'),
+        username:      _gv('field-username'),
+        password:      _gv('field-password'),
+        apiKey:        _gv('field-apiKey'),
+        oauthClientId: _gv('field-oauth-clientId'),
+        oauthSecret:   _gv('field-oauth-secret'),
+        oauthTokenUrl: _gv('field-oauth-tokenUrl'),
+        customHeaders: headers,
+    };
+    await _putCfg(id, cfg, 'Connection settings saved');
+}
+
+async function _saveHttpPayload(id) {
+    const conn = _connections.find(c=>c.id===id);
+    const cfg = { ...(conn?.config||{}),
+        payloadFormat:   _gr('field-payloadFormat') || 'json',
+        jsonTemplate:    _gv('field-jsonTemplate'),
+        timestampFormat: _gv('field-timestampFormat'),
+        compression:     _gc('field-compression'),
+        encryption:      _gc('field-encryption'),
+        dataFilter:      _gv('field-dataFilter'),
+    };
+    await _putCfg(id, cfg, 'Payload format saved');
+}
+
+async function _saveHttpPublishing(id) {
+    const rows = document.querySelectorAll('#http-tags-table tr[data-tag-name]');
+    const tags = [...rows].map(tr => tr.dataset.tagName);
+    try {
+        await _api('POST', `${API}/connections/${id}/tags`, { tags, publishMode: _gr('field-publishMode') || 'realtime', replace: true });
+        const conn = _connections.find(c=>c.id===id);
+        const cfg  = { ...(conn?.config||{}), publishMode: _gr('field-publishMode')||'realtime', batchSize: +_gv('field-batchSize')||100, batchInterval: +_gv('field-batchInterval')||60 };
+        await _putCfg(id, cfg, 'Publishing settings saved');
+    } catch { _toast('Save failed', 'error'); }
+}
+
+async function _saveHttpAdvanced(id) {
+    const conn = _connections.find(c=>c.id===id);
+    const cfg = { ...(conn?.config||{}),
+        timeout:          +_gv('field-timeout')          || 30,
+        retryCount:       +_gv('field-retryCount')       || 3,
+        retryDelay:       +_gv('field-retryDelay')       || 5,
+        sslVerify:        _gc('field-sslVerify'),
+        proxyServer:      _gv('field-proxyServer'),
+        proxyUsername:    _gv('field-proxyUsername'),
+        proxyPassword:    _gv('field-proxyPassword'),
+        rateLimit:        +_gv('field-rateLimit')        || 60,
+        throttle:         _gc('field-throttle'),
+        storeForward:     _gc('field-storeForward'),
+        maxStorage:       +_gv('field-maxStorage')       || 1000,
+        retentionPeriod:  +_gv('field-retentionPeriod')  || 24,
+    };
+    await _putCfg(id, cfg, 'Advanced settings saved');
+}
+
+async function _putCfg(id, cfg, msg) {
+    try {
+        await _api('PUT', `${API}/connections/${id}`, { config: cfg });
+        const idx = _connections.findIndex(c=>c.id===id);
+        if (idx !== -1) _connections[idx].config = { ...(_connections[idx].config||{}), ...cfg };
+        _toast(msg, 'success');
+    } catch { _toast('Save failed', 'error'); }
+}
+
+// ─── REMOVE TAG (called from inline button) ───────────────────────────────────
+window._cloudRemoveTag = async function (connId, tagName) {
+    if (!confirm(`Remove tag "${tagName}"?`)) return;
+    try {
+        await _api('DELETE', `${API}/connections/${connId}/tags/${encodeURIComponent(tagName)}`);
+        await _selectConnection(connId);
+        _toast(`Tag "${tagName}" removed`, 'success');
+    } catch { _toast('Remove failed', 'error'); }
+};
+
+// ─── ADD TAGS MODAL ───────────────────────────────────────────────────────────
+async function _openTagsModal(conn) {
+    _showM('addTagsModal');
+    _el('tagsSelectedCount').textContent = '0';
+    _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Loading…</td></tr>';
+
+    try {
+        const d = await _api('GET', `${API}/available-tags`);
+        _availTags = d.tags || [];
+        // Filter out already-assigned tags
+        const assigned = new Set((conn.tags || []).map(t => t.name));
+        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name)), conn);
+    } catch { _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">Failed to load tags</td></tr>'; }
+
+    _el('tagSearch').oninput = e => {
+        const q = e.target.value.toLowerCase();
+        const assigned = new Set((conn.tags || []).map(t => t.name));
+        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name) && (t.name.toLowerCase().includes(q) || t.device.toLowerCase().includes(q))), conn);
+    };
+
+    _el('selectAllTags').onchange = e => {
+        document.querySelectorAll('.modal-tag-cb').forEach(cb => cb.checked = e.target.checked);
+        _updateTagCount();
+    };
+
+    _el('tagsCancel').onclick  = () => _hideM('addTagsModal');
+    _el('closeTagsModal').onclick = () => _hideM('addTagsModal');
+    _el('tagsConfirm').onclick = async () => {
+        const selected = [...document.querySelectorAll('.modal-tag-cb:checked')].map(cb => cb.dataset.tag);
+        if (!selected.length) { _toast('Select at least one tag', 'error'); return; }
+        _setLoading(_el('tagsConfirm'), true);
+        try {
+            await _api('POST', `${API}/connections/${conn.id}/tags`, { tags: selected, publishMode: 'onChange', replace: false });
+            _hideM('addTagsModal');
+            await _selectConnection(conn.id);
+            _toast(`${selected.length} tag(s) added`, 'success');
+        } catch { _toast('Failed to add tags', 'error'); }
+        finally { _setLoading(_el('tagsConfirm'), false); }
+    };
+}
+
+function _renderTagsModal(tags, conn) {
+    const tbody = _el('tagsModalBody');
+    if (!tags.length) { tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">No tags available</td></tr>'; return; }
+    tbody.innerHTML = tags.map(t => `
+      <tr class="border-t border-slate-100 hover:bg-slate-50">
+        <td class="p-2"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" onchange="_updateTagCount()"></td>
+        <td class="p-2 font-mono text-xs">${_esc(t.name)}</td>
+        <td class="p-2 text-xs text-slate-600">${_esc(t.device||'—')}</td>
+        <td class="p-2 text-xs text-slate-500">${_esc(t.unit||'—')}</td>
+        <td class="p-2"><span class="cc-badge ${t.source==='modbus'?'mqtt':'http'}">${_esc(t.source)}</span></td>
+      </tr>`).join('');
+}
+
+window._updateTagCount = function () {
+    const n = document.querySelectorAll('.modal-tag-cb:checked').length;
+    const el = _el('tagsSelectedCount');
+    if (el) el.textContent = n;
+};
+
+// ─── ADD CONNECTION MODAL ─────────────────────────────────────────────────────
+const _TYPES = {
+    mqtt: { name:'MQTT Broker',   desc:'Standard IoT messaging protocol', icon:'fa-solid fa-cloud',  color:'#3B82F6' },
+    http: { name:'HTTP Endpoint', desc:'REST API / webhook endpoint',      icon:'fa-solid fa-globe',  color:'#F59E0B' },
+};
+
+function _openAddModal() {
+    _selectedType = null;
+    _showStep1();
+    _buildTypeGrid();
+    _showM('addConnectionModal');
+}
+
+function _buildTypeGrid() {
+    const grid = _el('typeGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    Object.entries(_TYPES).forEach(([type, info]) => {
+        const card = document.createElement('div');
+        card.className = 'type-card';
+        card.innerHTML = `
+          <div style="width:48px;height:48px;border-radius:50%;background:${info.color}22;color:${info.color};display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px;">
+            <i class="${info.icon}"></i>
+          </div>
+          <div class="font-semibold text-slate-900 text-sm mb-1">${info.name}</div>
+          <div class="text-xs text-slate-500">${info.desc}</div>`;
+        card.addEventListener('click', () => {
+            document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            _selectedType = type;
+            _el('typePreview').classList.remove('hidden');
+            _el('typePreviewName').textContent = info.name;
+            const btn = _el('proceedBtn');
+            btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+        });
         grid.appendChild(card);
     });
 }
 
-async function selectConnectionType(type) {
-    selectedConnectionType = type;
-    const connectionConfig = config.connectionTypes[type];
-    
-    document.getElementById('formTitle').textContent = `Configure ${connectionConfig.name}`;
-    document.getElementById('connectionTypeSelection').classList.add('hidden');
-    document.getElementById('connectionFormContainer').classList.remove('hidden');
-    
-    await renderConnectionForm(type);
+function _showStep1() {
+    _el('stepType').style.display = '';
+    _el('stepForm').style.display = 'none';
+    const btn = _el('proceedBtn');
+    btn.disabled = true; btn.style.opacity = '.4'; btn.style.cursor = 'not-allowed';
+    _el('typePreview').classList.add('hidden');
 }
 
-async function renderConnectionForm(type) {
-    const formContent = document.getElementById('formContent');
-    const connectionConfig = config.connectionTypes[type];
-    
+function _showStep2(type) {
+    _el('stepType').style.display = 'none';
+    _el('stepForm').style.display = '';
+    _el('formCtxName').textContent = _TYPES[type]?.name || type;
+    _el('addName').value = '';
+    _el('addMqttFields').classList.toggle('hidden', type !== 'mqtt');
+    _el('addHttpFields').classList.toggle('hidden', type !== 'http');
+}
+
+async function _handleCreate(e) {
+    e.preventDefault();
+    const btn  = e.target.querySelector('[type=submit]');
+    const name = _el('addName').value.trim();
+    if (!name) { _toast('Name is required', 'error'); return; }
+    if (!_selectedType) { _toast('Select a type', 'error'); return; }
+    let conn = {};
+    if (_selectedType === 'mqtt') {
+        const host = _el('addHost').value.trim();
+        if (!host) { _toast('Broker host is required', 'error'); return; }
+        conn = { host, port: +_el('addPort').value||1883, username: _el('addUsername').value.trim(), password: _el('addPassword').value };
+    } else {
+        const url = _el('addUrl').value.trim();
+        if (!url) { _toast('URL is required', 'error'); return; }
+        conn = { url, method: _el('addMethod').value, apiKey: _el('addToken').value.trim() };
+    }
+    _setLoading(btn, true);
     try {
-        const response = await fetch(connectionConfig.formFile);
-        if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
-        
-        const html = await response.text();
-        formContent.innerHTML = html;
-        
-        initializeForm(type);
-        
-    } catch (error) {
-        console.error('Error loading form:', error);
-        formContent.innerHTML = createFallbackForm(type);
-        initializeTemplateFields();
-        
-        const backButton = document.createElement('button');
-        backButton.onclick = showConnectionTypeSelection;
-        backButton.className = 'mt-4 compact-button border border-slate-300 text-slate-700 hover:bg-slate-50';
-        backButton.innerHTML = '<i class="fa-solid fa-arrow-left mr-1"></i> Back to Connection Types';
-        formContent.appendChild(backButton);
-    }
+        const d = await _api('POST', `${API}/connections`, { type: _selectedType, name, enabled: true, connection: conn });
+        _hideM('addConnectionModal');
+        _selectedId = d.id;
+        await _loadConnections();
+        _toast(`"${name}" created`, 'success');
+    } catch (err) { _toast('Create failed', 'error'); }
+    finally { _setLoading(btn, false); }
 }
 
-function createFallbackForm(type) {
-    if (type === 'mqtt') {
-        return `
-            <div class="form-section">
-                <h5 class="form-section-title">Connection Configuration</h5>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
-                        <input type="text" id="field-name" class="w-full compact-input" placeholder="${config.connectionTypes[type]?.defaultName || 'New Connection'}">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Host / Endpoint</label>
-                        <input type="text" id="field-host" class="w-full compact-input" placeholder="example.com">
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        return `
-            <div class="form-section">
-                <h5 class="form-section-title">Connection Configuration</h5>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
-                        <input type="text" id="field-name" class="w-full compact-input" placeholder="${config.connectionTypes[type]?.defaultName || 'New Connection'}">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 mb-1">Host / Endpoint</label>
-                        <input type="text" id="field-host" class="w-full compact-input" placeholder="example.com">
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-}
-
-function initializeForm(type) {
-    if (type === 'mqtt') {
-        // Wait a moment for DOM to be ready, then initialize MQTT form
-        setTimeout(() => {
-            if (typeof window.initializeMqttForm === 'function') {
-                window.initializeMqttForm();
-            }
-        }, 100);
-    } else if (type === 'http') {
-        // Wait a moment for DOM to be ready, then initialize HTTP form
-        setTimeout(() => {
-            if (typeof window.initializeHttpForm === 'function') {
-                window.initializeHttpForm();
-            }
-        }, 100);
-    } else {
-        initializeTemplateFields();
-    }
-}
-
-function initializeTemplateFields() {
-    document.querySelectorAll('.toggle-switch input').forEach(toggle => {
-        toggle.addEventListener('change', function() {
-            const label = this.nextElementSibling;
-            label.style.backgroundColor = this.checked ? '#10B981' : '#CBD5E1';
-        });
-        
-        const label = toggle.nextElementSibling;
-        label.style.backgroundColor = toggle.checked ? '#10B981' : '#CBD5E1';
-    });
-    
-    document.querySelectorAll('.key-value-list').forEach(list => {
-        const addButton = list.querySelector('button');
-        if (addButton) {
-            addButton.onclick = function() {
-                window.cloudConnections.addKeyValueItem(this);
-            };
-        }
-        
-        list.querySelectorAll('.key-value-item button').forEach(btn => {
-            btn.onclick = function() {
-                window.cloudConnections.removeKeyValueItem(this);
-            };
-        });
-    });
-}
-
-function cancelConnectionForm() {
-    showConnectionTypeSelection();
-}
-
-function saveNewConnection() {
-    if (!selectedConnectionType) return;
-    
-    const connectionConfig = config.connectionTypes[selectedConnectionType];
-    const formData = collectFormDataFromTemplate();
-    
-    const connectionId = `${selectedConnectionType}-${Date.now()}`;
-    const name = formData.name || connectionConfig.defaultName;
-    
-    connections[connectionId] = {
-        id: connectionId,
-        type: selectedConnectionType,
-        name: name,
-        enabled: true,
-        config: formData,
-        stats: {...config.defaultStats}
-    };
-    
-    addConnectionToList(connectionId, connections[connectionId]);
-    
-    closeModal('connectionManagerModal');
-    
-    showNotification(`${connectionConfig.name} added successfully`, 'success');
-    
-    selectConnection(connectionId);
-}
-
-function collectFormDataFromTemplate() {
-    const formData = {};
-    const formContent = document.getElementById('formContent');
-    
-    if (!formContent) return formData;
-    
-    formContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
-        const id = input.id;
-        if (id.startsWith('field-')) {
-            const fieldName = id.replace('field-', '');
-            formData[fieldName] = input.value;
-        }
-    });
-    
-    formContent.querySelectorAll('select').forEach(select => {
-        const id = select.id;
-        if (id.startsWith('field-')) {
-            const fieldName = id.replace('field-', '');
-            formData[fieldName] = select.value;
-        }
-    });
-    
-    formContent.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(checkbox => {
-        const id = checkbox.id;
-        if (id.startsWith('field-')) {
-            const fieldName = id.replace('field-', '');
-            formData[fieldName] = checkbox.checked;
-        }
-    });
-    
-    formContent.querySelectorAll('input[type="radio"]').forEach(radio => {
-        const name = radio.name;
-        if (name.startsWith('field-')) {
-            const fieldName = name.replace('field-', '');
-            if (radio.checked) {
-                formData[fieldName] = radio.value;
-            }
-        }
-    });
-    
-    const keyValueData = {};
-    formContent.querySelectorAll('.key-value-item').forEach(item => {
-        const inputs = item.querySelectorAll('input[type="text"]');
-        if (inputs.length >= 2) {
-            const key = inputs[0].value.trim();
-            const value = inputs[1].value.trim();
-            if (key && value) {
-                keyValueData[key] = value;
-            }
-        }
-    });
-    
-    if (Object.keys(keyValueData).length > 0) {
-        formData.headers = keyValueData;
-    }
-    
-    return formData;
-}
-
-function loadConnections() {
-    // Load default connections
-    Object.values(config.defaultConnections).forEach(conn => {
-        connections[conn.id] = conn;
-        addConnectionToList(conn.id, conn);
-    });
-    
-    updateConnectionCount();
-    
-    // Auto-select the first connection if none is selected
-    const connectionIds = Object.keys(connections);
-    if (connectionIds.length > 0 && !selectedConnectionId) {
-        const firstId = connectionIds[0];
-        console.log('Auto-selecting first connection:', firstId);
-        selectConnection(firstId);
-    }
-}
-
-function addConnectionToList(id, conn) {
-    const list = document.getElementById('connectionsList');
-    const connectionConfig = config.connectionTypes[conn.type];
-    
-    if (!list) return;
-    
-    // Check if connection already exists in the list
-    if (document.querySelector(`[data-connection-id="${id}"]`)) {
-        updateConnectionItem(id, conn);
-        return;
-    }
-    
-    // Remove the placeholder if it exists
-    const placeholder = list.querySelector('.text-center');
-    if (placeholder) {
-        placeholder.remove();
-    }
-    
-    const colorMap = {
-        blue: 'border-blue-500 text-blue-600',
-        yellow: 'border-yellow-500 text-yellow-600',
-        purple: 'border-purple-500 text-purple-600',
-        orange: 'border-orange-500 text-orange-600',
-        green: 'border-green-500 text-green-600'
-    };
-    
-    const colorClass = colorMap[connectionConfig.color] || 'border-blue-500 text-blue-600';
-    const isSelected = selectedConnectionId === id;
-    
-    // Create HTML string with inline onclick
-    const html = `
-        <div data-connection-id="${id}" 
-             onclick="if(window.cloudConnections && window.cloudConnections.selectConnection) { window.cloudConnections.selectConnection('${id}'); } else { console.error('selectConnection not available'); }"
-             class="border-l-4 ${colorClass.split(' ')[0]} p-3 bg-white border ${isSelected ? 'border-blue-200 bg-blue-50' : 'border-slate-200'} rounded-lg cursor-pointer hover:border-blue-200 transition-colors">
-            <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                    <i class="${connectionConfig.icon} ${colorClass.split(' ')[1]}"></i>
-                    <span class="font-medium text-slate-900 text-sm">${conn.name}</span>
-                </div>
-                <span class="text-xs text-slate-500">${conn.stats.lastActive}</span>
-            </div>
-            <div class="text-xs text-slate-600 truncate mb-2">${getConnectionSummary(conn)}</div>
-            <div class="flex justify-between items-center">
-                <span class="text-xs px-2 py-1 rounded ${conn.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                    ${conn.enabled ? 'Active' : 'Inactive'}
-                </span>
-                <span class="text-xs font-medium">${conn.stats.messages.toLocaleString()} msgs</span>
-            </div>
-        </div>
-    `;
-    
-    list.insertAdjacentHTML('afterbegin', html);
-    updateConnectionCount();
-}
-
-function updateConnectionItem(id, conn) {
-    const item = document.querySelector(`[data-connection-id="${id}"]`);
-    if (!item) return;
-    
-    const connectionConfig = config.connectionTypes[conn.type];
-    const colorMap = {
-        blue: 'text-blue-600',
-        yellow: 'text-yellow-600',
-        purple: 'text-purple-600',
-        orange: 'text-orange-600',
-        green: 'text-green-600'
-    };
-    
-    const iconClass = colorMap[connectionConfig.color] || 'text-blue-600';
-    
-    item.querySelector('i').className = `${connectionConfig.icon} ${iconClass}`;
-    item.querySelector('.font-medium').textContent = conn.name;
-    item.querySelector('.text-xs.text-slate-500').textContent = conn.stats.lastActive;
-    item.querySelector('.text-slate-600').textContent = getConnectionSummary(conn);
-    item.querySelector('.bg-green-100, .bg-gray-100').className = conn.enabled ? 'text-xs px-2 py-1 rounded bg-green-100 text-green-800' : 'text-xs px-2 py-1 rounded bg-gray-100 text-gray-800';
-    item.querySelector('.bg-green-100, .bg-gray-100').textContent = conn.enabled ? 'Active' : 'Inactive';
-    item.querySelector('.font-medium:last-child').textContent = `${conn.stats.messages.toLocaleString()} msgs`;
-}
-
-function getConnectionSummary(conn) {
-    if (conn.type === 'mqtt' && conn.config.host) {
-        const protocol = conn.config.protocol || 'mqtt://';
-        const port = conn.config.port || (protocol.includes('mqtts') ? 8883 : 1883);
-        return `${protocol}${conn.config.host}:${port}`;
-    }
-    if (conn.type === 'http' && conn.config.url) {
-        return conn.config.url;
-    }
-    if (conn.config.endpoint) return conn.config.endpoint;
-    if (conn.config.hostname) return conn.config.hostname;
-    return `${config.connectionTypes[conn.type]?.name} Connection`;
-}
-
-// CRITICAL FUNCTION: This must work for connections to be selectable
-function selectConnection(id) {
-    console.log('selectConnection called with id:', id);
-    
-    // Validate connection exists
-    if (!connections[id]) {
-        console.error('Connection not found:', id);
-        showEmptyConnectionState();
-        return;
-    }
-    
-    // Update selected ID
-    selectedConnectionId = id;
-    const conn = connections[id];
-    
-    // Update UI for all connection items
-    const allItems = document.querySelectorAll('[data-connection-id]');
-    allItems.forEach(el => {
-        const itemId = el.getAttribute('data-connection-id');
-        el.classList.remove('border-blue-200', 'bg-blue-50');
-        el.classList.add('border-slate-200');
-        
-        if (itemId === id) {
-            el.classList.add('border-blue-200', 'bg-blue-50');
-            el.classList.remove('border-slate-200');
-        }
-    });
-    
-    // Update the configuration panel
-    updateConfigurationForConnection(conn);
-}
-
-function showEmptyConnectionState() {
-    document.getElementById('connectionName').textContent = 'No Connection Selected';
-    document.getElementById('connectionDescription').textContent = 'Select a connection to view details';
-    document.getElementById('statMessages').textContent = '0';
-    document.getElementById('statErrors').textContent = '0';
-    document.getElementById('statLastSent').textContent = 'Never';
-    document.getElementById('statLatency').textContent = '0 ms';
-    
-    // Disable and reset the enabled toggle
-    const enabledToggle = document.getElementById('mqtt-enabled');
-    if (enabledToggle) {
-        enabledToggle.checked = false;
-        enabledToggle.disabled = true;
-        const slider = enabledToggle.nextElementSibling;
-        if (slider) {
-            slider.style.backgroundColor = '#CBD5E1';
-        }
-    }
-    
-    document.getElementById('diagnosticStatus').className = 'status-indicator offline';
-    document.getElementById('diagnosticStatus').textContent = 'Disconnected';
-    document.getElementById('diagnosticLastMessage').textContent = 'Never';
-    document.getElementById('diagnosticPacketsSent').textContent = '0';
-    document.getElementById('diagnosticPacketsReceived').textContent = '0';
-    document.getElementById('diagnosticLastError').textContent = 'None';
-    document.getElementById('diagnosticLatency').textContent = '0 ms';
-    
-    document.getElementById('downlinkCommands').innerHTML = `
-        <tr>
-            <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
-                No commands received
-            </td>
-        </tr>
-    `;
-    
-    document.getElementById('tab-content-connection').innerHTML = `
-        <div class="text-center py-12 text-slate-400">
-            <i class="fa-solid fa-plug text-3xl mb-3"></i>
-            <p class="text-sm">Select a connection to configure</p>
-            <p class="text-xs mt-1">or click "Add Connection" to create a new one</p>
-        </div>
-    `;
-    
-    document.getElementById('tab-content-topics').style.display = 'none';
-    document.getElementById('tab-content-publishing').style.display = 'none';
-    document.getElementById('tab-content-advanced').style.display = 'none';
-    
-    document.querySelectorAll('.tab-button').forEach(tab => {
-        if (tab.id === 'tab-connection') {
-            tab.style.display = 'block';
-            tab.classList.add('active');
-        } else {
-            tab.style.display = 'none';
-            tab.classList.remove('active');
-        }
-    });
-}
-
-async function updateConfigurationForConnection(conn) {
-    // SAFETY CHECK: Don't run if we're not on the cloud connections page
-    const isOnCloudPage = document.getElementById('connectionName') !== null;
-    if (!isOnCloudPage) {
-        console.log('Not on cloud connections page, skipping update');
-        return;
-    }
-    
-    const connectionConfig = config.connectionTypes[conn.type];
-    if (!connectionConfig) {
-        console.error('Connection type not found:', conn.type);
-        return;
-    }
-    
-    // Update basic info
-    document.getElementById('connectionName').textContent = conn.name;
-    document.getElementById('connectionDescription').textContent = `${connectionConfig.name} - ${connectionConfig.description}`;
-    
-    // Update stats
-    document.getElementById('statMessages').textContent = conn.stats.messages.toLocaleString();
-    document.getElementById('statErrors').textContent = conn.stats.errors;
-    document.getElementById('statLastSent').textContent = conn.stats.lastActive;
-    document.getElementById('statLatency').textContent = conn.stats.latency + ' ms';
-    
-    // Update enabled toggle
-    const enabledToggle = document.getElementById('mqtt-enabled');
-    if (enabledToggle) {
-        enabledToggle.checked = conn.enabled;
-        enabledToggle.disabled = false;
-        
-        // Update the toggle slider color
-        const slider = enabledToggle.nextElementSibling;
-        if (slider) {
-            slider.style.backgroundColor = conn.enabled ? '#10B981' : '#CBD5E1';
-        }
-    }
-    
-    // Update diagnostics
-    const statusElement = document.getElementById('diagnosticStatus');
-    if (statusElement) {
-        statusElement.className = conn.enabled ? 'status-indicator online' : 'status-indicator offline';
-        statusElement.textContent = conn.enabled ? 'Connected' : 'Disconnected';
-    }
-    
-    document.getElementById('diagnosticLastMessage').textContent = conn.stats.lastActive;
-    document.getElementById('diagnosticPacketsSent').textContent = conn.stats.messages.toLocaleString();
-    document.getElementById('diagnosticPacketsReceived').textContent = Math.floor(conn.stats.messages * 0.01).toLocaleString();
-    document.getElementById('diagnosticLastError').textContent = conn.stats.errors > 0 ? `${conn.stats.errors} errors` : 'None';
-    document.getElementById('diagnosticLatency').textContent = conn.stats.latency + ' ms';
-    
-    // Update downlink commands
-    if (conn.enabled) {
-        document.getElementById('downlinkCommands').innerHTML = `
-            <tr class="border-t border-slate-100">
-                <td class="p-2">10:43:12</td>
-                <td class="p-2 font-mono">SetSpeed=12</td>
-                <td class="p-2">
-                    <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">Accepted</span>
-                </td>
-            </tr>
-            <tr class="border-t border-slate-100">
-                <td class="p-2">10:41:04</td>
-                <td class="p-2 font-mono">ResetWarning</td>
-                <td class="p-2">
-                    <span class="px-2 py-1 bg-red-50 text-red-700 rounded text-xs">Failed</span>
-                </td>
-            </tr>
-        `;
-    } else {
-        document.getElementById('downlinkCommands').innerHTML = `
-            <tr>
-                <td colspan="3" class="p-4 text-center text-slate-400 text-xs">
-                    No commands received
-                </td>
-            </tr>
-        `;
-    }
-    
-    // Clear and show loading indicator for configuration
-    const tabContent = document.getElementById('tab-content-connection');
-    if (tabContent) {
-        tabContent.innerHTML = '<div class="text-center py-8"><i class="fa-solid fa-spinner fa-spin text-primary text-xl"></i><p class="text-xs text-slate-500 mt-2">Loading configuration...</p></div>';
-    }
-    
-    // Show only connection tab for now
-    document.getElementById('tab-content-topics').style.display = 'none';
-    document.getElementById('tab-content-publishing').style.display = 'none';
-    document.getElementById('tab-content-advanced').style.display = 'none';
-    
-    // Update tab buttons
-    document.querySelectorAll('.tab-button').forEach(tab => {
-        if (tab.id === 'tab-connection') {
-            tab.style.display = 'block';
-            tab.classList.add('active');
-        } else {
-            tab.style.display = 'none';
-            tab.classList.remove('active');
-        }
-    });
-    
-    // Load the connection-specific edit form
-    await loadConnectionEditForm(conn);
-}
-
-async function loadConnectionEditForm(conn) {
-    const connectionConfig = config.connectionTypes[conn.type];
-    const tabContent = document.getElementById('tab-content-connection');
-    
-    if (!connectionConfig || !tabContent) {
-        tabContent.innerHTML = `
-            <div class="text-center py-8 text-slate-400">
-                <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
-                <p class="text-sm">Failed to load configuration</p>
-            </div>
-        `;
-        return;
-    }
-    
+// ─── TEST ─────────────────────────────────────────────────────────────────────
+async function _runTest() {
+    if (!_selectedId) return;
+    const btn = _el('testBtn');
+    _setLoading(btn, true);
     try {
-        const response = await fetch(connectionConfig.formFile);
-        if (!response.ok) throw new Error(`Failed to load form: ${response.status}`);
-        
-        const html = await response.text();
-        
-        tabContent.innerHTML = `
-            <div class="space-y-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h4 class="text-sm font-semibold text-slate-900">${connectionConfig.name} Configuration</h4>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-slate-700">Enabled</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="connection-enabled" ${conn.enabled ? 'checked' : ''}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="form-section">
-                    <h5 class="form-section-title">Connection Information</h5>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name</label>
-                            <input type="text" id="edit-connection-name" 
-                                   class="w-full compact-input"
-                                   value="${conn.name}"
-                                   placeholder="Enter connection name">
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="edit-form-content">
-                    ${html}
-                </div>
-                
-                <div class="pt-4 border-t border-slate-200">
-                    <div class="flex justify-between items-center">
-                        <div class="flex space-x-2">
-                            <button onclick="if(window.cloudConnections && window.cloudConnections.testConnection) window.cloudConnections.testConnection()" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
-                                <i class="fa-solid fa-bolt mr-1"></i> Test Connection
-                            </button>
-                            <button onclick="if(window.cloudConnections && window.cloudConnections.deleteConnection) window.cloudConnections.deleteConnection('${conn.id}')" class="compact-button border border-red-300 text-red-700 hover:bg-red-50 flex items-center">
-                                <i class="fa-solid fa-trash mr-1"></i> Delete
-                            </button>
-                        </div>
-                        <button onclick="if(window.cloudConnections && window.cloudConnections.saveConnection) window.cloudConnections.saveConnection('${conn.id}')" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
-                            <i class="fa-solid fa-save mr-1"></i> Save Changes
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Populate form with connection data
-        populateFormWithData(conn);
-        
-        // Initialize form-specific JavaScript
-        if (conn.type === 'mqtt' && typeof window.initializeMqttForm === 'function') {
-            setTimeout(() => {
-                window.initializeMqttForm();
-            }, 100);
-        } else if (conn.type === 'http' && typeof window.initializeHttpForm === 'function') {
-            setTimeout(() => {
-                window.initializeHttpForm();
-            }, 100);
-        }
-        
-    } catch (error) {
-        console.error('Error loading form:', error);
-        tabContent.innerHTML = `
-            <div class="text-center py-8 text-slate-400">
-                <i class="fa-solid fa-exclamation-triangle text-3xl mb-3"></i>
-                <p class="text-sm">Failed to load configuration form</p>
-                <p class="text-xs mt-1">${error.message}</p>
-            </div>
-        `;
-    }
+        const d = await _api('POST', `${API}/connections/${_selectedId}/test`);
+        _el('testResStatus').className = 'font-medium ' + (d.connected ? 'text-green-600' : 'text-red-600');
+        _el('testResStatus').textContent = d.connected ? 'Connected' : 'Failed';
+        _el('testResLatency').textContent = d.latency + ' ms';
+        _el('testResAuth').textContent    = d.details?.auth || '—';
+        const msg = _el('testResMsg');
+        msg.className = `p-3 rounded-lg border text-sm ${d.connected ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`;
+        msg.innerHTML = `<i class="fa-solid ${d.connected?'fa-check-circle':'fa-exclamation-circle'} mr-2"></i>${_esc(d.message||'')}`;
+        _showM('testModal');
+        if (d.connected) { await _loadConnections(); }
+    } catch { _toast('Test failed', 'error'); }
+    finally { _setLoading(btn, false); }
 }
 
-function populateFormWithData(conn) {
-    const nameInput = document.getElementById('edit-connection-name');
-    if (nameInput) nameInput.value = conn.name;
-    
-    const enabledCheckbox = document.getElementById('connection-enabled');
-    if (enabledCheckbox) enabledCheckbox.checked = conn.enabled;
-    
-    Object.entries(conn.config).forEach(([fieldName, value]) => {
-        const fieldId = `field-${fieldName}`;
-        const element = document.getElementById(fieldId);
-        
-        if (element) {
-            if (element.type === 'checkbox') {
-                element.checked = value;
-            } else if (element.type === 'radio') {
-                document.querySelectorAll(`input[name="${element.name}"][value="${value}"]`).forEach(radio => {
-                    radio.checked = true;
-                });
-            } else {
-                element.value = value;
-            }
-        }
+// ─── STATUS BAR + DIAGNOSTICS ─────────────────────────────────────────────────
+function _updateStatusBar(conn) {
+    const s = conn?.statistics || {};
+    _st('panelName',    conn ? _esc(conn.name) : 'No Connection Selected');
+    _st('panelDesc',    conn ? `${conn.type.toUpperCase()} — ${conn.enabled?'Active':'Disabled'} — ${(conn.tags||[]).length} tag(s)` : 'Select a connection');
+    _st('statMessages', (s.messages||0).toLocaleString());
+    _st('statErrors',   (s.failed  ||0).toLocaleString());
+    _st('statLastSent', s.lastActive||'Never');
+    _st('statLatency',  (s.latency ||0)+' ms');
+}
+
+function _updateDiagnostics(conn) {
+    const s   = conn?.statistics || {};
+    const el  = _el('diagStatus');
+    const on  = conn?.enabled;
+    if (el) { el.className = 'cc-status '+(on?'online':'offline'); el.textContent = on?'Connected':'Disconnected'; }
+    _st('diagLastMsg', s.lastActive||'Never');
+    _st('diagSent',    (s.messages||0).toLocaleString());
+    _st('diagRecv',    Math.floor((s.ok||0)*0.98).toLocaleString());
+    _st('diagError',   s.failed > 0 ? s.failed+' errors' : 'None');
+    _st('diagLatency', (s.latency||0)+' ms');
+}
+
+function _showActionButtons(conn) {
+    ['testBtn','deleteBtn'].forEach(id => { const b = _el(id); if (b) b.style.display = 'inline-flex'; });
+    const tog = _el('enabledToggle');
+    if (tog) { tog.checked = conn.enabled; tog.disabled = false; }
+}
+
+function _showEmpty() {
+    _selectedId = null;
+    _st('panelName', 'No Connection Selected');
+    _st('panelDesc', 'Select a connection to view details');
+    const ph = _el('formPlaceholder'); if (ph) ph.style.display = '';
+    const fc = _el('formContent');    if (fc) { fc.classList.add('hidden'); fc.innerHTML = ''; }
+    ['testBtn','deleteBtn'].forEach(id => { const b = _el(id); if (b) b.style.display = 'none'; });
+    const tog = _el('enabledToggle'); if (tog) { tog.checked = false; tog.disabled = true; }
+}
+
+// ─── PAGE LISTENERS ───────────────────────────────────────────────────────────
+function _bindPageListeners() {
+    _el('addConnectionBtn')?.addEventListener('click', _openAddModal);
+    _el('refreshBtn')?.addEventListener('click', async () => { await _loadConnections(); _toast('Refreshed','success'); });
+    _el('footerSaveBtn')?.addEventListener('click', async () => {
+        try { const d = await _api('PUT', `${API}/save-config`, {}); _toast(d.message||'Saved','success'); }
+        catch { _toast('Save failed','error'); }
     });
-    
-    if (conn.config.headers && typeof conn.config.headers === 'object') {
-        const keyValueLists = document.querySelectorAll('.key-value-list');
-        keyValueLists.forEach(list => {
-            const items = list.querySelectorAll('.key-value-item');
-            items.forEach(item => {
-                if (!item.querySelector('button[onclick*="addKeyValueItem"]')) {
-                    item.remove();
-                }
-            });
-            
-            const addButton = list.querySelector('button[onclick*="addKeyValueItem"]');
-            if (addButton) {
-                Object.entries(conn.config.headers).forEach(([key, value]) => {
-                    const newItem = document.createElement('div');
-                    newItem.className = 'key-value-item';
-                    newItem.innerHTML = `
-                        <input type="text" value="${key}" placeholder="Key" class="compact-input">
-                        <input type="text" value="${value}" placeholder="Value" class="compact-input">
-                        <button type="button" class="text-red-600 hover:text-red-700" onclick="if(window.cloudConnections && window.cloudConnections.removeKeyValueItem) window.cloudConnections.removeKeyValueItem(this)">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    `;
-                    list.insertBefore(newItem, addButton.parentNode);
-                });
-            }
-        });
-    }
-}
-
-function saveConnection(connectionId) {
-    const conn = connections[connectionId];
-    if (!conn) return;
-    
-    const nameInput = document.getElementById('edit-connection-name');
-    if (nameInput) {
-        conn.name = nameInput.value;
-    }
-    
-    const enabledCheckbox = document.getElementById('connection-enabled');
-    if (enabledCheckbox) {
-        conn.enabled = enabledCheckbox.checked;
-    }
-    
-    const formData = collectFormDataFromEditForm();
-    
-    conn.config = {...conn.config, ...formData};
-    
-    updateConnectionItem(connectionId, conn);
-    updateConfigurationForConnection(conn);
-    
-    showNotification(`${conn.name} updated successfully`, 'success');
-}
-
-function collectFormDataFromEditForm() {
-    const formData = {};
-    
-    const editFormContent = document.getElementById('edit-form-content');
-    if (!editFormContent) return formData;
-    
-    editFormContent.querySelectorAll('input[type="text"], input[type="number"], input[type="password"]').forEach(input => {
-        const id = input.id;
-        if (id.startsWith('field-')) {
-            const fieldName = id.replace('field-', '');
-            formData[fieldName] = input.value;
-        }
+    _el('enabledToggle')?.addEventListener('change', async function () {
+        if (!_selectedId) return;
+        try { const d = await _api('POST', `${API}/connections/${_selectedId}/toggle`); await _loadConnections(); _toast(d.message||'Toggled','success'); }
+        catch { _toast('Toggle failed','error'); }
     });
-    
-    editFormContent.querySelectorAll('select').forEach(select => {
-        const id = select.id;
-        if (id.startsWith('field-')) {
-            const fieldName = id.replace('field-', '');
-            formData[fieldName] = select.value;
-        }
+    _el('testBtn')?.addEventListener('click', _runTest);
+    _el('deleteBtn')?.addEventListener('click', async () => {
+        const conn = _connections.find(c=>c.id===_selectedId);
+        if (!conn || !confirm(`Delete "${conn.name}"? This cannot be undone.`)) return;
+        try { await _api('DELETE', `${API}/connections/${_selectedId}`); _selectedId = null; await _loadConnections(); _toast('Deleted','success'); }
+        catch { _toast('Delete failed','error'); }
     });
-    
-    editFormContent.querySelectorAll('.toggle-switch input[type="checkbox"]').forEach(checkbox => {
-        const id = checkbox.id;
-        if (id.startsWith('field-')) {
-            const fieldName = id.replace('field-', '');
-            formData[fieldName] = checkbox.checked;
-        }
-    });
-    
-    editFormContent.querySelectorAll('input[type="radio"]').forEach(radio => {
-        const name = radio.name;
-        if (name.startsWith('field-')) {
-            const fieldName = name.replace('field-', '');
-            if (radio.checked) {
-                formData[fieldName] = radio.value;
-            }
-        }
-    });
-    
-    const keyValueData = {};
-    editFormContent.querySelectorAll('.key-value-item').forEach(item => {
-        const inputs = item.querySelectorAll('input[type="text"]');
-        if (inputs.length >= 2) {
-            const key = inputs[0].value.trim();
-            const value = inputs[1].value.trim();
-            if (key && value) {
-                keyValueData[key] = value;
-            }
-        }
-    });
-    
-    if (Object.keys(keyValueData).length > 0) {
-        formData.headers = keyValueData;
-    }
-    
-    return formData;
+    _el('closeAddModal')?.addEventListener('click', () => _hideM('addConnectionModal'));
+    _el('cancelType')?.addEventListener('click',    () => _hideM('addConnectionModal'));
+    _el('cancelForm')?.addEventListener('click',    () => _hideM('addConnectionModal'));
+    _el('backBtn')?.addEventListener('click',       _showStep1);
+    _el('proceedBtn')?.addEventListener('click', () => { if (_selectedType) _showStep2(_selectedType); });
+    _el('createForm')?.addEventListener('submit', _handleCreate);
+    _el('addConnectionModal')?.addEventListener('click', e => { if (e.target.id==='addConnectionModal') _hideM('addConnectionModal'); });
+    _el('closeTestModal')?.addEventListener('click',  () => _hideM('testModal'));
+    _el('closeTestModal2')?.addEventListener('click', () => _hideM('testModal'));
+    _el('testModal')?.addEventListener('click', e => { if (e.target.id==='testModal') _hideM('testModal'); });
+    document.addEventListener('keydown', e => { if (e.key==='Escape') { _hideM('addConnectionModal'); _hideM('addTagsModal'); _hideM('testModal'); }});
 }
 
-function deleteConnection(connectionId) {
-    if (!confirm(`Are you sure you want to delete "${connections[connectionId]?.name}"?`)) {
-        return;
-    }
-    
-    const connName = connections[connectionId]?.name || 'Connection';
-    delete connections[connectionId];
-    
-    const connectionElement = document.querySelector(`[data-connection-id="${connectionId}"]`);
-    if (connectionElement) {
-        connectionElement.remove();
-    }
-    
-    updateConnectionCount();
-    
-    if (selectedConnectionId === connectionId) {
-        selectedConnectionId = null;
-        showEmptyConnectionState();
-    }
-    
-    showNotification(`${connName} deleted successfully`, 'success');
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+async function _api(method, url, body) {
+    const opts = { method, headers: {'Content-Type':'application/json'} };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    return d;
 }
-
-function updateConnectionCount() {
-    const count = Object.keys(connections).length;
-    const countElement = document.getElementById('connectionCount');
-    if (countElement) {
-        countElement.textContent = count;
-    }
-    
-    const connectionsList = document.getElementById('connectionsList');
-    if (connectionsList && count === 0) {
-        connectionsList.innerHTML = `
-            <div class="text-center py-8 text-slate-400">
-                <i class="fa-solid fa-cloud text-3xl mb-3"></i>
-                <p class="text-sm">No connections yet</p>
-                <p class="text-xs mt-1">Click "Add Connection" to get started</p>
-            </div>
-        `;
-    }
+function _el(id)      { return document.getElementById(id); }
+function _gv(id)      { return _el(id)?.value ?? ''; }
+function _gc(id)      { return _el(id)?.checked ?? false; }
+function _gr(name)    { return document.querySelector(`input[name="${name}"]:checked`)?.value ?? ''; }
+function _sv(id, v)   { const e=_el(id); if (e) e.value = v; }
+function _sc(id, v)   { const e=_el(id); if (e) e.checked = v; }
+function _st(id, t)   { const e=_el(id); if (e) e.textContent = t; }
+function _radio(name, val) { const r=document.querySelector(`input[name="${name}"][value="${val}"]`); if(r) r.checked=true; }
+function _showM(id)   { const e=_el(id); if (e) { e.style.display='flex'; document.body.style.overflow='hidden'; } }
+function _hideM(id)   { const e=_el(id); if (e) { e.style.display='none'; document.body.style.overflow=''; } }
+function _esc(s)      { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _setLoading(btn, on) {
+    if (!btn) return;
+    if (on)  { btn._html=btn.innerHTML; btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i>Saving…'; }
+    else     { btn.disabled=false; btn.innerHTML=btn._html||btn.innerHTML; }
 }
-
-// Helper Functions
-function showNotification(message, type = 'info') {
-    // Check for infinite recursion
-    if (arguments.callee.caller === arguments.callee) {
-        console.error('Infinite recursion detected in showNotification');
-        return;
-    }
-    
-    const colors = {
-        success: 'bg-green-100 border-green-200 text-green-800',
-        error: 'bg-red-100 border-red-200 text-red-800',
-        info: 'bg-blue-100 border-blue-200 text-blue-800',
-        warning: 'bg-yellow-100 border-yellow-200 text-yellow-800'
-    };
-    
-    const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 px-4 py-2 rounded-lg border ${colors[type]} shadow-lg z-50 text-sm`;
-    notification.innerHTML = `
-        <div class="flex items-center gap-2">
-            <i class="fa-solid ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
-            <span>${message}</span>
-        </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.parentNode.removeChild(notification);
-        }
-    }, 3000);
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('active');
-    }
-}
-
-function showModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.add('active');
-    }
-}
-
-// Key-Value List Functions
-function addKeyValueItem(button) {
-    const list = button.closest('.key-value-list');
-    const keyPlaceholder = list.querySelector('input[placeholder*="Key"]')?.placeholder || 'Key';
-    const valuePlaceholder = list.querySelector('input[placeholder*="Value"]')?.placeholder || 'Value';
-    
-    const item = document.createElement('div');
-    item.className = 'key-value-item';
-    item.innerHTML = `
-        <input type="text" placeholder="${keyPlaceholder}" class="compact-input">
-        <input type="text" placeholder="${valuePlaceholder}" class="compact-input">
-        <button type="button" class="text-red-600 hover:text-red-700" onclick="if(window.cloudConnections && window.cloudConnections.removeKeyValueItem) window.cloudConnections.removeKeyValueItem(this)">
-            <i class="fa-solid fa-trash"></i>
-        </button>
-    `;
-    
-    list.insertBefore(item, button.parentNode);
-}
-
-function removeKeyValueItem(button) {
-    const item = button.closest('.key-value-item');
-    if (item) {
-        item.remove();
-    }
-}
-
-// Tab Switching Functions
-function switchTab(tabName) {
-    const conn = connections[selectedConnectionId];
-    
-    document.querySelectorAll('[id^="tab-content-"]').forEach(tab => {
-        tab.style.display = 'none';
-    });
-    
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('active');
-    });
-    
-    const tabContent = document.getElementById(`tab-content-${tabName}`);
-    if (tabContent) {
-        tabContent.style.display = 'block';
-    }
-    
-    const tabButton = document.getElementById(`tab-${tabName}`);
-    if (tabButton) {
-        tabButton.classList.add('active');
-    }
-}
-
-function refreshConnections() {
-    showNotification('Refreshing connections...', 'info');
-    
-    setTimeout(() => {
-        Object.values(connections).forEach(conn => {
-            conn.stats.lastActive = `${Math.floor(Math.random() * 10)}s ago`;
-            updateConnectionItem(conn.id, conn);
-        });
-        
-        if (selectedConnectionId) {
-            updateConfigurationForConnection(connections[selectedConnectionId]);
-        }
-        
-        showNotification('Connections refreshed', 'success');
-    }, 1000);
-}
-
-function cancelChanges() {
-    if (confirm('Discard all unsaved changes?')) {
-        showNotification('Changes discarded', 'info');
-    }
-}
-
-function saveAllConnections() {
-    showNotification('All connections saved successfully!', 'success');
-}
-
-function testConnection() {
-    const currentConn = connections[selectedConnectionId];
-    if (!currentConn) {
-        showNotification('Please select a connection first', 'warning');
-        return;
-    }
-    
-    showNotification(`Testing ${currentConn.name} connection...`, 'info');
-    
-    setTimeout(() => {
-        currentConn.stats.messages += Math.floor(Math.random() * 100);
-        currentConn.stats.lastActive = 'Just now';
-        currentConn.stats.latency = Math.floor(Math.random() * 200);
-        currentConn.stats.successRate = `${98 + Math.floor(Math.random() * 2)}%`;
-        
-        updateConnectionItem(selectedConnectionId, currentConn);
-        updateConfigurationForConnection(currentConn);
-        
-        showModal('testResultsModal');
-        
-        showNotification(`Connection test for ${currentConn.name} successful!`, 'success');
-    }, 1500);
-}
-
-function showHelp() {
-    alert('Cloud Connection Manager Help:\n\n1. Click "Add Connection" to create new cloud connections\n2. Select a connection type (MQTT or HTTP)\n3. Configure the connection settings\n4. Test the connection before saving\n5. Manage multiple connections from the list\n\nMaximum connections: ' + config.app.maxConnections);
+function _toast(msg, type='info') {
+    if (typeof showNotification === 'function') { showNotification(msg, type); return; }
+    const c = {success:'#16A34A',error:'#DC2626',info:'#2563EB',warning:'#D97706'}[type]||'#2563EB';
+    const i = {success:'fa-check-circle',error:'fa-circle-xmark',info:'fa-circle-info',warning:'fa-triangle-exclamation'}[type]||'fa-circle-info';
+    const n = document.querySelectorAll('.cc-toast').length;
+    const t = document.createElement('div');
+    t.className='cc-toast';
+    t.style.cssText=`position:fixed;bottom:${24+n*52}px;right:24px;z-index:99999;background:${c};color:white;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;max-width:340px;transition:opacity .3s,transform .3s`;
+    t.innerHTML=`<i class="fa-solid ${i} flex-shrink-0"></i><span>${_esc(msg)}</span>`;
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(20px)'; setTimeout(()=>t.remove(),300); },3500);
 }

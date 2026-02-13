@@ -41,6 +41,7 @@ def init_database():
     print("✓ Dynamic device groups")
     print("✓ Status and last_poll handled via WebSocket real-time only")
     print("✓ Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
+    print("✓ Cloud Integration: cloud_connections | mqtt_datapoints | http_datapoints | cloud_connection_stats")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
@@ -225,6 +226,66 @@ def create_tables(cursor):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, name),
             FOREIGN KEY (device_id) REFERENCES loadcell_device(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # ── Cloud Integration ─────────────────────────────────────────────────────
+    # cloud_connections: one row per broker/endpoint (mqtt or http)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cloud_connections (
+            id         TEXT PRIMARY KEY,
+            type       TEXT NOT NULL CHECK(type IN ('mqtt','http')),
+            name       TEXT NOT NULL,
+            enabled    INTEGER DEFAULT 1,
+            config     TEXT NOT NULL DEFAULT '{}',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # mqtt_datapoints: tags published via a specific MQTT connection
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS mqtt_datapoints (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id    TEXT NOT NULL,
+            tag_name         TEXT NOT NULL,
+            topic            TEXT NOT NULL DEFAULT '',
+            publish_mode     TEXT NOT NULL DEFAULT 'onChange',
+            change_threshold REAL DEFAULT 0.0,
+            enabled          INTEGER DEFAULT 1,
+            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(connection_id, tag_name),
+            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # http_datapoints: tags published via a specific HTTP connection
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS http_datapoints (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id      TEXT NOT NULL,
+            tag_name           TEXT NOT NULL,
+            field_name         TEXT NOT NULL DEFAULT '',
+            publish_mode       TEXT NOT NULL DEFAULT 'onChange',
+            include_unit       INTEGER DEFAULT 1,
+            include_timestamp  INTEGER DEFAULT 1,
+            enabled            INTEGER DEFAULT 1,
+            created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(connection_id, tag_name),
+            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # cloud_connection_stats: runtime counters per connection
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cloud_connection_stats (
+            connection_id   TEXT PRIMARY KEY,
+            messages_total  INTEGER DEFAULT 0,
+            messages_ok     INTEGER DEFAULT 0,
+            messages_failed INTEGER DEFAULT 0,
+            latency_avg_ms  REAL    DEFAULT 0.0,
+            last_active     TEXT    DEFAULT NULL,
+            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
         )
     ''')
 

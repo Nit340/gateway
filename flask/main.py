@@ -23,6 +23,7 @@ from tag_mapping import (
 )
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
+from mqtt_cloud import register_cloud_routes
 
 async def database_viewer_handler(request):
     """GET handler - simple database viewer showing all tables and data"""
@@ -367,8 +368,8 @@ def create_app():
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
     
-    # ADD THESE ROUTES TO main.py in the create_app() function
-
+    # Cloud Integration endpoints
+    register_cloud_routes(app)
 
     # Device Management endpoints
     app.router.add_get('/api/devices', get_all_devices)
