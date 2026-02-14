@@ -41,7 +41,7 @@ def init_database():
     print("✓ Dynamic device groups")
     print("✓ Status and last_poll handled via WebSocket real-time only")
     print("✓ Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
-    print("✓ Cloud Integration: cloud_connections | mqtt_datapoints | http_datapoints | cloud_connection_stats")
+    print("✓ Cloud Integration: cloud_connections | mqtt_datapoints | http_datapoints | ftp_datapoints | cloud_connection_stats")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
@@ -230,11 +230,11 @@ def create_tables(cursor):
     ''')
 
     # ── Cloud Integration ─────────────────────────────────────────────────────
-    # cloud_connections: one row per broker/endpoint (mqtt or http)
+    # cloud_connections: one row per broker/endpoint (mqtt, http, or ftp)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connections (
             id         TEXT PRIMARY KEY,
-            type       TEXT NOT NULL CHECK(type IN ('mqtt','http')),
+            type       TEXT NOT NULL CHECK(type IN ('mqtt','http','ftp')),
             name       TEXT NOT NULL,
             enabled    INTEGER DEFAULT 1,
             config     TEXT NOT NULL DEFAULT '{}',
@@ -271,6 +271,22 @@ def create_tables(cursor):
             include_timestamp  INTEGER DEFAULT 1,
             enabled            INTEGER DEFAULT 1,
             created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(connection_id, tag_name),
+            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # ftp_datapoints: tags exported via a specific FTP connection
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ftp_datapoints (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id    TEXT NOT NULL,
+            tag_name         TEXT NOT NULL,
+            column_name      TEXT NOT NULL DEFAULT '',
+            include_unit     INTEGER DEFAULT 1,
+            include_timestamp INTEGER DEFAULT 1,
+            enabled          INTEGER DEFAULT 1,
+            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(connection_id, tag_name),
             FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
         )

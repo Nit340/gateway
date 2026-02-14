@@ -1,34 +1,32 @@
 // mqtt-cloud.js  — Cloud Connection Manager orchestrator
-// Flow: load list → select → inject form HTML → populate from DB → save back to DB
 'use strict';
 
 const API = '/api/cloud-integration';
-let _connections   = [];
-let _selectedId    = null;
-let _selectedType  = null;   // for Add modal
-let _availTags     = [];     // fetched when Add Tags modal opens
+let _connections  = [];
+let _selectedId   = null;
+let _selectedType = null;
+let _availTags    = [];
 
-// ─── ENTRY ───────────────────────────────────────────────────────────────────
+// ─── ENTRY ────────────────────────────────────────────────────────────────────
 window.initMqttCloud = async function () {
     _bindPageListeners();
     await _loadConnections();
 };
 
-// ─── LOAD LIST ───────────────────────────────────────────────────────────────
+// ─── LOAD LIST ────────────────────────────────────────────────────────────────
 async function _loadConnections() {
     try {
         const d = await _api('GET', `${API}/connections`);
         _connections = d.connections || [];
         _renderList();
-        // re-select previously selected or first
         const target = _selectedId && _connections.find(c => c.id === _selectedId)
             ? _selectedId : (_connections[0]?.id || null);
         if (target) await _selectConnection(target);
         else _showEmpty();
-    } catch (e) { _toast('Failed to load connections', 'error'); }
+    } catch { _toast('Failed to load connections', 'error'); }
 }
 
-// ─── RENDER LIST ─────────────────────────────────────────────────────────────
+// ─── RENDER LIST ──────────────────────────────────────────────────────────────
 function _renderList() {
     const list  = _el('connectionsList');
     const empty = _el('connectionsEmpty');
@@ -39,14 +37,15 @@ function _renderList() {
     if (empty) empty.style.display = 'none';
 
     _connections.forEach(c => {
-        const s = c.statistics || {};
+        const s   = c.statistics || {};
+        const icon = { mqtt:'fa-cloud text-blue-500', http:'fa-globe text-yellow-500', ftp:'fa-folder-open text-emerald-500' }[c.type] || 'fa-plug';
         const div = document.createElement('div');
         div.className = `conn-item ${c.type}${c.id === _selectedId ? ' active' : ''}`;
         div.dataset.id = c.id;
         div.innerHTML = `
           <div class="flex items-center justify-between mb-1.5">
             <div class="flex items-center gap-2">
-              <i class="${c.type==='mqtt'?'fa-solid fa-cloud text-blue-500':'fa-solid fa-globe text-yellow-500'} text-xs"></i>
+              <i class="fa-solid ${icon} text-xs"></i>
               <span class="font-medium text-slate-900 text-sm truncate max-w-[130px]">${_esc(c.name)}</span>
             </div>
             <span class="text-xs text-slate-400 flex-shrink-0">${_esc(s.lastActive||'Never')}</span>
@@ -90,37 +89,43 @@ async function _loadForm(conn) {
     fc.classList.remove('hidden');
     fc.innerHTML = '<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-primary text-2xl"></i></div>';
 
-    const file = conn.type === 'mqtt'
-        ? 'pages/connection-forms/mqtt-form.html'
-        : 'pages/connection-forms/http-form.html';
+    const fileMap = {
+        mqtt: 'pages/connection-forms/mqtt-form.html',
+        http: 'pages/connection-forms/http-form.html',
+        ftp:  'pages/connection-forms/ftp-form.html',
+    };
+    const file = fileMap[conn.type];
 
     try {
         const r = await fetch(file);
         if (!r.ok) throw new Error(`${r.status}`);
         fc.innerHTML = await r.text();
 
-        // Init form UI logic (toggles, tab switching)
-        if (conn.type === 'mqtt' && typeof window.initializeMqttForm === 'function') window.initializeMqttForm();
-        if (conn.type === 'http' && typeof window.initializeHttpForm === 'function') window.initializeHttpForm();
+        // Init form UI (toggles, protocol↔port, anonymous hide/show)
+        if (conn.type === 'mqtt' && typeof window.initializeMqttForm  === 'function') window.initializeMqttForm();
+        if (conn.type === 'http' && typeof window.initializeHttpForm  === 'function') window.initializeHttpForm();
+        if (conn.type === 'ftp'  && typeof window.initializeFtpForm   === 'function') window.initializeFtpForm();
 
-        // Populate every field from DB data
-        conn.type === 'mqtt' ? _populateMqtt(conn) : _populateHttp(conn);
+        // Populate every field from DB
+        if (conn.type === 'mqtt') _populateMqtt(conn);
+        else if (conn.type === 'http') _populateHttp(conn);
+        else _populateFtp(conn);
 
-        // Override all Save buttons to call real API
+        // Override Save buttons to call real API
         _wireFormSaves(conn);
 
-        // Wire the "Add Tags" button inside the form
+        // Wire Add Tags button
         _wireAddTagsBtn(conn);
 
-    } catch (e) {
+    } catch {
         fc.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">
           <i class="fa-solid fa-triangle-exclamation text-amber-400 text-2xl mb-2 block"></i>
-          Could not load form file: <code>${file}</code>
+          Could not load <code>${file}</code>
         </div>`;
     }
 }
 
-// ─── POPULATE MQTT FORM ───────────────────────────────────────────────────────
+// ─── POPULATE MQTT ────────────────────────────────────────────────────────────
 function _populateMqtt(conn) {
     const c = conn.config || {};
     _sv('field-protocol',    c.protocol    ?? 'mqtts');
@@ -134,12 +139,8 @@ function _populateMqtt(conn) {
     _sc('field-cleanSession',c.cleanSession ?? true);
     _sc('field-retainMessages', c.retainMessages ?? false);
     _radio('field-qos', String(c.qos ?? 1));
-
-    // Topics tab
     _sv('field-baseTopic',    c.baseTopic    ?? '');
     _sv('field-json-template',c.jsonTemplate ?? '{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}');
-
-    // Advanced tab
     _sv('field-advanced-keep-alive',         c.keepAlive         ?? 60);
     _sv('field-advanced-reconnect-interval', c.reconnectInterval ?? 5);
     _sv('field-advanced-connect-timeout',    c.connectTimeout    ?? 30);
@@ -166,8 +167,6 @@ function _populateMqtt(conn) {
     _sv('field-advanced-lwt-message',        c.lwtMessage        ?? '');
     _sv('field-advanced-lwt-qos',            c.lwtQos            ?? 1);
     _sc('field-advanced-lwt-retain',         c.lwtRetain         ?? false);
-
-    // Populate tag publishing table from mqtt_datapoints
     _renderMqttTagsTable(conn);
 }
 
@@ -188,9 +187,7 @@ function _renderMqttTagsTable(conn) {
         tr.innerHTML = `
           <td class="p-2"><input type="checkbox" class="tag-select"></td>
           <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
-          <td class="p-2">
-            <input type="text" class="compact-input text-xs tag-topic" value="${_esc(tag.topic||base)}" placeholder="${_esc(base)}/...">
-          </td>
+          <td class="p-2"><input type="text" class="compact-input text-xs tag-topic" value="${_esc(tag.topic||base)}" placeholder="${_esc(base)}/..."></td>
           <td class="p-2">
             <select class="compact-select text-xs tag-publish-mode">
               <option value="onChange" ${tag.publishMode==='onChange'?'selected':''}>On Change</option>
@@ -202,20 +199,15 @@ function _renderMqttTagsTable(conn) {
           </td>
           <td class="p-2">
             <div class="flex items-center gap-2">
-              <label class="toggle-switch">
-                <input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}>
-                <span class="toggle-slider"></span>
-              </label>
-              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')">
-                <i class="fa-solid fa-trash"></i>
-              </button>
+              <label class="toggle-switch"><input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}><span class="toggle-slider"></span></label>
+              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')"><i class="fa-solid fa-trash"></i></button>
             </div>
           </td>`;
         tbody.appendChild(tr);
     });
 }
 
-// ─── POPULATE HTTP FORM ───────────────────────────────────────────────────────
+// ─── POPULATE HTTP ────────────────────────────────────────────────────────────
 function _populateHttp(conn) {
     const c = conn.config || {};
     _sv('field-url',         c.url         ?? '');
@@ -228,29 +220,19 @@ function _populateHttp(conn) {
     _sv('field-oauth-clientId', c.oauthClientId ?? '');
     _sv('field-oauth-secret',   c.oauthSecret   ?? '');
     _sv('field-oauth-tokenUrl', c.oauthTokenUrl ?? '');
-
-    // Trigger auth-type show/hide
     const authSel = _el('field-authType');
     if (authSel) authSel.dispatchEvent(new Event('change'));
-
-    // Payload tab
     _radio('field-payloadFormat', c.payloadFormat ?? 'json');
     _sv('field-jsonTemplate',   c.jsonTemplate    ?? '');
     _sv('field-timestampFormat',c.timestampFormat ?? 'epoch');
     _sc('field-compression',    c.compression     ?? false);
     _sc('field-encryption',     c.encryption      ?? false);
     _sv('field-dataFilter',     c.dataFilter      ?? '');
-
-    // Trigger payload format show/hide
     const checked = document.querySelector('input[name="field-payloadFormat"]:checked');
     if (checked) checked.dispatchEvent(new Event('change'));
-
-    // Publishing tab
     _radio('field-publishMode', c.publishMode ?? 'realtime');
     _sv('field-batchSize',     c.batchSize    ?? 100);
     _sv('field-batchInterval', c.batchInterval ?? 60);
-
-    // Advanced tab
     _sv('field-timeout',    c.timeout    ?? 30);
     _sv('field-retryCount', c.retryCount ?? 3);
     _sv('field-retryDelay', c.retryDelay ?? 5);
@@ -263,8 +245,6 @@ function _populateHttp(conn) {
     _sc('field-storeForward',c.storeForward ?? true);
     _sv('field-maxStorage',     c.maxStorage     ?? 1000);
     _sv('field-retentionPeriod',c.retentionPeriod ?? 24);
-
-    // Publishing tab tags table
     _renderHttpTagsTable(conn);
 }
 
@@ -274,7 +254,7 @@ function _renderHttpTagsTable(conn) {
     const tags = conn.tags || [];
     tbody.innerHTML = '';
     if (!tags.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags" to publish data.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags".</td></tr>';
         return;
     }
     tags.forEach(tag => {
@@ -292,22 +272,63 @@ function _renderHttpTagsTable(conn) {
               <option value="30000"${tag.publishMode==='30000'?'selected':''}>30 sec</option>
             </select>
           </td>
-          <td class="p-2 text-xs">
+          <td class="p-2">
             <select class="compact-select text-xs">
-              <option value="high">High</option>
-              <option value="medium" selected>Medium</option>
-              <option value="low">Low</option>
+              <option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option>
             </select>
           </td>
           <td class="p-2">
             <div class="flex items-center gap-2">
-              <label class="toggle-switch">
-                <input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}>
-                <span class="toggle-slider"></span>
-              </label>
-              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')">
-                <i class="fa-solid fa-trash"></i>
-              </button>
+              <label class="toggle-switch"><input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}><span class="toggle-slider"></span></label>
+              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ─── POPULATE FTP ─────────────────────────────────────────────────────────────
+function _populateFtp(conn) {
+    const c = conn.config || {};
+    _sv('field-host',            c.host            ?? '');
+    _sv('field-port',            c.port            ?? 21);
+    _sv('field-protocol',        c.protocol        ?? 'ftp');
+    _sv('field-mode',            c.mode            ?? 'passive');
+    _sv('field-username',        c.username        ?? '');
+    _sv('field-password',        c.password        ?? '');
+    _sc('field-anonymous',       c.anonymous       ?? false);
+    _sv('field-remotePath',      c.remotePath      ?? '/uploads/');
+    _sv('field-filenamePattern', c.filenamePattern ?? 'data_${DATE}.csv');
+    _sv('field-fileFormat',      c.fileFormat      ?? 'csv');
+    _sv('field-maxFileSize',     c.maxFileSize     ?? 10485760);
+    _sv('field-uploadInterval',  c.uploadInterval  ?? 300);
+    _sc('field-appendMode',      c.appendMode      ?? true);
+    _sc('field-compressFiles',   c.compressFiles   ?? true);
+    _sv('field-retryAttempts',   c.retryAttempts   ?? 3);
+    _renderFtpTagsTable(conn);
+}
+
+function _renderFtpTagsTable(conn) {
+    const tbody = _el('ftp-tags-table');
+    if (!tbody) return;
+    const tags = conn.tags || [];
+    tbody.innerHTML = '';
+    if (!tags.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags".</td></tr>';
+        return;
+    }
+    tags.forEach(tag => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100';
+        tr.dataset.tagName = tag.name;
+        tr.innerHTML = `
+          <td class="p-2"><input type="checkbox" class="ftp-tag-select"></td>
+          <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
+          <td class="p-2"><input type="text" class="compact-input text-xs ftp-col-name" value="${_esc(tag.columnName||tag.name)}" placeholder="column header"></td>
+          <td class="p-2">
+            <div class="flex items-center gap-2">
+              <label class="toggle-switch"><input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}><span class="toggle-slider"></span></label>
+              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')"><i class="fa-solid fa-trash"></i></button>
             </div>
           </td>`;
         tbody.appendChild(tr);
@@ -322,29 +343,39 @@ function _wireFormSaves(conn) {
         window.mqttFormLogic.saveMqttTopicSettings      = () => _saveMqttTopics(conn.id);
         window.mqttFormLogic.saveMqttPublishingSettings = () => _saveMqttPublishing(conn.id);
         window.mqttFormLogic.saveMqttAdvancedSettings   = () => _saveMqttAdvanced(conn.id);
-    } else {
+    } else if (conn.type === 'http') {
         if (!window.httpFormLogic) window.httpFormLogic = {};
         window.httpFormLogic.saveHttpConnectionSettings = () => _saveHttpConnection(conn.id);
         window.httpFormLogic.saveHttpPayloadSettings    = () => _saveHttpPayload(conn.id);
         window.httpFormLogic.saveHttpPublishingSettings = () => _saveHttpPublishing(conn.id);
         window.httpFormLogic.saveHttpAdvancedSettings   = () => _saveHttpAdvanced(conn.id);
+    } else {
+        // ftp — wire via ftpFormLogic (same pattern as mqtt/http) AND by button id
+        if (!window.ftpFormLogic) window.ftpFormLogic = {};
+        window.ftpFormLogic.saveFtpSettings = () => _saveFtp(conn.id);
+        const saveBtn = _el('ftp-save-btn');
+        if (saveBtn) saveBtn.onclick = () => _saveFtp(conn.id);
     }
 }
 
-// ─── WIRE ADD TAGS BUTTON ─────────────────────────────────────────────────────
+// ─── WIRE ADD TAGS BTN ────────────────────────────────────────────────────────
 function _wireAddTagsBtn(conn) {
-    // Both forms call showAddTagModal() — we override it here
+    const openFn = () => _openTagsModal(conn);
+    window.showAddTagModal = openFn;
     if (!window.mqttFormLogic) window.mqttFormLogic = {};
     if (!window.httpFormLogic) window.httpFormLogic = {};
-    const openFn = () => _openTagsModal(conn);
+    if (!window.ftpFormLogic)  window.ftpFormLogic  = {};
     window.mqttFormLogic.showAddTagModal = openFn;
     window.httpFormLogic.showAddTagModal = openFn;
-    // Also override the raw global (http-form uses direct call)
-    window.showAddTagModal = openFn;
+    window.ftpFormLogic.showAddTagModal  = openFn;
+    // Also wire ftp Add Tags button if present
+    const ftpAddBtn = _el('ftp-add-tags-btn');
+    if (ftpAddBtn) ftpAddBtn.onclick = openFn;
+
     window.removeKeyValueItem = btn => btn.closest('.key-value-item')?.remove();
-    window.addKeyValueItem = btn => {
+    window.addKeyValueItem    = btn => {
         const list = btn.closest('.key-value-list');
-        const div = document.createElement('div');
+        const div  = document.createElement('div');
         div.className = 'key-value-item';
         div.innerHTML = `<input type="text" placeholder="Header Name" class="compact-input"><input type="text" placeholder="Value" class="compact-input"><button type="button" class="text-red-600" onclick="window.removeKeyValueItem(this)"><i class="fa-solid fa-trash"></i></button>`;
         list?.insertBefore(div, btn.closest('.p-2') || null);
@@ -357,146 +388,141 @@ function _wireAddTagsBtn(conn) {
 
 // ─── SAVE: MQTT ───────────────────────────────────────────────────────────────
 async function _saveMqttConnection(id) {
-    const cfg = {
-        protocol:       _gv('field-protocol'),
-        host:           _gv('field-host'),
-        port:           +_gv('field-port') || 8883,
-        clientId:       _gv('field-clientId'),
-        keepAlive:      +_gv('field-keepAlive') || 60,
-        username:       _gv('field-username'),
-        password:       _gv('field-password'),
-        tls:            _gc('field-tls'),
-        cleanSession:   _gc('field-cleanSession'),
-        retainMessages: _gc('field-retainMessages'),
-        qos:            +_gr('field-qos') || 1,
-    };
-    await _putCfg(id, cfg, 'Connection settings saved');
+    await _putCfg(id, {
+        protocol:_gv('field-protocol'), host:_gv('field-host'), port:+_gv('field-port')||8883,
+        clientId:_gv('field-clientId'), keepAlive:+_gv('field-keepAlive')||60,
+        username:_gv('field-username'), password:_gv('field-password'),
+        tls:_gc('field-tls'), cleanSession:_gc('field-cleanSession'),
+        retainMessages:_gc('field-retainMessages'), qos:+_gr('field-qos')||1,
+    }, 'Connection settings saved');
 }
 
 async function _saveMqttTopics(id) {
-    const conn = _connections.find(c => c.id === id);
-    const cfg  = { ...(conn?.config||{}), baseTopic: _gv('field-baseTopic'), jsonTemplate: _gv('field-json-template') };
-    await _putCfg(id, cfg, 'Topics & Format saved');
+    await _putCfg(id, { baseTopic:_gv('field-baseTopic'), jsonTemplate:_gv('field-json-template') }, 'Topics & Format saved');
 }
 
 async function _saveMqttPublishing(id) {
-    // Collect rows from the rendered table and PUT to tags endpoint
     const rows = document.querySelectorAll('#mqtt-tags-table tr[data-tag-name]');
     const tags = [...rows].map(tr => ({
-        name:        tr.dataset.tagName,
-        topic:       tr.querySelector('.tag-topic')?.value || '',
+        name: tr.dataset.tagName,
+        topic: tr.querySelector('.tag-topic')?.value || '',
         publishMode: tr.querySelector('.tag-publish-mode')?.value || 'onChange',
-        enabled:     tr.querySelector('.tag-enabled')?.checked ?? true,
+        enabled: tr.querySelector('.tag-enabled')?.checked ?? true,
     }));
     try {
-        await _api('POST', `${API}/connections/${id}/tags`, { tags: tags.map(t=>t.name), publishMode: 'onChange', replace: true });
-        // Also update individual topic/mode per tag — batch update via config
-        const conn = _connections.find(c=>c.id===id);
-        if (conn) { conn.tags = tags; }
+        await _api('POST', `${API}/connections/${id}/tags`, { tags: tags.map(t=>t.name), publishMode:'onChange', replace:true });
         _toast('Publishing settings saved', 'success');
     } catch { _toast('Save failed', 'error'); }
 }
 
 async function _saveMqttAdvanced(id) {
-    const conn = _connections.find(c => c.id === id);
-    const cfg  = { ...(conn?.config||{}),
-        keepAlive:         +_gv('field-advanced-keep-alive')         || 60,
-        reconnectInterval: +_gv('field-advanced-reconnect-interval') || 5,
-        connectTimeout:    +_gv('field-advanced-connect-timeout')    || 30,
-        maxRetries:        +_gv('field-advanced-max-retries')        || 5,
-        autoReconnect:     _gc('field-advanced-auto-reconnect'),
-        storeForward:      _gc('field-advanced-store-forward'),
-        validateCerts:     _gc('field-advanced-validate-certs'),
-        logLevel:          _gv('field-advanced-log-level'),
-        maxLogSize:        +_gv('field-advanced-max-log-size')       || 10,
-        logRetention:      +_gv('field-advanced-log-retention')      || 7,
-        connLogging:       _gc('field-advanced-connection-logging'),
-        msgLogging:        _gc('field-advanced-message-logging'),
-        maxInflight:       +_gv('field-advanced-max-inflight')       || 10,
-        queueSize:         +_gv('field-advanced-queue-size')         || 100,
-        bufferSize:        +_gv('field-advanced-buffer-size')        || 1024,
-        pingTimeout:       +_gv('field-advanced-ping-timeout')       || 10,
-        compression:       _gc('field-advanced-enable-compression'),
-        compressionLevel:  +_gv('field-advanced-compression-level')  || 6,
-        minCompressSize:   +_gv('field-advanced-min-compress-size')  || 256,
-        tlsVersion:        _gv('field-advanced-tls-version'),
-        cipherSuite:       _gv('field-advanced-cipher-suite'),
-        lwt:               _gc('field-advanced-enable-lwt'),
-        lwtTopic:          _gv('field-advanced-lwt-topic'),
-        lwtMessage:        _gv('field-advanced-lwt-message'),
-        lwtQos:            +_gv('field-advanced-lwt-qos')            || 1,
-        lwtRetain:         _gc('field-advanced-lwt-retain'),
-    };
-    await _putCfg(id, cfg, 'Advanced settings saved');
+    const conn = _connections.find(c=>c.id===id);
+    await _putCfg(id, { ...(conn?.config||{}),
+        keepAlive:+_gv('field-advanced-keep-alive')||60,
+        reconnectInterval:+_gv('field-advanced-reconnect-interval')||5,
+        connectTimeout:+_gv('field-advanced-connect-timeout')||30,
+        maxRetries:+_gv('field-advanced-max-retries')||5,
+        autoReconnect:_gc('field-advanced-auto-reconnect'),
+        storeForward:_gc('field-advanced-store-forward'),
+        validateCerts:_gc('field-advanced-validate-certs'),
+        logLevel:_gv('field-advanced-log-level'),
+        maxLogSize:+_gv('field-advanced-max-log-size')||10,
+        logRetention:+_gv('field-advanced-log-retention')||7,
+        connLogging:_gc('field-advanced-connection-logging'),
+        msgLogging:_gc('field-advanced-message-logging'),
+        maxInflight:+_gv('field-advanced-max-inflight')||10,
+        queueSize:+_gv('field-advanced-queue-size')||100,
+        bufferSize:+_gv('field-advanced-buffer-size')||1024,
+        pingTimeout:+_gv('field-advanced-ping-timeout')||10,
+        compression:_gc('field-advanced-enable-compression'),
+        compressionLevel:+_gv('field-advanced-compression-level')||6,
+        minCompressSize:+_gv('field-advanced-min-compress-size')||256,
+        tlsVersion:_gv('field-advanced-tls-version'),
+        cipherSuite:_gv('field-advanced-cipher-suite'),
+        lwt:_gc('field-advanced-enable-lwt'),
+        lwtTopic:_gv('field-advanced-lwt-topic'),
+        lwtMessage:_gv('field-advanced-lwt-message'),
+        lwtQos:+_gv('field-advanced-lwt-qos')||1,
+        lwtRetain:_gc('field-advanced-lwt-retain'),
+    }, 'Advanced settings saved');
 }
 
 // ─── SAVE: HTTP ───────────────────────────────────────────────────────────────
 async function _saveHttpConnection(id) {
-    // Collect custom headers
     const headers = {};
     document.querySelectorAll('.key-value-item').forEach(item => {
         const inputs = item.querySelectorAll('input');
         if (inputs[0]?.value) headers[inputs[0].value] = inputs[1]?.value || '';
     });
-    const cfg = {
-        url:           _gv('field-url'),
-        method:        _gv('field-method'),
-        contentType:   _gv('field-contentType'),
-        authType:      _gv('field-authType'),
-        username:      _gv('field-username'),
-        password:      _gv('field-password'),
-        apiKey:        _gv('field-apiKey'),
-        oauthClientId: _gv('field-oauth-clientId'),
-        oauthSecret:   _gv('field-oauth-secret'),
-        oauthTokenUrl: _gv('field-oauth-tokenUrl'),
+    await _putCfg(id, {
+        url:_gv('field-url'), method:_gv('field-method'), contentType:_gv('field-contentType'),
+        authType:_gv('field-authType'), username:_gv('field-username'), password:_gv('field-password'),
+        apiKey:_gv('field-apiKey'), oauthClientId:_gv('field-oauth-clientId'),
+        oauthSecret:_gv('field-oauth-secret'), oauthTokenUrl:_gv('field-oauth-tokenUrl'),
         customHeaders: headers,
-    };
-    await _putCfg(id, cfg, 'Connection settings saved');
+    }, 'Connection settings saved');
 }
 
 async function _saveHttpPayload(id) {
-    const conn = _connections.find(c=>c.id===id);
-    const cfg = { ...(conn?.config||{}),
-        payloadFormat:   _gr('field-payloadFormat') || 'json',
-        jsonTemplate:    _gv('field-jsonTemplate'),
-        timestampFormat: _gv('field-timestampFormat'),
-        compression:     _gc('field-compression'),
-        encryption:      _gc('field-encryption'),
-        dataFilter:      _gv('field-dataFilter'),
-    };
-    await _putCfg(id, cfg, 'Payload format saved');
+    await _putCfg(id, {
+        payloadFormat:_gr('field-payloadFormat')||'json', jsonTemplate:_gv('field-jsonTemplate'),
+        timestampFormat:_gv('field-timestampFormat'), compression:_gc('field-compression'),
+        encryption:_gc('field-encryption'), dataFilter:_gv('field-dataFilter'),
+    }, 'Payload format saved');
 }
 
 async function _saveHttpPublishing(id) {
     const rows = document.querySelectorAll('#http-tags-table tr[data-tag-name]');
     const tags = [...rows].map(tr => tr.dataset.tagName);
     try {
-        await _api('POST', `${API}/connections/${id}/tags`, { tags, publishMode: _gr('field-publishMode') || 'realtime', replace: true });
-        const conn = _connections.find(c=>c.id===id);
-        const cfg  = { ...(conn?.config||{}), publishMode: _gr('field-publishMode')||'realtime', batchSize: +_gv('field-batchSize')||100, batchInterval: +_gv('field-batchInterval')||60 };
-        await _putCfg(id, cfg, 'Publishing settings saved');
+        await _api('POST', `${API}/connections/${id}/tags`, { tags, publishMode:_gr('field-publishMode')||'realtime', replace:true });
+        await _putCfg(id, { publishMode:_gr('field-publishMode')||'realtime', batchSize:+_gv('field-batchSize')||100, batchInterval:+_gv('field-batchInterval')||60 }, 'Publishing settings saved');
     } catch { _toast('Save failed', 'error'); }
 }
 
 async function _saveHttpAdvanced(id) {
-    const conn = _connections.find(c=>c.id===id);
-    const cfg = { ...(conn?.config||{}),
-        timeout:          +_gv('field-timeout')          || 30,
-        retryCount:       +_gv('field-retryCount')       || 3,
-        retryDelay:       +_gv('field-retryDelay')       || 5,
-        sslVerify:        _gc('field-sslVerify'),
-        proxyServer:      _gv('field-proxyServer'),
-        proxyUsername:    _gv('field-proxyUsername'),
-        proxyPassword:    _gv('field-proxyPassword'),
-        rateLimit:        +_gv('field-rateLimit')        || 60,
-        throttle:         _gc('field-throttle'),
-        storeForward:     _gc('field-storeForward'),
-        maxStorage:       +_gv('field-maxStorage')       || 1000,
-        retentionPeriod:  +_gv('field-retentionPeriod')  || 24,
-    };
-    await _putCfg(id, cfg, 'Advanced settings saved');
+    await _putCfg(id, {
+        timeout:+_gv('field-timeout')||30, retryCount:+_gv('field-retryCount')||3, retryDelay:+_gv('field-retryDelay')||5,
+        sslVerify:_gc('field-sslVerify'), proxyServer:_gv('field-proxyServer'),
+        proxyUsername:_gv('field-proxyUsername'), proxyPassword:_gv('field-proxyPassword'),
+        rateLimit:+_gv('field-rateLimit')||60, throttle:_gc('field-throttle'),
+        storeForward:_gc('field-storeForward'), maxStorage:+_gv('field-maxStorage')||1000,
+        retentionPeriod:+_gv('field-retentionPeriod')||24,
+    }, 'Advanced settings saved');
 }
 
+// ─── SAVE: FTP ────────────────────────────────────────────────────────────────
+async function _saveFtp(id) {
+    // 1. Save config
+    const cfg = {
+        host:            _gv('field-host'),
+        port:            +_gv('field-port') || 21,
+        protocol:        _gv('field-protocol'),
+        mode:            _gv('field-mode'),
+        username:        _gv('field-username'),
+        password:        _gv('field-password'),
+        anonymous:       _gc('field-anonymous'),
+        remotePath:      _gv('field-remotePath'),
+        filenamePattern: _gv('field-filenamePattern'),
+        fileFormat:      _gv('field-fileFormat'),
+        maxFileSize:     +_gv('field-maxFileSize') || 10485760,
+        uploadInterval:  +_gv('field-uploadInterval') || 300,
+        appendMode:      _gc('field-appendMode'),
+        compressFiles:   _gc('field-compressFiles'),
+        retryAttempts:   +_gv('field-retryAttempts') || 3,
+    };
+    await _putCfg(id, cfg, 'FTP settings saved');
+
+    // 2. Save tag assignments from the rendered table
+    const rows = document.querySelectorAll('#ftp-tags-table tr[data-tag-name]');
+    if (rows.length) {
+        const tags = [...rows].map(tr => tr.dataset.tagName);
+        try { await _api('POST', `${API}/connections/${id}/tags`, { tags, replace: true }); }
+        catch { /* non-fatal */ }
+    }
+}
+
+// ─── SHARED SAVE HELPER ───────────────────────────────────────────────────────
 async function _putCfg(id, cfg, msg) {
     try {
         await _api('PUT', `${API}/connections/${id}`, { config: cfg });
@@ -506,7 +532,7 @@ async function _putCfg(id, cfg, msg) {
     } catch { _toast('Save failed', 'error'); }
 }
 
-// ─── REMOVE TAG (called from inline button) ───────────────────────────────────
+// ─── REMOVE TAG (inline trash) ────────────────────────────────────────────────
 window._cloudRemoveTag = async function (connId, tagName) {
     if (!confirm(`Remove tag "${tagName}"?`)) return;
     try {
@@ -525,61 +551,54 @@ async function _openTagsModal(conn) {
     try {
         const d = await _api('GET', `${API}/available-tags`);
         _availTags = d.tags || [];
-        // Filter out already-assigned tags
         const assigned = new Set((conn.tags || []).map(t => t.name));
-        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name)), conn);
+        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name)));
     } catch { _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">Failed to load tags</td></tr>'; }
 
     _el('tagSearch').oninput = e => {
         const q = e.target.value.toLowerCase();
         const assigned = new Set((conn.tags || []).map(t => t.name));
-        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name) && (t.name.toLowerCase().includes(q) || t.device.toLowerCase().includes(q))), conn);
+        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name) && (t.name.toLowerCase().includes(q) || (t.device||'').toLowerCase().includes(q))));
     };
-
-    _el('selectAllTags').onchange = e => {
-        document.querySelectorAll('.modal-tag-cb').forEach(cb => cb.checked = e.target.checked);
-        _updateTagCount();
-    };
-
-    _el('tagsCancel').onclick  = () => _hideM('addTagsModal');
+    _el('selectAllTags').onchange = e => { document.querySelectorAll('.modal-tag-cb').forEach(cb => cb.checked = e.target.checked); _updateTagCount(); };
+    _el('tagsCancel').onclick     = () => _hideM('addTagsModal');
     _el('closeTagsModal').onclick = () => _hideM('addTagsModal');
-    _el('tagsConfirm').onclick = async () => {
-        const selected = [...document.querySelectorAll('.modal-tag-cb:checked')].map(cb => cb.dataset.tag);
-        if (!selected.length) { _toast('Select at least one tag', 'error'); return; }
+    _el('tagsConfirm').onclick    = async () => {
+        const sel = [...document.querySelectorAll('.modal-tag-cb:checked')].map(cb => cb.dataset.tag);
+        if (!sel.length) { _toast('Select at least one tag', 'error'); return; }
         _setLoading(_el('tagsConfirm'), true);
         try {
-            await _api('POST', `${API}/connections/${conn.id}/tags`, { tags: selected, publishMode: 'onChange', replace: false });
+            await _api('POST', `${API}/connections/${conn.id}/tags`, { tags: sel, publishMode:'onChange', replace:false });
             _hideM('addTagsModal');
             await _selectConnection(conn.id);
-            _toast(`${selected.length} tag(s) added`, 'success');
+            _toast(`${sel.length} tag(s) added`, 'success');
         } catch { _toast('Failed to add tags', 'error'); }
         finally { _setLoading(_el('tagsConfirm'), false); }
     };
 }
 
-function _renderTagsModal(tags, conn) {
+function _renderTagsModal(tags) {
     const tbody = _el('tagsModalBody');
     if (!tags.length) { tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">No tags available</td></tr>'; return; }
     tbody.innerHTML = tags.map(t => `
       <tr class="border-t border-slate-100 hover:bg-slate-50">
-        <td class="p-2"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" onchange="_updateTagCount()"></td>
+        <td class="p-2"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" onchange="window._updateTagCount()"></td>
         <td class="p-2 font-mono text-xs">${_esc(t.name)}</td>
         <td class="p-2 text-xs text-slate-600">${_esc(t.device||'—')}</td>
         <td class="p-2 text-xs text-slate-500">${_esc(t.unit||'—')}</td>
         <td class="p-2"><span class="cc-badge ${t.source==='modbus'?'mqtt':'http'}">${_esc(t.source)}</span></td>
       </tr>`).join('');
 }
-
 window._updateTagCount = function () {
     const n = document.querySelectorAll('.modal-tag-cb:checked').length;
-    const el = _el('tagsSelectedCount');
-    if (el) el.textContent = n;
+    const el = _el('tagsSelectedCount'); if (el) el.textContent = n;
 };
 
 // ─── ADD CONNECTION MODAL ─────────────────────────────────────────────────────
 const _TYPES = {
-    mqtt: { name:'MQTT Broker',   desc:'Standard IoT messaging protocol', icon:'fa-solid fa-cloud',  color:'#3B82F6' },
-    http: { name:'HTTP Endpoint', desc:'REST API / webhook endpoint',      icon:'fa-solid fa-globe',  color:'#F59E0B' },
+    mqtt: { name:'MQTT Broker',   desc:'Standard IoT messaging protocol', icon:'fa-cloud',       color:'#3B82F6' },
+    http: { name:'HTTP Endpoint', desc:'REST API / webhook endpoint',      icon:'fa-globe',       color:'#F59E0B' },
+    ftp:  { name:'FTP Server',    desc:'File transfer FTP/SFTP/FTPS',      icon:'fa-folder-open', color:'#10B981' },
 };
 
 function _openAddModal() {
@@ -590,16 +609,13 @@ function _openAddModal() {
 }
 
 function _buildTypeGrid() {
-    const grid = _el('typeGrid');
-    if (!grid) return;
+    const grid = _el('typeGrid'); if (!grid) return;
     grid.innerHTML = '';
     Object.entries(_TYPES).forEach(([type, info]) => {
         const card = document.createElement('div');
         card.className = 'type-card';
         card.innerHTML = `
-          <div style="width:48px;height:48px;border-radius:50%;background:${info.color}22;color:${info.color};display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px;">
-            <i class="${info.icon}"></i>
-          </div>
+          <div style="width:48px;height:48px;border-radius:50%;background:${info.color}22;color:${info.color};display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:20px;"><i class="fa-solid ${info.icon}"></i></div>
           <div class="font-semibold text-slate-900 text-sm mb-1">${info.name}</div>
           <div class="text-xs text-slate-500">${info.desc}</div>`;
         card.addEventListener('click', () => {
@@ -630,6 +646,7 @@ function _showStep2(type) {
     _el('addName').value = '';
     _el('addMqttFields').classList.toggle('hidden', type !== 'mqtt');
     _el('addHttpFields').classList.toggle('hidden', type !== 'http');
+    _el('addFtpFields').classList.toggle('hidden',  type !== 'ftp');
 }
 
 async function _handleCreate(e) {
@@ -643,39 +660,23 @@ async function _handleCreate(e) {
         const host = _el('addHost').value.trim();
         if (!host) { _toast('Broker host is required', 'error'); return; }
         conn = { host, port: +_el('addPort').value||1883, username: _el('addUsername').value.trim(), password: _el('addPassword').value };
-    } else {
+    } else if (_selectedType === 'http') {
         const url = _el('addUrl').value.trim();
         if (!url) { _toast('URL is required', 'error'); return; }
         conn = { url, method: _el('addMethod').value, apiKey: _el('addToken').value.trim() };
+    } else {
+        const host = _el('addFtpHost').value.trim();
+        if (!host) { _toast('FTP host is required', 'error'); return; }
+        conn = { host, port: +_el('addFtpPort').value||21, protocol: _el('addFtpProtocol').value, username: _el('addFtpUser').value.trim(), password: _el('addFtpPass').value };
     }
     _setLoading(btn, true);
     try {
-        const d = await _api('POST', `${API}/connections`, { type: _selectedType, name, enabled: true, connection: conn });
+        const d = await _api('POST', `${API}/connections`, { type:_selectedType, name, enabled:true, connection:conn });
         _hideM('addConnectionModal');
         _selectedId = d.id;
         await _loadConnections();
         _toast(`"${name}" created`, 'success');
-    } catch (err) { _toast('Create failed', 'error'); }
-    finally { _setLoading(btn, false); }
-}
-
-// ─── TEST ─────────────────────────────────────────────────────────────────────
-async function _runTest() {
-    if (!_selectedId) return;
-    const btn = _el('testBtn');
-    _setLoading(btn, true);
-    try {
-        const d = await _api('POST', `${API}/connections/${_selectedId}/test`);
-        _el('testResStatus').className = 'font-medium ' + (d.connected ? 'text-green-600' : 'text-red-600');
-        _el('testResStatus').textContent = d.connected ? 'Connected' : 'Failed';
-        _el('testResLatency').textContent = d.latency + ' ms';
-        _el('testResAuth').textContent    = d.details?.auth || '—';
-        const msg = _el('testResMsg');
-        msg.className = `p-3 rounded-lg border text-sm ${d.connected ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`;
-        msg.innerHTML = `<i class="fa-solid ${d.connected?'fa-check-circle':'fa-exclamation-circle'} mr-2"></i>${_esc(d.message||'')}`;
-        _showM('testModal');
-        if (d.connected) { await _loadConnections(); }
-    } catch { _toast('Test failed', 'error'); }
+    } catch { _toast('Create failed', 'error'); }
     finally { _setLoading(btn, false); }
 }
 
@@ -691,10 +692,9 @@ function _updateStatusBar(conn) {
 }
 
 function _updateDiagnostics(conn) {
-    const s   = conn?.statistics || {};
-    const el  = _el('diagStatus');
-    const on  = conn?.enabled;
-    if (el) { el.className = 'cc-status '+(on?'online':'offline'); el.textContent = on?'Connected':'Disconnected'; }
+    const s = conn?.statistics || {};
+    const el = _el('diagStatus');
+    if (el) { el.className = 'cc-status '+(conn?.enabled?'online':'offline'); el.textContent = conn?.enabled?'Connected':'Disconnected'; }
     _st('diagLastMsg', s.lastActive||'Never');
     _st('diagSent',    (s.messages||0).toLocaleString());
     _st('diagRecv',    Math.floor((s.ok||0)*0.98).toLocaleString());
@@ -703,9 +703,14 @@ function _updateDiagnostics(conn) {
 }
 
 function _showActionButtons(conn) {
-    ['testBtn','deleteBtn'].forEach(id => { const b = _el(id); if (b) b.style.display = 'inline-flex'; });
+    // Only show delete, no test button
+    const db = _el('deleteBtn'); if (db) db.style.display = 'inline-flex';
+    // Set toggle to DB value — do NOT use local state
     const tog = _el('enabledToggle');
-    if (tog) { tog.checked = conn.enabled; tog.disabled = false; }
+    if (tog) {
+        tog.checked  = conn.enabled;   // from DB
+        tog.disabled = false;
+    }
 }
 
 function _showEmpty() {
@@ -714,7 +719,7 @@ function _showEmpty() {
     _st('panelDesc', 'Select a connection to view details');
     const ph = _el('formPlaceholder'); if (ph) ph.style.display = '';
     const fc = _el('formContent');    if (fc) { fc.classList.add('hidden'); fc.innerHTML = ''; }
-    ['testBtn','deleteBtn'].forEach(id => { const b = _el(id); if (b) b.style.display = 'none'; });
+    const db = _el('deleteBtn');      if (db) db.style.display = 'none';
     const tog = _el('enabledToggle'); if (tog) { tog.checked = false; tog.disabled = true; }
 }
 
@@ -726,29 +731,48 @@ function _bindPageListeners() {
         try { const d = await _api('PUT', `${API}/save-config`, {}); _toast(d.message||'Saved','success'); }
         catch { _toast('Save failed','error'); }
     });
+
+    // ENABLE TOGGLE — fixed: read confirmed state from API response, then re-render
     _el('enabledToggle')?.addEventListener('change', async function () {
-        if (!_selectedId) return;
-        try { const d = await _api('POST', `${API}/connections/${_selectedId}/toggle`); await _loadConnections(); _toast(d.message||'Toggled','success'); }
-        catch { _toast('Toggle failed','error'); }
+        if (!_selectedId) { this.checked = !this.checked; return; }  // revert if no selection
+        const previousState = !this.checked;   // what it was before this click
+        this.disabled = true;                  // prevent double-click
+        try {
+            const d = await _api('POST', `${API}/connections/${_selectedId}/toggle`);
+            // Use the confirmed value the server read back
+            this.checked  = d.enabled;
+            this.disabled = false;
+            // Update local cache
+            const idx = _connections.findIndex(c => c.id === _selectedId);
+            if (idx !== -1) _connections[idx].enabled = d.enabled;
+            // Re-render list to show new Active/Inactive badge
+            _renderList();
+            // Update status bar desc
+            const conn = _connections[idx];
+            if (conn) _updateStatusBar(conn);
+            _toast(d.enabled ? 'Connection enabled' : 'Connection disabled', 'success');
+        } catch {
+            // Revert toggle to previous state on error
+            this.checked  = previousState;
+            this.disabled = false;
+            _toast('Toggle failed', 'error');
+        }
     });
-    _el('testBtn')?.addEventListener('click', _runTest);
+
     _el('deleteBtn')?.addEventListener('click', async () => {
         const conn = _connections.find(c=>c.id===_selectedId);
         if (!conn || !confirm(`Delete "${conn.name}"? This cannot be undone.`)) return;
         try { await _api('DELETE', `${API}/connections/${_selectedId}`); _selectedId = null; await _loadConnections(); _toast('Deleted','success'); }
         catch { _toast('Delete failed','error'); }
     });
-    _el('closeAddModal')?.addEventListener('click', () => _hideM('addConnectionModal'));
-    _el('cancelType')?.addEventListener('click',    () => _hideM('addConnectionModal'));
-    _el('cancelForm')?.addEventListener('click',    () => _hideM('addConnectionModal'));
-    _el('backBtn')?.addEventListener('click',       _showStep1);
-    _el('proceedBtn')?.addEventListener('click', () => { if (_selectedType) _showStep2(_selectedType); });
-    _el('createForm')?.addEventListener('submit', _handleCreate);
+    _el('closeAddModal')?.addEventListener('click',  () => _hideM('addConnectionModal'));
+    _el('cancelType')?.addEventListener('click',     () => _hideM('addConnectionModal'));
+    _el('cancelForm')?.addEventListener('click',     () => _hideM('addConnectionModal'));
+    _el('backBtn')?.addEventListener('click',        _showStep1);
+    _el('proceedBtn')?.addEventListener('click',     () => { if (_selectedType) _showStep2(_selectedType); });
+    _el('createForm')?.addEventListener('submit',    _handleCreate);
     _el('addConnectionModal')?.addEventListener('click', e => { if (e.target.id==='addConnectionModal') _hideM('addConnectionModal'); });
-    _el('closeTestModal')?.addEventListener('click',  () => _hideM('testModal'));
-    _el('closeTestModal2')?.addEventListener('click', () => _hideM('testModal'));
-    _el('testModal')?.addEventListener('click', e => { if (e.target.id==='testModal') _hideM('testModal'); });
-    document.addEventListener('keydown', e => { if (e.key==='Escape') { _hideM('addConnectionModal'); _hideM('addTagsModal'); _hideM('testModal'); }});
+    document.addEventListener('keydown', e => { if (e.key==='Escape') { _hideM('addConnectionModal'); _hideM('addTagsModal'); }});
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -773,7 +797,7 @@ function _hideM(id)   { const e=_el(id); if (e) { e.style.display='none'; docume
 function _esc(s)      { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _setLoading(btn, on) {
     if (!btn) return;
-    if (on)  { btn._html=btn.innerHTML; btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i>Saving…'; }
+    if (on)  { btn._html=btn.innerHTML; btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i>Working…'; }
     else     { btn.disabled=false; btn.innerHTML=btn._html||btn.innerHTML; }
 }
 function _toast(msg, type='info') {
@@ -781,8 +805,7 @@ function _toast(msg, type='info') {
     const c = {success:'#16A34A',error:'#DC2626',info:'#2563EB',warning:'#D97706'}[type]||'#2563EB';
     const i = {success:'fa-check-circle',error:'fa-circle-xmark',info:'fa-circle-info',warning:'fa-triangle-exclamation'}[type]||'fa-circle-info';
     const n = document.querySelectorAll('.cc-toast').length;
-    const t = document.createElement('div');
-    t.className='cc-toast';
+    const t = document.createElement('div'); t.className='cc-toast';
     t.style.cssText=`position:fixed;bottom:${24+n*52}px;right:24px;z-index:99999;background:${c};color:white;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px;max-width:340px;transition:opacity .3s,transform .3s`;
     t.innerHTML=`<i class="fa-solid ${i} flex-shrink-0"></i><span>${_esc(msg)}</span>`;
     document.body.appendChild(t);
