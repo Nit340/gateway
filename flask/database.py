@@ -42,7 +42,6 @@ def init_database():
     print("✓ Status and last_poll handled via WebSocket real-time only")
     print("✓ Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
     print("✓ Cloud Integration: cloud_connections | mqtt_datapoints | http_datapoints | ftp_datapoints | cloud_connection_stats")
-    print("✓ View: modbus_device_config_view  (SELECT config FROM modbus_device_config_view WHERE device_id='MB1')")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
@@ -306,97 +305,6 @@ def create_tables(cursor):
         )
     ''')
 
-    # ── Modbus Device Config View ─────────────────────────────────────────────
-    # One row per enabled modbus device.
-    # `config` column is a JSON string matching EXACTLY this shape:
-    #
-    #   { "system": { "mode":"rtu", "device":"/dev/ttymxc5", "baud":9600,
-    #                 "parity":"N", "dataBits":8, "stopBits":1,
-    #                 "pollingIntervalMs":500, "responseTimeoutMs":1000,
-    #                 "byteTimeoutMs":2000, "maxRetries":2,
-    #                 "pipelineServer":"127.0.0.1", "pipelinePort":7000,
-    #                 "serviceName":"modbus", "logLevel":"info",
-    #                 "readStrategy":"auto", "maxBlockSize":125,
-    #                 "maxBlockGap":5, "enablePacking":true,
-    #                 "interRequestDelayMs":10 },
-    #     "assets": [ { "name":"hoist_voltage", "slaveId":1,
-    #                   "registerType":"holding", "address":2060,
-    #                   "registerCount":1, "dataType":"uint16",
-    #                   "group":"hoist_group" }, ... ] }
-    #
-    # Python:  cfg = get_modbus_device_config('MB1')   -> dict
-    # SQL:     SELECT config FROM modbus_device_config_view WHERE device_id='MB1';
-    cursor.execute('DROP VIEW IF EXISTS modbus_device_config_view')
-    cursor.execute('''
-        CREATE VIEW modbus_device_config_view AS
-        SELECT
-            d.id          AS device_id,
-            d.name        AS device_name,
-            d.device_type AS device_type,
-
-            json_object(
-
-                'system', json_object(
-                    'baud',               COALESCE(d.baud_rate,          9600),
-                    'byteTimeoutMs',      COALESCE(d.timeout_ms,         1000) * 2,
-                    'dataBits',           COALESCE(d.data_bits,          8),
-                    'device',             CASE d.device_type
-                                               WHEN 'rtu' THEN COALESCE(d.serial_port, '/dev/ttymxc2')
-                                               ELSE              COALESCE(d.ip_address,  '127.0.0.1')
-                                           END,
-                    'enablePacking',      json('true'),
-                    'interRequestDelayMs', 10,
-                    'logLevel',           'info',
-                    'maxBlockGap',        5,
-                    'maxBlockSize',       125,
-                    'maxRetries',         COALESCE(d.retry_count,        2),
-                    'mode',               d.device_type,
-                    'parity',             CASE COALESCE(d.parity, 'N')
-                                               WHEN 'N' THEN 'None'
-                                               WHEN 'E' THEN 'Even'
-                                               WHEN 'O' THEN 'Odd'
-                                               ELSE COALESCE(d.parity, 'None')
-                                           END,
-                    'pipelinePort',       7000,
-                    'pipelineServer',     '127.0.0.1',
-                    'pollingIntervalMs',  COALESCE(d.polling_interval_ms, 500),
-                    'readStrategy',       'auto',
-                    'responseTimeoutMs',  COALESCE(d.timeout_ms,         1000),
-                    'serviceName',        'modbus',
-                    'stopBits',           COALESCE(d.stop_bits,          1)
-                ),
-
-                'assets', COALESCE(
-                    (
-                        SELECT json_group_array(
-                            json_object(
-                                'address',       dp.register_address,
-                                'dataType',      dp.data_type,
-                                'group',         COALESCE(
-                                                      (SELECT dg.name
-                                                       FROM   device_groups dg
-                                                       WHERE  dg.id = d.group_id),
-                                                      'default_group'
-                                                  ),
-                                'name',          dp.name,
-                                'registerCount', 1,
-                                'registerType',  dp.register_type,
-                                'slaveId',       d.slave_id
-                            )
-                        )
-                        FROM  modbus_datapoints dp
-                        WHERE dp.device_id = d.id
-                          AND dp.enabled   = 1
-                        ORDER BY dp.register_address
-                    ),
-                    json('[]')
-                )
-
-            ) AS config
-
-        FROM  modbus_device d
-        WHERE d.enabled = 1
-    ''')
 def insert_default_data(cursor):
     """Insert default data"""
     
@@ -557,112 +465,6 @@ def update_general_configuration(config_data):
         return False
 
 # Device Groups operations
-# ── Modbus device config helper ───────────────────────────────────────────────
-
-def get_modbus_device_config(device_id=None):
-    """
-    Read one or all modbus device configs from modbus_device_config_view.
-
-    Returns the exact JSON structure your downstream services expect:
-        {
-          "system": { "mode": "rtu", "device": "/dev/ttymxc5", "baud": 9600, ... },
-          "assets": [ {"name": "...", "slaveId": 1, "registerType": "holding",
-                       "address": 2060, "registerCount": 1, "dataType": "uint16",
-                       "group": "hoist_group"}, ... ]
-        }
-
-    Usage
-    -----
-    # All enabled devices — returns list of dicts
-    configs = get_modbus_device_config()
-    for c in configs:
-        print(c['device_id'], c['device_name'])
-        print(c['config'])          # already a Python dict
-
-    # Single device — returns dict directly, or None if not found
-    cfg = get_modbus_device_config('MB1')
-    if cfg:
-        print(cfg['config']['system']['mode'])   # "rtu"
-        print(cfg['config']['assets'])           # list of datapoint dicts
-    """
-    try:
-        db  = get_db_connection()
-        cur = db.cursor()
-
-        if device_id:
-            cur.execute(
-                "SELECT device_id, device_name, device_type, config "
-                "FROM modbus_device_config_view WHERE device_id = ?",
-                (device_id,)
-            )
-            row = cur.fetchone()
-            db.close()
-            if not row:
-                return None
-            return {
-                'device_id':   row[0],
-                'device_name': row[1],
-                'device_type': row[2],
-                'config':      json.loads(row[3]),
-            }
-        else:
-            cur.execute(
-                "SELECT device_id, device_name, device_type, config "
-                "FROM modbus_device_config_view ORDER BY device_id"
-            )
-            rows = cur.fetchall()
-            db.close()
-            return [
-                {
-                    'device_id':   r[0],
-                    'device_name': r[1],
-                    'device_type': r[2],
-                    'config':      json.loads(r[3]),
-                }
-                for r in rows
-            ]
-
-    except Exception as e:
-        print(f"Error reading modbus_device_config_view: {e}")
-        return None if device_id else []
-
-
-def get_modbus_device_config_json(device_id=None):
-    """
-    Same as get_modbus_device_config() but returns raw JSON string(s)
-    — useful when you need to write the config directly to a file or
-    pass it to an external process as-is.
-
-    Returns
-    -------
-    str   — if device_id given (single device JSON string, or None)
-    list  — if no device_id (list of JSON strings, one per device)
-    """
-    try:
-        db  = get_db_connection()
-        cur = db.cursor()
-
-        if device_id:
-            cur.execute(
-                "SELECT config FROM modbus_device_config_view WHERE device_id = ?",
-                (device_id,)
-            )
-            row = cur.fetchone()
-            db.close()
-            return row[0] if row else None
-        else:
-            cur.execute(
-                "SELECT device_id, config FROM modbus_device_config_view ORDER BY device_id"
-            )
-            rows = cur.fetchall()
-            db.close()
-            return [{'device_id': r[0], 'config_json': r[1]} for r in rows]
-
-    except Exception as e:
-        print(f"Error reading modbus device config JSON: {e}")
-        return None if device_id else []
-
-
 def get_all_device_groups():
     """Get all device groups"""
     try:
@@ -794,18 +596,9 @@ def get_database_stats():
         
         cursor.execute('SELECT COUNT(*) FROM device_groups')
         group_count = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM modbus_device WHERE enabled=1")
-        view_device_count = cursor.fetchone()[0]
-
-        cursor.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='view' AND name='modbus_device_config_view'
-        """)
-        view_exists = cursor.fetchone() is not None
         
         conn.close()
-
+        
         return {
             'modbus_devices': modbus_count,
             'loadcell_devices': loadcell_count,
@@ -813,16 +606,7 @@ def get_database_stats():
             'modbus_datapoints': modbus_datapoint_count,
             'loadcell_datapoints': loadcell_datapoint_count,
             'total_datapoints': modbus_datapoint_count + loadcell_datapoint_count,
-            'groups': group_count,
-            'views': {
-                'modbus_device_config_view': {
-                    'exists': view_exists,
-                    'enabled_devices': view_device_count,
-                    'description': 'One row per enabled Modbus device. config column = {system:{...}, assets:[...]}',
-                    'query_all': 'SELECT device_id, device_name, config FROM modbus_device_config_view',
-                    'query_one': "SELECT config FROM modbus_device_config_view WHERE device_id='MB1'",
-                }
-            }
+            'groups': group_count
         }
     except Exception as e:
         print(f"Error getting stats: {e}")
@@ -836,15 +620,6 @@ if __name__ == '__main__':
     print("\n=== Database Statistics ===")
     stats = get_database_stats()
     for key, value in stats.items():
-        if key != 'views':
-            print(f"  {key}: {value}")
-
-    print("\n=== Views ===")
-    for vname, vinfo in stats.get('views', {}).items():
-        status = "EXISTS" if vinfo['exists'] else "MISSING"
-        print(f"  [{status}] {vname}")
-        print(f"           Enabled devices : {vinfo['enabled_devices']}")
-        print(f"           Query all       : {vinfo['query_all']}")
-        print(f"           Query one       : {vinfo['query_one']}")
+        print(f"{key}: {value}")
 else:
     init_database()

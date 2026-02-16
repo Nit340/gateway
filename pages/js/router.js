@@ -261,6 +261,12 @@ class Router {
         // Remove from initialized pages
         this.initializedPages.delete(page);
         
+        // CRITICAL FIX: Also remove from loaded scripts cache
+        // This forces the script to re-execute on next navigation
+        // Fixes modal/event listener issues after navigation
+        this.loadedScripts.delete(scriptName);
+        console.log(`✅ Cleared script cache for ${scriptName} to allow re-execution`);
+        
         // Remove script promise (but keep in loadedScripts for caching)
         this.scriptPromises.delete(scriptName);
         
@@ -402,28 +408,36 @@ class Router {
                 
             case 'alerts':
                 delete window.alerts_initialized;
+                this.initializedPages.delete(page);
                 if (typeof window.cleanupAlerts === 'function') {
+                    console.log('Cleaning up alerts');
                     window.cleanupAlerts();
                 }
                 break;
-                
+
             case 'rules':
                 delete window.rules_initialized;
+                this.initializedPages.delete(page);
                 if (typeof window.cleanupRules === 'function') {
+                    console.log('Cleaning up rules');
                     window.cleanupRules();
                 }
                 break;
                 
             case 'backup':
                 delete window.backup_initialized;
+                this.initializedPages.delete(page);
                 if (typeof window.cleanupBackup === 'function') {
+                    console.log('Cleaning up backup');
                     window.cleanupBackup();
                 }
                 break;
-                
+
             case 'notification':
                 delete window.notification_initialized;
+                this.initializedPages.delete(page);
                 if (typeof window.cleanupNotification === 'function') {
+                    console.log('Cleaning up notification');
                     window.cleanupNotification();
                 }
                 break;
@@ -431,6 +445,7 @@ class Router {
             case 'craneiq':
                 delete window.craneiq_initialized;
                 if (typeof window.cleanupCraneIQ === 'function') {
+                    console.log('Cleaning up CraneIQ');
                     window.cleanupCraneIQ();
                 }
                 break;
@@ -607,7 +622,7 @@ class Router {
                         console.warn('initAlerts function not found');
                     }
                     break;
-                    
+
                 case 'rules':
                     if (typeof window.initRules === 'function') {
                         console.log('Initializing Rules');
@@ -618,7 +633,6 @@ class Router {
                         console.warn('initRules function not found');
                     }
                     break;
-                    
                 case 'backup':
                     if (typeof window.initBackup === 'function') {
                         console.log('Initializing Backup');
@@ -629,7 +643,7 @@ class Router {
                         console.warn('initBackup function not found');
                     }
                     break;
-                    
+
                 case 'notification':
                     if (typeof window.initNotification === 'function') {
                         console.log('Initializing Notification');

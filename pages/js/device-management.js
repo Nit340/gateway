@@ -1,10 +1,9 @@
 // device-management.js - Complete Fixed Version with Import/Export, View Details, and Real-time Updates
 
-if (typeof window.deviceManagementLoaded === 'undefined') {
-    window.deviceManagementLoaded = true;
-    
-    (function() {
-        'use strict';
+// CRITICAL FIX: Removed the wrapper check that prevented re-execution after navigation
+// The IIFE will now execute every time the script loads, allowing proper re-initialization
+(function() {
+    'use strict';
         
         window.initializeDeviceManagement = function() {
             console.log('Device Management page initialized');
@@ -25,7 +24,7 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         let deviceWsConnection = null;
         let currentViewingDeviceId = null;
         let currentViewingDevice = null;
-        let eventListenersSetup = false; // Flag to prevent duplicate listeners
+        // REMOVED: eventListenersSetup flag - was blocking listener re-binding after navigation
         let isRefreshing = false;
 
         // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
@@ -1784,18 +1783,14 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
 
         // ==================== EVENT LISTENERS ====================
         function setupEventListeners() {
-            // Prevent duplicate event listeners
-            if (eventListenersSetup) {
-                return;
-            }
-            
-            eventListenersSetup = true;
+            // CRITICAL FIX: Removed eventListenersSetup check that blocked re-binding after navigation
+            // DOM is fresh after navigation, so we need to bind listeners to new elements
+            console.log('📌 Setting up Device Management event listeners...');
             
             // Refresh button
             const refreshBtn = document.getElementById('refreshBtn');
-            if (refreshBtn && !refreshBtn.hasListener) {
+            if (refreshBtn) {
                 refreshBtn.addEventListener('click', refreshData);
-                refreshBtn.hasListener = true;
             }
             
             // Add Device
@@ -1804,31 +1799,24 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             const cancelAddDeviceBtn = document.getElementById('cancelAddDevice');
             const saveDeviceBtn = document.getElementById('saveDeviceBtn');
             
-            if (addDeviceBtn && !addDeviceBtn.hasListener) {
+            if (addDeviceBtn) {
                 addDeviceBtn.addEventListener('click', openAddDevicePanel);
-                addDeviceBtn.hasListener = true;
             }
-            if (closeAddDevicePanelBtn && !closeAddDevicePanelBtn.hasListener) {
+            if (closeAddDevicePanelBtn) {
                 closeAddDevicePanelBtn.addEventListener('click', closeAddDevicePanel);
-                closeAddDevicePanelBtn.hasListener = true;
             }
-            if (cancelAddDeviceBtn && !cancelAddDeviceBtn.hasListener) {
+            if (cancelAddDeviceBtn) {
                 cancelAddDeviceBtn.addEventListener('click', closeAddDevicePanel);
-                cancelAddDeviceBtn.hasListener = true;
             }
-            if (saveDeviceBtn && !saveDeviceBtn.hasListener) {
+            if (saveDeviceBtn) {
                 saveDeviceBtn.addEventListener('click', saveDevice);
-                saveDeviceBtn.hasListener = true;
             }
             
             // Device Type radios
             document.querySelectorAll('input[name="device-type"]').forEach(radio => {
-                if (!radio.hasListener) {
-                    radio.addEventListener('change', function() {
-                        switchDeviceType(this.value);
-                    });
-                    radio.hasListener = true;
-                }
+                radio.addEventListener('change', function() {
+                    switchDeviceType(this.value);
+                });
             });
             
             // View Details Modal
@@ -1838,15 +1826,13 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             const deleteFromViewBtn = document.getElementById('deleteFromViewBtn');
             const duplicateDeviceBtn = document.getElementById('duplicateDeviceBtn');
             
-            if (closeViewModalBtn && !closeViewModalBtn.hasListener) {
+            if (closeViewModalBtn) {
                 closeViewModalBtn.addEventListener('click', closeViewModal);
-                closeViewModalBtn.hasListener = true;
             }
-            if (closeViewDetailsBtn && !closeViewDetailsBtn.hasListener) {
+            if (closeViewDetailsBtn) {
                 closeViewDetailsBtn.addEventListener('click', closeViewModal);
-                closeViewDetailsBtn.hasListener = true;
             }
-            if (editFromViewBtn && !editFromViewBtn.hasListener) {
+            if (editFromViewBtn) {
                 editFromViewBtn.addEventListener('click', function() {
                     if (currentViewingDeviceId) {
                         closeViewModal();
@@ -1855,9 +1841,8 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                         }, 300);
                     }
                 });
-                editFromViewBtn.hasListener = true;
             }
-            if (deleteFromViewBtn && !deleteFromViewBtn.hasListener) {
+            if (deleteFromViewBtn) {
                 deleteFromViewBtn.addEventListener('click', function() {
                     if (currentViewingDeviceId) {
                         if (confirm('Are you sure you want to delete this device?')) {
@@ -1868,15 +1853,13 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
                         }
                     }
                 });
-                deleteFromViewBtn.hasListener = true;
             }
-            if (duplicateDeviceBtn && !duplicateDeviceBtn.hasListener) {
+            if (duplicateDeviceBtn) {
                 duplicateDeviceBtn.addEventListener('click', function() {
                     if (currentViewingDeviceId) {
                         duplicateDevice(currentViewingDeviceId);
                     }
                 });
-                duplicateDeviceBtn.hasListener = true;
             }
             
             // Add Group
@@ -1885,46 +1868,38 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
             const cancelGroupBtn = document.getElementById('cancelGroupBtn');
             const saveGroupBtn = document.getElementById('saveGroupBtn');
             
-            if (addGroupBtn && !addGroupBtn.hasListener) {
+            if (addGroupBtn) {
                 addGroupBtn.addEventListener('click', openAddGroupModal);
-                addGroupBtn.hasListener = true;
             }
-            if (closeGroupModalBtn && !closeGroupModalBtn.hasListener) {
+            if (closeGroupModalBtn) {
                 closeGroupModalBtn.addEventListener('click', closeAddGroupModal);
-                closeGroupModalBtn.hasListener = true;
             }
-            if (cancelGroupBtn && !cancelGroupBtn.hasListener) {
+            if (cancelGroupBtn) {
                 cancelGroupBtn.addEventListener('click', closeAddGroupModal);
-                cancelGroupBtn.hasListener = true;
             }
-            if (saveGroupBtn && !saveGroupBtn.hasListener) {
+            if (saveGroupBtn) {
                 saveGroupBtn.addEventListener('click', saveGroup);
-                saveGroupBtn.hasListener = true;
             }
             
             // Color selection
             document.querySelectorAll('[data-color]').forEach(btn => {
-                if (!btn.hasListener) {
-                    btn.addEventListener('click', function() {
-                        selectedColor = this.dataset.color;
-                        document.querySelectorAll('[data-color]').forEach(b => b.classList.remove('border-2'));
-                        this.classList.add('border-2');
-                    });
-                    btn.hasListener = true;
-                }
+                btn.addEventListener('click', function() {
+                    selectedColor = this.dataset.color;
+                    document.querySelectorAll('[data-color]').forEach(b => b.classList.remove('border-2'));
+                    this.classList.add('border-2');
+                });
             });
             
             // Search
             const searchInput = document.getElementById('searchDevices');
-            if (searchInput && !searchInput.hasListener) {
+            if (searchInput) {
                 searchInput.addEventListener('input', renderDevicesTable);
-                searchInput.hasListener = true;
             }
             
             // Import/Export
             setupImportExportListeners();
             
-            console.log('Event listeners setup complete');
+            console.log('✅ Device Management event listeners setup complete - modals ready!');
         }
 
         // ==================== UTILITY ====================
@@ -1979,4 +1954,4 @@ if (typeof window.deviceManagementLoaded === 'undefined') {
         }
 
     })();
-}
+// IIFE ends here - no more wrapper closing brace

@@ -5,7 +5,7 @@ import sqlite3
 import json
 
 # Import modules
-from database import init_database, DB_FILE, get_database_stats, get_modbus_device_config
+from database import init_database, DB_FILE, get_database_stats
 from general_config import get_config_handler, put_config_handler
 
 from device_management import (
@@ -23,6 +23,7 @@ from tag_mapping import (
 )
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
+from mqtt_cloud import register_cloud_routes
 
 async def database_viewer_handler(request):
     """GET handler - simple database viewer showing all tables and data"""
@@ -30,8 +31,8 @@ async def database_viewer_handler(request):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Get all tables
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        # Get all tables (including views)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' OR type='view' ORDER BY name")
         tables = cursor.fetchall()
         
         html_content = """
@@ -43,12 +44,15 @@ async def database_viewer_handler(request):
                 body { font-family: monospace; margin: 20px; background: #f5f5f5; }
                 h1 { color: #333; }
                 h2 { color: #555; margin-top: 30px; background: #fff; padding: 10px; border-left: 4px solid #4CAF50; }
+                .view-header { border-left-color: #2196F3; }
                 table { border-collapse: collapse; width: 100%; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
                 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                 th { background-color: #4CAF50; color: white; font-weight: bold; }
+                .view-th { background-color: #2196F3; }
                 tr:nth-child(even) { background-color: #f9f9f9; }
                 tr:hover { background-color: #f0f0f0; }
                 .count { background-color: #4CAF50; color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.9em; }
+                .view-count { background-color: #2196F3; }
                 .empty { color: #999; font-style: italic; padding: 20px; }
                 pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
                 .stats { background: white; padding: 20px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -56,6 +60,18 @@ async def database_viewer_handler(request):
                 .stat-item { display: inline-block; margin-right: 30px; }
                 .stat-value { font-size: 24px; font-weight: bold; color: #4CAF50; }
                 .stat-label { color: #666; font-size: 14px; }
+                .view-badge { 
+                    display: inline-block;
+                    background: #2196F3; 
+                    color: white; 
+                    padding: 2px 8px; 
+                    border-radius: 3px; 
+                    font-size: 12px;
+                    margin-left: 10px;
+                    font-weight: normal;
+                }
+                .json-cell { max-width: 500px; overflow-x: auto; }
+                .json-cell pre { margin: 0; background: #f8f8f8; }
             </style>
         </head>
         <body>
@@ -70,145 +86,135 @@ async def database_viewer_handler(request):
         """
         
         for key, value in stats.items():
-            if key == 'views':
-                continue   # rendered separately below
-            label = key.replace('_', ' ').title()
-            html_content += f"""
-                <div class="stat-item">
-                    <div class="stat-value">{value}</div>
-                    <div class="stat-label">{label}</div>
-                </div>
-            """
+            if key != 'views':
+                label = key.replace('_', ' ').title()
+                html_content += f"""
+                    <div class="stat-item">
+                        <div class="stat-value">{value}</div>
+                        <div class="stat-label">{label}</div>
+                    </div>
+                """
+        
+        # Add view stats if available
+        if 'views' in stats:
+            for vname, vinfo in stats['views'].items():
+                if vinfo['exists']:
+                    html_content += f"""
+                    <div class="stat-item">
+                        <div class="stat-value" style="color: #2196F3;">{vinfo['enabled_devices']}</div>
+                        <div class="stat-label">Devices in View</div>
+                    </div>
+                    """
         
         html_content += "</div>"
         
         for table in tables:
             table_name = table[0]
             
-            # Get table schema
+            # Check if it's a view
+            cursor.execute("SELECT type FROM sqlite_master WHERE name = ?", (table_name,))
+            object_type = cursor.fetchone()[0]
+            is_view = (object_type == 'view')
+            
+            # Get table/view schema
             cursor.execute(f"PRAGMA table_info({table_name})")
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
             
-            # Get table data
+            # Get data
             cursor.execute(f"SELECT * FROM {table_name}")
             rows = cursor.fetchall()
             
+            # Header with view badge if it's a view
+            header_class = "view-header" if is_view else ""
+            count_class = "view-count" if is_view else ""
+            view_badge = '<span class="view-badge">VIEW</span>' if is_view else ''
+            
             html_content += f"""
-            <h2>{table_name} <span class="count">{len(rows)} rows</span></h2>
+            <h2 class="{header_class}">{table_name} {view_badge} <span class="count {count_class}">{len(rows)} rows</span></h2>
             """
             
             if rows:
+                # Table header with different color for views
+                th_class = "view-th" if is_view else ""
                 html_content += f"""
                 <table>
                     <tr>
-                        {''.join([f'<th>{col}</th>' for col in column_names])}
+                        {''.join([f'<th class="{th_class}">{col}</th>' for col in column_names])}
                     </tr>
                 """
                 
                 for row in rows:
                     html_content += "<tr>"
-                    for cell in row:
-                        if isinstance(cell, str) and len(cell) > 100:
-                            # Truncate long strings
-                            cell = cell[:100] + "..."
-                        html_content += f"<td>{cell}</td>"
+                    for i, cell in enumerate(row):
+                        # Check if this is the config column (JSON) in the view
+                        if is_view and column_names[i] == 'config' and isinstance(cell, str):
+                            try:
+                                # Pretty print JSON
+                                json_obj = json.loads(cell)
+                                formatted_json = json.dumps(json_obj, indent=2)
+                                html_content += f'<td class="json-cell"><pre>{formatted_json}</pre></td>'
+                            except:
+                                # If not valid JSON, display as is
+                                cell_str = str(cell)
+                                if len(cell_str) > 100:
+                                    cell_str = cell_str[:100] + "..."
+                                html_content += f"<td>{cell_str}</td>"
+                        else:
+                            cell_str = str(cell)
+                            if len(cell_str) > 100:
+                                cell_str = cell_str[:100] + "..."
+                            html_content += f"<td>{cell_str}</td>"
                     html_content += "</tr>"
                 
                 html_content += "</table>"
+                
+                # For the modbus view, add some helpful info
+                if is_view and table_name == 'modbus_device_config_view':
+                    html_content += """
+                    <div style="background: #e3f2fd; padding: 10px; margin-top: -15px; margin-bottom: 20px; border-radius: 0 0 4px 4px; font-size: 0.9em;">
+                        <strong>ℹ️ View Info:</strong> The 'config' column contains the complete device configuration in JSON format.
+                        You can query specific parts using SQLite JSON functions.
+                    </div>
+                    """
             else:
-                html_content += "<p class='empty'>Table is empty</p>"
+                html_content += "<p class='empty'>Table/View is empty</p>"
         
-        # ── Views section ────────────────────────────────────────────────────────
-        html_content += """
-            <h2 style="border-left-color:#9C27B0;">🔍 Views</h2>
-        """
+        # Add view information section
+        if 'views' in stats and stats['views']:
+            html_content += """
+            <div style="margin-top: 30px; background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h3>🔍 View Details</h3>
+            """
+            
+            for vname, vinfo in stats['views'].items():
+                if vinfo['exists']:
+                    html_content += f"""
+                    <div style="margin-bottom: 15px; padding: 15px; background: #f5f5f5; border-left: 4px solid #2196F3;">
+                        <h4 style="margin-top: 0; color: #2196F3;">{vname}</h4>
+                        <p><strong>Description:</strong> {vinfo['description']}</p>
+                        <p><strong>Enabled Devices:</strong> {vinfo['enabled_devices']}</p>
+                        <p><strong>Sample Queries:</strong></p>
+                        <pre style="background: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto;">
+-- Get all devices
+{vinfo['query_all']}
 
-        # Get all views from sqlite_master
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name")
-        views = cursor.fetchall()
+-- Get config for a specific device
+{vinfo['query_one']}
 
-        if not views:
-            html_content += "<p class='empty'>No views defined.</p>"
-        else:
-            for (view_name,) in views:
-                # Get the CREATE VIEW SQL
-                cursor.execute("SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (view_name,))
-                view_sql = cursor.fetchone()[0]
-
-                html_content += f"""
-                <h2 style="border-left-color:#9C27B0;">{view_name}
-                    <span class="count" style="background:#9C27B0;">VIEW</span>
-                </h2>
-                <details style="margin-bottom:10px;">
-                    <summary style="cursor:pointer;color:#9C27B0;font-family:monospace;font-size:13px;">
-                        ▶ Show CREATE VIEW SQL
-                    </summary>
-                    <pre style="background:#f8f0ff;border-left:3px solid #9C27B0;">{view_sql}</pre>
-                </details>
-                """
-
-                # For modbus_device_config_view: render each device's config as formatted JSON
-                if view_name == 'modbus_device_config_view':
-                    configs = get_modbus_device_config()
-                    if not configs:
-                        html_content += "<p class='empty'>No enabled Modbus devices — view is empty.</p>"
-                    else:
-                        for row in configs:
-                            did   = row['device_id']
-                            dname = row['device_name']
-                            dtype = row['device_type'].upper()
-                            cfg   = row['config']
-                            nassets = len(cfg.get('assets', []))
-                            import json as _json
-                            cfg_pretty = _json.dumps(cfg, indent=2)
-                            html_content += f"""
-                            <div style="background:white;border:1px solid #e0d0ff;border-radius:6px;
-                                        margin-bottom:12px;overflow:hidden;
-                                        box-shadow:0 2px 4px rgba(0,0,0,0.07);">
-                                <div style="background:#9C27B0;color:white;padding:8px 14px;
-                                            display:flex;justify-content:space-between;align-items:center;">
-                                    <span style="font-weight:bold;font-size:14px;">
-                                        {did} — {dname}
-                                    </span>
-                                    <span style="font-size:12px;opacity:0.9;">
-                                        {dtype} &nbsp;|&nbsp; {nassets} asset(s)
-                                    </span>
-                                </div>
-                                <details open>
-                                    <summary style="cursor:pointer;padding:8px 14px;
-                                                    color:#9C27B0;font-size:12px;font-family:monospace;">
-                                        ▶ config JSON
-                                    </summary>
-                                    <pre style="margin:0;padding:14px;background:#fdf8ff;
-                                                font-size:12px;overflow-x:auto;
-                                                border-top:1px solid #e0d0ff;">{cfg_pretty}</pre>
-                                </details>
-                            </div>
-                            """
-                else:
-                    # Generic: just query the view and show as table
-                    try:
-                        cursor.execute(f"SELECT * FROM {view_name} LIMIT 100")
-                        vcols = [d[0] for d in cursor.description]
-                        vrows = cursor.fetchall()
-                        if vrows:
-                            html_content += f"<table><tr>"
-                            html_content += ''.join(f'<th>{c}</th>' for c in vcols)
-                            html_content += "</tr>"
-                            for vrow in vrows:
-                                html_content += "<tr>"
-                                for cell in vrow:
-                                    s = str(cell) if cell is not None else ''
-                                    if len(s) > 120: s = s[:120] + '…'
-                                    html_content += f"<td>{s}</td>"
-                                html_content += "</tr>"
-                            html_content += "</table>"
-                        else:
-                            html_content += "<p class='empty'>View returned no rows.</p>"
-                    except Exception as ve:
-                        html_content += f"<p style='color:red'>Error reading view: {ve}</p>"
-
+-- Extract specific fields using JSON functions
+SELECT 
+    device_id,
+    json_extract(config, '$.system.mode') as mode,
+    json_extract(config, '$.system.device') as device,
+    json_extract(config, '$.system.baud') as baud_rate
+FROM {vname}
+WHERE device_id = 'MB1';</pre>
+                    </div>
+                    """
+            
+            html_content += "</div>"
+        
         html_content += """
         </body>
         </html>
@@ -459,8 +465,8 @@ def create_app():
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
     
-    # ADD THESE ROUTES TO main.py in the create_app() function
-
+    # Cloud Integration endpoints
+    register_cloud_routes(app)
 
     # Device Management endpoints
     app.router.add_get('/api/devices', get_all_devices)
