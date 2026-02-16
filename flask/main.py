@@ -5,7 +5,7 @@ import sqlite3
 import json
 
 # Import modules
-from database import init_database, DB_FILE, get_database_stats
+from database import init_database, DB_FILE, get_database_stats, get_modbus_device_config
 from general_config import get_config_handler, put_config_handler
 
 from device_management import (
@@ -23,7 +23,6 @@ from tag_mapping import (
 )
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
-from mqtt_cloud import register_cloud_routes
 
 async def database_viewer_handler(request):
     """GET handler - simple database viewer showing all tables and data"""
@@ -71,6 +70,8 @@ async def database_viewer_handler(request):
         """
         
         for key, value in stats.items():
+            if key == 'views':
+                continue   # rendered separately below
             label = key.replace('_', ' ').title()
             html_content += f"""
                 <div class="stat-item">
@@ -118,6 +119,96 @@ async def database_viewer_handler(request):
             else:
                 html_content += "<p class='empty'>Table is empty</p>"
         
+        # ── Views section ────────────────────────────────────────────────────────
+        html_content += """
+            <h2 style="border-left-color:#9C27B0;">🔍 Views</h2>
+        """
+
+        # Get all views from sqlite_master
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name")
+        views = cursor.fetchall()
+
+        if not views:
+            html_content += "<p class='empty'>No views defined.</p>"
+        else:
+            for (view_name,) in views:
+                # Get the CREATE VIEW SQL
+                cursor.execute("SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (view_name,))
+                view_sql = cursor.fetchone()[0]
+
+                html_content += f"""
+                <h2 style="border-left-color:#9C27B0;">{view_name}
+                    <span class="count" style="background:#9C27B0;">VIEW</span>
+                </h2>
+                <details style="margin-bottom:10px;">
+                    <summary style="cursor:pointer;color:#9C27B0;font-family:monospace;font-size:13px;">
+                        ▶ Show CREATE VIEW SQL
+                    </summary>
+                    <pre style="background:#f8f0ff;border-left:3px solid #9C27B0;">{view_sql}</pre>
+                </details>
+                """
+
+                # For modbus_device_config_view: render each device's config as formatted JSON
+                if view_name == 'modbus_device_config_view':
+                    configs = get_modbus_device_config()
+                    if not configs:
+                        html_content += "<p class='empty'>No enabled Modbus devices — view is empty.</p>"
+                    else:
+                        for row in configs:
+                            did   = row['device_id']
+                            dname = row['device_name']
+                            dtype = row['device_type'].upper()
+                            cfg   = row['config']
+                            nassets = len(cfg.get('assets', []))
+                            import json as _json
+                            cfg_pretty = _json.dumps(cfg, indent=2)
+                            html_content += f"""
+                            <div style="background:white;border:1px solid #e0d0ff;border-radius:6px;
+                                        margin-bottom:12px;overflow:hidden;
+                                        box-shadow:0 2px 4px rgba(0,0,0,0.07);">
+                                <div style="background:#9C27B0;color:white;padding:8px 14px;
+                                            display:flex;justify-content:space-between;align-items:center;">
+                                    <span style="font-weight:bold;font-size:14px;">
+                                        {did} — {dname}
+                                    </span>
+                                    <span style="font-size:12px;opacity:0.9;">
+                                        {dtype} &nbsp;|&nbsp; {nassets} asset(s)
+                                    </span>
+                                </div>
+                                <details open>
+                                    <summary style="cursor:pointer;padding:8px 14px;
+                                                    color:#9C27B0;font-size:12px;font-family:monospace;">
+                                        ▶ config JSON
+                                    </summary>
+                                    <pre style="margin:0;padding:14px;background:#fdf8ff;
+                                                font-size:12px;overflow-x:auto;
+                                                border-top:1px solid #e0d0ff;">{cfg_pretty}</pre>
+                                </details>
+                            </div>
+                            """
+                else:
+                    # Generic: just query the view and show as table
+                    try:
+                        cursor.execute(f"SELECT * FROM {view_name} LIMIT 100")
+                        vcols = [d[0] for d in cursor.description]
+                        vrows = cursor.fetchall()
+                        if vrows:
+                            html_content += f"<table><tr>"
+                            html_content += ''.join(f'<th>{c}</th>' for c in vcols)
+                            html_content += "</tr>"
+                            for vrow in vrows:
+                                html_content += "<tr>"
+                                for cell in vrow:
+                                    s = str(cell) if cell is not None else ''
+                                    if len(s) > 120: s = s[:120] + '…'
+                                    html_content += f"<td>{s}</td>"
+                                html_content += "</tr>"
+                            html_content += "</table>"
+                        else:
+                            html_content += "<p class='empty'>View returned no rows.</p>"
+                    except Exception as ve:
+                        html_content += f"<p style='color:red'>Error reading view: {ve}</p>"
+
         html_content += """
         </body>
         </html>
@@ -368,8 +459,8 @@ def create_app():
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
     
-    # Cloud Integration endpoints
-    register_cloud_routes(app)
+    # ADD THESE ROUTES TO main.py in the create_app() function
+
 
     # Device Management endpoints
     app.router.add_get('/api/devices', get_all_devices)
