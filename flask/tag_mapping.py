@@ -13,6 +13,7 @@ async def get_all_datapoints(request):
     """GET all datapoints (modbus + loadcell)"""
     try:
         conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
         cursor = conn.cursor()
         
         tags = []  # Changed from datapoints to tags
@@ -33,7 +34,7 @@ async def get_all_datapoints(request):
                 'id': row[0],
                 'device_id': row[1],
                 'device_name': row[13],
-                'device_type': f"Modbus {row[14].upper()}",
+                'device_type': "Modbus {}".format(row[14].upper()),
                 'tag_name': row[2],
                 'register_address': row[3],
                 'register_type': row[4],
@@ -65,7 +66,7 @@ async def get_all_datapoints(request):
                 'device_type': 'Loadcell',
                 'tag_name': row[2],
                 'unit': row[4] if row[2] == 'load' else 'g',
-                'description': f"Loadcell {row[2]}",
+                'description': "Loadcell {}".format(row[2]),
                 'enabled': True,
                 'type': 'loadcell',  # Added type field
                 'data_type': 'float32'  # Default for loadcell
@@ -75,7 +76,7 @@ async def get_all_datapoints(request):
         return web.json_response({'tags': tags})  # Changed from datapoints to tags
         
     except Exception as e:
-        print(f"Error getting tags: {e}")
+        print("Error getting tags: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -88,6 +89,7 @@ async def add_modbus_datapoint(request):
         data = await request.json()
         
         conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
         cursor = conn.cursor()
         
         # Validate device exists
@@ -145,7 +147,7 @@ async def add_modbus_datapoint(request):
         })
         
     except Exception as e:
-        print(f"Error adding tag: {e}")
+        print("Error adding tag: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -159,6 +161,7 @@ async def update_modbus_datapoint(request):
         data = await request.json()
         
         conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
         cursor = conn.cursor()
         
         # Check if tag exists
@@ -206,11 +209,11 @@ async def update_modbus_datapoint(request):
         
         values.append(tag_id)
         
-        query = f'''
+        query = '''
             UPDATE modbus_datapoints 
-            SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+            SET {fields}, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        '''
+        '''.format(fields=', '.join(update_fields))
         
         cursor.execute(query, values)
         conn.commit()
@@ -222,7 +225,7 @@ async def update_modbus_datapoint(request):
         })
         
     except Exception as e:
-        print(f"Error updating tag: {e}")
+        print("Error updating tag: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -236,6 +239,7 @@ async def delete_datapoint(request):
         tag_type = request.query.get('type', 'modbus')
         
         conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
         cursor = conn.cursor()
         
         if tag_type == 'loadcell':
@@ -262,7 +266,7 @@ async def delete_datapoint(request):
         })
         
     except Exception as e:
-        print(f"Error deleting tag: {e}")
+        print("Error deleting tag: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -273,6 +277,7 @@ async def get_available_devices(request):
     """GET devices available for creating tags"""
     try:
         conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
         cursor = conn.cursor()
         
         devices = []
@@ -288,8 +293,8 @@ async def get_available_devices(request):
             devices.append({
                 'id': row[0],
                 'name': row[1],
-                'type': f"Modbus {row[2].upper()}",
-                'protocol': f"modbus-{row[2]}"
+                'type': "Modbus {}".format(row[2].upper()),
+                'protocol': "modbus-{}".format(row[2])
             })
         
         # Get Loadcell devices (NO status - it's real-time via WebSocket)
@@ -311,7 +316,7 @@ async def get_available_devices(request):
         return web.json_response({'devices': devices})
         
     except Exception as e:
-        print(f"Error getting available devices: {e}")
+        print("Error getting available devices: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -430,5 +435,5 @@ async def get_protocol_form(request):
         return web.json_response(form_schema)
         
     except Exception as e:
-        print(f"Error getting protocol form: {e}")
+        print("Error getting protocol form: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)

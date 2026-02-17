@@ -503,4 +503,97 @@
 .tag-card-body { display:flex; flex-direction:column; gap:0.5rem; font-size:0.75rem; color:#64748b; }
 .tag-card-row { display:flex; justify-content:space-between; }
 .tag-card-actions { display:flex; gap:0.5rem; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid #e2e8f0; }
+
+.tag-table-row.bg-yellow-100 {
+    background-color: #fef9c3;
+    transition: background-color 0.3s ease;
+}
+
+.tag-table-row.border-l-4.border-yellow-400 {
+    border-left-width: 4px;
+    border-left-color: #fbbf24;
+}
+
+.tag-table-row.font-bold {
+    font-weight: 600;
+}
+
+/* Hover effect for tag cards */
+.tag-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tag-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 12px -4px rgba(59, 130, 246, 0.15);
+    border-color: #3b82f6;
+}
+
+/* Pagination controls styling */
+#browserPagination {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.tag-table-row.bg-yellow-100 {
+    background-color: #fef9c3 !important;
+    transition: background-color 0.3s ease;
+}
+
+.tag-table-row.border-l-4.border-yellow-400 {
+    border-left-width: 4px !important;
+    border-left-color: #fbbf24 !important;
+}
+
+.tag-table-row.font-bold {
+    font-weight: 600 !important;
+}
+
+/* Tag card hover effect */
+.tag-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #e2e8f0;
+}
+
+.tag-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -4px rgba(59, 130, 246, 0.15);
+    border-color: #3b82f6;
+}
+
+/* Pagination controls */
+#browserPagination {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Disabled button state */
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Toast notification improvements */
+.tm-toast {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+}
+
+/* Load cell tag indicator */
+.tag-card .text-green-600 {
+    color: #16a34a;
+    font-size: 11px;
+    margin-top: 4px;
+}
 </style>

@@ -1,0 +1,16 @@
+services:
+  backend:
+    build: ./flask
+    container_name: gateway_backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./flask:/app
+
+  frontend:
+    build: ./frontend
+    container_name: gateway_frontend
+    ports:
+      - "5550:5500"
+    depends_on:
+      - backend

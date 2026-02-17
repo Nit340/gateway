@@ -63,7 +63,8 @@ def _err(m, s=400): return web.Response(text=json.dumps({'error':m}), content_ty
 def _cfg(raw):
     try: return json.loads(raw or '{}')
     except: return {}
-def _gid(t): return f"{t}-{int(time.time()*1000)%100_000_000}"
+def _gid(t):
+    return "{}-{}".format(t, int(time.time()*1000) % 100000000)
 def _ensure_stats(cur, cid):
     cur.execute('INSERT OR IGNORE INTO cloud_connection_stats(connection_id) VALUES(?)',(cid,))
 

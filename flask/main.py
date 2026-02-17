@@ -29,6 +29,7 @@ async def database_viewer_handler(request):
     """GET handler - simple database viewer showing all tables and data"""
     try:
         conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
         cursor = conn.cursor()
         
         # Get all tables (including views)
@@ -88,23 +89,23 @@ async def database_viewer_handler(request):
         for key, value in stats.items():
             if key != 'views':
                 label = key.replace('_', ' ').title()
-                html_content += f"""
+                html_content += """
                     <div class="stat-item">
                         <div class="stat-value">{value}</div>
                         <div class="stat-label">{label}</div>
                     </div>
-                """
+                """.format(value=value, label=label)
         
         # Add view stats if available
         if 'views' in stats:
             for vname, vinfo in stats['views'].items():
                 if vinfo['exists']:
-                    html_content += f"""
+                    html_content += """
                     <div class="stat-item">
-                        <div class="stat-value" style="color: #2196F3;">{vinfo['enabled_devices']}</div>
+                        <div class="stat-value" style="color: #2196F3;">{enabled_devices}</div>
                         <div class="stat-label">Devices in View</div>
                     </div>
-                    """
+                    """.format(enabled_devices=vinfo['enabled_devices'])
         
         html_content += "</div>"
         
@@ -117,12 +118,12 @@ async def database_viewer_handler(request):
             is_view = (object_type == 'view')
             
             # Get table/view schema
-            cursor.execute(f"PRAGMA table_info({table_name})")
+            cursor.execute("PRAGMA table_info({table_name})".format(table_name=table_name))
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
             
             # Get data
-            cursor.execute(f"SELECT * FROM {table_name}")
+            cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
             rows = cursor.fetchall()
             
             # Header with view badge if it's a view
@@ -130,19 +131,19 @@ async def database_viewer_handler(request):
             count_class = "view-count" if is_view else ""
             view_badge = '<span class="view-badge">VIEW</span>' if is_view else ''
             
-            html_content += f"""
-            <h2 class="{header_class}">{table_name} {view_badge} <span class="count {count_class}">{len(rows)} rows</span></h2>
-            """
+            html_content += """
+            <h2 class="{header_class}">{table_name} {view_badge} <span class="count {count_class}">{row_count} rows</span></h2>
+            """.format(header_class=header_class, table_name=table_name, view_badge=view_badge, count_class=count_class, row_count=len(rows))
             
             if rows:
                 # Table header with different color for views
                 th_class = "view-th" if is_view else ""
-                html_content += f"""
+                html_content += """
                 <table>
                     <tr>
-                        {''.join([f'<th class="{th_class}">{col}</th>' for col in column_names])}
+                        {th_cells}
                     </tr>
-                """
+                """.format(th_cells=''.join(['<th class="{th_class}">{col}</th>'.format(th_class=th_class, col=col) for col in column_names]))
                 
                 for row in rows:
                     html_content += "<tr>"
@@ -153,18 +154,18 @@ async def database_viewer_handler(request):
                                 # Pretty print JSON
                                 json_obj = json.loads(cell)
                                 formatted_json = json.dumps(json_obj, indent=2)
-                                html_content += f'<td class="json-cell"><pre>{formatted_json}</pre></td>'
+                                html_content += '<td class="json-cell"><pre>{formatted_json}</pre></td>'.format(formatted_json=formatted_json)
                             except:
                                 # If not valid JSON, display as is
                                 cell_str = str(cell)
                                 if len(cell_str) > 100:
                                     cell_str = cell_str[:100] + "..."
-                                html_content += f"<td>{cell_str}</td>"
+                                html_content += "<td>{cell_str}</td>".format(cell_str=cell_str)
                         else:
                             cell_str = str(cell)
                             if len(cell_str) > 100:
                                 cell_str = cell_str[:100] + "..."
-                            html_content += f"<td>{cell_str}</td>"
+                            html_content += "<td>{cell_str}</td>".format(cell_str=cell_str)
                     html_content += "</tr>"
                 
                 html_content += "</table>"
@@ -189,18 +190,18 @@ async def database_viewer_handler(request):
             
             for vname, vinfo in stats['views'].items():
                 if vinfo['exists']:
-                    html_content += f"""
+                    html_content += """
                     <div style="margin-bottom: 15px; padding: 15px; background: #f5f5f5; border-left: 4px solid #2196F3;">
                         <h4 style="margin-top: 0; color: #2196F3;">{vname}</h4>
-                        <p><strong>Description:</strong> {vinfo['description']}</p>
-                        <p><strong>Enabled Devices:</strong> {vinfo['enabled_devices']}</p>
+                        <p><strong>Description:</strong> {description}</p>
+                        <p><strong>Enabled Devices:</strong> {enabled_devices}</p>
                         <p><strong>Sample Queries:</strong></p>
                         <pre style="background: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto;">
 -- Get all devices
-{vinfo['query_all']}
+{query_all}
 
 -- Get config for a specific device
-{vinfo['query_one']}
+{query_one}
 
 -- Extract specific fields using JSON functions
 SELECT 
@@ -208,10 +209,17 @@ SELECT
     json_extract(config, '$.system.mode') as mode,
     json_extract(config, '$.system.device') as device,
     json_extract(config, '$.system.baud') as baud_rate
-FROM {vname}
+FROM {vname2}
 WHERE device_id = 'MB1';</pre>
                     </div>
-                    """
+                    """.format(
+                        vname=vname,
+                        description=vinfo['description'],
+                        enabled_devices=vinfo['enabled_devices'],
+                        query_all=vinfo['query_all'],
+                        query_one=vinfo['query_one'],
+                        vname2=vname
+                    )
             
             html_content += "</div>"
         
@@ -224,16 +232,16 @@ WHERE device_id = 'MB1';</pre>
         return web.Response(text=html_content, content_type='text/html')
         
     except Exception as e:
-        error_html = f"""
+        error_html = """
         <!DOCTYPE html>
         <html>
         <head><title>Database Error</title></head>
         <body>
             <h1>Database Error</h1>
-            <p>Error: {str(e)}</p>
+            <p>Error: {error}</p>
         </body>
         </html>
-        """
+        """.format(error=str(e))
         return web.Response(text=error_html, content_type='text/html')
 
 async def api_docs_handler(request):
@@ -541,4 +549,4 @@ if __name__ == '__main__':
     print("Press Ctrl+C to stop")
     print("="*60 + "\n")
     
-    web.run_app(create_app(), host='0.0.0.0', port=8080)
+    web.run_app(create_app(), host='0.0.0.0', port=5000)

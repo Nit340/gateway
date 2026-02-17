@@ -16,7 +16,7 @@ async def websocket_handler(request):
     await ws.prepare(request)
     
     connected_websockets.add(ws)
-    print(f"WebSocket connected. Total clients: {len(connected_websockets)}")
+    print("WebSocket connected. Total clients: {}".format(len(connected_websockets)))
     
     try:
         # Send initial data
@@ -72,14 +72,14 @@ async def websocket_handler(request):
                         'message': 'Invalid JSON format'
                     })
             elif msg.type == aiohttp.WSMsgType.ERROR:
-                print(f'WebSocket connection closed with exception {ws.exception()}')
+                print('WebSocket connection closed with exception {}'.format(ws.exception()))
                 break
                     
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print("WebSocket error: {}".format(e))
     finally:
         connected_websockets.discard(ws)
-        print(f"WebSocket disconnected. Total clients: {len(connected_websockets)}")
+        print("WebSocket disconnected. Total clients: {}".format(len(connected_websockets)))
     
     return ws
 
@@ -91,7 +91,7 @@ async def device_websocket_handler(request):
     # Check if there's already a connection from this session
     # Only allow one device WebSocket connection at a time
     device_websockets.add(ws)
-    print(f"Device WebSocket connected. Total clients: {len(device_websockets)}")
+    print("Device WebSocket connected. Total clients: {}".format(len(device_websockets)))
     
     try:
         # Send initial device status for ALL devices
@@ -124,14 +124,14 @@ async def device_websocket_handler(request):
                         'message': 'Invalid JSON format'
                     })
             elif msg.type == aiohttp.WSMsgType.ERROR:
-                print(f'Device WebSocket connection closed with exception {ws.exception()}')
+                print('Device WebSocket connection closed with exception {}'.format(ws.exception()))
                 break
                     
     except Exception as e:
-        print(f"Device WebSocket error: {e}")
+        print("Device WebSocket error: {}".format(e))
     finally:
         device_websockets.discard(ws)
-        print(f"Device WebSocket disconnected. Total clients: {len(device_websockets)}")
+        print("Device WebSocket disconnected. Total clients: {}".format(len(device_websockets)))
     
     return ws
 
@@ -176,7 +176,7 @@ async def safe_send(ws, data):
         if not ws.closed:
             await ws.send_json(data)
     except Exception as e:
-        print(f"Error sending to WebSocket: {e}")
+        print("Error sending to WebSocket: {}".format(e))
         # Remove from sets if it's there
         device_websockets.discard(ws)
         connected_websockets.discard(ws)

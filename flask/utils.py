@@ -43,7 +43,7 @@ async def periodic_updates():
                 await asyncio.sleep(60)
             
         except Exception as e:
-            print(f"Error in periodic updates: {e}")
+            print("Error in periodic updates: {}".format(e))
             await asyncio.sleep(60)
 
 async def device_status_updater():
@@ -68,7 +68,7 @@ async def device_status_updater():
                 if current_status == 'Online':
                     # Online devices poll regularly
                     seconds_ago = random.choice([2, 3, 5, 8, 10])
-                    device_info['last_poll'] = f"{seconds_ago} sec ago"
+                    device_info['last_poll'] = "{} sec ago".format(seconds_ago)
                     
                     # Very small chance to go offline (0.5% per update)
                     if random.random() < 0.005:
@@ -93,13 +93,13 @@ async def device_status_updater():
                     offline_duration = (datetime.datetime.now() - device_info['last_offline_time']).seconds
                     
                     if offline_duration < 60:
-                        new_poll = f"{offline_duration} sec ago"
+                        new_poll = "{} sec ago".format(offline_duration)
                     elif offline_duration < 3600:
                         minutes = offline_duration // 60
-                        new_poll = f"{minutes} min ago"
+                        new_poll = "{} min ago".format(minutes)
                     else:
                         hours = offline_duration // 3600
-                        new_poll = f"{hours} hr ago"
+                        new_poll = "{} hr ago".format(hours)
                     
                     # Only update if the time description changed
                     if new_poll != device_info['last_poll']:
@@ -133,7 +133,7 @@ async def device_status_updater():
             await asyncio.sleep(10)
             
         except Exception as e:
-            print(f"Error in device status updater: {e}")
+            print("Error in device status updater: {}".format(e))
             await asyncio.sleep(10)
 
 def initialize_device_status(device_id, initial_status='Offline'):

@@ -24,7 +24,7 @@ async def put_config_handler(request):
         }, status=500)
         
     except Exception as e:
-        print(f"Error in PUT handler: {e}")
+        print("Error in PUT handler: {}".format(e))
         return web.json_response({
             'success': False,
             'message': str(e)

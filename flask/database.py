@@ -9,6 +9,7 @@ def get_db_connection():
     """Get a database connection with proper timeout and WAL mode for concurrency"""
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
     conn.execute('PRAGMA journal_mode=WAL')  # Write-Ahead Logging for better concurrency
+    conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints (including CASCADE)
     return conn
 
 def init_database():
@@ -304,6 +305,79 @@ def create_tables(cursor):
             FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
         )
     ''')
+    
+    # ── Modbus Device Config VIEW ─────────────────────────────────────────────────
+    # Create a comprehensive view of modbus devices with their configuration as JSON
+    cursor.execute('''
+        CREATE VIEW IF NOT EXISTS modbus_device_config_view AS
+        SELECT
+            d.id          AS device_id,
+            d.name        AS device_name,
+            d.device_type AS device_type,
+
+            json_object(
+
+                'system', json_object(
+                    'baud',               COALESCE(d.baud_rate,          9600),
+                    'byteTimeoutMs',      COALESCE(d.timeout_ms,         1000) * 2,
+                    'dataBits',           COALESCE(d.data_bits,          8),
+                    'device',             CASE d.device_type
+                                               WHEN 'rtu' THEN COALESCE(d.serial_port, '/dev/ttymxc2')
+                                               ELSE              COALESCE(d.ip_address,  '127.0.0.1')
+                                           END,
+                    'enablePacking',      json('true'),
+                    'interRequestDelayMs', 10,
+                    'logLevel',           'info',
+                    'maxBlockGap',        5,
+                    'maxBlockSize',       125,
+                    'maxRetries',         COALESCE(d.retry_count,        2),
+                    'mode',               d.device_type,
+                    'parity',             CASE COALESCE(d.parity, 'N')
+                                               WHEN 'N' THEN 'None'
+                                               WHEN 'E' THEN 'Even'
+                                               WHEN 'O' THEN 'Odd'
+                                               ELSE COALESCE(d.parity, 'None')
+                                           END,
+                    'pipelinePort',       7000,
+                    'pipelineServer',     '127.0.0.1',
+                    'pollingIntervalMs',  COALESCE(d.polling_interval_ms, 500),
+                    'readStrategy',       'auto',
+                    'responseTimeoutMs',  COALESCE(d.timeout_ms,         1000),
+                    'serviceName',        'modbus',
+                    'stopBits',           COALESCE(d.stop_bits,          1)
+                ),
+
+                'assets', COALESCE(
+                    (
+                        SELECT json_group_array(
+                            json_object(
+                                'address',       dp.register_address,
+                                'dataType',      dp.data_type,
+                                'group',         COALESCE(
+                                                      (SELECT dg.name
+                                                       FROM   device_groups dg
+                                                       WHERE  dg.id = d.group_id),
+                                                      'default_group'
+                                                  ),
+                                'name',          dp.name,
+                                'registerCount', 1,
+                                'registerType',  dp.register_type,
+                                'slaveId',       d.slave_id
+                            )
+                        )
+                        FROM  modbus_datapoints dp
+                        WHERE dp.device_id = d.id
+                          AND dp.enabled   = 1
+                        ORDER BY dp.register_address
+                    ),
+                    json('[]')
+                )
+
+            ) AS config
+
+        FROM  modbus_device d
+        WHERE d.enabled = 1
+    ''')
 
 def insert_default_data(cursor):
     """Insert default data"""
@@ -596,9 +670,18 @@ def get_database_stats():
         
         cursor.execute('SELECT COUNT(*) FROM device_groups')
         group_count = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM modbus_device WHERE enabled=1")
+        view_device_count = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='view' AND name='modbus_device_config_view'
+        """)
+        view_exists = cursor.fetchone() is not None
         
         conn.close()
-        
+
         return {
             'modbus_devices': modbus_count,
             'loadcell_devices': loadcell_count,
@@ -606,7 +689,16 @@ def get_database_stats():
             'modbus_datapoints': modbus_datapoint_count,
             'loadcell_datapoints': loadcell_datapoint_count,
             'total_datapoints': modbus_datapoint_count + loadcell_datapoint_count,
-            'groups': group_count
+            'groups': group_count,
+            'views': {
+                'modbus_device_config_view': {
+                    'exists': view_exists,
+                    'enabled_devices': view_device_count,
+                    'description': 'One row per enabled Modbus device. config column = {system:{...}, assets:[...]}',
+                    'query_all': 'SELECT device_id, device_name, config FROM modbus_device_config_view',
+                    'query_one': "SELECT config FROM modbus_device_config_view WHERE device_id='MB1'",
+                }
+            }
         }
     except Exception as e:
         print(f"Error getting stats: {e}")

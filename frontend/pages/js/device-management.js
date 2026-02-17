@@ -24,7 +24,7 @@
         let deviceWsConnection = null;
         let currentViewingDeviceId = null;
         let currentViewingDevice = null;
-        // REMOVED: eventListenersSetup flag - was blocking listener re-binding after navigation
+        let eventListenersSetup = false; // Prevent duplicate event listeners
         let isRefreshing = false;
 
         // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
@@ -1783,8 +1783,12 @@
 
         // ==================== EVENT LISTENERS ====================
         function setupEventListeners() {
-            // CRITICAL FIX: Removed eventListenersSetup check that blocked re-binding after navigation
-            // DOM is fresh after navigation, so we need to bind listeners to new elements
+            // Prevent duplicate event listeners when re-initializing
+            if (eventListenersSetup) {
+                console.log('📌 Event listeners already setup, skipping...');
+                return;
+            }
+            
             console.log('📌 Setting up Device Management event listeners...');
             
             // Refresh button
@@ -1898,6 +1902,9 @@
             
             // Import/Export
             setupImportExportListeners();
+            
+            // Mark as setup
+            eventListenersSetup = true;
             
             console.log('✅ Device Management event listeners setup complete - modals ready!');
         }

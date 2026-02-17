@@ -22,6 +22,7 @@ def get_db_connection():
     """Get a database connection with proper timeout and WAL mode for concurrency"""
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
     conn.execute('PRAGMA journal_mode=WAL')  # Write-Ahead Logging for better concurrency
+    conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints (including CASCADE)
     return conn
 
 # ============================================================================
@@ -51,7 +52,7 @@ async def get_all_devices(request):
             
             # Determine address display
             if device_type == 'tcp':
-                address = f"{ip}:{port}" if ip else "Not configured"
+                address = "{}:{}".format(ip, port) if ip else "Not configured"
                 protocol = "modbus-tcp"
             else:  # rtu
                 address = serial_port or "Not configured"
@@ -116,7 +117,7 @@ async def get_all_devices(request):
         return web.json_response({'devices': devices})
         
     except Exception as e:
-        print(f"Error getting devices: {e}")
+        print("Error getting devices: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -304,7 +305,7 @@ async def get_device_details(request):
         return web.json_response({'error': 'Device not found'}, status=404)
         
     except Exception as e:
-        print(f"Error getting device details: {e}")
+        print("Error getting device details: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -338,7 +339,7 @@ async def add_device(request):
                 except ValueError:
                     continue
             
-            device_id = f'LC{max_num + 1}'
+            device_id = 'LC{}'.format(max_num + 1)
         else:  # modbus
             # Modbus devices get MB prefix - find max existing ID number
             cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
@@ -354,7 +355,7 @@ async def add_device(request):
                 except ValueError:
                     continue
             
-            device_id = f'MB{max_num + 1}'
+            device_id = 'MB{}'.format(max_num + 1)
         
         # Get group_id if group name is provided
         group_id = None
@@ -417,7 +418,7 @@ async def add_device(request):
                 # Fallback: check if IP address is provided (indicates TCP)
                 modbus_type = 'tcp' if config.get('ip_address') else 'rtu'
             
-            print(f"Creating Modbus device - Protocol received: '{protocol}', Type determined: '{modbus_type}'")
+            print("Creating Modbus device - Protocol received: '{}', Type determined: '{}'".format(protocol, modbus_type))
             
             cursor.execute('''
                 INSERT INTO modbus_device (
@@ -459,10 +460,10 @@ async def add_device(request):
         })
         
     except sqlite3.IntegrityError as e:
-        print(f"Database integrity error: {e}")
-        return web.json_response({'error': f'Database constraint violation: {str(e)}'}, status=400)
+        print("Database integrity error: {}".format(e))
+        return web.json_response({'error': 'Database constraint violation: {}'.format(str(e))}, status=400)
     except Exception as e:
-        print(f"Error adding device: {e}")
+        print("Error adding device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -541,11 +542,11 @@ async def update_device(request):
             
             values.append(device_id)
             
-            query = f'''
+            query = '''
                 UPDATE modbus_device 
-                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                SET {fields}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            '''
+            '''.format(fields=', '.join(update_fields))
             
             cursor.execute(query, values)
         
@@ -591,11 +592,11 @@ async def update_device(request):
             
             values.append(device_id)
             
-            query = f'''
+            query = '''
                 UPDATE loadcell_device 
-                SET {', '.join(update_fields)}, updated_at = CURRENT_TIMESTAMP
+                SET {fields}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-            '''
+            '''.format(fields=', '.join(update_fields))
             
             cursor.execute(query, values)
         
@@ -608,7 +609,7 @@ async def update_device(request):
         })
         
     except Exception as e:
-        print(f"Error updating device: {e}")
+        print("Error updating device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -639,7 +640,7 @@ async def delete_device(request):
         })
         
     except Exception as e:
-        print(f"Error deleting device: {e}")
+        print("Error deleting device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -669,7 +670,7 @@ async def test_device(request):
             }, status=400)
             
     except Exception as e:
-        print(f"Error testing device: {e}")
+        print("Error testing device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 async def disable_device(request):
@@ -697,11 +698,11 @@ async def disable_device(request):
         
         return web.json_response({
             'success': True,
-            'message': f"Device {'enabled' if enabled else 'disabled'} successfully"
+            'message': "Device {} successfully".format('enabled' if enabled else 'disabled')
         })
         
     except Exception as e:
-        print(f"Error disabling device: {e}")
+        print("Error disabling device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -743,7 +744,7 @@ async def duplicate_device(request):
                 except ValueError:
                     continue
             
-            new_device_id = f'MB{max_num + 1}'
+            new_device_id = 'MB{}'.format(max_num + 1)
             
             # Generate new device name with -001, -002 suffix
             base_name = old_device['name']
@@ -751,7 +752,7 @@ async def duplicate_device(request):
             import re
             base_name_clean = re.sub(r'-\d+$', '', base_name)
             
-            cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', (f'{base_name_clean}%',))
+            cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
             existing_names = [row[0] for row in cursor.fetchall()]
             
             counter = 1
@@ -767,7 +768,7 @@ async def duplicate_device(request):
                 # First duplicate should be -001
                 counter = 1
             
-            new_name = f"{base_name_clean}-{str(counter).zfill(3)}"
+            new_name = "{}-{}".format(base_name_clean, str(counter).zfill(3))
             
             # Insert new device
             cursor.execute('''
@@ -815,7 +816,7 @@ async def duplicate_device(request):
             
             return web.json_response({
                 'success': True,
-                'message': f'Device duplicated successfully as {new_name}',
+                'message': 'Device duplicated successfully as {}'.format(new_name),
                 'device_id': new_device_id,
                 'device_name': new_name,
                 'datapoints_copied': len(datapoints)
@@ -847,7 +848,7 @@ async def duplicate_device(request):
                     except ValueError:
                         continue
                 
-                new_device_id = f'LC{max_num + 1}'
+                new_device_id = 'LC{}'.format(max_num + 1)
                 
                 # Generate new device name with -001, -002 suffix
                 base_name = old_device['name']
@@ -855,7 +856,7 @@ async def duplicate_device(request):
                 import re
                 base_name_clean = re.sub(r'-\d+$', '', base_name)
                 
-                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', (f'{base_name_clean}%',))
+                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
                 existing_names = [row[0] for row in cursor.fetchall()]
                 
                 counter = 1
@@ -871,7 +872,7 @@ async def duplicate_device(request):
                     # First duplicate should be -001
                     counter = 1
                 
-                new_name = f"{base_name_clean}-{str(counter).zfill(3)}"
+                new_name = "{}-{}".format(base_name_clean, str(counter).zfill(3))
                 
                 # Insert new loadcell device
                 cursor.execute('''
@@ -913,7 +914,7 @@ async def duplicate_device(request):
                 
                 return web.json_response({
                     'success': True,
-                    'message': f'Device duplicated successfully as {new_name}',
+                    'message': 'Device duplicated successfully as {}'.format(new_name),
                     'device_id': new_device_id,
                     'device_name': new_name,
                     'datapoints_copied': len(datapoints)
@@ -926,7 +927,7 @@ async def duplicate_device(request):
                 }, status=404)
         
     except Exception as e:
-        print(f"Error duplicating device: {e}")
+        print("Error duplicating device: {}".format(e))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -942,7 +943,7 @@ async def get_all_groups(request):
         groups = get_all_device_groups()
         return web.json_response({'groups': groups})
     except Exception as e:
-        print(f"Error getting groups: {e}")
+        print("Error getting groups: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 async def add_group(request):
@@ -970,7 +971,7 @@ async def add_group(request):
             }, status=500)
             
     except Exception as e:
-        print(f"Error adding group: {e}")
+        print("Error adding group: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 async def delete_group(request):
@@ -993,7 +994,7 @@ async def delete_group(request):
             }, status=500)
             
     except Exception as e:
-        print(f"Error deleting group: {e}")
+        print("Error deleting group: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 async def assign_devices_to_group(request):
@@ -1019,7 +1020,7 @@ async def assign_devices_to_group(request):
         })
         
     except Exception as e:
-        print(f"Error assigning devices to group: {e}")
+        print("Error assigning devices to group: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1094,19 +1095,19 @@ async def export_devices_csv(request):
         
         # Create filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'devices_export_{timestamp}.csv'
+        filename = 'devices_export_{}.csv'.format(timestamp)
         
         # Return CSV file
         return web.Response(
             text=csv_content,
             headers={
                 'Content-Type': 'text/csv',
-                'Content-Disposition': f'attachment; filename="{filename}"'
+                'Content-Disposition': 'attachment; filename="{}"'.format(filename)
             }
         )
         
     except Exception as e:
-        print(f"Error exporting devices: {e}")
+        print("Error exporting devices: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 async def import_devices_csv(request):
@@ -1177,7 +1178,7 @@ async def import_devices_csv(request):
                 'requires_confirmation': True,
                 'duplicates': duplicates,
                 'new_devices_count': len(new_devices),
-                'message': f'Found {len(duplicates)} duplicate device(s). Please choose how to proceed.'
+                'message': 'Found {} duplicate device(s). Please choose how to proceed.'.format(len(duplicates))
             })
         
         # Second pass: Import devices based on user choice
@@ -1197,7 +1198,7 @@ async def import_devices_csv(request):
                 group_name = row.get('Group', '').strip()
                 
                 if not name:
-                    errors.append(f"Row {row_num}: Missing device name")
+                    errors.append("Row {}: Missing device name".format(row_num))
                     continue
                 
                 # Check if device exists
@@ -1258,7 +1259,7 @@ async def import_devices_csv(request):
                                 max_num = num
                         except ValueError:
                             continue
-                    device_id = f'LC{max_num + 1}'
+                    device_id = 'LC{}'.format(max_num + 1)
                 else:
                     cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
@@ -1270,7 +1271,7 @@ async def import_devices_csv(request):
                                 max_num = num
                         except ValueError:
                             continue
-                    device_id = f'MB{max_num + 1}'
+                    device_id = 'MB{}'.format(max_num + 1)
                 
                 if device_type.lower() == 'loadcell':
                     # Import Loadcell device
@@ -1347,7 +1348,7 @@ async def import_devices_csv(request):
                 imported_count += 1
                 
             except Exception as e:
-                errors.append(f"Row {row_num}: {str(e)}")
+                errors.append("Row {}: {}".format(row_num, str(e)))
                 continue
         
         conn.commit()
@@ -1355,11 +1356,11 @@ async def import_devices_csv(request):
         
         message_parts = []
         if imported_count > 0:
-            message_parts.append(f'Successfully imported {imported_count} device(s)')
+            message_parts.append('Successfully imported {} device(s)'.format(imported_count))
         if replaced_count > 0:
-            message_parts.append(f'Replaced {replaced_count} existing device(s)')
+            message_parts.append('Replaced {} existing device(s)'.format(replaced_count))
         if skipped_count > 0:
-            message_parts.append(f'Skipped {skipped_count} duplicate(s)')
+            message_parts.append('Skipped {} duplicate(s)'.format(skipped_count))
         
         response_data = {
             'success': True,
@@ -1373,7 +1374,7 @@ async def import_devices_csv(request):
         return web.json_response(response_data)
         
     except Exception as e:
-        print(f"Error importing devices: {e}")
+        print("Error importing devices: {}".format(e))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -1426,7 +1427,7 @@ async def download_csv_template(request):
         )
         
     except Exception as e:
-        print(f"Error generating template: {e}")
+        print("Error generating template: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1492,7 +1493,7 @@ async def get_device_datapoints(request):
         return web.json_response({'datapoints': datapoints})
         
     except Exception as e:
-        print(f"Error getting device datapoints: {e}")
+        print("Error getting device datapoints: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1522,5 +1523,5 @@ async def update_device_status_api(request):
         })
         
     except Exception as e:
-        print(f"Error updating device status: {e}")
+        print("Error updating device status: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
