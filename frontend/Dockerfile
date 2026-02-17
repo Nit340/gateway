@@ -9,4 +9,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # copy frontend files
 COPY . /usr/share/nginx/html
 
-EXPOSE 5500
+EXPOSE 5550

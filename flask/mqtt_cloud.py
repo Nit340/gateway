@@ -114,7 +114,7 @@ async def _create(req):
     try: body=await req.json()
     except: return _err('Invalid JSON')
     ctype=(body.get('type') or '').lower()
-    if ctype not in ('mqtt','http','ftp'): return _err(f'Invalid type: {ctype}')
+    if ctype not in ('mqtt','http','ftp'): return _err('Invalid type: {}'.format(ctype))
     name=(body.get('name') or '').strip()
     if not name: return _err('name is required')
     config={**_DEFAULTS[ctype],**(body.get('connection') or body.get('config') or {})}
@@ -125,7 +125,7 @@ async def _create(req):
                     (cid,ctype,name,1 if body.get('enabled',True) else 0,json.dumps(config)))
         _ensure_stats(cur,cid)
         db.commit(); db.close()
-        return _ok({'id':cid,'message':f'"{name}" created'},201)
+        return _ok({'id':cid,'message':'"{}" created'.format(name)},201)
     except Exception as e: return _err(str(e),500)
 
 async def _get(req):
@@ -153,7 +153,7 @@ async def _update(req):
         if body.get('name'): sets.append('name=?'); vals.append(body['name'].strip())
         if 'enabled' in body: sets.append('enabled=?'); vals.append(1 if body['enabled'] else 0)
         vals.append(cid)
-        cur.execute(f'UPDATE cloud_connections SET {",".join(sets)} WHERE id=?',vals)
+        cur.execute('UPDATE cloud_connections SET {} WHERE id=?'.format(','.join(sets)),vals)
         db.commit(); db.close()
         return _ok({'message':'Updated'})
     except Exception as e: return _err(str(e),500)
@@ -212,7 +212,7 @@ async def _assign_tags(req):
         ctype=r[0]
         tbl_map={'mqtt':'mqtt_datapoints','http':'http_datapoints','ftp':'ftp_datapoints'}
         tbl=tbl_map[ctype]
-        if replace: cur.execute(f'DELETE FROM {tbl} WHERE connection_id=?',(cid,))
+        if replace: cur.execute('DELETE FROM {} WHERE connection_id=?'.format(tbl),(cid,))
         for tag in tag_list:
             if ctype=='mqtt':
                 cur.execute('INSERT OR REPLACE INTO mqtt_datapoints(connection_id,tag_name,topic,publish_mode,change_threshold,enabled) VALUES(?,?,?,?,?,1)',(cid,tag,'',mode,thresh))
@@ -221,7 +221,7 @@ async def _assign_tags(req):
             else:  # ftp
                 cur.execute('INSERT OR REPLACE INTO ftp_datapoints(connection_id,tag_name,column_name,include_unit,include_timestamp,enabled) VALUES(?,?,?,1,1,1)',(cid,tag,tag))
         db.commit(); db.close()
-        return _ok({'message':f'{len(tag_list)} tag(s) assigned'})
+        return _ok({'message':'{} tag(s) assigned'.format(len(tag_list))})
     except Exception as e: return _err(str(e),500)
 
 async def _remove_tag(req):
@@ -232,7 +232,7 @@ async def _remove_tag(req):
         r=cur.fetchone()
         if not r: db.close(); return _err('Not found',404)
         tbl={'mqtt':'mqtt_datapoints','http':'http_datapoints','ftp':'ftp_datapoints'}[r[0]]
-        cur.execute(f'DELETE FROM {tbl} WHERE connection_id=? AND tag_name=?',(cid,tag))
+        cur.execute('DELETE FROM {} WHERE connection_id=? AND tag_name=?'.format(tbl),(cid,tag))
         db.commit(); db.close()
         return _ok({'message':'Tag removed'})
     except Exception as e: return _err(str(e),500)
@@ -255,5 +255,5 @@ async def _save_all(req):
         db=get_db_connection(); cur=db.cursor()
         cur.execute('SELECT COUNT(*) FROM cloud_connections')
         n=cur.fetchone()[0]; db.close()
-        return _ok({'message':f'Saved ({n} connections)','total':n})
+        return _ok({'message':'Saved ({} connections)'.format(n),'total':n})
     except Exception as e: return _err(str(e),500)

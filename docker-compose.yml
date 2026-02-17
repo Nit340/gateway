@@ -3,7 +3,7 @@ services:
     build: ./flask
     container_name: gateway_backend
     ports:
-      - "5000:5000"
+      - "8080:8080"
     volumes:
       - ./flask:/app
 
@@ -11,6 +11,6 @@ services:
     build: ./frontend
     container_name: gateway_frontend
     ports:
-      - "5550:5500"
+      - "5550:5550"
     depends_on:
       - backend

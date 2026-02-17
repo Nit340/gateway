@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # database.py - Database initialization and operations
 import sqlite3
 import json
@@ -455,7 +456,7 @@ def get_general_configuration():
         conn.close()
         return config
     except Exception as e:
-        print(f"Error getting general config: {e}")
+        print("Error getting general config: {}".format(e))
         return {}
 
 def update_general_configuration(config_data):
@@ -524,18 +525,18 @@ def update_general_configuration(config_data):
             values.append(config_data['mac_address'])
         
         if updates:
-            query = f'''
+            query = '''
                 UPDATE general_configuration 
-                SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP
+                SET {fields}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = 1
-            '''
+            '''.format(fields=', '.join(updates))
             cursor.execute(query, values)
             conn.commit()
         
         conn.close()
         return True
     except Exception as e:
-        print(f"Error updating general config: {e}")
+        print("Error updating general config: {}".format(e))
         return False
 
 # Device Groups operations
@@ -564,7 +565,7 @@ def get_all_device_groups():
         conn.close()
         return groups
     except Exception as e:
-        print(f"Error getting device groups: {e}")
+        print("Error getting device groups: {}".format(e))
         return []
 
 def add_device_group(name, color='blue', description=''):
@@ -583,7 +584,7 @@ def add_device_group(name, color='blue', description=''):
         conn.close()
         return group_id
     except Exception as e:
-        print(f"Error adding device group: {e}")
+        print("Error adding device group: {}".format(e))
         return None
 
 def delete_device_group(group_id):
@@ -603,7 +604,7 @@ def delete_device_group(group_id):
         conn.close()
         return True
     except Exception as e:
-        print(f"Error deleting device group: {e}")
+        print("Error deleting device group: {}".format(e))
         return False
 
 # Services operations
@@ -631,7 +632,7 @@ def get_all_services():
         conn.close()
         return services
     except Exception as e:
-        print(f"Error getting services: {e}")
+        print("Error getting services: {}".format(e))
         return []
 
 def get_service_by_name(name):
@@ -646,7 +647,7 @@ def get_service_by_name(name):
         conn.close()
         return row[0] if row else None
     except Exception as e:
-        print(f"Error getting service by name: {e}")
+        print("Error getting service by name: {}".format(e))
         return None
 
 # Database statistics
@@ -701,7 +702,7 @@ def get_database_stats():
             }
         }
     except Exception as e:
-        print(f"Error getting stats: {e}")
+        print("Error getting stats: {}".format(e))
         return {}
 
 # Initialize database when module is imported
@@ -712,6 +713,6 @@ if __name__ == '__main__':
     print("\n=== Database Statistics ===")
     stats = get_database_stats()
     for key, value in stats.items():
-        print(f"{key}: {value}")
+        print("{}: {}".format(key, value))
 else:
     init_database()
