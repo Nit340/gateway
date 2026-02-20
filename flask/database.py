@@ -25,6 +25,10 @@ def init_database():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Drop legacy SQL view if it exists (uses json_object which requires JSON1 extension
+    # compiled into SQLite -- not guaranteed on all builds). Replaced by Python function.
+    cursor.execute('DROP VIEW IF EXISTS modbus_device_config_view')
+
     # Create all tables
     create_tables(cursor)
     
@@ -34,16 +38,16 @@ def init_database():
     conn.commit()
     conn.close()
     print("Database initialized with new schema")
-    print("✓ General configuration table (no JSON)")
-    print("✓ Services table (modbus, loadcell)")
-    print("✓ Modbus_device table (tcp/rtu with connection details) - NO status column")
-    print("✓ Loadcell_device table (with calibration) - NO status column")
-    print("✓ Modbus_datapoints table")
-    print("✓ Loadcell_datapoints table (auto-created: load, capacity)")
-    print("✓ Dynamic device groups")
-    print("✓ Status and last_poll handled via WebSocket real-time only")
-    print("✓ Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
-    print("✓ Cloud Integration: cloud_connections | mqtt_datapoints | http_datapoints | ftp_datapoints | cloud_connection_stats")
+    print("[OK] General configuration table (no JSON)")
+    print("[OK] Services table (modbus, loadcell)")
+    print("[OK] Modbus_device table (tcp/rtu with connection details) - NO status column")
+    print("[OK] Loadcell_device table (with calibration) - NO status column")
+    print("[OK] Modbus_datapoints table")
+    print("[OK] Loadcell_datapoints table (auto-created: load, capacity)")
+    print("[OK] Dynamic device groups")
+    print("[OK] Status and last_poll handled via WebSocket real-time only")
+    print("[OK] Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
+    print("[OK] Cloud Integration: cloud_connections | mqtt_datapoints | http_datapoints | ftp_datapoints | cloud_connection_stats")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
@@ -231,7 +235,7 @@ def create_tables(cursor):
         )
     ''')
 
-    # ── Cloud Integration ─────────────────────────────────────────────────────
+    # -- Cloud Integration -----------------------------------------------------
     # cloud_connections: one row per broker/endpoint (mqtt, http, or ftp)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connections (
@@ -307,78 +311,10 @@ def create_tables(cursor):
         )
     ''')
     
-    # ── Modbus Device Config VIEW ─────────────────────────────────────────────────
-    # Create a comprehensive view of modbus devices with their configuration as JSON
-    cursor.execute('''
-        CREATE VIEW IF NOT EXISTS modbus_device_config_view AS
-        SELECT
-            d.id          AS device_id,
-            d.name        AS device_name,
-            d.device_type AS device_type,
-
-            json_object(
-
-                'system', json_object(
-                    'baud',               COALESCE(d.baud_rate,          9600),
-                    'byteTimeoutMs',      COALESCE(d.timeout_ms,         1000) * 2,
-                    'dataBits',           COALESCE(d.data_bits,          8),
-                    'device',             CASE d.device_type
-                                               WHEN 'rtu' THEN COALESCE(d.serial_port, '/dev/ttymxc2')
-                                               ELSE              COALESCE(d.ip_address,  '127.0.0.1')
-                                           END,
-                    'enablePacking',      json('true'),
-                    'interRequestDelayMs', 10,
-                    'logLevel',           'info',
-                    'maxBlockGap',        5,
-                    'maxBlockSize',       125,
-                    'maxRetries',         COALESCE(d.retry_count,        2),
-                    'mode',               d.device_type,
-                    'parity',             CASE COALESCE(d.parity, 'N')
-                                               WHEN 'N' THEN 'None'
-                                               WHEN 'E' THEN 'Even'
-                                               WHEN 'O' THEN 'Odd'
-                                               ELSE COALESCE(d.parity, 'None')
-                                           END,
-                    'pipelinePort',       7000,
-                    'pipelineServer',     '127.0.0.1',
-                    'pollingIntervalMs',  COALESCE(d.polling_interval_ms, 500),
-                    'readStrategy',       'auto',
-                    'responseTimeoutMs',  COALESCE(d.timeout_ms,         1000),
-                    'serviceName',        'modbus',
-                    'stopBits',           COALESCE(d.stop_bits,          1)
-                ),
-
-                'assets', COALESCE(
-                    (
-                        SELECT json_group_array(
-                            json_object(
-                                'address',       dp.register_address,
-                                'dataType',      dp.data_type,
-                                'group',         COALESCE(
-                                                      (SELECT dg.name
-                                                       FROM   device_groups dg
-                                                       WHERE  dg.id = d.group_id),
-                                                      'default_group'
-                                                  ),
-                                'name',          dp.name,
-                                'registerCount', 1,
-                                'registerType',  dp.register_type,
-                                'slaveId',       d.slave_id
-                            )
-                        )
-                        FROM  modbus_datapoints dp
-                        WHERE dp.device_id = d.id
-                          AND dp.enabled   = 1
-                        ORDER BY dp.register_address
-                    ),
-                    json('[]')
-                )
-
-            ) AS config
-
-        FROM  modbus_device d
-        WHERE d.enabled = 1
-    ''')
+    # -- Modbus Device Config VIEW -------------------------------------------------
+    # NOTE: SQLite JSON functions (json_object, json_group_array) require SQLite 3.9.0+
+    # which is not available on this system. The view has been replaced by the Python
+    # function get_modbus_device_config_view() below, which produces identical output.
 
 def insert_default_data(cursor):
     """Insert default data"""
@@ -408,6 +344,110 @@ def insert_default_data(cursor):
             INSERT OR IGNORE INTO device_groups (name, color, description)
             VALUES (?, ?, ?)
         ''', group)
+
+# -- Python replacement for modbus_device_config_view -------------------------
+# Builds the same JSON config that the SQL view would have produced,
+# but entirely in Python so it works with old SQLite (pre-3.9.0).
+
+def get_modbus_device_config_view(device_id=None):
+    """Return a list of dicts: {device_id, device_name, device_type, config}.
+    config is a dict (not a string) matching the old SQL view's JSON shape.
+    Pass device_id to filter to a single device."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        if device_id:
+            cursor.execute("""
+                SELECT id, name, device_type, baud_rate, timeout_ms, data_bits,
+                       serial_port, ip_address, retry_count, parity,
+                       polling_interval_ms, stop_bits, slave_id, group_id
+                FROM modbus_device WHERE enabled=1 AND id=?
+            """, (device_id,))
+        else:
+            cursor.execute("""
+                SELECT id, name, device_type, baud_rate, timeout_ms, data_bits,
+                       serial_port, ip_address, retry_count, parity,
+                       polling_interval_ms, stop_bits, slave_id, group_id
+                FROM modbus_device WHERE enabled=1
+            """)
+
+        devices = cursor.fetchall()
+        results = []
+
+        parity_map = {'N': 'None', 'E': 'Even', 'O': 'Odd'}
+
+        for d in devices:
+            (d_id, d_name, d_type, baud_rate, timeout_ms, data_bits,
+             serial_port, ip_address, retry_count, parity,
+             polling_interval_ms, stop_bits, slave_id, group_id) = d
+
+            # Resolve group name
+            group_name = 'default_group'
+            if group_id is not None:
+                cursor.execute("SELECT name FROM device_groups WHERE id=?", (group_id,))
+                row = cursor.fetchone()
+                if row:
+                    group_name = row[0]
+
+            # Resolve datapoints
+            cursor.execute("""
+                SELECT register_address, data_type, name, register_type
+                FROM modbus_datapoints
+                WHERE device_id=? AND enabled=1
+                ORDER BY register_address
+            """, (d_id,))
+            assets = []
+            for dp in cursor.fetchall():
+                assets.append({
+                    'address':       dp[0],
+                    'dataType':      dp[1],
+                    'group':         group_name,
+                    'name':          dp[2],
+                    'registerCount': 1,
+                    'registerType':  dp[3],
+                    'slaveId':       slave_id
+                })
+
+            device_path = serial_port if d_type == 'rtu' else (ip_address or '127.0.0.1')
+
+            config = {
+                'system': {
+                    'baud':                baud_rate or 9600,
+                    'byteTimeoutMs':       (timeout_ms or 1000) * 2,
+                    'dataBits':            data_bits or 8,
+                    'device':              device_path or '/dev/ttymxc2',
+                    'enablePacking':       True,
+                    'interRequestDelayMs': 10,
+                    'logLevel':            'info',
+                    'maxBlockGap':         5,
+                    'maxBlockSize':        125,
+                    'maxRetries':          retry_count or 2,
+                    'mode':                d_type,
+                    'parity':              parity_map.get(parity or 'N', 'None'),
+                    'pipelinePort':        7000,
+                    'pipelineServer':      '127.0.0.1',
+                    'pollingIntervalMs':   polling_interval_ms or 500,
+                    'readStrategy':        'auto',
+                    'responseTimeoutMs':   timeout_ms or 1000,
+                    'serviceName':         'modbus',
+                    'stopBits':            stop_bits or 1
+                },
+                'assets': assets
+            }
+
+            results.append({
+                'device_id':   d_id,
+                'device_name': d_name,
+                'device_type': d_type,
+                'config':      config
+            })
+
+        conn.close()
+        return results
+    except Exception as e:
+        print("Error in get_modbus_device_config_view: {}".format(e))
+        return []
 
 def get_general_configuration():
     """Get general configuration"""
@@ -675,12 +715,6 @@ def get_database_stats():
         cursor.execute("SELECT COUNT(*) FROM modbus_device WHERE enabled=1")
         view_device_count = cursor.fetchone()[0]
 
-        cursor.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='view' AND name='modbus_device_config_view'
-        """)
-        view_exists = cursor.fetchone() is not None
-        
         conn.close()
 
         return {
@@ -693,11 +727,11 @@ def get_database_stats():
             'groups': group_count,
             'views': {
                 'modbus_device_config_view': {
-                    'exists': view_exists,
+                    'exists': True,
                     'enabled_devices': view_device_count,
-                    'description': 'One row per enabled Modbus device. config column = {system:{...}, assets:[...]}',
-                    'query_all': 'SELECT device_id, device_name, config FROM modbus_device_config_view',
-                    'query_one': "SELECT config FROM modbus_device_config_view WHERE device_id='MB1'",
+                    'description': 'Python function replaces SQL view (SQLite JSON funcs unavailable)',
+                    'query_all': 'get_modbus_device_config_view()',
+                    'query_one': "get_modbus_device_config_view(device_id='MB1')",
                 }
             }
         }

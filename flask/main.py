@@ -1,8 +1,31 @@
+# -*- coding: utf-8 -*-
 # main.py - Main entry point
 from aiohttp import web
 import asyncio
 import sqlite3
 import json
+import threading
+import logging
+
+# Pipeline client integration
+try:
+    from ilx_pipeline import PipelineClient, EventType, DataType
+    PIPELINE_AVAILABLE = True
+except ImportError:
+    PIPELINE_AVAILABLE = False
+    logging.warning("ilx_pipeline not available - pipeline features disabled")
+
+# Global pipeline state
+pipeline_state = {
+    "client": None,
+    "connected": False,
+    "load_raw": None,
+    "ws_clients": set(),
+    "lock": threading.Lock(),
+}
+
+# Calibration storage (in-memory, persists while server runs)
+calibration_data = {}  # legacy - calibration now stored in DB
 
 # Import modules
 from database import init_database, DB_FILE, get_database_stats
@@ -76,7 +99,7 @@ async def database_viewer_handler(request):
             </style>
         </head>
         <body>
-            <h1>📊 Database Viewer: gateway_config.db</h1>
+            <h1> Database Viewer: gateway_config.db</h1>
         """
         
         # Add statistics
@@ -122,9 +145,23 @@ async def database_viewer_handler(request):
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
             
-            # Get data
-            cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
-            rows = cursor.fetchall()
+            # For views, use the Python replacement function (avoids SQLite JSON1 dependency)
+            if is_view and table_name == 'modbus_device_config_view':
+                from database import get_modbus_device_config_view
+                view_data = get_modbus_device_config_view()
+                column_names = ['device_id', 'device_name', 'device_type', 'config']
+                rows = [
+                    (r['device_id'], r['device_name'], r['device_type'], json.dumps(r['config'], indent=2))
+                    for r in view_data
+                ]
+            else:
+                # Get data � wrap in try/except in case a view uses unsupported SQL functions
+                try:
+                    cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
+                    rows = cursor.fetchall()
+                except Exception as tbl_err:
+                    rows = []
+                    print("DB viewer: could not query {}: {}".format(table_name, tbl_err))
             
             # Header with view badge if it's a view
             header_class = "view-header" if is_view else ""
@@ -174,7 +211,7 @@ async def database_viewer_handler(request):
                 if is_view and table_name == 'modbus_device_config_view':
                     html_content += """
                     <div style="background: #e3f2fd; padding: 10px; margin-top: -15px; margin-bottom: 20px; border-radius: 0 0 4px 4px; font-size: 0.9em;">
-                        <strong>ℹ️ View Info:</strong> The 'config' column contains the complete device configuration in JSON format.
+                        <strong>(i) View Info:</strong> The 'config' column contains the complete device configuration in JSON format.
                         You can query specific parts using SQLite JSON functions.
                     </div>
                     """
@@ -185,7 +222,7 @@ async def database_viewer_handler(request):
         if 'views' in stats and stats['views']:
             html_content += """
             <div style="margin-top: 30px; background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h3>🔍 View Details</h3>
+                <h3> View Details</h3>
             """
             
             for vname, vinfo in stats['views'].items():
@@ -268,10 +305,10 @@ async def api_docs_handler(request):
         </style>
     </head>
     <body>
-        <h1>🚀 Gateway Configuration API</h1>
+        <h1> Gateway Configuration API</h1>
         <p>RESTful API for managing gateway configuration, devices, and datapoints.</p>
         
-        <h2>📋 General Configuration</h2>
+        <h2> General Configuration</h2>
         <div class="endpoint">
             <span class="method get">GET</span>
             <span class="path">/api/general-configuration</span>
@@ -284,7 +321,7 @@ async def api_docs_handler(request):
             <p>Update general gateway configuration</p>
         </div>
         
-        <h2>🔌 Device Management</h2>
+        <h2> Device Management</h2>
         
         <h3>Device Operations</h3>
         <div class="endpoint">
@@ -367,7 +404,7 @@ async def api_docs_handler(request):
             <p>Assign devices to a group</p>
         </div>
         
-        <h2>🏷️ Datapoint Management</h2>
+        <h2> Datapoint Management</h2>
         
         <div class="endpoint">
             <span class="method get">GET</span>
@@ -387,7 +424,7 @@ async def api_docs_handler(request):
   "data_type": "int16",
   "scale_factor": 0.1,
   "offset": 0,
-  "unit": "°C"
+  "unit": "degC"
 }</pre>
         </div>
         
@@ -415,7 +452,7 @@ async def api_docs_handler(request):
             <p>Get form schema for creating datapoint by protocol</p>
         </div>
         
-        <h2>🔄 WebSocket Endpoints</h2>
+        <h2> WebSocket Endpoints</h2>
         
         <div class="endpoint">
             <span class="method get">GET</span>
@@ -429,7 +466,7 @@ async def api_docs_handler(request):
             <p>WebSocket for device status updates</p>
         </div>
         
-        <h2>🗄️ Database Viewer</h2>
+        <h2> Database Viewer</h2>
         
         <div class="endpoint">
             <span class="method get">GET</span>
@@ -437,7 +474,7 @@ async def api_docs_handler(request):
             <p>View all database tables and data</p>
         </div>
         
-        <h2>📝 Notes</h2>
+        <h2> Notes</h2>
         <ul>
             <li><strong>Modbus Devices:</strong> Support both TCP and RTU. Device type determined by protocol.</li>
             <li><strong>Loadcell Devices:</strong> Automatically create 'load' and 'capacity' datapoints upon creation.</li>
@@ -460,6 +497,205 @@ async def cleanup_background_tasks(app):
     await app['periodic_updates']
     app['device_status_updater'].cancel()
     await app['device_status_updater']
+
+# ==================== PIPELINE HANDLERS ====================
+
+async def pipeline_connect_handler(request):
+    """POST /api/pipeline/connect - Connect to pipeline and start listening for all datapoints"""
+    global pipeline_state
+    try:
+        if not PIPELINE_AVAILABLE:
+            return web.json_response({"success": False, "error": "ilx_pipeline library not found - check server logs"})
+
+        with pipeline_state["lock"]:
+            if pipeline_state["connected"] and pipeline_state["client"]:
+                return web.json_response({"success": True, "message": "Already connected"})
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        host = body.get("host", "127.0.0.1")
+        port = body.get("port", 7000)
+
+        def _run_pipeline():
+            try:
+                client = PipelineClient("craneiq_loadcell_listener", host, port, 1000, 10)
+                client.set_connection_timeout(5)
+
+                def on_event(event):
+                    try:
+                        if event.event_type == EventType.PIPELINE_CONNECTED:
+                            with pipeline_state["lock"]:
+                                pipeline_state["connected"] = True
+                        elif event.event_type == EventType.PIPELINE_OFFLINE:
+                            with pipeline_state["lock"]:
+                                pipeline_state["connected"] = False
+                        elif event.event_type == EventType.RECEIVE_DONE:
+                            dp = event.datapoint_name
+                            try:
+                                dtype = client.get_datapoint_type(dp)
+                                if dtype == DataType.FLOAT:
+                                    val = client.get_datapoint_float(dp)
+                                elif dtype == DataType.DOUBLE:
+                                    val = client.get_datapoint_double(dp)
+                                elif dtype == DataType.INT:
+                                    val = client.get_datapoint_integer(dp)
+                                elif dtype == DataType.LONG:
+                                    val = client.get_datapoint_long(dp)
+                                elif dtype == DataType.BOOL:
+                                    val = client.get_datapoint_boolean(dp)
+                                else:
+                                    val = client.get_datapoint_string(dp)
+                                msg = json.dumps({"datapoint": dp, "value": val})
+                                for ws in list(pipeline_state["ws_clients"]):
+                                    try:
+                                        asyncio.run_coroutine_threadsafe(ws.send_str(msg), ws._loop)
+                                    except Exception:
+                                        pass
+                            except Exception as e:
+                                logging.error("Error reading datapoint %s: %s", dp, e)
+                    except Exception as e:
+                        logging.error("Pipeline event error: %s", e)
+
+                client.set_event_callback(on_event)
+                client.start()
+                ok = client.wait_until_connected(5000)
+                with pipeline_state["lock"]:
+                    pipeline_state["client"] = client
+                    pipeline_state["connected"] = ok
+            except Exception as e:
+                logging.error("Pipeline thread error: %s", e)
+                with pipeline_state["lock"]:
+                    pipeline_state["connected"] = False
+
+        thread = threading.Thread(target=_run_pipeline, daemon=True)
+        thread.start()
+        thread.join(timeout=7)
+
+        with pipeline_state["lock"]:
+            ok = pipeline_state["connected"]
+
+        if ok:
+            return web.json_response({"success": True, "message": "Connected to pipeline"})
+        else:
+            return web.json_response({"success": False, "error": "Could not connect to pipeline server at " + host + ":" + str(port)})
+
+    except Exception as e:
+        logging.error("pipeline_connect_handler fatal: %s", e)
+        return web.json_response({"success": False, "error": str(e)})
+
+
+async def pipeline_disconnect_handler(request):
+    """POST /api/pipeline/disconnect - Disconnect from pipeline"""
+    global pipeline_state
+    with pipeline_state["lock"]:
+        client = pipeline_state.get("client")
+        if client:
+            try:
+                client.stop()
+            except Exception:
+                pass
+        pipeline_state["client"] = None
+        pipeline_state["connected"] = False
+        pipeline_state["load_raw"] = None
+    return web.json_response({"success": True, "message": "Disconnected"})
+
+
+async def pipeline_status_handler(request):
+    """GET /api/pipeline/status - Return current pipeline connection status and latest load_raw"""
+    with pipeline_state["lock"]:
+        return web.json_response({
+            "connected": pipeline_state["connected"],
+            "load_raw": pipeline_state["load_raw"],
+        })
+
+
+async def pipeline_loadraw_ws_handler(request):
+    """WebSocket /ws/pipeline/load_raw - Stream live load_raw values to browser"""
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    ws._loop = asyncio.get_event_loop()
+
+    pipeline_state["ws_clients"].add(ws)
+    try:
+        async for msg in ws:
+            pass  # We only send, not receive
+    finally:
+        pipeline_state["ws_clients"].discard(ws)
+    return ws
+
+
+async def pipeline_loadcell_devices_handler(request):
+    """GET /api/pipeline/loadcell-devices - Return all enabled loadcell devices from DB"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, name, device_path, channel, tare_offset, known_weight, known_weight_raw,
+                   pipeline_server, pipeline_port, unit, capacity, enabled
+            FROM loadcell_device WHERE enabled = 1
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        devices = [dict(r) for r in rows]
+        return web.json_response({"devices": devices})
+    except Exception as e:
+        logging.error("loadcell_devices error: %s", e)
+        return web.json_response({"devices": [], "error": str(e)})
+
+
+async def pipeline_calibration_get_handler(request):
+    """GET /api/pipeline/calibration - Return calibration for a device"""
+    try:
+        device_id = request.rel_url.query.get('device_id')
+        if not device_id:
+            return web.json_response({"error": "device_id required"}, status=400)
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT tare_offset, known_weight, known_weight_raw FROM loadcell_device WHERE id = ?', (device_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return web.json_response({"error": "device not found"}, status=404)
+        return web.json_response(dict(row))
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def pipeline_calibration_post_handler(request):
+    """POST /api/pipeline/calibration - Save tare_offset, known_weight, known_weight_raw to DB"""
+    try:
+        body = await request.json()
+        device_id = body.get("device_id")
+        tare_offset = body.get("tare_offset")
+        known_weight = body.get("known_weight")
+        known_weight_raw = body.get("known_weight_raw")
+
+        if not device_id:
+            return web.json_response({"success": False, "error": "device_id required"})
+
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE loadcell_device
+            SET tare_offset = ?, known_weight = ?, known_weight_raw = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (tare_offset, known_weight, known_weight_raw, device_id))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+
+        if affected == 0:
+            return web.json_response({"success": False, "error": "Device not found"})
+        return web.json_response({"success": True})
+    except Exception as e:
+        logging.error("calibration save error: %s", e)
+        return web.json_response({"success": False, "error": str(e)})
+
 
 def create_app():
     """Create and configure the aiohttp application"""
@@ -513,6 +749,15 @@ def create_app():
     
     # WebSocket for device status updates
     app.router.add_get('/ws/devices', device_websocket_handler)
+
+    # Pipeline endpoints for Load Cell live data
+    app.router.add_post('/api/pipeline/connect', pipeline_connect_handler)
+    app.router.add_post('/api/pipeline/disconnect', pipeline_disconnect_handler)
+    app.router.add_get('/api/pipeline/status', pipeline_status_handler)
+    app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
+    app.router.add_get('/api/pipeline/loadcell-devices', pipeline_loadcell_devices_handler)
+    app.router.add_get('/api/pipeline/calibration', pipeline_calibration_get_handler)
+    app.router.add_post('/api/pipeline/calibration', pipeline_calibration_post_handler)
     
     # Background tasks
     app.on_startup.append(start_background_tasks)
@@ -526,27 +771,27 @@ if __name__ == '__main__':
     init_database()
     
     print("\n" + "="*60)
-    print("🚀 Gateway Configuration Server Starting")
+    print(" Gateway Configuration Server Starting")
     print("="*60)
-    print("\n📍 Server: http://0.0.0.0:8080")
-    print("\n📚 Main Routes:")
+    print("\n Server: http://0.0.0.0:8080")
+    print("\n Main Routes:")
     print("  GET  /                          - API Documentation")
     print("  GET  /docs                      - API Documentation")
     print("  GET  /db                        - Database viewer")
-    print("\n🔌 Device Management:")
+    print("\n Device Management:")
     print("  GET  /api/devices               - Get all devices")
     print("  POST /api/devices               - Add device")
     print("  GET  /api/devices/{id}/details  - Get device details")
     print("  PUT  /api/devices/{id}          - Update device")
     print("  DEL  /api/devices/{id}          - Delete device")
-    print("\n🏷️  Datapoint Management:")
+    print("\n  Datapoint Management:")
     print("  GET  /api/datapoints            - Get all datapoints")
     print("  POST /api/datapoints/modbus     - Add Modbus datapoint")
-    print("\n🔄 WebSocket:")
+    print("\n WebSocket:")
     print("  GET  /ws                        - Real-time updates")
     print("  GET  /ws/devices                - Device status")
     print("\n" + "="*60)
     print("Press Ctrl+C to stop")
     print("="*60 + "\n")
     
-    web.run_app(create_app(), host='0.0.0.0', port=8080)
+    web.run_app(create_app(), host='0.0.0.0', port=8082)

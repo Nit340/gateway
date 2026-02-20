@@ -24,7 +24,7 @@
         let deviceWsConnection = null;
         let currentViewingDeviceId = null;
         let currentViewingDevice = null;
-        let eventListenersSetup = false; // Prevent duplicate event listeners
+        let eventListenersBoundToNode = null; // DOM node reference to detect when page HTML has been replaced
         let isRefreshing = false;
 
         // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
@@ -472,6 +472,15 @@
             
             wsConnectionAttempts = 0;
         }
+
+        // Called by the router when navigating away from this page.
+        // Resets the DOM node reference so setupEventListeners() re-binds
+        // to the fresh nodes that exist after the router replaces innerHTML.
+        window.cleanupDeviceManagement = function() {
+            cleanupWebSocket();
+            eventListenersBoundToNode = null;
+            console.log('✅ Device Management cleaned up — will re-bind listeners on next visit');
+        };
 
         function handleDeviceStatusUpdate(data) {
             if (data.type === 'device_status') {
@@ -1783,11 +1792,17 @@
 
         // ==================== EVENT LISTENERS ====================
         function setupEventListeners() {
-            // Prevent duplicate event listeners when re-initializing
-            if (eventListenersSetup) {
+            // Use DOM node identity instead of a boolean flag.
+            // After navigation the router replaces innerHTML, creating fresh DOM nodes.
+            // The old nodes are detached (not in document), so document.contains() returns false.
+            // This means we re-bind whenever the DOM has been replaced, but still skip
+            // duplicate calls within the same page load (both calls see the same live node).
+            const anchorNode = document.getElementById('addDeviceBtn');
+            if (anchorNode && document.contains(anchorNode) && eventListenersBoundToNode === anchorNode) {
                 console.log('📌 Event listeners already setup, skipping...');
                 return;
             }
+            eventListenersBoundToNode = anchorNode;
             
             console.log('📌 Setting up Device Management event listeners...');
             
@@ -1902,9 +1917,6 @@
             
             // Import/Export
             setupImportExportListeners();
-            
-            // Mark as setup
-            eventListenersSetup = true;
             
             console.log('✅ Device Management event listeners setup complete - modals ready!');
         }
