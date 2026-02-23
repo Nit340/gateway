@@ -25,10 +25,6 @@ def init_database():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Drop legacy SQL view if it exists (uses json_object which requires JSON1 extension
-    # compiled into SQLite -- not guaranteed on all builds). Replaced by Python function.
-    cursor.execute('DROP VIEW IF EXISTS modbus_device_config_view')
-
     # Create all tables
     create_tables(cursor)
     
@@ -311,10 +307,6 @@ def create_tables(cursor):
         )
     ''')
     
-    # -- Modbus Device Config VIEW -------------------------------------------------
-    # NOTE: SQLite JSON functions (json_object, json_group_array) require SQLite 3.9.0+
-    # which is not available on this system. The view has been replaced by the Python
-    # function get_modbus_device_config_view() below, which produces identical output.
 
 def insert_default_data(cursor):
     """Insert default data"""
@@ -725,15 +717,7 @@ def get_database_stats():
             'loadcell_datapoints': loadcell_datapoint_count,
             'total_datapoints': modbus_datapoint_count + loadcell_datapoint_count,
             'groups': group_count,
-            'views': {
-                'modbus_device_config_view': {
-                    'exists': True,
-                    'enabled_devices': view_device_count,
-                    'description': 'Python function replaces SQL view (SQLite JSON funcs unavailable)',
-                    'query_all': 'get_modbus_device_config_view()',
-                    'query_one': "get_modbus_device_config_view(device_id='MB1')",
-                }
-            }
+            'enabled_modbus_devices': view_device_count
         }
     except Exception as e:
         print("Error getting stats: {}".format(e))

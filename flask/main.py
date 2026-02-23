@@ -47,6 +47,7 @@ from tag_mapping import (
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
 from mqtt_cloud import register_cloud_routes
+from auth import register_auth_routes
 
 async def database_viewer_handler(request):
     """GET handler - simple database viewer showing all tables and data"""
@@ -145,7 +146,7 @@ async def database_viewer_handler(request):
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
             
-            # For views, use the Python replacement function (avoids SQLite JSON1 dependency)
+            # For the modbus view render one combined JSON row per device via Python helper
             if is_view and table_name == 'modbus_device_config_view':
                 from database import get_modbus_device_config_view
                 view_data = get_modbus_device_config_view()
@@ -155,7 +156,6 @@ async def database_viewer_handler(request):
                     for r in view_data
                 ]
             else:
-                # Get data — wrap in try/except in case a view uses unsupported SQL functions
                 try:
                     cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
                     rows = cursor.fetchall()
@@ -207,58 +207,9 @@ async def database_viewer_handler(request):
                 
                 html_content += "</table>"
                 
-                # For the modbus view, add some helpful info
-                if is_view and table_name == 'modbus_device_config_view':
-                    html_content += """
-                    <div style="background: #e3f2fd; padding: 10px; margin-top: -15px; margin-bottom: 20px; border-radius: 0 0 4px 4px; font-size: 0.9em;">
-                        <strong>(i) View Info:</strong> The 'config' column contains the complete device configuration in JSON format.
-                        You can query specific parts using SQLite JSON functions.
-                    </div>
-                    """
+
             else:
                 html_content += "<p class='empty'>Table/View is empty</p>"
-        
-        # Add view information section
-        if 'views' in stats and stats['views']:
-            html_content += """
-            <div style="margin-top: 30px; background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h3> View Details</h3>
-            """
-            
-            for vname, vinfo in stats['views'].items():
-                if vinfo['exists']:
-                    html_content += """
-                    <div style="margin-bottom: 15px; padding: 15px; background: #f5f5f5; border-left: 4px solid #2196F3;">
-                        <h4 style="margin-top: 0; color: #2196F3;">{vname}</h4>
-                        <p><strong>Description:</strong> {description}</p>
-                        <p><strong>Enabled Devices:</strong> {enabled_devices}</p>
-                        <p><strong>Sample Queries:</strong></p>
-                        <pre style="background: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto;">
--- Get all devices
-{query_all}
-
--- Get config for a specific device
-{query_one}
-
--- Extract specific fields using JSON functions
-SELECT 
-    device_id,
-    json_extract(config, '$.system.mode') as mode,
-    json_extract(config, '$.system.device') as device,
-    json_extract(config, '$.system.baud') as baud_rate
-FROM {vname2}
-WHERE device_id = 'MB1';</pre>
-                    </div>
-                    """.format(
-                        vname=vname,
-                        description=vinfo['description'],
-                        enabled_devices=vinfo['enabled_devices'],
-                        query_all=vinfo['query_all'],
-                        query_one=vinfo['query_one'],
-                        vname2=vname
-                    )
-            
-            html_content += "</div>"
         
         html_content += """
         </body>
@@ -709,6 +660,9 @@ def create_app():
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
     
+    # Authentication endpoints
+    register_auth_routes(app)
+
     # Cloud Integration endpoints
     register_cloud_routes(app)
 
@@ -743,7 +697,7 @@ def create_app():
     app.router.add_get('/api/devices/{device_id}/datapoints', get_device_datapoints)
     # Database Viewer route
     app.router.add_get('/db', database_viewer_handler)
-    
+
     # WebSocket for real-time data
     app.router.add_get('/ws', websocket_handler)
     

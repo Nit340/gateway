@@ -2,14 +2,15 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=layout.html?page=general-configuration">
-    <title>Univa Gateway - Redirecting...</title>
+    <title>Univa Gateway</title>
 </head>
 <body>
-    
     <script>
-        // Immediate redirect
-        window.location.href = "layout.html?page=general-configuration";
+        if (sessionStorage.getItem('gw_auth') === 'true') {
+            window.location.replace('/layout.html?page=general-configuration');
+        } else {
+            window.location.replace('/login.html');
+        }
     </script>
 </body>
 </html>

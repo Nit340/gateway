@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Univa Gateway – Login</title>
+    <script src="assets/js/tailwindcdn.js"></script>
+    <script src="assets/js/fontawesome.js"></script>
+    <link href="assets/css/fonts.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB',
+                        primaryHover: '#1D4ED8',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #F1F5F9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+            padding: 48px 40px 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 10px 14px 10px 40px;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #1E293B;
+            background: #F8FAFC;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .input-field:focus {
+            border-color: #2563EB;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .input-field.error {
+            border-color: #EF4444;
+            background: #FFF8F8;
+        }
+
+        .input-wrapper {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94A3B8;
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 11px;
+            background: #2563EB;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-login:hover { background: #1D4ED8; }
+        .btn-login:active { transform: scale(0.99); }
+        .btn-login:disabled { background: #93C5FD; cursor: not-allowed; transform: none; }
+
+        .error-banner {
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #DC2626;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .error-banner.show { display: flex; }
+
+        .spinner-sm {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+
+        .btn-login.loading .spinner-sm { display: block; }
+        .btn-login.loading .btn-text { display: none; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .brand-bar {
+            height: 4px;
+            background: linear-gradient(90deg, #2563EB, #60A5FA);
+            border-radius: 16px 16px 0 0;
+            margin: -48px -40px 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="brand-bar"></div>
+
+        <!-- Logo & Title -->
+        <div style="text-align: center; margin-bottom: 32px;">
+            <div style="display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; background: #EFF6FF; border-radius: 14px; margin-bottom: 16px;">
+                <i class="fa-solid fa-satellite-dish" style="color: #2563EB; font-size: 22px;"></i>
+            </div>
+            <h1 style="font-size: 20px; font-weight: 700; color: #1E293B; margin: 0 0 4px;">Innospace Gateway</h1>
+            <p style="font-size: 13px; color: #64748B; margin: 0;">Sign in to your account</p>
+        </div>
+
+        <!-- Error Banner -->
+        <div class="error-banner" id="errorBanner">
+            <i class="fa-solid fa-circle-exclamation" style="flex-shrink:0;"></i>
+            <span id="errorMessage">Invalid username or password.</span>
+        </div>
+
+        <!-- Form -->
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <!-- Username -->
+            <label style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">
+                Username
+            </label>
+            <div class="input-wrapper">
+                <i class="fa-solid fa-user input-icon"></i>
+                <input
+                    type="text"
+                    id="username"
+                    class="input-field"
+                    placeholder="Enter username"
+                    autocomplete="username"
+                    autofocus
+                />
+            </div>
+
+            <!-- Password -->
+            <label style="display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:6px;">
+                Password
+            </label>
+            <div class="input-wrapper">
+                <i class="fa-solid fa-lock input-icon"></i>
+                <input
+                    type="password"
+                    id="password"
+                    class="input-field"
+                    placeholder="Enter password"
+                    autocomplete="current-password"
+                />
+            </div>
+
+            <!-- Submit -->
+            <div style="margin-top: 8px;">
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <div class="spinner-sm"></div>
+                    <span class="btn-text"><i class="fa-solid fa-right-to-bracket"></i> &nbsp;Sign In</span>
+                </button>
+            </div>
+        </form>
+
+        <p style="text-align:center; font-size:12px; color:#94A3B8; margin: 24px 0 0;">
+            Univa Gateway Management Console
+        </p>
+    </div>
+
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const btn      = document.getElementById('loginBtn');
+            const banner   = document.getElementById('errorBanner');
+            const errMsg   = document.getElementById('errorMessage');
+
+            // Clear previous errors
+            banner.classList.remove('show');
+            document.getElementById('username').classList.remove('error');
+            document.getElementById('password').classList.remove('error');
+
+            // Basic client-side check
+            if (!username || !password) {
+                errMsg.textContent = 'Please enter both username and password.';
+                banner.classList.add('show');
+                if (!username) document.getElementById('username').classList.add('error');
+                if (!password) document.getElementById('password').classList.add('error');
+                return;
+            }
+
+            // Show loading state
+            btn.disabled = true;
+            btn.classList.add('loading');
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Set auth cookie - works across all paths unlike sessionStorage
+                    document.cookie = 'gw_auth=true; path=/; SameSite=Strict';
+                    document.cookie = 'gw_user=' + (data.username || username) + '; path=/; SameSite=Strict';
+                    window.location.replace('/layout.html?page=general-configuration');
+                } else {
+                    errMsg.textContent = data.error || 'Invalid username or password.';
+                    banner.classList.add('show');
+                    document.getElementById('username').classList.add('error');
+                    document.getElementById('password').classList.add('error');
+                    document.getElementById('password').value = '';
+                    document.getElementById('password').focus();
+                }
+            } catch (err) {
+                errMsg.textContent = 'Could not reach server. Please try again.';
+                banner.classList.add('show');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+            }
+        }
+
+        // Clear error on input
+        ['username', 'password'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                document.getElementById(id).classList.remove('error');
+                document.getElementById('errorBanner').classList.remove('show');
+            });
+        });
+    </script>
+</body>
+</html>

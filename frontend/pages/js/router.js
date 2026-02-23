@@ -88,7 +88,7 @@ class Router {
             }
         });
         
-        // Load initial page from URL or default
+        // Load initial page from URL query param or default
         const urlParams = new URLSearchParams(window.location.search);
         const pageParam = urlParams.get('page');
         const initialPage = pageParam && this.routes[pageParam] ? pageParam : 'general-configuration';

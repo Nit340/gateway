@@ -302,6 +302,16 @@
     </style>
 </head>
 <body>
+    <script>
+        // Auth guard - check cookie (works across all paths)
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+        if (getCookie('gw_auth') !== 'true') {
+            window.location.replace('/login.html');
+        }
+    </script>
     <!-- Loading Indicator -->
     <div class="loading-indicator" id="loadingIndicator">
         <div class="spinner"></div>
@@ -436,9 +446,18 @@
                         <i class="fa-solid fa-user"></i>
                     </div>
                     <div class="user-info">
-                        <h4>Admin User</h4>
+                        <h4 id="sidebarUsername">Admin User</h4>
                         <p>System Administrator</p>
                     </div>
+                    <button
+                        onclick="handleLogout()"
+                        title="Logout"
+                        style="margin-left:auto; width:32px; height:32px; border-radius:8px; border:1.5px solid #E2E8F0; background:transparent; color:#94A3B8; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; transition:all 0.2s;"
+                        onmouseover="this.style.background='#FEF2F2';this.style.borderColor='#FCA5A5';this.style.color='#EF4444';"
+                        onmouseout="this.style.background='transparent';this.style.borderColor='#E2E8F0';this.style.color='#94A3B8';"
+                    >
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -547,6 +566,30 @@
         console.log('Router initialized successfully');
         console.log('Available routes:', Object.keys(router.routes));
     </script>
-    
+    <script>
+        // Display logged-in username in sidebar
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+        const storedUser = getCookie('gw_user');
+        if (storedUser) {
+            const el = document.getElementById('sidebarUsername');
+            if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1) + ' User';
+        }
+
+        // Logout handler
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (e) {}
+            // Clear auth cookies
+            document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            window.location.replace('/login.html');
+        }
+
+        window.handleLogout = handleLogout;
+    </script>
 </body>
 </html>
