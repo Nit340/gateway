@@ -88,10 +88,9 @@ class Router {
             }
         });
         
-        // Load initial page from URL query param or default
-        const urlParams = new URLSearchParams(window.location.search);
-        const pageParam = urlParams.get('page');
-        const initialPage = pageParam && this.routes[pageParam] ? pageParam : 'general-configuration';
+        // Load initial page from URL path or default
+        const pathPage = window.location.pathname.replace(/^\//, '');
+        const initialPage = pathPage && this.routes[pathPage] ? pathPage : 'general-configuration';
         
         this.initialLoad(initialPage);
     }
@@ -102,7 +101,7 @@ class Router {
         this.updateActiveNavLink();
         
         // Update URL without adding to history
-        window.history.replaceState({ page }, '', `?page=${page}`);
+        window.history.replaceState({ page }, '', `/${page}`);
     }
     
     navigateTo(page, updateHistory = true) {
@@ -123,7 +122,7 @@ class Router {
         this.updateActiveNavLink();
         
         if (updateHistory) {
-            window.history.pushState({ page }, '', `?page=${page}`);
+            window.history.pushState({ page }, '', `/${page}`);
         }
         
         // Close sidebar on mobile after navigation

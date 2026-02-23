@@ -7,9 +7,9 @@
 <body>
     <script>
         if (sessionStorage.getItem('gw_auth') === 'true') {
-            window.location.replace('/layout.html?page=general-configuration');
+            window.location.replace('/layout?page=general-configuration');
         } else {
-            window.location.replace('/login.html');
+            window.location.replace('/login');
         }
     </script>
 </body>

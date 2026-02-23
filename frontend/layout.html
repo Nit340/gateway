@@ -309,7 +309,7 @@
             return match ? match[2] : null;
         }
         if (getCookie('gw_auth') !== 'true') {
-            window.location.replace('/login.html');
+            window.location.replace('/login');
         }
     </script>
     <!-- Loading Indicator -->
@@ -586,7 +586,7 @@
             // Clear auth cookies
             document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
             document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            window.location.replace('/login.html');
+            window.location.replace('/login');
         }
 
         window.handleLogout = handleLogout;
