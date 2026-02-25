@@ -144,26 +144,20 @@ def create_tables(cursor):
             name TEXT NOT NULL,
             group_id INTEGER,
             service_id INTEGER,
-            
-            -- Device connection
             device_path TEXT NOT NULL,
             channel INTEGER DEFAULT 0,
-            
-            -- Calibration
-            tare_offset REAL DEFAULT 0.0,
-            known_weight REAL DEFAULT 1000.0,
-            known_weight_raw REAL DEFAULT 0.0,
+            load_name TEXT DEFAULT 'load',
+            capacity_name TEXT DEFAULT 'capacity',
             shift_bits INTEGER DEFAULT 10,
             unit TEXT DEFAULT 'g',
             capacity REAL DEFAULT 40000.0,
-            
-            -- Service settings
             pipeline_server TEXT DEFAULT '127.0.0.1',
             pipeline_port INTEGER DEFAULT 7000,
             log_level TEXT DEFAULT 'info',
             polling_interval_ms INTEGER DEFAULT 15,
-            
-            -- Filters
+            tare_offset REAL DEFAULT 0.0,
+            known_weight REAL DEFAULT 1000.0,
+            known_weight_raw REAL DEFAULT 0.0,
             lowpass_filter_enabled BOOLEAN DEFAULT 0,
             filter_cutoff_frequency REAL DEFAULT 8.0,
             filter_activation_delta_min REAL DEFAULT 20000.0,
@@ -184,11 +178,7 @@ def create_tables(cursor):
             overload_action INTEGER DEFAULT 0,
             overload_cooldown_ms INTEGER DEFAULT 2000,
             confirm_count INTEGER DEFAULT 3,
-            capacity_name TEXT DEFAULT 'capacity',
-            
-            -- Only enabled flag, no status
             enabled BOOLEAN DEFAULT 1,
-            
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (group_id) REFERENCES device_groups(id),
@@ -219,13 +209,15 @@ def create_tables(cursor):
         )
     ''')
     
-    # Loadcell datapoints table - ONLY name (auto-created)
+    # Loadcell datapoints table - name and unit only (auto-created)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_datapoints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id TEXT NOT NULL,
             name TEXT NOT NULL,
+            unit TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, name),
             FOREIGN KEY (device_id) REFERENCES loadcell_device(id) ON DELETE CASCADE
         )

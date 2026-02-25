@@ -49,27 +49,31 @@ async def get_all_datapoints(request):
                 'type': 'modbus'  # Added type field
             })
         
-        # Get Loadcell datapoints
+        # Get Loadcell datapoints with unit, load_name, capacity_name from device
         cursor.execute('''
-            SELECT ld.id, ld.device_id, ld.name,
-                   l.name as device_name, l.unit
+            SELECT ld.id, ld.device_id, ld.name, ld.unit,
+                   l.name as device_name, l.capacity, l.load_name, l.capacity_name
             FROM loadcell_datapoints ld
             JOIN loadcell_device l ON ld.device_id = l.id
             ORDER BY ld.device_id, ld.name
         ''')
         
         for row in cursor.fetchall():
-            tags.append({  # Changed to tags
-                'id': row[0],
-                'device_id': row[1],
-                'device_name': row[3],
+            dp_id, device_id, dp_name, unit, device_name, lc_capacity, load_name, capacity_name = row
+            tags.append({
+                'id': dp_id,
+                'device_id': device_id,
+                'device_name': device_name,
                 'device_type': 'Loadcell',
-                'tag_name': row[2],
-                'unit': row[4] if row[2] == 'load' else 'g',
-                'description': "Loadcell {}".format(row[2]),
+                'tag_name': dp_name,
+                'unit': unit or '',
+                'capacity': lc_capacity,
+                'load_name': load_name or 'load',
+                'capacity_name': capacity_name or 'capacity',
+                'data_type': 'float32',
+                'description': "Loadcell {}".format(dp_name),
                 'enabled': True,
-                'type': 'loadcell',  # Added type field
-                'data_type': 'float32'  # Default for loadcell
+                'type': 'loadcell'
             })
         
         conn.close()
@@ -436,4 +440,44 @@ async def get_protocol_form(request):
         
     except Exception as e:
         print("Error getting protocol form: {}".format(e))
+        return web.json_response({'error': str(e)}, status=500)
+
+# ============================================================================
+# UPDATE LOADCELL DATAPOINT (unit only)
+# ============================================================================
+
+async def update_loadcell_datapoint(request):
+    """PUT - Update Loadcell datapoint unit only"""
+    try:
+        tag_id = request.match_info['id']
+        data = await request.json()
+        
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute('PRAGMA foreign_keys = ON')
+        cursor = conn.cursor()
+        
+        # Check tag exists
+        cursor.execute('SELECT id, name FROM loadcell_datapoints WHERE id = ?', (tag_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return web.json_response({'error': 'Loadcell tag not found'}, status=404)
+        
+        # Only allow updating unit
+        unit = data.get('unit', '')
+        cursor.execute(
+            'UPDATE loadcell_datapoints SET unit = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (unit, tag_id)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return web.json_response({
+            'success': True,
+            'message': 'Loadcell tag unit updated successfully'
+        })
+        
+    except Exception as e:
+        print("Error updating loadcell tag: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)

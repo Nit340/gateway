@@ -84,34 +84,41 @@ function _renderTagsTable() {
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
         const tr = document.createElement('tr');
         
-        // Use consistent ID format
-        tr.id = `tag-row-${tag.id}`;
+        // Use type-prefixed ID to avoid collisions between loadcell and modbus IDs
+        const tagType = isLC ? 'loadcell' : 'modbus';
+        tr.id = `tag-row-${tagType}-${tag.id}`;
         tr.className = 'tag-table-row';
         tr.dataset.tagId = tag.id;
-        tr.dataset.tagType = isLC ? 'loadcell' : 'modbus';
+        tr.dataset.tagType = tagType;
         
         // Get values with fallbacks
         const deviceName = tag.device_name || tag.deviceName || '—';
         const deviceType = tag.device_type || tag.protocol || (isLC ? 'Load Cell' : 'Modbus');
         const tagName = tag.tag_name || tag.name || '—';
-        const dataType = tag.data_type || (isLC ? 'float32' : '—');
+        const dataType = tag.data_type || '—';
         const unit = tag.unit || '—';
         const address = tag.register_address !== undefined ? tag.register_address : '—';
         const enabled = tag.enabled !== undefined ? tag.enabled : true;
-        
+
         tr.innerHTML = `
             <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
             <td><span class="protocol-badge ${_pClass(isLC, deviceType)}">${_esc(deviceType)}</span></td>
-            <td class="text-slate-600 font-mono text-xs">${address}</td>
             <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
+            ${isLC ? `
+            <td class="text-slate-300">—</td>
+            <td class="text-slate-300">—</td>
+            <td class="text-slate-300">—</td>
+            <td></td>` : `
+            <td class="text-slate-600 font-mono text-xs">${address}</td>
             <td class="text-slate-600 text-xs">${_esc(dataType)}</td>
             <td class="text-slate-600 text-xs">${_esc(unit)}</td>
-            <td><span class="px-2 py-0.5 rounded-full text-xs font-medium ${enabled ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}">${enabled ? 'Enabled' : 'Disabled'}</span></td>
+            <td><span class="px-2 py-0.5 rounded-full text-xs font-medium ${enabled ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}">${enabled ? 'Enabled' : 'Disabled'}</span></td>`}
             <td class="text-right whitespace-nowrap">
-                <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, '${isLC ? 'loadcell' : 'modbus'}')" title="Edit">
+                ${!isLC ? `
+                <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, 'modbus')" title="Edit">
                     <i class="fa-solid fa-pencil text-sm"></i>
                 </button>
-                ${!isLC ? `<button class="text-red-500 hover:text-red-700" onclick="deleteTag(${tag.id}, 'modbus')" title="Delete"><i class="fa-solid fa-trash text-sm"></i></button>` : ''}
+                <button class="text-red-500 hover:text-red-700" onclick="deleteTag(${tag.id}, 'modbus')" title="Delete"><i class="fa-solid fa-trash text-sm"></i></button>` : ''}
             </td>`;
         tbody.appendChild(tr);
     });
@@ -167,8 +174,9 @@ function _renderTagsBrowser() {
         // Use click event listener
         d.addEventListener('click', function(e) {
             e.stopPropagation();
-            console.log(`Tag card clicked: ID ${tag.id}, Type: ${isLC ? 'loadcell' : 'modbus'}, Name: ${tag.tag_name || tag.name}`);
-            highlightTagRow(tag.id);
+            const tagType = isLC ? 'loadcell' : 'modbus';
+            console.log(`Tag card clicked: ID ${tag.id}, Type: ${tagType}, Name: ${tag.tag_name || tag.name}`);
+            highlightTagRow(tag.id, tagType);
         });
         
         d.style.cursor = 'pointer';
@@ -176,7 +184,7 @@ function _renderTagsBrowser() {
         // Get values with fallbacks
         const tagName = tag.tag_name || tag.name || 'Unnamed';
         const deviceName = tag.device_name || tag.deviceName || '—';
-        const dataType = tag.data_type || (isLC ? 'float32' : '—');
+        const dataType = isLC ? null : (tag.data_type || '—');
         const unit = tag.unit || '—';
         const address = tag.register_address !== undefined ? tag.register_address : null;
         
@@ -190,15 +198,25 @@ function _renderTagsBrowser() {
                     <span>Device</span>
                     <span class="font-medium text-slate-700">${_esc(deviceName)}</span>
                 </div>
-                ${address !== null ? `
+                ${!isLC && address !== null ? `
                 <div class="tag-card-row">
                     <span>Address</span>
                     <span class="font-mono">${address}</span>
                 </div>` : ''}
+                ${isLC && tagName === 'load' ? `
                 <div class="tag-card-row">
+                    <span>Load</span>
+                    <span class="font-mono">load</span>
+                </div>` : ''}
+                ${isLC && tagName === 'capacity' ? `
+                <div class="tag-card-row">
+                    <span>Capacity</span>
+                    <span class="font-mono">${tag.capacity_value != null ? tag.capacity_value : '—'}</span>
+                </div>` : ''}
+                ${!isLC ? `<div class="tag-card-row">
                     <span>Type</span>
                     <span>${_esc(dataType)}</span>
-                </div>
+                </div>` : ''}
                 ${unit && unit !== '—' ? `
                 <div class="tag-card-row">
                     <span>Unit</span>
@@ -272,8 +290,8 @@ function changeBrowserPage(newPage) {
 
 // ─── HIGHLIGHT TAG ROW ──────────────────────────────────────────────────────
 
-function highlightTagRow(tagId) {
-    console.log(`Attempting to highlight tag ID: ${tagId}`);
+function highlightTagRow(tagId, tagType) {
+    console.log(`Attempting to highlight tag ID: ${tagId}, type: ${tagType}`);
     
     // Remove highlight from all rows
     document.querySelectorAll('.tag-table-row').forEach(row => {
@@ -281,18 +299,17 @@ function highlightTagRow(tagId) {
         row.style.backgroundColor = '';
     });
 
-    // Try multiple selectors to find the row
-    let targetRow = document.getElementById(`tag-row-${tagId}`);
+    // Find the row using type-prefixed ID (avoids loadcell/modbus ID collisions)
+    let targetRow = tagType ? document.getElementById(`tag-row-${tagType}-${tagId}`) : null;
     
-    if (!targetRow) {
-        targetRow = document.querySelector(`.tag-table-row[data-tag-id="${tagId}"]`);
+    // Fallback: match by tagId + tagType dataset
+    if (!targetRow && tagType) {
+        targetRow = Array.from(document.querySelectorAll('.tag-table-row')).find(row =>
+            String(row.dataset.tagId) === String(tagId) && row.dataset.tagType === tagType
+        );
     }
     
-    if (!targetRow) {
-        targetRow = document.querySelector(`tr[data-tag-id="${tagId}"]`);
-    }
-    
-    // Try with string comparison
+    // Last resort: match by tagId only
     if (!targetRow) {
         targetRow = Array.from(document.querySelectorAll('.tag-table-row')).find(row => 
             String(row.dataset.tagId) === String(tagId)
@@ -300,18 +317,35 @@ function highlightTagRow(tagId) {
     }
 
     if (targetRow) {
-        console.log(`Found row for tag ID ${tagId}, applying highlight`);
+        console.log(`Found row for tag ID ${tagId} (${tagType}), moving to top and highlighting`);
+        
+        // Move this row to the top of its tbody
+        const tbody = targetRow.parentElement;
+        if (tbody && tbody.firstChild !== targetRow) {
+            tbody.insertBefore(targetRow, tbody.firstChild);
+        }
+        
+        // Apply highlight
         targetRow.classList.add('bg-yellow-100', 'border-l-4', 'border-yellow-400', 'font-bold');
         
-        // Scroll the row into view smoothly
-        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Scroll the mapping section into view, then the row
+        const mappingSection = document.querySelector('#mappingTableBody')?.closest('section');
+        if (mappingSection) {
+            mappingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        setTimeout(() => {
+            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
         
-        // Find tag info
-        const tag = (_tags || []).find(t => String(t.id) === String(tagId));
+        // Find tag info and toast
+        const tag = (_tags || []).find(t =>
+            String(t.id) === String(tagId) &&
+            (tagType ? ((tagType === 'loadcell') === (t.protocol === 'loadcell' || t.type === 'loadcell')) : true)
+        );
         if (tag) {
             const tagName = tag.tag_name || tag.name || 'Unknown';
             const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
-            _toast(`Selected: ${tagName} (${isLC ? 'Load Cell' : 'Modbus'})`, 'success');
+            _toast(`Mapped: ${tagName} (${isLC ? 'Load Cell' : 'Modbus'})`, 'success');
         }
     } else {
         console.error(`Could not find table row for tag ID: ${tagId}`);
@@ -370,12 +404,6 @@ function _bindStaticListeners() {
     document.getElementById('editMbRegAddress')?.addEventListener('input', e => _autoDetect(e.target.value, 'editMbDetectedType'));
     document.getElementById('editModbusModal')?.addEventListener('click', e => { if (e.target.id === 'editModbusModal') _closeEditModbus(); });
 
-    // Edit modal (loadcell)
-    document.getElementById('closeEditLcModal')?.addEventListener('click', _closeEditLc);
-    document.getElementById('editLcCancel')?.addEventListener('click', _closeEditLc);
-    document.getElementById('editLcForm')?.addEventListener('submit', _handleLcEdit);
-    document.getElementById('editLcModal')?.addEventListener('click', e => { if (e.target.id === 'editLcModal') _closeEditLc(); });
-
     // CSV
     document.getElementById('importCSVBtn')?.addEventListener('click', importCSV);
     document.getElementById('exportCSVBtn')?.addEventListener('click', exportCSV);
@@ -385,7 +413,6 @@ function _bindStaticListeners() {
         if (e.key !== 'Escape') return;
         if (_vis('addTagModal')) _closeAddTagModal();
         if (_vis('editModbusModal')) _closeEditModbus();
-        if (_vis('editLcModal')) _closeEditLc();
     });
 }
 
@@ -599,12 +626,7 @@ function editTag(tagId, tagType) {
         _toast('Tag not found', 'error');
         return;
     }
-
-    if (tagType === 'loadcell') {
-        _openEditLcModal(tag);
-    } else {
-        _openEditModbusModal(tag);
-    }
+    _openEditModbusModal(tag);
 }
 
 // ─── EDIT MODBUS MODAL ────────────────────────────────────────────────────────
@@ -670,7 +692,23 @@ async function _handleModbusEdit(e) {
         const data = await resp.json();
         if (resp.ok) {
             _closeEditModbus();
-            await _loadData();
+            // Update tag in memory — no page reload
+            const tagId = document.getElementById('editMbTagId').value;
+            const idx = (_tags || []).findIndex(t => String(t.id) === String(tagId));
+            if (idx !== -1) {
+                _tags[idx].tag_name      = document.getElementById('editMbTagName').value.trim();
+                _tags[idx].name          = _tags[idx].tag_name;
+                _tags[idx].register_address = parseInt(document.getElementById('editMbRegAddress').value, 10);
+                _tags[idx].data_type     = document.getElementById('editMbDataType').value;
+                _tags[idx].byte_order    = document.getElementById('editMbByteOrder').value;
+                _tags[idx].word_order    = document.getElementById('editMbWordOrder').value;
+                _tags[idx].scale_factor  = parseFloat(document.getElementById('editMbScale').value) || 1.0;
+                _tags[idx].offset        = parseFloat(document.getElementById('editMbOffset').value) || 0.0;
+                _tags[idx].unit          = document.getElementById('editMbUnit').value.trim();
+                _tags[idx].description   = document.getElementById('editMbDescription').value.trim();
+            }
+            _renderTagsTable();
+            _renderTagsBrowser();
             _toast('Tag updated successfully', 'success');
         } else {
             _toast(data.error || 'Failed to update tag', 'error');
@@ -685,77 +723,7 @@ async function _handleModbusEdit(e) {
 
 function _closeEditModbus() { _hideModal('editModbusModal'); }
 
-// ─── EDIT LOADCELL MODAL ──────────────────────────────────────────────────────
-
-function _openEditLcModal(tag) {
-    document.getElementById('editLcTagId').value = tag.id;
-    document.getElementById('editLcCtxDevice').textContent = tag.device_name || tag.deviceName || '—';
-    document.getElementById('editLcTagName').value = tag.tag_name || tag.name || '';
-
-    const dataTypeSelect = document.getElementById('editLcDataType');
-    if (dataTypeSelect) {
-        dataTypeSelect.value = tag.data_type || 'float32';
-    }
-
-    document.getElementById('editLcUnit').value = tag.unit || '';
-    _showModal('editLcModal');
-}
-
-async function _handleLcEdit(e) {
-    e.preventDefault();
-    const btn = e.submitter || e.target.querySelector('[type=submit]');
-    const tagId = document.getElementById('editLcTagId').value;
-    const unit = document.getElementById('editLcUnit').value.trim();
-    const dataType = document.getElementById('editLcDataType').value;
-
-    _setLoading(btn, true);
-    try {
-        const resp = await fetch(`/api/datapoints/loadcell/${tagId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                unit,
-                data_type: dataType
-            })
-        });
-
-        if (resp.status === 404 || resp.status === 405) {
-            const resp2 = await fetch(`/api/datapoints/modbus/${tagId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    unit,
-                    data_type: dataType
-                })
-            });
-            const d2 = await resp2.json();
-            if (resp2.ok) {
-                _closeEditLc();
-                await _loadData();
-                _toast('Load cell tag updated successfully', 'success');
-            } else {
-                _toast(d2.error || 'Failed to update load cell tag', 'error');
-            }
-            return;
-        }
-
-        const data = await resp.json();
-        if (resp.ok) {
-            _closeEditLc();
-            await _loadData();
-            _toast('Load cell tag updated successfully', 'success');
-        } else {
-            _toast(data.error || 'Failed to update load cell tag', 'error');
-        }
-    } catch (err) {
-        console.error(err);
-        _toast('Network error', 'error');
-    } finally {
-        _setLoading(btn, false);
-    }
-}
-
-function _closeEditLc() { _hideModal('editLcModal'); }
+// ─── LOADCELL TAGS: no edit modal (tag name and unit from device management) ───
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 

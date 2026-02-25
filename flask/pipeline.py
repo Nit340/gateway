@@ -183,13 +183,31 @@ async def pipeline_loadcell_devices_handler(request):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT id, name, device_path, channel, tare_offset, known_weight, known_weight_raw,
-                   pipeline_server, pipeline_port, unit, capacity, enabled
+            SELECT id, name, device_path, channel, unit, capacity,
+                   tare_offset, known_weight, known_weight_raw,
+                   pipeline_server, pipeline_port,
+                   lowpass_filter_enabled, filter_cutoff_frequency, filter_activation_delta_min,
+                   moving_avg_enabled, moving_avg_window,
+                   median_filter_enabled, median_filter_window,
+                   autotare_enabled, autotare_trigger_delta_grams,
+                   adaptive_deadband_enabled, adaptive_deadband_min, adaptive_deadband_max,
+                   adaptive_deadband_grow_rate, adaptive_deadband_shrink_rate,
+                   publish_step_grams, overload_threshold, overload_relay,
+                   overload_action, overload_cooldown_ms, confirm_count, enabled
             FROM loadcell_device WHERE enabled = 1
         ''')
         rows = cursor.fetchall()
         conn.close()
-        devices = [dict(r) for r in rows]
+        devices = []
+        for r in rows:
+            d = dict(r)
+            # Cast booleans
+            d['lowpass_filter_enabled']    = bool(d['lowpass_filter_enabled'])
+            d['moving_avg_enabled']        = bool(d['moving_avg_enabled'])
+            d['median_filter_enabled']     = bool(d['median_filter_enabled'])
+            d['autotare_enabled']          = bool(d['autotare_enabled'])
+            d['adaptive_deadband_enabled'] = bool(d['adaptive_deadband_enabled'])
+            devices.append(d)
         return web.json_response({"devices": devices})
     except Exception as e:
         logging.error("loadcell_devices error: %s", e)
@@ -254,6 +272,80 @@ async def pipeline_calibration_post_handler(request):
         return web.json_response({"success": False, "error": str(e)})
 
 
+async def pipeline_filters_post_handler(request):
+    """POST /api/pipeline/filters - Save all filter/overload settings for a loadcell device.
+    No pipeline connection required — these are user-configured values only.
+    """
+    try:
+        body = await request.json()
+        device_id = body.get("device_id")
+        filters   = body.get("filters", {})
+
+        if not device_id:
+            return web.json_response({"success": False, "error": "device_id required"})
+
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE loadcell_device SET
+                lowpass_filter_enabled        = ?,
+                filter_cutoff_frequency       = ?,
+                filter_activation_delta_min   = ?,
+                moving_avg_enabled            = ?,
+                moving_avg_window             = ?,
+                median_filter_enabled         = ?,
+                median_filter_window          = ?,
+                autotare_enabled              = ?,
+                autotare_trigger_delta_grams  = ?,
+                adaptive_deadband_enabled     = ?,
+                adaptive_deadband_min         = ?,
+                adaptive_deadband_max         = ?,
+                adaptive_deadband_grow_rate   = ?,
+                adaptive_deadband_shrink_rate = ?,
+                publish_step_grams            = ?,
+                overload_threshold            = ?,
+                overload_relay                = ?,
+                overload_action               = ?,
+                overload_cooldown_ms          = ?,
+                confirm_count                 = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (
+            1 if filters.get("lowpass_filter_enabled")    else 0,
+            filters.get("filter_cutoff_frequency",       8.0),
+            filters.get("filter_activation_delta_min",   20000.0),
+            1 if filters.get("moving_avg_enabled")        else 0,
+            filters.get("moving_avg_window",             4),
+            1 if filters.get("median_filter_enabled")     else 0,
+            filters.get("median_filter_window",          3),
+            1 if filters.get("autotare_enabled")          else 0,
+            filters.get("autotare_trigger_delta_grams",  -5.0),
+            1 if filters.get("adaptive_deadband_enabled") else 0,
+            filters.get("adaptive_deadband_min",         1.0),
+            filters.get("adaptive_deadband_max",         20.0),
+            filters.get("adaptive_deadband_grow_rate",   0.5),
+            filters.get("adaptive_deadband_shrink_rate", 1.5),
+            filters.get("publish_step_grams",            5.0),
+            filters.get("overload_threshold",            5000.0),
+            filters.get("overload_relay",                "relay2"),
+            filters.get("overload_action",               0),
+            filters.get("overload_cooldown_ms",          2000),
+            filters.get("confirm_count",                 3),
+            device_id
+        ))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+
+        if affected == 0:
+            return web.json_response({"success": False, "error": "Device not found"})
+        return web.json_response({"success": True})
+
+    except Exception as e:
+        logging.error("filters save error: %s", e)
+        return web.json_response({"success": False, "error": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # Route registration
 # ---------------------------------------------------------------------------
@@ -267,3 +359,4 @@ def register_pipeline_routes(app):
     app.router.add_get ('/api/pipeline/loadcell-devices', pipeline_loadcell_devices_handler)
     app.router.add_get ('/api/pipeline/calibration',      pipeline_calibration_get_handler)
     app.router.add_post('/api/pipeline/calibration',      pipeline_calibration_post_handler)
+    app.router.add_post('/api/pipeline/filters',          pipeline_filters_post_handler)

@@ -42,7 +42,8 @@ from device_management import (
 
 from tag_mapping import (
     get_all_datapoints, add_modbus_datapoint, update_modbus_datapoint,
-    delete_datapoint, get_available_devices, get_protocol_form
+    delete_datapoint, get_available_devices, get_protocol_form,
+    update_loadcell_datapoint
 )
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
@@ -691,6 +692,7 @@ def create_app():
     app.router.add_get('/api/datapoints', get_all_datapoints)
     app.router.add_post('/api/datapoints/modbus', add_modbus_datapoint)
     app.router.add_put('/api/datapoints/modbus/{id}', update_modbus_datapoint)
+    app.router.add_put('/api/datapoints/loadcell/{id}', update_loadcell_datapoint)
     app.router.add_delete('/api/datapoints/{id}', delete_datapoint)
     app.router.add_get('/api/datapoints/devices', get_available_devices)
     app.router.add_get('/api/datapoints/protocol-form/{protocol}', get_protocol_form)

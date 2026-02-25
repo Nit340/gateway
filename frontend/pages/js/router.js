@@ -25,8 +25,8 @@ class Router {
         this.pageTitles = {
             'general-configuration': 'General Configuration',
             'device-management': 'Device Management',
-            'modbus-mapping': 'Modbus Tag Mapping',
-            'mqtt-cloud': 'MQTT Cloud Integration',
+            'modbus-mapping': 'Tag Mapping',
+            'mqtt-cloud': 'Cloud Integration',
             'ota-gateway': 'OTA Gateway & Recovery',
             'craneiq': 'CraneIQ Configuration',
             'data-retention': 'Data Retention',
@@ -35,10 +35,10 @@ class Router {
             'security': 'Security & Access Control',
             'license': 'Licensing & Subscriptions',
             'automation': 'Scheduler / Automation',
-            'alerts': 'Alerts & Event Classes',
+            'alerts': 'Alerts & Event',
             'rules': 'Rule Engine',
             'backup': 'Backup & Restore',
-            'notification': 'Notification & Alerts'
+            'notification': 'Notification'
         };
         
         // UPDATED: Scripts are in pages/js/ directory

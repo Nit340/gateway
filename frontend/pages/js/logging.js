@@ -679,14 +679,42 @@ function applyGlobalSettings() {
 }
 
 // Show notification
+// IMPORTANT: This function must NOT call window.showNotification — it IS window.showNotification
+// when loaded globally, which causes infinite recursion. Use a local toast/alert fallback only.
 function showNotification(message, type = 'info') {
-    // Use common.js notification function if available
-    if (typeof window.showNotification === 'function') {
-        window.showNotification(message, type);
-    } else {
-        // Fallback simple notification
-        alert(`${type.toUpperCase()}: ${message}`);
+    // Try to use a notification utility from common.js that was stored before this script loaded.
+    // Never call window.showNotification here — that would call ourselves recursively.
+    if (typeof window._commonShowNotification === 'function') {
+        window._commonShowNotification(message, type);
+        return;
     }
+
+    // Built-in lightweight toast fallback
+    const colors = { success: '#16A34A', error: '#DC2626', info: '#2563EB', warning: '#D97706' };
+    const icons  = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info', warning: 'fa-triangle-exclamation' };
+
+    const existing = document.querySelectorAll('.logging-toast');
+    if (existing.length > 3) existing[0].remove();
+
+    const t = document.createElement('div');
+    t.className = 'logging-toast';
+    t.style.cssText = `
+        position:fixed; bottom:24px; right:24px; z-index:99999;
+        background:${colors[type] || colors.info}; color:white;
+        padding:12px 20px; border-radius:8px; font-size:14px; font-weight:500;
+        box-shadow:0 4px 16px rgba(0,0,0,0.25); display:flex; align-items:center;
+        gap:10px; min-width:240px; max-width:360px; pointer-events:none;
+        transition:opacity 0.3s ease, transform 0.3s ease;
+    `;
+    const iconClass = icons[type] || icons.info;
+    t.innerHTML = `<i class="fa-solid ${iconClass}" style="font-size:16px;"></i><span>${String(message).replace(/</g,'&lt;')}</span>`;
+    document.body.appendChild(t);
+
+    setTimeout(() => {
+        t.style.opacity = '0';
+        t.style.transform = 'translateX(20px)';
+        setTimeout(() => t.remove(), 300);
+    }, 3500);
 }
 
 // Setup event listeners
@@ -895,4 +923,4 @@ function cleanupLogging() {
 }
 
 // Export for global access
-window.cleanupLogging = cleanupLogging;
+window.cleanupLogging = cleanupLogging; 

@@ -197,7 +197,7 @@ async def get_device_details(request):
         cursor.execute('''
             SELECT l.id, l.name, l.group_id, l.device_path, l.channel,
                    l.tare_offset, l.known_weight, l.known_weight_raw, l.shift_bits,
-                   l.unit, l.capacity, l.capacity_name,
+                   l.unit, l.capacity, l.load_name, l.capacity_name,
                    l.pipeline_server, l.pipeline_port, l.log_level, l.polling_interval_ms,
                    l.lowpass_filter_enabled, l.filter_cutoff_frequency, l.filter_activation_delta_min,
                    l.moving_avg_enabled, l.moving_avg_window,
@@ -226,7 +226,7 @@ async def get_device_details(request):
             # Build loadcell details
             (dev_id, name, group_id, device_path, channel,
              tare_offset, known_weight, known_weight_raw, shift_bits,
-             unit, capacity, capacity_name,
+             unit, capacity, load_name, capacity_name,
              pipeline_server, pipeline_port, log_level, polling_interval_ms,
              lowpass_filter_enabled, filter_cutoff_frequency, filter_activation_delta_min,
              moving_avg_enabled, moving_avg_window,
@@ -253,8 +253,10 @@ async def get_device_details(request):
                     'device_path': device_path,
                     'channel': channel,
                     'capacity': capacity,
+                    'load_name': load_name or 'load',
                     'capacity_name': capacity_name,
                     'unit': unit,
+                    'shift_bits': shift_bits,
                     'polling_interval_ms': polling_interval_ms,
                     'calibration': {
                         'tare_offset': tare_offset,
@@ -325,21 +327,17 @@ async def add_device(request):
         
         # Generate device ID with unique prefix to prevent collisions
         if device_type == 'loadcell':
-            # LoadCell devices get LC prefix - find max existing ID number
-            cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
-            existing_ids = [row[0] for row in cursor.fetchall()]
+            # ENFORCE: Only one loadcell device allowed (LC1 only)
+            cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+            lc_count = cursor.fetchone()[0]
+            if lc_count >= 1:
+                conn.close()
+                return web.json_response({
+                    'success': False,
+                    'error': 'Only one Load Cell device (LC1) is allowed. A load cell device already exists.'
+                }, status=400)
             
-            # Extract numbers from IDs and find max
-            max_num = 0
-            for existing_id in existing_ids:
-                try:
-                    num = int(existing_id[2:])  # Skip 'LC' prefix
-                    if num > max_num:
-                        max_num = num
-                except ValueError:
-                    continue
-            
-            device_id = 'LC{}'.format(max_num + 1)
+            device_id = 'LC1'  # Always LC1 - only one allowed
         else:  # modbus
             # Modbus devices get MB prefix - find max existing ID number
             cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
@@ -376,9 +374,9 @@ async def add_device(request):
             cursor.execute('''
                 INSERT INTO loadcell_device (
                     id, name, group_id, service_id, device_path, channel,
-                    capacity, capacity_name
+                    capacity, unit, shift_bits, load_name, capacity_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 data.get('name', 'Loadcell Device'),
@@ -387,23 +385,21 @@ async def add_device(request):
                 config.get('device_path', '/dev/spidev0.0'),
                 config.get('channel', 0),
                 config.get('capacity', 40000.0),
+                config.get('unit', 'g'),
+                config.get('shift_bits', 10),
+                'load',
                 config.get('capacity_name', 'capacity')
             ))
             
-            # Automatically create 'load' and 'capacity' datapoints (use INSERT OR IGNORE to prevent duplicates)
-            capacity_name = config.get('capacity_name', 'capacity')
-            
-            # Insert load datapoint
+            # Automatically create 'load' and 'capacity' datapoints
             cursor.execute('''
-                INSERT OR IGNORE INTO loadcell_datapoints (device_id, name)
-                VALUES (?, 'load')
+                INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
+                VALUES (?, 'load', '')
             ''', (device_id,))
-            
-            # Insert capacity datapoint
             cursor.execute('''
-                INSERT OR IGNORE INTO loadcell_datapoints (device_id, name)
-                VALUES (?, ?)
-            ''', (device_id, capacity_name))
+                INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
+                VALUES (?, 'capacity', '')
+            ''', (device_id,))
             
         else:  # Modbus (TCP or RTU)
             config = data.get('config', {})
@@ -564,6 +560,15 @@ async def update_device(request):
             if 'channel' in config:
                 update_fields.append('channel = ?')
                 values.append(config['channel'])
+            if 'unit' in config:
+                update_fields.append('unit = ?')
+                values.append(config['unit'])
+            if 'capacity' in config:
+                update_fields.append('capacity = ?')
+                values.append(float(config['capacity']))
+            if 'shift_bits' in config:
+                update_fields.append('shift_bits = ?')
+                values.append(int(config['shift_bits']))
             
             # Calibration
             if 'calibration' in config:
@@ -599,6 +604,8 @@ async def update_device(request):
             '''.format(fields=', '.join(update_fields))
             
             cursor.execute(query, values)
+            
+
         
         conn.commit()
         conn.close()
@@ -828,6 +835,14 @@ async def duplicate_device(request):
             loadcell_row = cursor.fetchone()
             
             if loadcell_row:
+                # Block duplicating loadcell - only one loadcell (LC1) allowed
+                conn.close()
+                return web.json_response({
+                    'success': False,
+                    'error': 'Cannot duplicate Load Cell device. Only one Load Cell (LC1) is allowed.'
+                }, status=400)
+            
+            if False and loadcell_row:  # unreachable - kept for reference
                 # It's a Loadcell device - duplicate it
                 cursor.execute('PRAGMA table_info(loadcell_device)')
                 columns = [col[1] for col in cursor.fetchall()]
@@ -1042,7 +1057,7 @@ async def export_devices_csv(request):
             'ID', 'Name', 'Type', 'Protocol', 'Group',
             'IP Address', 'Port', 'Serial Port', 'Slave ID',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
-            'Device Path', 'Capacity', 'Enabled'
+            'Device Path', 'Channel', 'Capacity', 'Unit', 'Enabled'
         ])
         
         # Export Modbus devices
@@ -1065,26 +1080,27 @@ async def export_devices_csv(request):
                 device_id, name, 'Modbus', protocol, group_name or '',
                 ip or '', port or '', serial or '', slave_id or '',
                 baud or '', data_bits or '', parity or '', stop_bits or '',
-                '', '', '1' if enabled else '0'
+                '', '', '', '', '1' if enabled else '0'
             ])
         
-        # Export Loadcell devices
+        # Export Loadcell devices (only LC1 is valid - enforce single loadcell)
         cursor.execute('''
             SELECT l.id, l.name, g.name as group_name,
-                   l.device_path, l.capacity, l.enabled
+                   l.device_path, l.channel, l.capacity, l.unit, l.enabled
             FROM loadcell_device l
             LEFT JOIN device_groups g ON l.group_id = g.id
-            ORDER BY CAST(l.id AS INTEGER)
+            WHERE l.id = 'LC1'
+            LIMIT 1
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, group_name, device_path, capacity, enabled = row
-            
+            device_id, name, group_name, device_path, channel, capacity, unit, enabled = row
+            # Only export LC1 - system enforces single loadcell
             writer.writerow([
-                device_id, name, 'Loadcell', 'loadcell', group_name or '',
+                'LC1', name, 'Loadcell', 'loadcell', group_name or '',
                 '', '', '', '',
                 '', '', '', '',
-                device_path or '', capacity or '', '1' if enabled else '0'
+                device_path or '', channel or 0, capacity or '', unit or 'g', '1' if enabled else '0'
             ])
         
         conn.close()
@@ -1147,6 +1163,21 @@ async def import_devices_csv(request):
                 
                 # Check if device with same name already exists
                 if device_type.lower() == 'loadcell':
+                    # ENFORCE: Only one loadcell allowed - check if LC1 already exists
+                    cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+                    lc_existing_count = cursor.fetchone()[0]
+                    # Also count how many loadcell rows are already in new_devices
+                    lc_in_new = sum(1 for d in new_devices if d.get('data', {}).get('Type', '').lower() == 'loadcell')
+                    if lc_existing_count > 0 or lc_in_new > 0:
+                        errors_pre = errors_pre if 'errors_pre' in dir() else []
+                        duplicates.append({
+                            'row': row_num,
+                            'name': name,
+                            'type': device_type,
+                            'existing_id': 'LC1',
+                            'reason': 'Only one Load Cell (LC1) is allowed'
+                        })
+                        continue
                     cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
                 else:
                     cursor.execute('SELECT id, name FROM modbus_device WHERE name = ?', (name,))
@@ -1249,17 +1280,13 @@ async def import_devices_csv(request):
                 
                 # Generate device ID using max ID logic
                 if device_type.lower() == 'loadcell':
-                    cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
-                    existing_ids = [r[0] for r in cursor.fetchall()]
-                    max_num = 0
-                    for existing_id in existing_ids:
-                        try:
-                            num = int(existing_id[2:])
-                            if num > max_num:
-                                max_num = num
-                        except ValueError:
-                            continue
-                    device_id = 'LC{}'.format(max_num + 1)
+                    # ENFORCE: Only LC1 allowed
+                    cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+                    if cursor.fetchone()[0] >= 1:
+                        errors.append('Row {}: Only one Load Cell (LC1) is allowed. Skipping.'.format(row_num))
+                        skipped_count += 1
+                        continue
+                    device_id = 'LC1'
                 else:
                     cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
@@ -1277,24 +1304,30 @@ async def import_devices_csv(request):
                     # Import Loadcell device
                     device_path = row.get('Device Path', '/dev/spidev0.0').strip()
                     capacity = float(row.get('Capacity', '40000'))
+                    unit = row.get('Unit', 'g').strip() or 'g'
+                    channel = int(row.get('Channel', '0') or '0')
                     enabled = row.get('Enabled', '1').strip() == '1'
                     
                     cursor.execute('''
                         INSERT INTO loadcell_device (
                             id, name, group_id, service_id, device_path, 
-                            channel, capacity, capacity_name, enabled
+                            channel, capacity, unit, load_name, capacity_name, enabled
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         device_id, name, group_id, service_id, device_path,
-                        0, capacity, 'capacity', enabled
+                        channel, capacity, unit, 'load', 'capacity', enabled
                     ))
                     
                     # Create default datapoints
-                    cursor.execute('''
-                        INSERT INTO loadcell_datapoints (device_id, name)
-                        VALUES (?, 'load'), (?, 'capacity')
-                    ''', (device_id, device_id))
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'load', '')",
+                        (device_id,)
+                    )
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'capacity', '')",
+                        (device_id,)
+                    )
                     
                     # Initialize status
                     initialize_device_status(device_id, 'Online' if enabled else 'Offline')

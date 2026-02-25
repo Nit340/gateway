@@ -1,99 +1,806 @@
 <!-- craneiq.html -->
-<div style="max-width:680px;margin:40px auto;padding:0 20px;font-family:sans-serif;">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-    <!-- Load Cell Card -->
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px;">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-slate-900">CraneIQ Pro Configuration</h1>
+        <p class="text-slate-500 text-sm mt-1">Configure anti-collision systems, zoning, load monitoring, and crane safety parameters.</p>
+    </div>
 
-        <!-- Header -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-            <div style="width:38px;height:38px;background:#fff7ed;border-radius:8px;display:flex;align-items:center;justify-content:center;">
-                <svg width="18" height="18" fill="none" stroke="#ea580c" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L8 6H4v4l-2 2 2 2v4h4l4 4 4-4h4v-4l2-2-2-2V6h-4z"/></svg>
-            </div>
-            <div>
-                <div style="font-size:15px;font-weight:600;color:#1e293b;">Load Cell</div>
-                <div style="font-size:11px;color:#94a3b8;" id="lc-device-label">Not connected</div>
-            </div>
-        </div>
+    <div class="space-y-8">
 
-        <!-- Idle / Device select -->
-        <div id="lc-idle" style="padding:8px 0 4px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-                <select id="lc-device-select"
-                    style="flex:1;padding:9px 12px;font-size:13px;color:#1e293b;border:1px solid #e2e8f0;border-radius:6px;outline:none;background:#f8fafc;">
-                    <option value="">Loading devices...</option>
-                </select>
-                <button id="pipeline-connect-btn" onclick="togglePipelineConnection()"
-                    style="padding:9px 22px;font-size:13px;font-weight:600;border:none;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;white-space:nowrap;">
-                    Connect
-                </button>
-            </div>
-            <div id="lc-no-devices" style="display:none;margin-top:10px;font-size:12px;color:#ef4444;">
-                No Load Cell device found. Add one in Device Management first.
-            </div>
-        </div>
+        <!-- =====================================================
+             SECTION 1: Crane Profile & Overview
+             ===================================================== -->
+        <section id="crane-profile-section" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        <!-- Live + Calibration (all in one, shown when connected) -->
-        <div id="lc-live" style="display:none;">
-
-            <!-- Live raw value -->
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;">
-                <div style="text-align:center;flex:1;padding:10px 0 16px;border-bottom:1px solid #f1f5f9;">
-                    <div style="font-size:10px;font-weight:600;letter-spacing:2px;color:#94a3b8;text-transform:uppercase;margin-bottom:6px;">load_raw</div>
-                    <div style="font-size:52px;font-weight:700;color:#1e293b;line-height:1;" id="lc-raw-value">--</div>
-                    <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;">
-                        <span style="width:6px;height:6px;background:#22c55e;border-radius:50%;display:inline-block;animation:lcpulse 1.5s infinite;"></span>
-                        <span style="font-size:11px;color:#22c55e;font-weight:500;">Live</span>
+            <!-- Profile Card -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-800">Crane Profile</h2>
+                        <p class="text-xs text-slate-500 uppercase tracking-wider mt-1">ID: CRANE-01</p>
+                    </div>
+                    <span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full border border-green-200">Online</span>
+                </div>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Crane Type</label>
+                            <select class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option>Double-Girder EOT</option><option>Single-Girder</option><option>Gantry</option><option>JIB</option><option>Tower Crane</option><option>RTG</option><option>Portal Crane</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Capacity</label>
+                            <div class="relative">
+                                <input type="text" value="25,000" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 pl-3 pr-10 py-2">
+                                <span class="absolute right-3 top-2 text-xs text-slate-500">kg</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Operating Mode</label>
+                        <div class="flex bg-slate-100 rounded-md p-1 border border-slate-200" id="operating-mode-btns">
+                            <button class="mode-btn flex-1 py-2 text-xs font-medium rounded-md bg-blue-600 text-white shadow">Manual</button>
+                            <button class="mode-btn flex-1 py-2 text-xs font-medium rounded-md text-slate-600 hover:bg-slate-50">Semi-Auto</button>
+                            <button class="mode-btn flex-1 py-2 text-xs font-medium rounded-md text-slate-600 hover:bg-slate-50">Auto</button>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t border-slate-100">
+                        <div class="flex justify-between items-center text-sm mb-3">
+                            <span class="text-slate-600">Dimensions</span>
+                            <button class="text-blue-600 text-xs hover:text-blue-700 hover:underline">Edit Mapping</button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3 text-center">
+                            <div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 mb-1">Span (X)</div><div class="font-mono text-slate-900 text-sm">15.0m</div></div>
+                            <div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 mb-1">Travel (Y)</div><div class="font-mono text-slate-900 text-sm">45.0m</div></div>
+                            <div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 mb-1">Height (Z)</div><div class="font-mono text-slate-900 text-sm">12.0m</div></div>
+                        </div>
                     </div>
                 </div>
-                <button onclick="togglePipelineConnection()"
-                    style="margin-left:16px;padding:7px 14px;font-size:12px;font-weight:600;border:1px solid #fca5a5;border-radius:6px;background:#fef2f2;color:#dc2626;cursor:pointer;white-space:nowrap;">
-                    Disconnect
+            </div>
+
+            <!-- Floor Layout -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-slate-800">Floor Layout &amp; Zones</h3>
+                    <div class="flex gap-2">
+                        <button id="upload-layout-btn" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors">&#8593; Upload</button>
+                        <button class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors">&#x26F6;</button>
+                    </div>
+                </div>
+                <div class="w-full h-64 bg-gradient-to-br from-slate-50 to-blue-50 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center">
+                    <div class="text-center">
+                        <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553-2.276A1 1 0 0021 19.618V8.382a1 1 0 00-.553-.894L15 5m0 16V5m0 0L9 7"/></svg>
+                        <p class="text-sm text-slate-500">Upload or draw floor layout</p>
+                        <p class="text-xs text-slate-400 mt-1">Supports .dwg, .dxf, .png, .jpg</p>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-4">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500"></div><span class="text-xs text-slate-600">Restricted Zone</span></div>
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-yellow-500"></div><span class="text-xs text-slate-600">Slow Down Zone</span></div>
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500"></div><span class="text-xs text-slate-600">Safe Zone</span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================
+             SECTION 2: Load Cell
+             ===================================================== -->
+        <section id="loadcell-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+
+            <!-- Section header -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                        <svg width="18" height="18" fill="none" stroke="#ea580c" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L8 6H4v4l-2 2 2 2v4h4l4 4 4-4h4v-4l2-2-2-2V6h-4z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-800">Load Cell</h3>
+                        <p class="text-xs text-slate-500" id="lc-device-label">Not connected</p>
+                    </div>
+                </div>
+                <!-- Pipeline connect/disconnect -->
+                <div class="flex items-center gap-3">
+                    <span id="lc-status-dot" class="w-2 h-2 rounded-full bg-slate-300"></span>
+                    <span id="lc-status-text" class="text-xs text-slate-500">Disconnected</span>
+                    <button id="pipeline-connect-btn" onclick="togglePipelineConnection()"
+                        class="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+                        Connect
+                    </button>
+                    <!-- Calibration button — only shown when connected -->
+                    <button id="lc-calibrate-btn" onclick="openCalibrationModal()" style="display:none;"
+                        class="px-4 py-2 text-sm font-semibold rounded-lg border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors">
+                        Calibrate
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live raw value bar (shown when connected) -->
+            <div id="lc-live-bar" style="display:none;" class="mb-6 flex items-center gap-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div class="text-center">
+                    <div class="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-1">load_raw</div>
+                    <div class="text-4xl font-bold text-slate-900 font-mono" id="lc-raw-value">--</div>
+                </div>
+                <div class="flex items-center gap-2 ml-4">
+                    <span style="width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block;animation:lcpulse 1.5s infinite;"></span>
+                    <span class="text-sm text-green-600 font-medium">Live</span>
+                </div>
+            </div>
+
+            <!-- ── Filters (always visible, user-entered, no pipeline needed) ── -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <!-- Left column: Signal filters -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-2">Signal Filters</h4>
+
+                    <!-- Low-pass filter -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-slate-700">Low-Pass Filter</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-lowpass-enabled" class="sr-only peer">
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Cutoff Frequency (Hz)</label>
+                                <input type="number" step="0.1" id="lc-cutoff-freq" placeholder="8.0"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Activation Delta Min</label>
+                                <input type="number" step="1" id="lc-filter-delta" placeholder="20000"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Moving Average filter -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-slate-700">Moving Average Filter</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-mavg-enabled" class="sr-only peer">
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
+                            <input type="number" min="1" max="100" id="lc-mavg-window" placeholder="4"
+                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Median filter -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-slate-700">Median Filter</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-median-enabled" class="sr-only peer">
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
+                            <input type="number" min="1" max="99" id="lc-median-window" placeholder="3"
+                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Auto-tare -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-slate-700">Auto-Tare</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-autotare-enabled" class="sr-only peer">
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Trigger Delta (grams)</label>
+                            <input type="number" step="0.1" id="lc-autotare-delta" placeholder="-5.0"
+                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right column: Deadband, Publish, Overload -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-2">Output & Overload</h4>
+
+                    <!-- Adaptive Deadband -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-slate-700">Adaptive Deadband</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-deadband-enabled" class="sr-only peer">
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Min</label>
+                                <input type="number" step="0.1" id="lc-deadband-min" placeholder="1.0"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Max</label>
+                                <input type="number" step="0.1" id="lc-deadband-max" placeholder="20.0"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Grow Rate</label>
+                                <input type="number" step="0.1" id="lc-deadband-grow" placeholder="0.5"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Shrink Rate</label>
+                                <input type="number" step="0.1" id="lc-deadband-shrink" placeholder="1.5"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Publish step -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Publish Step (grams)</label>
+                        <input type="number" step="0.1" id="lc-publish-step" placeholder="5.0"
+                            class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+
+                    <!-- Overload settings -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <h5 class="text-sm font-medium text-slate-700 mb-3">Overload Settings</h5>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="col-span-2">
+                                <label class="block text-xs text-slate-500 mb-1">Threshold</label>
+                                <input type="number" step="0.1" id="lc-overload-threshold" placeholder="5000.0"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Relay</label>
+                                <select id="lc-overload-relay" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="relay1">Relay 1</option>
+                                    <option value="relay2" selected>Relay 2</option>
+                                    <option value="relay3">Relay 3</option>
+                                    <option value="relay4">Relay 4</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Action</label>
+                                <select id="lc-overload-action" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="0">None</option>
+                                    <option value="1">Alarm</option>
+                                    <option value="2">Stop</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Cooldown (ms)</label>
+                                <input type="number" step="100" id="lc-overload-cooldown" placeholder="2000"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Confirm Count</label>
+                                <input type="number" min="1" id="lc-confirm-count" placeholder="3"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save filters button -->
+                    <div class="flex items-center gap-3">
+                        <button onclick="saveLoadcellFilters()"
+                            class="px-5 py-2 text-sm font-semibold rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">
+                            Save Filters
+                        </button>
+                        <span id="lc-filter-status" class="text-xs text-slate-400"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Calibration Modal (pipeline-dependent) ────────────────── -->
+        <div id="lc-cal-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+            <div style="background:white;border-radius:12px;width:92%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-5">
+                        <h3 class="text-base font-semibold text-slate-800">
+                            <svg class="inline w-4 h-4 mr-2 text-orange-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m8-9h1M3 12H2m15.364-6.364l.707.707M5.636 18.364l-.707.707M18.364 18.364l.707-.707M5.636 5.636l-.707.707"/></svg>
+                            Calibration
+                        </h3>
+                        <button onclick="closeCalibrationModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+                    </div>
+
+                    <!-- live raw inside modal -->
+                    <div class="mb-5 text-center p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <div class="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-1">load_raw (live)</div>
+                        <div class="text-4xl font-bold text-slate-900 font-mono" id="cal-modal-raw">--</div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Zero / Tare -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Zero State (Tare Offset)</div>
+                            <div class="text-xl font-bold text-slate-900 mb-3" id="cal-zero-display">--</div>
+                            <button onclick="captureZero()"
+                                class="w-full py-2 text-sm font-semibold border border-slate-300 rounded-lg bg-white text-slate-600 hover:bg-slate-100 transition-colors">
+                                Capture Zero
+                            </button>
+                        </div>
+                        <!-- Known weight -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Known Weight (kg)</div>
+                            <input id="cal-weight-input" type="number" placeholder="e.g. 1000"
+                                class="w-full text-xl font-bold text-slate-900 border-none bg-transparent outline-none mb-2 p-0">
+                            <div class="text-xs text-slate-400">Raw at this weight:</div>
+                            <div class="text-sm font-semibold text-slate-600" id="cal-weight-raw-display">-- (use current raw)</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-xs text-slate-500 mb-1">Note (optional)</label>
+                        <textarea id="cal-note" rows="2" placeholder="Calibration note..."
+                            class="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 resize-none outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+
+                    <button onclick="saveCalibration()"
+                        class="w-full py-3 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+                        Save Calibration
+                    </button>
+                    <div id="cal-status" class="mt-3 text-xs text-slate-400 text-center min-h-4"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- =====================================================
+             SECTION 3: IoT Gateway Data Buffer
+             ===================================================== -->
+        <section id="datalogger-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-800">IoT Gateway Data Buffer</h3>
+                        <p class="text-xs text-slate-500">Configure individual data loggers for network outage buffering</p>
+                    </div>
+                </div>
+                <button id="add-datalogger-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg> Add Datalogger
                 </button>
             </div>
 
-            <!-- Calibration fields -->
-            <div style="font-size:11px;font-weight:600;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:14px;">Calibration</div>
+            <!-- ── LEFT-TO-RIGHT DRAWER ─────────────────────────── -->
+            <!-- Backdrop -->
+            <div id="drawer-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-40 z-40 transition-opacity duration-300 opacity-0"></div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <!-- Drawer panel — slides in from the LEFT -->
+            <div id="add-datalogger-modal"
+                 class="fixed top-0 left-0 h-full w-full max-w-lg bg-white shadow-2xl z-50
+                        transform -translate-x-full transition-transform duration-300 ease-in-out
+                        flex flex-col">
 
-                <!-- Zero State -->
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;">
-                    <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Zero State (Tare Offset)</div>
-                    <div style="font-size:22px;font-weight:700;color:#1e293b;margin-bottom:10px;" id="cal-zero-display">--</div>
-                    <button onclick="captureZero()"
-                        style="width:100%;padding:7px;font-size:12px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;background:#fff;color:#475569;cursor:pointer;">
-                        Capture Zero
+                <!-- Drawer header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-800">Add New Datalogger</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Configure data point logging for network outages</p>
+                    </div>
+                    <button id="close-drawer-btn"
+                            class="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
 
-                <!-- Known Weight -->
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;">
-                    <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Known Weight (kg)</div>
-                    <input id="cal-weight-input" type="number" placeholder="e.g. 1000"
-                        style="width:100%;font-size:22px;font-weight:700;color:#1e293b;border:none;background:transparent;outline:none;padding:0;margin-bottom:10px;box-sizing:border-box;" />
-                    <div style="font-size:10px;color:#94a3b8;">Raw at this weight:</div>
-                    <div style="font-size:15px;font-weight:600;color:#475569;" id="cal-weight-raw-display">-- (use current raw)</div>
+                <!-- Drawer scrollable body -->
+                <div class="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+                    <!-- 1. Device -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">1. Select Device</label>
+                        <select id="logger-device-select" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">-- Select a device --</option>
+                            <option value="load_cell">Load Cell System (LC-001)</option>
+                            <option value="anti_collision">Anti-Collision System (ACS-001)</option>
+                            <option value="emergency_stop">Emergency Stop Module (ESM-001)</option>
+                            <option value="hoist_motor">Hoist Motor Drive (HM-001)</option>
+                            <option value="trolley_motor">Trolley Motor Drive (TM-001)</option>
+                            <option value="bridge_motor">Bridge Motor Drive (BM-001)</option>
+                            <option value="encoder_x">X-Axis Encoder (ENC-X-01)</option>
+                            <option value="encoder_y">Y-Axis Encoder (ENC-Y-01)</option>
+                            <option value="encoder_z">Z-Axis Encoder (ENC-Z-01)</option>
+                            <option value="main_brake">Main Hoist Brake (BRK-H-01)</option>
+                            <option value="trolley_brake">Trolley Brake (BRK-T-01)</option>
+                            <option value="weather_station">Weather Station (WS-001)</option>
+                            <option value="vibration_sensor">Vibration Sensor (VS-001)</option>
+                            <option value="temperature_sensor">Temperature Sensor Array (TS-001)</option>
+                            <option value="wind_sensor">Wind Speed Sensor (WIND-001)</option>
+                        </select>
+                    </div>
+
+                    <!-- 2. Tag -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">2. Select Data Tag</label>
+                        <select id="logger-tag-select" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500" disabled>
+                            <option value="">-- First select a device --</option>
+                        </select>
+                        <div id="tag-description" class="hidden mt-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-md">
+                            <p class="text-xs text-blue-700" id="tag-desc-text"></p>
+                            <p class="text-xs font-mono text-slate-500 mt-0.5" id="tag-address"></p>
+                        </div>
+                    </div>
+
+                    <!-- 3. Priority -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">3. Set Priority</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                                <input type="radio" name="logger-priority" value="critical" class="h-4 w-4 text-red-600">
+                                <span class="text-xs font-medium text-slate-700 mt-2">Critical</span>
+                                <div class="w-6 h-1 bg-red-500 rounded-full mt-1"></div>
+                            </label>
+                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                                <input type="radio" name="logger-priority" value="high" class="h-4 w-4 text-orange-600">
+                                <span class="text-xs font-medium text-slate-700 mt-2">High</span>
+                                <div class="w-6 h-1 bg-orange-500 rounded-full mt-1"></div>
+                            </label>
+                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                                <input type="radio" name="logger-priority" value="medium" checked class="h-4 w-4 text-yellow-600">
+                                <span class="text-xs font-medium text-slate-700 mt-2">Medium</span>
+                                <div class="w-6 h-1 bg-yellow-500 rounded-full mt-1"></div>
+                            </label>
+                            <label class="flex flex-col items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                                <input type="radio" name="logger-priority" value="low" class="h-4 w-4 text-slate-600">
+                                <span class="text-xs font-medium text-slate-700 mt-2">Low</span>
+                                <div class="w-6 h-1 bg-slate-400 rounded-full mt-1"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 4. Logging Condition -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">4. Logging Condition</label>
+                        <div class="grid grid-cols-2 gap-2 mb-3">
+                            <label class="flex flex-col p-3 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                <input type="radio" name="logger-condition" value="always" class="h-4 w-4 text-blue-600">
+                                <span class="text-sm font-medium text-slate-700 mt-2">Always Log</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Continuous at sampling rate</p>
+                            </label>
+                            <label class="flex flex-col p-3 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                <input type="radio" name="logger-condition" value="on_change" class="h-4 w-4 text-blue-600">
+                                <span class="text-sm font-medium text-slate-700 mt-2">On Change</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Log when value changes</p>
+                            </label>
+                            <label class="flex flex-col p-3 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                <input type="radio" name="logger-condition" value="threshold" class="h-4 w-4 text-blue-600">
+                                <span class="text-sm font-medium text-slate-700 mt-2">Threshold</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Log when exceeds limit</p>
+                            </label>
+                            <label class="flex flex-col p-3 border rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                <input type="radio" name="logger-condition" value="periodic" checked class="h-4 w-4 text-blue-600">
+                                <span class="text-sm font-medium text-slate-700 mt-2">Periodic</span>
+                                <p class="text-xs text-slate-500 mt-0.5">Log at fixed intervals</p>
+                            </label>
+                        </div>
+
+                        <!-- Condition detail panels -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-600">
+                            <div id="always-config" class="condition-panel">
+                                Continuous logging — all data captured at sampling rate. Recommended for critical safety data.
+                            </div>
+                            <div id="on-change-config" class="condition-panel" style="display:none">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div><label class="block font-medium text-slate-600 mb-1">Change Type</label><select class="w-full border-slate-300 rounded shadow-sm text-xs"><option>Absolute Change</option><option>Percentage Change</option><option>Any Change</option></select></div>
+                                    <div><label class="block font-medium text-slate-600 mb-1">Amount</label><div class="flex gap-2 items-center"><input type="text" class="w-16 border-slate-300 rounded shadow-sm text-xs" value="5"><span class="text-slate-500">units</span></div></div>
+                                </div>
+                            </div>
+                            <div id="threshold-config" class="condition-panel" style="display:none">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div><label class="block font-medium text-slate-600 mb-1">Condition</label><select class="w-full border-slate-300 rounded shadow-sm text-xs"><option>Greater than (&gt;)</option><option>Less than (&lt;)</option><option>Between range</option></select></div>
+                                    <div><label class="block font-medium text-slate-600 mb-1">Value</label><div class="flex gap-2 items-center"><input type="text" class="w-16 border-slate-300 rounded shadow-sm text-xs" value="80"><span class="text-slate-500">%</span></div></div>
+                                </div>
+                            </div>
+                            <div id="periodic-config" class="condition-panel" style="display:none">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div><label class="block font-medium text-slate-600 mb-1">Interval</label><input type="number" min="1" value="10" class="w-full border-slate-300 rounded shadow-sm text-xs"></div>
+                                    <div><label class="block font-medium text-slate-600 mb-1">Unit</label><select class="w-full border-slate-300 rounded shadow-sm text-xs"><option>Seconds</option><option>Minutes</option><option>Hours</option></select></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Storage -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">5. Storage Allocation</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Max Storage</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="logger-storage-size" value="100" class="w-20 text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500">
+                                    <select id="logger-storage-unit" class="flex-1 text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500">
+                                        <option value="mb">MB</option>
+                                        <option value="gb">GB</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Estimated Duration</label>
+                                <div class="text-sm font-semibold text-slate-800" id="estimated-duration">~48 hours</div>
+                                <div class="text-xs text-slate-500">Based on sampling rate</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 6. Sampling -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">6. Sampling Rate</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Interval</label>
+                                <select id="sampling-rate" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500">
+                                    <option value="1000">1 second</option>
+                                    <option value="5000" selected>5 seconds</option>
+                                    <option value="10000">10 seconds</option>
+                                    <option value="30000">30 seconds</option>
+                                    <option value="60000">1 minute</option>
+                                    <option value="300000">5 minutes</option>
+                                    <option value="600000">10 minutes</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Data Format</label>
+                                <select id="data-format" class="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-blue-500">
+                                    <option value="raw">Raw binary</option>
+                                    <option value="compressed" selected>Compressed</option>
+                                    <option value="csv">CSV text</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /scrollable body -->
+
+                <!-- Drawer footer -->
+                <div class="flex-shrink-0 px-6 py-4 border-t border-slate-200 flex justify-end gap-3 bg-white">
+                    <button id="cancel-datalogger" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 hover:border-slate-400 rounded-md transition-colors">
+                        Cancel
+                    </button>
+                    <button id="save-datalogger" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-colors">
+                        Create Datalogger
+                    </button>
+                </div>
+
+            </div><!-- /drawer panel -->
+            <!-- ── END DRAWER ──────────────────────────────────── -->
+
+            <!-- Summary Stats -->
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-blue-50 rounded-lg p-4 border border-blue-200"><div class="text-xs text-blue-600 mb-1">Active Loggers</div><div class="text-xl font-bold text-blue-700" id="active-loggers-count">0</div></div>
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-200"><div class="text-xs text-green-600 mb-1">Total Storage</div><div class="text-xl font-bold text-green-700" id="total-storage">0 MB</div></div>
+                    <div class="bg-purple-50 rounded-lg p-4 border border-purple-200"><div class="text-xs text-purple-600 mb-1">Data Rate</div><div class="text-xl font-bold text-purple-700" id="total-data-rate">0 MB/h</div></div>
+                    <div class="bg-amber-50 rounded-lg p-4 border border-amber-200"><div class="text-xs text-amber-600 mb-1">Buffer Health</div><div class="text-xl font-bold text-amber-700" id="buffer-health">N/A</div></div>
+                </div>
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <div class="bg-slate-50 px-4 py-3 border-b border-slate-200">
+                        <h4 class="text-sm font-semibold text-slate-700">Configured Data Loggers</h4>
+                        <p class="text-xs text-slate-500 mt-1">Individual data point loggers for network outage buffering</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Device</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tag</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Priority</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Condition</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Storage</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Sampling</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loggers-table-body" class="bg-white divide-y divide-slate-200">
+                                <tr id="no-loggers-row">
+                                    <td colspan="8" class="px-4 py-8 text-center">
+                                        <svg class="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+                                        <p class="text-sm text-slate-500">No dataloggers configured yet</p>
+                                        <p class="text-xs text-slate-400 mt-1">Click "Add Datalogger" to create your first logger</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================
+             SECTION 4: Safety Systems — ACS & Zoning
+             ===================================================== -->
+        <section id="safety-configuration" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Anti-Collision -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        </div>
+                        <div><h3 class="text-lg font-semibold text-slate-800">Anti-Collision System</h3><p class="text-xs text-slate-500">Crane-to-Crane &amp; Object Detection</p></div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
+                </div>
+                <div class="space-y-5">
+                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <h4 class="text-sm font-medium text-slate-700 mb-3">Crane Geometry</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-xs font-medium text-slate-600 mb-1">Boom Length</label><div class="relative"><input type="text" value="30.0" class="w-full text-sm border-slate-300 rounded-md shadow-sm pl-3 pr-10 py-2"><span class="absolute right-3 top-2 text-xs text-slate-500">m</span></div></div>
+                            <div><label class="block text-xs font-medium text-slate-600 mb-1">Jib Angle</label><div class="relative"><input type="text" value="45.0" class="w-full text-sm border-slate-300 rounded-md shadow-sm pl-3 pr-10 py-2"><span class="absolute right-3 top-2 text-xs text-slate-500">°</span></div></div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <h4 class="text-sm font-medium text-slate-700 mb-3">Detection Settings</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-xs font-medium text-slate-600 mb-1">Sensor Tech</label><select class="w-full text-sm border-slate-300 rounded-md shadow-sm"><option>Laser LiDAR</option><option>Radar</option><option>Ultrasonic</option><option>Camera Vision</option><option>Combined</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-600 mb-1">Comm. Protocol</label><select class="w-full text-sm border-slate-300 rounded-md shadow-sm"><option>Wireless (RF)</option><option>CAN Bus</option><option>EtherCAT</option><option>Wireless Mesh</option><option>Profinet</option></select></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm text-slate-600 mb-1"><span>Warning Distance</span><span class="font-medium">6.0 m</span></div>
+                        <div class="w-full bg-slate-200 rounded-full h-2 mb-3"><div class="bg-yellow-400 h-2 rounded-full" style="width:60%"></div></div>
+                        <div class="flex justify-between text-sm text-slate-600 mb-1"><span>Slow-Down Distance</span><span class="font-medium">4.0 m</span></div>
+                        <div class="w-full bg-slate-200 rounded-full h-2 mb-3"><div class="bg-yellow-500 h-2 rounded-full" style="width:40%"></div></div>
+                        <div class="flex justify-between text-sm text-slate-600 mb-1"><span>Critical Stop Distance</span><span class="font-medium">2.0 m</span></div>
+                        <div class="w-full bg-slate-200 rounded-full h-2"><div class="bg-red-500 h-2 rounded-full" style="width:20%"></div></div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-slate-700 mb-2">Paired Cranes</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-md text-sm text-slate-700">Crane-02 &#x1F517;</span>
+                            <span class="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-md text-sm text-slate-700">Crane-03 &#x1F517;</span>
+                            <span class="px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-md text-sm text-red-500">Crane-04 &#x26D4;</span>
+                            <button id="add-peer-btn" class="px-3 py-1.5 bg-white border border-dashed border-slate-300 rounded-md text-sm text-slate-600 hover:border-slate-400 transition">+ Add Peer</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Note -->
-            <div style="margin-bottom:16px;">
-                <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Note</div>
-                <textarea id="cal-note" rows="2" placeholder="Calibration note (optional)"
-                    style="width:100%;font-size:13px;color:#1e293b;border:1px solid #e2e8f0;border-radius:6px;padding:8px;resize:none;outline:none;box-sizing:border-box;font-family:sans-serif;"></textarea>
+            <!-- Zoning -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 16l4.553-2.276A1 1 0 0021 19.618V8.382a1 1 0 00-.553-.894L15 5m0 16V5m0 0L9 7"/></svg>
+                        </div>
+                        <div><h3 class="text-lg font-semibold text-slate-800">Zoning Configuration</h3><p class="text-xs text-slate-500">Restricted Areas &amp; Speed Limits</p></div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
+                </div>
+                <div class="space-y-4">
+                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-medium text-slate-700">Add New Zone</h4>
+                            <button id="add-zone-btn" class="text-blue-600 text-sm hover:underline">+ New Zone</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div><label class="block text-xs font-medium text-slate-600 mb-1">Zone Type</label><select class="w-full text-sm border-slate-300 rounded-md shadow-sm"><option>No-Go (Restricted)</option><option>Slow Zone (Speed Limit)</option><option>Warning Only</option><option>Safe Zone</option></select></div>
+                            <div><label class="block text-xs font-medium text-slate-600 mb-1">Priority</label><select class="w-full text-sm border-slate-300 rounded-md shadow-sm"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></div>
+                        </div>
+                        <div><label class="block text-xs font-medium text-slate-600 mb-1">Coordinates/Dimensions</label><textarea class="w-full text-sm border-slate-300 rounded-md shadow-sm h-20" placeholder="Enter coordinates or dimensions (X1,Y1,X2,Y2,Height)"></textarea></div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                        <div class="p-3 border-b border-slate-200 flex justify-between items-center bg-white"><span class="text-sm font-semibold text-slate-700">Active Zones</span><span class="text-xs text-slate-500">3 zones configured</span></div>
+                        <div class="divide-y divide-slate-200 max-h-48 overflow-y-auto">
+                            <div class="p-3 flex items-center justify-between hover:bg-slate-100/50"><div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-red-500"></div><div><div class="text-sm font-medium text-slate-800">Chemical Storage</div><div class="text-xs text-slate-500">No-Go • Priority: High • 10,20,30,40,8</div></div></div><button class="text-slate-400 hover:text-slate-600 p-1">&#9998;</button></div>
+                            <div class="p-3 flex items-center justify-between hover:bg-slate-100/50"><div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-yellow-500"></div><div><div class="text-sm font-medium text-slate-800">Mezzanine Floor</div><div class="text-xs text-slate-500">Slow Zone (20%) • Priority: Medium</div></div></div><button class="text-slate-400 hover:text-slate-600 p-1">&#9998;</button></div>
+                            <div class="p-3 flex items-center justify-between hover:bg-slate-100/50"><div class="flex items-center gap-3"><div class="w-3 h-3 rounded-full bg-green-500"></div><div><div class="text-sm font-medium text-slate-800">Loading Bay</div><div class="text-xs text-slate-500">Warning Only • Priority: Low</div></div></div><button class="text-slate-400 hover:text-slate-600 p-1">&#9998;</button></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-50 rounded-lg p-4 border border-slate-200"><label class="block text-sm font-medium text-slate-700 mb-2">Violation Action</label><select class="w-full text-sm border-slate-300 rounded-md shadow-sm"><option>Hard Stop</option><option>Slow Down</option><option>Alarm Only</option><option>Log Only</option><option>Gradual Stop</option></select></div>
+                        <div class="bg-slate-50 rounded-lg p-4 border border-slate-200"><label class="block text-sm font-medium text-slate-700 mb-2">Override Mode</label><div class="flex items-center justify-between"><span class="text-sm text-slate-600">Auth Required</span><span class="text-yellow-500">&#x1F511;</span></div><p class="text-xs text-slate-500 mt-1">Admin PIN needed for override</p></div>
+                    </div>
+                </div>
             </div>
+        </section>
 
-            <!-- Save -->
-            <button onclick="saveCalibration()"
-                style="width:100%;padding:11px;font-size:14px;font-weight:600;border:none;border-radius:7px;background:#2563eb;color:#fff;cursor:pointer;">
-                Save Calibration
-            </button>
+        <!-- =====================================================
+             SECTION 5: Health & Load Intelligence
+             ===================================================== -->
+        <section id="health-monitoring" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                    </div>
+                    <div><h3 class="text-lg font-semibold text-slate-800">Health &amp; Load Intelligence</h3><p class="text-xs text-slate-500">Load monitoring, wear detection</p></div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Load Monitoring -->
+                <div class="bg-slate-50 rounded-lg border border-slate-200 p-5">
+                    <div class="flex justify-between items-center mb-4"><h4 class="font-medium text-slate-800">Load Monitoring</h4><span class="text-blue-600">&#x2696;</span></div>
+                    <div class="space-y-4">
+                        <div><label class="block text-xs font-medium text-slate-600 mb-2">Overload Thresholds</label><div class="flex gap-2"><div class="bg-white px-3 py-2 rounded border border-slate-300 flex-1 text-center"><span class="text-sm font-medium text-yellow-600">90%</span><div class="text-xs text-slate-500">Warning</div></div><div class="bg-white px-3 py-2 rounded border border-slate-300 flex-1 text-center"><span class="text-sm font-medium text-red-600">110%</span><div class="text-xs text-slate-500">Trip</div></div></div></div>
+                        <div class="flex items-center justify-between text-sm py-2 border-t border-slate-200"><span class="text-slate-600">Shock Load Detect</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+                        <div class="flex items-center justify-between text-sm py-2 border-t border-slate-200"><span class="text-slate-600">Swing Detect</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+                    </div>
+                </div>
+                <!-- Motor Health -->
+                <div class="bg-slate-50 rounded-lg border border-slate-200 p-5">
+                    <div class="flex justify-between items-center mb-4"><h4 class="font-medium text-slate-800">Motor Health</h4><span class="text-emerald-600">&#x2699;</span></div>
+                    <div class="space-y-4">
+                        <div><label class="block text-xs font-medium text-slate-600 mb-2">Motor Temperatures</label><div class="space-y-1.5"><div class="flex justify-between text-sm"><span class="text-slate-600">LT Motor</span><span class="font-medium">65°C</span></div><div class="flex justify-between text-sm"><span class="text-slate-600">CT Motor</span><span class="font-medium">72°C</span></div><div class="flex justify-between text-sm"><span class="text-slate-600">MH Motor</span><span class="font-medium">58°C</span></div></div></div>
+                        <div><label class="block text-xs font-medium text-slate-600 mb-2">Temperature Alert</label><div class="flex gap-2"><div class="bg-white px-3 py-2 rounded border border-slate-300 flex-1 text-center"><span class="text-sm font-medium text-yellow-600">75°C</span><div class="text-xs text-slate-500">Warning</div></div><div class="bg-white px-3 py-2 rounded border border-slate-300 flex-1 text-center"><span class="text-sm font-medium text-red-600">90°C</span><div class="text-xs text-slate-500">Shutdown</div></div></div></div>
+                        <div><label class="block text-xs font-medium text-slate-600 mb-2">Vibration Limits</label><div class="space-y-1.5"><div class="flex justify-between text-sm"><span class="text-slate-600">RMS Limit</span><input type="text" value="4.2" class="w-16 text-sm border-slate-300 rounded px-2 py-1 text-right"></div><div class="flex justify-between text-sm"><span class="text-slate-600">Peak Limit</span><input type="text" value="6.5" class="w-16 text-sm border-slate-300 rounded px-2 py-1 text-right"></div></div></div>
+                    </div>
+                </div>
+                <!-- Brake Monitoring -->
+                <div class="bg-slate-50 rounded-lg border border-slate-200 p-5">
+                    <div class="flex justify-between items-center mb-4"><h4 class="font-medium text-slate-800">Brake Monitoring</h4><span class="text-red-600">&#x23F9;</span></div>
+                    <div class="space-y-4">
+                        <div><label class="block text-xs font-medium text-slate-600 mb-2">Brake Coil Current</label><div class="flex justify-between mb-2"><span class="text-xs text-slate-500">Normal Range</span><span class="text-sm font-medium text-slate-800">2.5 - 3.5 A</span></div><div class="w-full bg-slate-200 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width:70%"></div></div></div>
+                        <div><label class="block text-xs font-medium text-slate-600 mb-2">Wear Threshold</label><div class="flex justify-between mb-2"><span class="text-xs text-slate-500">Current</span><span class="text-sm font-medium text-slate-800">12% worn</span></div><div class="w-full bg-slate-200 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width:12%"></div></div></div>
+                        <div class="pt-3 border-t border-slate-200"><div class="flex items-center justify-between text-sm"><div><span class="text-slate-600">Brake Release Time</span><p class="text-xs text-slate-500">Expected: 120ms</p></div><input type="text" value="115" class="w-16 text-sm border-slate-300 rounded px-2 py-1 text-right"></div></div>
+                        <div class="flex items-center justify-between text-sm pt-2"><span class="text-slate-600">Slippage Detection</span><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked class="sr-only peer"><div class="w-10 h-5 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-            <div id="cal-status" style="margin-top:10px;font-size:12px;color:#64748b;text-align:center;min-height:18px;"></div>
+        <!-- =====================================================
+             SECTION 6: Rule Engine Integration (view only)
+             ===================================================== -->
+        <section id="rule-engine-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                    </div>
+                    <div><h3 class="text-base font-semibold text-slate-800">Rule Engine Integration</h3><p class="text-xs text-slate-500">Auto-generated safety rules from configurations</p></div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">View Only</span>
+                    <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                </div>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <div class="flex items-start gap-2">
+                    <svg class="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                    <div><h4 class="text-sm font-medium text-blue-800 mb-1">Auto-Generated Rules</h4><p class="text-xs text-blue-600">Rules are automatically created from your safety configurations. To modify rules, update the corresponding safety parameters.</p></div>
+                </div>
+            </div>
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-3"><h4 class="text-sm font-medium text-slate-700">Active Rules (6)</h4><span class="text-xs text-slate-500">Auto-generated from safety configurations</span></div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><div class="flex items-center gap-2 mb-1"><span class="text-blue-500 text-xs">&#x2696;</span><span class="text-sm font-medium text-slate-800">Load Limiter Rule</span><span class="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">Auto</span></div><div class="text-xs text-slate-600 mb-1">IF Load &gt; 90% THEN Trigger Alarm</div><div class="text-xs text-slate-500">Source: Load Cell Configuration</div></div>
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><div class="flex items-center gap-2 mb-1"><span class="text-red-500 text-xs">&#x1F321;</span><span class="text-sm font-medium text-slate-800">Motor Temperature</span><span class="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded">Auto</span></div><div class="text-xs text-slate-600 mb-1">IF Temp &ge; 75°C THEN Send Alert</div><div class="text-xs text-slate-500">Source: Health Monitoring</div></div>
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><div class="flex items-center gap-2 mb-1"><span class="text-green-500 text-xs">&#x1F5FA;</span><span class="text-sm font-medium text-slate-800">Zone Violation</span><span class="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">Auto</span></div><div class="text-xs text-slate-600 mb-1">IF Zone Violation THEN Stop Motion</div><div class="text-xs text-slate-500">Source: Zoning Configuration</div></div>
+                    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><div class="flex items-center gap-2 mb-1"><span class="text-purple-500 text-xs">&#x1F6E1;</span><span class="text-sm font-medium text-slate-800">Anti-Collision</span><span class="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">Auto</span></div><div class="text-xs text-slate-600 mb-1">IF Distance &le; 2.0m THEN Emergency Stop</div><div class="text-xs text-slate-500">Source: Anti-Collision System</div></div>
+                </div>
+            </div>
+            <div class="bg-slate-50 rounded-lg border border-slate-200 p-3">
+                <h4 class="text-sm font-medium text-slate-700 mb-2">Rule Sources</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <a href="#loadcell-section" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded bg-orange-500"></div><span class="text-slate-700">Load Cell</span></div><span class="text-slate-500">2 rules</span></a>
+                    <a href="#safety-configuration" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded bg-green-500"></div><span class="text-slate-700">Zone Control</span></div><span class="text-slate-500">3 rules</span></a>
+                    <a href="#safety-configuration" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded bg-red-500"></div><span class="text-slate-700">Anti-Collision</span></div><span class="text-slate-500">2 rules</span></a>
+                    <a href="#health-monitoring" class="flex items-center justify-between p-2 hover:bg-white rounded border border-slate-200 transition text-xs"><div class="flex items-center gap-2"><div class="w-2 h-2 rounded bg-emerald-500"></div><span class="text-slate-700">Health Monitor</span></div><span class="text-slate-500">4 rules</span></a>
+                </div>
+            </div>
+        </section>
 
-        </div>
-    </div>
-</div>
+    </div><!-- /space-y-8 -->
+</div><!-- /container -->
+
+<!-- Notification Container -->
+<div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none"></div>
 
 <style>
 @keyframes lcpulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
