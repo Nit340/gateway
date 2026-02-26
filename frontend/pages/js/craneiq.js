@@ -24,7 +24,7 @@
                 var btn = el('pipeline-connect-btn');
                 if (btn) { btn.disabled = true; btn.classList.add('opacity-40'); }
                 var lbl = el('lc-device-label');
-                if (lbl) lbl.textContent = 'No device â€” add one in Device Management';
+                if (lbl) lbl.textContent = 'No device — add one in Device Management';
                 return;
             }
             selectedDevice = devices[0];
@@ -113,7 +113,7 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (s) s.textContent = data.success ? 'Saved âœ“' : 'Error: ' + (data.error || 'unknown');
+            if (s) s.textContent = data.success ? 'Saved ?' : 'Error: ' + (data.error || 'unknown');
             setTimeout(function() { if (s) s.textContent = ''; }, 3000);
         })
         .catch(function(e) { if (s) s.textContent = 'Error: ' + e.message; });
@@ -190,22 +190,38 @@
     }
 
     // ---- WebSocket ----
+    function updateRawDisplay(value) {
+        currentRaw = value;
+        var display = (value !== null && value !== undefined)
+            ? (typeof value === 'number' ? value.toFixed(2) : value)
+            : '--';
+        var rv = el('lc-raw-value');
+        if (rv) rv.textContent = display;
+        var mr = el('cal-modal-raw');
+        if (mr) mr.textContent = display;   // keep modal in sync
+    }
+
     function openWS() {
         closeWS();
         var proto = location.protocol === 'https:' ? 'wss' : 'ws';
         pipelineWs = new WebSocket(proto + '://' + location.host + '/ws/pipeline/load_raw');
+        pipelineWs.onopen = function() {
+            // Fallback: if the backend had no buffered value yet (load_raw was None when
+            // we connected), poll the REST status endpoint to pick up the latest value.
+            fetch('/api/pipeline/status')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.load_raw !== null && d.load_raw !== undefined && currentRaw === null) {
+                        updateRawDisplay(d.load_raw);
+                    }
+                })
+                .catch(function() {});
+        };
         pipelineWs.onmessage = function(evt) {
             try {
                 var msg = JSON.parse(evt.data);
                 if (msg.datapoint === 'load_raw') {
-                    currentRaw = msg.value;
-                    var display = (msg.value !== null && msg.value !== undefined)
-                        ? (typeof msg.value === 'number' ? msg.value.toFixed(2) : msg.value)
-                        : '--';
-                    var rv = el('lc-raw-value');
-                    if (rv) rv.textContent = display;
-                    var mr = el('cal-modal-raw');
-                    if (mr) mr.textContent = display;   // keep modal in sync
+                    updateRawDisplay(msg.value);
                 }
             } catch(e) {}
         };
@@ -283,7 +299,7 @@
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.success) {
-                if (s) s.textContent = 'Saved âœ“';
+                if (s) s.textContent = 'Saved ?';
                 var wr = el('cal-weight-raw-display');
                 if (wr) wr.textContent = knownWeightRaw.toFixed(2);
                 selectedDevice.tare_offset      = capturedZero;
@@ -322,7 +338,7 @@
 
 
 // ============================================================
-// PART 2: Static UI logic â€” NEW sections (no backend)
+// PART 2: Static UI logic — NEW sections (no backend)
 // ============================================================
 (function () {
     'use strict';
@@ -350,7 +366,7 @@
         hoist_motor: [
             { name: 'Motor Speed',       address: '40301', type: 'REAL', description: 'Current motor RPM' },
             { name: 'Motor Current',     address: '40303', type: 'REAL', description: 'Motor current draw in Amps' },
-            { name: 'Motor Temperature', address: '40305', type: 'REAL', description: 'Motor winding temperature in Â°C' }
+            { name: 'Motor Temperature', address: '40305', type: 'REAL', description: 'Motor winding temperature in °C' }
         ],
         trolley_motor: [
             { name: 'Trolley Position', address: '40401', type: 'REAL', description: 'Trolley position on beam in meters' },
@@ -383,7 +399,7 @@
         weather_station: [
             { name: 'Wind Speed',    address: '41101', type: 'REAL',   description: 'Current wind speed in m/s' },
             { name: 'Wind Direction',address: '41103', type: 'UINT16', description: 'Wind direction in degrees (0-360)' },
-            { name: 'Temperature',   address: '41105', type: 'REAL',   description: 'Ambient temperature in Â°C' },
+            { name: 'Temperature',   address: '41105', type: 'REAL',   description: 'Ambient temperature in °C' },
             { name: 'Humidity',      address: '41107', type: 'REAL',   description: 'Relative humidity percentage' }
         ],
         vibration_sensor: [
@@ -391,9 +407,9 @@
             { name: 'Vibration Frequency',address: '41203', type: 'REAL', description: 'Dominant frequency in Hz' }
         ],
         temperature_sensor: [
-            { name: 'Temperature 1', address: '41301', type: 'REAL', description: 'First sensor reading Â°C' },
-            { name: 'Temperature 2', address: '41302', type: 'REAL', description: 'Second sensor reading Â°C' },
-            { name: 'Temperature 3', address: '41303', type: 'REAL', description: 'Third sensor reading Â°C' }
+            { name: 'Temperature 1', address: '41301', type: 'REAL', description: 'First sensor reading °C' },
+            { name: 'Temperature 2', address: '41302', type: 'REAL', description: 'Second sensor reading °C' },
+            { name: 'Temperature 3', address: '41303', type: 'REAL', description: 'Third sensor reading °C' }
         ],
         wind_sensor: [
             { name: 'Wind Speed', address: '41401', type: 'REAL', description: 'Current wind speed in m/s' },
@@ -568,7 +584,7 @@
 
         if (saveBtn) saveBtn.addEventListener('click', saveDatalogger);
 
-        // Device â†’ populate tags
+        // Device ? populate tags
         if (deviceSel && tagSel) {
             deviceSel.addEventListener('change', function() {
                 var dt = deviceTags[this.value];
