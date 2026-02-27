@@ -334,19 +334,28 @@ if (typeof window.generalConfigLoaded === 'undefined') {
 
     // Main initialization
     window.initGeneralConfig = function() {
+        // Guard against double-init from router calling twice
+        if (window._generalConfigInitializing) {
+            console.log('General Configuration already initializing, skipping duplicate call');
+            return;
+        }
+        window._generalConfigInitializing = true;
+
         console.log('General Configuration initialized');
-        
+
         // Clean up any existing connections first
         cleanupGeneralConfig();
-        
+
         loadConfiguration().then(() => {
             initializeGeneralConfig();
             initializeWebSocket();
+            window._generalConfigInitializing = false;
         }).catch(error => {
             console.error('Load error:', error);
             initializeGeneralConfig();
             initializeWebSocket();
             showNotification('Load failed', 'error');
+            window._generalConfigInitializing = false;
         });
     };
 
@@ -358,7 +367,7 @@ if (typeof window.generalConfigLoaded === 'undefined') {
 
     // WebSocket
     let wsConnection = null;
-    let reconnectInterval = null;
+    let reconnectTimeout = null;
 
     const initializeWebSocket = function() {
         // Close existing connection if any
@@ -370,26 +379,28 @@ if (typeof window.generalConfigLoaded === 'undefined') {
             }
             wsConnection = null;
         }
-        
-        // Clear existing reconnect interval
-        if (reconnectInterval) {
-            clearInterval(reconnectInterval);
-            reconnectInterval = null;
+
+        // Clear any pending reconnect
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
         }
-        
-        const wsUrl = 'ws://' + window.location.host + '/ws';
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = protocol + '//' + window.location.host + '/ws/general';
         console.log('Connecting WebSocket:', wsUrl);
-        
+
         wsConnection = new WebSocket(wsUrl);
-        
+
         wsConnection.onopen = function() {
             console.log('WebSocket connected');
-            if (reconnectInterval) {
-                clearInterval(reconnectInterval);
-                reconnectInterval = null;
+            // Clear any pending reconnect on successful connect
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
             }
         };
-        
+
         wsConnection.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
@@ -398,18 +409,19 @@ if (typeof window.generalConfigLoaded === 'undefined') {
                 console.error('WebSocket parse error:', e);
             }
         };
-        
+
         wsConnection.onclose = function() {
             console.log('WebSocket disconnected');
-            
-            if (!reconnectInterval) {
-                reconnectInterval = setInterval(() => {
+            // FIX: use setTimeout (one-shot) instead of setInterval to avoid stacking multiple timers
+            if (!reconnectTimeout) {
+                reconnectTimeout = setTimeout(() => {
+                    reconnectTimeout = null; // clear flag before re-init so onclose guard works correctly
                     console.log('Reconnecting WebSocket...');
                     initializeWebSocket();
                 }, 5000);
             }
         };
-        
+
         wsConnection.onerror = function(error) {
             console.error('WebSocket error:', error);
         };
@@ -590,10 +602,10 @@ if (typeof window.generalConfigLoaded === 'undefined') {
             wsConnection = null;
         }
         
-        // Clear reconnect interval
-        if (reconnectInterval) {
-            clearInterval(reconnectInterval);
-            reconnectInterval = null;
+        // Clear reconnect timeout
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
         }
         
         // Remove event listeners if needed
@@ -609,6 +621,8 @@ if (typeof window.generalConfigLoaded === 'undefined') {
             refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
         }
         
+        // Reset init guard so navigating back to this page works
+        window._generalConfigInitializing = false;
         console.log('General config cleanup complete');
     };
 

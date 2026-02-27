@@ -330,7 +330,7 @@ def create_app():
     app.router.add_get   ('/api/devices/{device_id}/datapoints',  get_device_datapoints)
 
     app.router.add_get('/db', database_viewer_handler)
-    app.router.add_get('/ws',         websocket_handler)
+    app.router.add_get('/ws/general', websocket_handler)
     app.router.add_get('/ws/devices', device_websocket_handler)
 
     # Pipeline routes - pipeline.py owns the one and only pipeline_state.

@@ -6,10 +6,10 @@
 </head>
 <body>
     <script>
-        if (sessionStorage.getItem('gw_auth') === 'true') {
-            window.location.replace('/layout?page=general-configuration');
+        if (document.cookie.indexOf('gw_auth=true') !== -1) {
+            window.location.replace('/layout.html');
         } else {
-            window.location.replace('/login');
+            window.location.replace('/login.html');
         }
     </script>
 </body>
