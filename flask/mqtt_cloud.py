@@ -1,5 +1,5 @@
 # mqtt_cloud.py
-# Tables: cloud_connections, mqtt_datapoints, http_datapoints, ftp_datapoints, cloud_connection_stats
+# Tables: cloud_connections, mqtt_datapoints, cloud_connection_stats
 import json, time, asyncio
 from aiohttp import web
 from database import get_db_connection
@@ -33,21 +33,6 @@ _DEFAULTS = {
         'lwt':False,'lwtTopic':'','lwtMessage':'','lwtQos':1,'lwtRetain':False,
         'connLogging':True,'msgLogging':False,'maxLogSize':10,'logRetention':7,
     },
-    'http': {
-        'url':'','method':'POST','contentType':'application/json','authType':'none',
-        'username':'','password':'','apiKey':'',
-        'oauthClientId':'','oauthSecret':'','oauthTokenUrl':'',
-        'payloadFormat':'json',
-        'jsonTemplate':'{\n  "timestamp": "%TIMESTAMP%",\n  "device": "%DEVICE_ID%",\n  "data": [%DATA%]\n}',
-        'timestampFormat':'epoch',
-        'compression':False,'encryption':False,'dataFilter':'',
-        'publishMode':'realtime','batchSize':100,'batchInterval':60,
-        'conditionalExpression':'','minInterval':1,
-        'timeout':30,'retryCount':3,'retryDelay':5,
-        'sslVerify':True,'proxyServer':'','proxyUsername':'','proxyPassword':'',
-        'rateLimit':60,'throttle':True,
-        'storeForward':True,'maxStorage':1000,'retentionPeriod':24,
-    },
     'ftp': {
         'host':'','port':21,'protocol':'ftp','mode':'passive',
         'username':'','password':'','anonymous':False,
@@ -72,12 +57,7 @@ def _fetch_tags(cur, cid, ctype):
     if ctype == 'mqtt':
         cur.execute('SELECT tag_name,topic,publish_mode,change_threshold,enabled FROM mqtt_datapoints WHERE connection_id=? ORDER BY tag_name',(cid,))
         return [{'name':r[0],'topic':r[1],'publishMode':r[2],'changeThreshold':r[3],'enabled':bool(r[4])} for r in cur.fetchall()]
-    elif ctype == 'http':
-        cur.execute('SELECT tag_name,field_name,publish_mode,include_unit,include_timestamp,enabled FROM http_datapoints WHERE connection_id=? ORDER BY tag_name',(cid,))
-        return [{'name':r[0],'fieldName':r[1],'publishMode':r[2],'includeUnit':bool(r[3]),'includeTimestamp':bool(r[4]),'enabled':bool(r[5])} for r in cur.fetchall()]
-    else:  # ftp
-        cur.execute('SELECT tag_name,column_name,include_unit,include_timestamp,enabled FROM ftp_datapoints WHERE connection_id=? ORDER BY tag_name',(cid,))
-        return [{'name':r[0],'columnName':r[1],'includeUnit':bool(r[2]),'includeTimestamp':bool(r[3]),'enabled':bool(r[4])} for r in cur.fetchall()]
+    return []
 
 def _fetch_stats(cur, cid):
     cur.execute('SELECT messages_total,messages_ok,messages_failed,latency_avg_ms,last_active FROM cloud_connection_stats WHERE connection_id=?',(cid,))
@@ -97,7 +77,6 @@ def _row_dict(r, cur):
 async def _connection_types(req):
     return _ok({'types':[
         {'id':'mqtt','name':'MQTT Broker',   'description':'Standard IoT messaging protocol','icon':'fa-solid fa-cloud','color':'#3B82F6'},
-        {'id':'http','name':'HTTP Endpoint', 'description':'REST API / webhook endpoint',    'icon':'fa-solid fa-globe','color':'#F59E0B'},
         {'id':'ftp', 'name':'FTP Server',    'description':'File transfer via FTP/SFTP/FTPS','icon':'fa-solid fa-folder-open','color':'#10B981'},
     ]})
 
@@ -114,7 +93,7 @@ async def _create(req):
     try: body=await req.json()
     except: return _err('Invalid JSON')
     ctype=(body.get('type') or '').lower()
-    if ctype not in ('mqtt','http','ftp'): return _err('Invalid type: {}'.format(ctype))
+    if ctype not in ('mqtt','ftp'): return _err('Invalid type: {}'.format(ctype))
     name=(body.get('name') or '').strip()
     if not name: return _err('name is required')
     config={**_DEFAULTS[ctype],**(body.get('connection') or body.get('config') or {})}
@@ -210,16 +189,10 @@ async def _assign_tags(req):
         r=cur.fetchone()
         if not r: db.close(); return _err('Not found',404)
         ctype=r[0]
-        tbl_map={'mqtt':'mqtt_datapoints','http':'http_datapoints','ftp':'ftp_datapoints'}
-        tbl=tbl_map[ctype]
-        if replace: cur.execute('DELETE FROM {} WHERE connection_id=?'.format(tbl),(cid,))
+        if ctype != 'mqtt': db.close(); return _err('Tags not supported for this connection type',400)
+        if replace: cur.execute('DELETE FROM mqtt_datapoints WHERE connection_id=?',(cid,))
         for tag in tag_list:
-            if ctype=='mqtt':
-                cur.execute('INSERT OR REPLACE INTO mqtt_datapoints(connection_id,tag_name,topic,publish_mode,change_threshold,enabled) VALUES(?,?,?,?,?,1)',(cid,tag,'',mode,thresh))
-            elif ctype=='http':
-                cur.execute('INSERT OR REPLACE INTO http_datapoints(connection_id,tag_name,field_name,publish_mode,include_unit,include_timestamp,enabled) VALUES(?,?,?,?,1,1,1)',(cid,tag,tag,mode))
-            else:  # ftp
-                cur.execute('INSERT OR REPLACE INTO ftp_datapoints(connection_id,tag_name,column_name,include_unit,include_timestamp,enabled) VALUES(?,?,?,1,1,1)',(cid,tag,tag))
+            cur.execute('INSERT OR REPLACE INTO mqtt_datapoints(connection_id,tag_name,topic,publish_mode,change_threshold,enabled) VALUES(?,?,?,?,?,1)',(cid,tag,'',mode,thresh))
         db.commit(); db.close()
         return _ok({'message':'{} tag(s) assigned'.format(len(tag_list))})
     except Exception as e: return _err(str(e),500)
@@ -231,7 +204,7 @@ async def _remove_tag(req):
         cur.execute('SELECT type FROM cloud_connections WHERE id=?',(cid,))
         r=cur.fetchone()
         if not r: db.close(); return _err('Not found',404)
-        tbl={'mqtt':'mqtt_datapoints','http':'http_datapoints','ftp':'ftp_datapoints'}[r[0]]
+        tbl={'mqtt':'mqtt_datapoints'}[r[0]]
         cur.execute('DELETE FROM {} WHERE connection_id=? AND tag_name=?'.format(tbl),(cid,tag))
         db.commit(); db.close()
         return _ok({'message':'Tag removed'})

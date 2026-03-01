@@ -59,10 +59,10 @@ async def get_all_devices(request):
                 protocol = "modbus-rtu"
             
             # Get or initialize real-time status
+            # FIX BUG-10: Always initialise as Offline — the real service will set Online.
+            # Random status caused spurious WS broadcasts and wrong UI state on every GET.
             if device_id not in device_status_tracker:
-                # Initialize with random status for demo
-                initial_status = 'Online' if random.random() > 0.3 else 'Offline'
-                initialize_device_status(device_id, initial_status)
+                initialize_device_status(device_id, 'Offline')
             
             status = device_status_tracker[device_id]
             
@@ -93,10 +93,9 @@ async def get_all_devices(request):
             device_id, name, device_path, group_name, color, enabled, service_name = row
             
             # Get or initialize real-time status
+            # FIX BUG-10: Always initialise as Offline — same reason as above.
             if device_id not in device_status_tracker:
-                # Initialize with random status for demo
-                initial_status = 'Online' if random.random() > 0.3 else 'Offline'
-                initialize_device_status(device_id, initial_status)
+                initialize_device_status(device_id, 'Offline')
             
             status = device_status_tracker[device_id]
             

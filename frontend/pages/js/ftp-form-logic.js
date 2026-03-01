@@ -12,7 +12,6 @@ window.initializeFtpForm = function () {
         anonToggle.addEventListener('change', function () {
             credFields.style.display = this.checked ? 'none' : 'block';
         });
-        // Apply initial state
         credFields.style.display = anonToggle.checked ? 'none' : 'block';
     }
 
@@ -22,7 +21,6 @@ window.initializeFtpForm = function () {
     if (protocolSel && portInput) {
         protocolSel.addEventListener('change', function () {
             const defaults = { ftp: '21', sftp: '22', ftps: '990' };
-            // Only auto-update if user hasn't customised it beyond the known defaults
             const known = ['21', '22', '990'];
             if (known.includes(portInput.value)) {
                 portInput.value = defaults[this.value] || '21';
@@ -30,7 +28,7 @@ window.initializeFtpForm = function () {
         });
     }
 
-    // Transfer mode — hide for SFTP (SFTP has no active/passive)
+    // Transfer mode — hide for SFTP
     const modeSel = document.getElementById('field-mode');
     if (protocolSel && modeSel) {
         function _applyMode() {
@@ -41,29 +39,8 @@ window.initializeFtpForm = function () {
         _applyMode();
     }
 
-    // Tag checkbox select-all listener
-    document.addEventListener('click', function (e) {
-        if (e.target.classList.contains('ftp-tag-select')) _updateFtpTagCount();
-    });
-
-    _updateFtpTagCount();
     console.log('FTP form initialized successfully');
 };
-
-function _updateFtpTagCount() {
-    const total = document.querySelectorAll('#ftp-tags-table tr[data-tag-name]').length;
-    const el    = document.getElementById('ftp-tag-count');
-    if (el) el.textContent = total;
-}
-
-function removeFtpTags() {
-    const sel = document.querySelectorAll('.ftp-tag-select:checked');
-    if (!sel.length) { alert('Select tags to remove.'); return; }
-    if (confirm(`Remove ${sel.length} tag(s)?`)) {
-        sel.forEach(cb => cb.closest('tr')?.remove());
-        _updateFtpTagCount();
-    }
-}
 
 function generateFtpPassword(fieldId) {
     const el = document.getElementById(fieldId);
@@ -71,14 +48,10 @@ function generateFtpPassword(fieldId) {
         'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b % 72]).join('');
 }
 
-// showAddTagModal and saveFtpSettings are overridden by mqtt-cloud.js after injection
-function showAddTagModal()  { console.warn('showAddTagModal not yet wired'); }
-function saveFtpSettings()  { console.log('saveFtpSettings: not wired yet'); }
+function saveFtpSettings() { console.log('saveFtpSettings: not wired yet'); }
 
 window.ftpFormLogic = {
     initializeFtpForm,
-    removeFtpTags,
     generateFtpPassword,
-    showAddTagModal,
     saveFtpSettings,
 };

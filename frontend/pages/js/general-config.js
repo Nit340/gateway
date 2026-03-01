@@ -1,9 +1,8 @@
-// general-config.js - Clean and fixed version with script reload protection
-
-// Check if already loaded to prevent duplicate declarations
-if (typeof window.generalConfigLoaded === 'undefined') {
-    window.generalConfigLoaded = true;
-    
+// general-config.js
+// FIX BUG-12: Removed the window.generalConfigLoaded guard that wrapped the entire file.
+// That guard caused all const declarations (wsConnection, initializeWebSocket, etc.) to be
+// skipped on the second SPA visit, making the module rely on fragile closure state from
+// the first visit. Now the IIFE runs fully every time the script loads.
     // Helper functions
     const setInputValue = function(selector, value) {
         if (value === undefined || value === null) return;
@@ -412,10 +411,17 @@ if (typeof window.generalConfigLoaded === 'undefined') {
 
         wsConnection.onclose = function() {
             console.log('WebSocket disconnected');
-            // FIX: use setTimeout (one-shot) instead of setInterval to avoid stacking multiple timers
+            // FIX BUG-11: Only reconnect if we're still on the General Config page.
+            // Without this guard, navigating away causes an infinite zombie WS loop
+            // that runs for the entire browser session, trying to update DOM elements
+            // that no longer exist.
+            if (!document.getElementById('save-btn')) {
+                console.log('General config page no longer active, skipping WS reconnect');
+                return;
+            }
             if (!reconnectTimeout) {
-                reconnectTimeout = setTimeout(() => {
-                    reconnectTimeout = null; // clear flag before re-init so onclose guard works correctly
+                reconnectTimeout = setTimeout(function() {
+                    reconnectTimeout = null;
                     console.log('Reconnecting WebSocket...');
                     initializeWebSocket();
                 }, 5000);
@@ -633,13 +639,16 @@ if (typeof window.generalConfigLoaded === 'undefined') {
     window.addEventListener('beforeunload', function() {
         cleanupGeneralConfig();
     });
-}
+// FIX BUG-12: Removed the orphaned closing brace that belonged to the
+// now-deleted window.generalConfigLoaded guard block.
 
-// Export for module system
+// FIX BUG-13: module.exports previously referenced loadConfiguration and
+// handleSaveConfiguration as bare names — both are const-declared inside the
+// (now removed) guard block, making them out-of-scope in any non-browser env
+// and causing ReferenceError. Now we only export what is safely on window.
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         initGeneralConfig: window.initGeneralConfig,
-        loadConfiguration: loadConfiguration,
-        handleSaveConfiguration: handleSaveConfiguration
+        cleanupGeneralConfig: window.cleanupGeneralConfig
     };
 }

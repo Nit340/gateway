@@ -38,7 +38,7 @@ function _renderList() {
 
     _connections.forEach(c => {
         const s   = c.statistics || {};
-        const icon = { mqtt:'fa-cloud text-blue-500', http:'fa-globe text-yellow-500', ftp:'fa-folder-open text-emerald-500' }[c.type] || 'fa-plug';
+        const icon = { mqtt:'fa-cloud text-blue-500', ftp:'fa-folder-open text-emerald-500' }[c.type] || 'fa-plug';
         const div = document.createElement('div');
         div.className = `conn-item ${c.type}${c.id === _selectedId ? ' active' : ''}`;
         div.dataset.id = c.id;
@@ -91,7 +91,6 @@ async function _loadForm(conn) {
 
     const fileMap = {
         mqtt: 'pages/connection-forms/mqtt-form.html',
-        http: 'pages/connection-forms/http-form.html',
         ftp:  'pages/connection-forms/ftp-form.html',
     };
     const file = fileMap[conn.type];
@@ -103,12 +102,10 @@ async function _loadForm(conn) {
 
         // Init form UI (toggles, protocol↔port, anonymous hide/show)
         if (conn.type === 'mqtt' && typeof window.initializeMqttForm  === 'function') window.initializeMqttForm();
-        if (conn.type === 'http' && typeof window.initializeHttpForm  === 'function') window.initializeHttpForm();
         if (conn.type === 'ftp'  && typeof window.initializeFtpForm   === 'function') window.initializeFtpForm();
 
         // Populate every field from DB
         if (conn.type === 'mqtt') _populateMqtt(conn);
-        else if (conn.type === 'http') _populateHttp(conn);
         else _populateFtp(conn);
 
         // Override Save buttons to call real API
@@ -207,86 +204,6 @@ function _renderMqttTagsTable(conn) {
     });
 }
 
-// ─── POPULATE HTTP ────────────────────────────────────────────────────────────
-function _populateHttp(conn) {
-    const c = conn.config || {};
-    _sv('field-url',         c.url         ?? '');
-    _sv('field-method',      c.method      ?? 'POST');
-    _sv('field-contentType', c.contentType ?? 'application/json');
-    _sv('field-authType',    c.authType    ?? 'none');
-    _sv('field-username',    c.username    ?? '');
-    _sv('field-password',    c.password    ?? '');
-    _sv('field-apiKey',      c.apiKey      ?? '');
-    _sv('field-oauth-clientId', c.oauthClientId ?? '');
-    _sv('field-oauth-secret',   c.oauthSecret   ?? '');
-    _sv('field-oauth-tokenUrl', c.oauthTokenUrl ?? '');
-    const authSel = _el('field-authType');
-    if (authSel) authSel.dispatchEvent(new Event('change'));
-    _radio('field-payloadFormat', c.payloadFormat ?? 'json');
-    _sv('field-jsonTemplate',   c.jsonTemplate    ?? '');
-    _sv('field-timestampFormat',c.timestampFormat ?? 'epoch');
-    _sc('field-compression',    c.compression     ?? false);
-    _sc('field-encryption',     c.encryption      ?? false);
-    _sv('field-dataFilter',     c.dataFilter      ?? '');
-    const checked = document.querySelector('input[name="field-payloadFormat"]:checked');
-    if (checked) checked.dispatchEvent(new Event('change'));
-    _radio('field-publishMode', c.publishMode ?? 'realtime');
-    _sv('field-batchSize',     c.batchSize    ?? 100);
-    _sv('field-batchInterval', c.batchInterval ?? 60);
-    _sv('field-timeout',    c.timeout    ?? 30);
-    _sv('field-retryCount', c.retryCount ?? 3);
-    _sv('field-retryDelay', c.retryDelay ?? 5);
-    _sc('field-sslVerify',  c.sslVerify  ?? true);
-    _sv('field-proxyServer',    c.proxyServer    ?? '');
-    _sv('field-proxyUsername',  c.proxyUsername  ?? '');
-    _sv('field-proxyPassword',  c.proxyPassword  ?? '');
-    _sv('field-rateLimit',  c.rateLimit  ?? 60);
-    _sc('field-throttle',   c.throttle   ?? true);
-    _sc('field-storeForward',c.storeForward ?? true);
-    _sv('field-maxStorage',     c.maxStorage     ?? 1000);
-    _sv('field-retentionPeriod',c.retentionPeriod ?? 24);
-    _renderHttpTagsTable(conn);
-}
-
-function _renderHttpTagsTable(conn) {
-    const tbody = _el('http-tags-table');
-    if (!tbody) return;
-    const tags = conn.tags || [];
-    tbody.innerHTML = '';
-    if (!tags.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags".</td></tr>';
-        return;
-    }
-    tags.forEach(tag => {
-        const tr = document.createElement('tr');
-        tr.className = 'border-t border-slate-100';
-        tr.dataset.tagName = tag.name;
-        tr.innerHTML = `
-          <td class="p-2"><input type="checkbox" class="http-tag-select"></td>
-          <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
-          <td class="p-2">
-            <select class="compact-select text-xs tag-publish-mode">
-              <option value="onChange" ${tag.publishMode==='onChange'?'selected':''}>On Change</option>
-              <option value="1000" ${tag.publishMode==='1000'?'selected':''}>1 sec</option>
-              <option value="5000" ${tag.publishMode==='5000'?'selected':''}>5 sec</option>
-              <option value="30000"${tag.publishMode==='30000'?'selected':''}>30 sec</option>
-            </select>
-          </td>
-          <td class="p-2">
-            <select class="compact-select text-xs">
-              <option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option>
-            </select>
-          </td>
-          <td class="p-2">
-            <div class="flex items-center gap-2">
-              <label class="toggle-switch"><input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}><span class="toggle-slider"></span></label>
-              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')"><i class="fa-solid fa-trash"></i></button>
-            </div>
-          </td>`;
-        tbody.appendChild(tr);
-    });
-}
-
 // ─── POPULATE FTP ─────────────────────────────────────────────────────────────
 function _populateFtp(conn) {
     const c = conn.config || {};
@@ -309,30 +226,7 @@ function _populateFtp(conn) {
 }
 
 function _renderFtpTagsTable(conn) {
-    const tbody = _el('ftp-tags-table');
-    if (!tbody) return;
-    const tags = conn.tags || [];
-    tbody.innerHTML = '';
-    if (!tags.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags".</td></tr>';
-        return;
-    }
-    tags.forEach(tag => {
-        const tr = document.createElement('tr');
-        tr.className = 'border-t border-slate-100';
-        tr.dataset.tagName = tag.name;
-        tr.innerHTML = `
-          <td class="p-2"><input type="checkbox" class="ftp-tag-select"></td>
-          <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
-          <td class="p-2"><input type="text" class="compact-input text-xs ftp-col-name" value="${_esc(tag.columnName||tag.name)}" placeholder="column header"></td>
-          <td class="p-2">
-            <div class="flex items-center gap-2">
-              <label class="toggle-switch"><input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}><span class="toggle-slider"></span></label>
-              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')"><i class="fa-solid fa-trash"></i></button>
-            </div>
-          </td>`;
-        tbody.appendChild(tr);
-    });
+    // FTP has no datapoints — nothing to render
 }
 
 // ─── WIRE SAVE BUTTONS ────────────────────────────────────────────────────────
@@ -343,14 +237,8 @@ function _wireFormSaves(conn) {
         window.mqttFormLogic.saveMqttTopicSettings      = () => _saveMqttTopics(conn.id);
         window.mqttFormLogic.saveMqttPublishingSettings = () => _saveMqttPublishing(conn.id);
         window.mqttFormLogic.saveMqttAdvancedSettings   = () => _saveMqttAdvanced(conn.id);
-    } else if (conn.type === 'http') {
-        if (!window.httpFormLogic) window.httpFormLogic = {};
-        window.httpFormLogic.saveHttpConnectionSettings = () => _saveHttpConnection(conn.id);
-        window.httpFormLogic.saveHttpPayloadSettings    = () => _saveHttpPayload(conn.id);
-        window.httpFormLogic.saveHttpPublishingSettings = () => _saveHttpPublishing(conn.id);
-        window.httpFormLogic.saveHttpAdvancedSettings   = () => _saveHttpAdvanced(conn.id);
     } else {
-        // ftp — wire via ftpFormLogic (same pattern as mqtt/http) AND by button id
+        // ftp — wire via ftpFormLogic (same pattern as mqtt) AND by button id
         if (!window.ftpFormLogic) window.ftpFormLogic = {};
         window.ftpFormLogic.saveFtpSettings = () => _saveFtp(conn.id);
         const saveBtn = _el('ftp-save-btn');
@@ -363,14 +251,7 @@ function _wireAddTagsBtn(conn) {
     const openFn = () => _openTagsModal(conn);
     window.showAddTagModal = openFn;
     if (!window.mqttFormLogic) window.mqttFormLogic = {};
-    if (!window.httpFormLogic) window.httpFormLogic = {};
-    if (!window.ftpFormLogic)  window.ftpFormLogic  = {};
     window.mqttFormLogic.showAddTagModal = openFn;
-    window.httpFormLogic.showAddTagModal = openFn;
-    window.ftpFormLogic.showAddTagModal  = openFn;
-    // Also wire ftp Add Tags button if present
-    const ftpAddBtn = _el('ftp-add-tags-btn');
-    if (ftpAddBtn) ftpAddBtn.onclick = openFn;
 
     window.removeKeyValueItem = btn => btn.closest('.key-value-item')?.remove();
     window.addKeyValueItem    = btn => {
@@ -447,53 +328,8 @@ async function _saveMqttAdvanced(id) {
     }, 'Advanced settings saved');
 }
 
-// ─── SAVE: HTTP ───────────────────────────────────────────────────────────────
-async function _saveHttpConnection(id) {
-    const headers = {};
-    document.querySelectorAll('.key-value-item').forEach(item => {
-        const inputs = item.querySelectorAll('input');
-        if (inputs[0]?.value) headers[inputs[0].value] = inputs[1]?.value || '';
-    });
-    await _putCfg(id, {
-        url:_gv('field-url'), method:_gv('field-method'), contentType:_gv('field-contentType'),
-        authType:_gv('field-authType'), username:_gv('field-username'), password:_gv('field-password'),
-        apiKey:_gv('field-apiKey'), oauthClientId:_gv('field-oauth-clientId'),
-        oauthSecret:_gv('field-oauth-secret'), oauthTokenUrl:_gv('field-oauth-tokenUrl'),
-        customHeaders: headers,
-    }, 'Connection settings saved');
-}
-
-async function _saveHttpPayload(id) {
-    await _putCfg(id, {
-        payloadFormat:_gr('field-payloadFormat')||'json', jsonTemplate:_gv('field-jsonTemplate'),
-        timestampFormat:_gv('field-timestampFormat'), compression:_gc('field-compression'),
-        encryption:_gc('field-encryption'), dataFilter:_gv('field-dataFilter'),
-    }, 'Payload format saved');
-}
-
-async function _saveHttpPublishing(id) {
-    const rows = document.querySelectorAll('#http-tags-table tr[data-tag-name]');
-    const tags = [...rows].map(tr => tr.dataset.tagName);
-    try {
-        await _api('POST', `${API}/connections/${id}/tags`, { tags, publishMode:_gr('field-publishMode')||'realtime', replace:true });
-        await _putCfg(id, { publishMode:_gr('field-publishMode')||'realtime', batchSize:+_gv('field-batchSize')||100, batchInterval:+_gv('field-batchInterval')||60 }, 'Publishing settings saved');
-    } catch { _toast('Save failed', 'error'); }
-}
-
-async function _saveHttpAdvanced(id) {
-    await _putCfg(id, {
-        timeout:+_gv('field-timeout')||30, retryCount:+_gv('field-retryCount')||3, retryDelay:+_gv('field-retryDelay')||5,
-        sslVerify:_gc('field-sslVerify'), proxyServer:_gv('field-proxyServer'),
-        proxyUsername:_gv('field-proxyUsername'), proxyPassword:_gv('field-proxyPassword'),
-        rateLimit:+_gv('field-rateLimit')||60, throttle:_gc('field-throttle'),
-        storeForward:_gc('field-storeForward'), maxStorage:+_gv('field-maxStorage')||1000,
-        retentionPeriod:+_gv('field-retentionPeriod')||24,
-    }, 'Advanced settings saved');
-}
-
 // ─── SAVE: FTP ────────────────────────────────────────────────────────────────
 async function _saveFtp(id) {
-    // 1. Save config
     const cfg = {
         host:            _gv('field-host'),
         port:            +_gv('field-port') || 21,
@@ -512,14 +348,6 @@ async function _saveFtp(id) {
         retryAttempts:   +_gv('field-retryAttempts') || 3,
     };
     await _putCfg(id, cfg, 'FTP settings saved');
-
-    // 2. Save tag assignments from the rendered table
-    const rows = document.querySelectorAll('#ftp-tags-table tr[data-tag-name]');
-    if (rows.length) {
-        const tags = [...rows].map(tr => tr.dataset.tagName);
-        try { await _api('POST', `${API}/connections/${id}/tags`, { tags, replace: true }); }
-        catch { /* non-fatal */ }
-    }
 }
 
 // ─── SHARED SAVE HELPER ───────────────────────────────────────────────────────
@@ -597,7 +425,6 @@ window._updateTagCount = function () {
 // ─── ADD CONNECTION MODAL ─────────────────────────────────────────────────────
 const _TYPES = {
     mqtt: { name:'MQTT Broker',   desc:'Standard IoT messaging protocol', icon:'fa-cloud',       color:'#3B82F6' },
-    http: { name:'HTTP Endpoint', desc:'REST API / webhook endpoint',      icon:'fa-globe',       color:'#F59E0B' },
     ftp:  { name:'FTP Server',    desc:'File transfer FTP/SFTP/FTPS',      icon:'fa-folder-open', color:'#10B981' },
 };
 
@@ -645,7 +472,6 @@ function _showStep2(type) {
     _el('formCtxName').textContent = _TYPES[type]?.name || type;
     _el('addName').value = '';
     _el('addMqttFields').classList.toggle('hidden', type !== 'mqtt');
-    _el('addHttpFields').classList.toggle('hidden', type !== 'http');
     _el('addFtpFields').classList.toggle('hidden',  type !== 'ftp');
 }
 
@@ -660,10 +486,6 @@ async function _handleCreate(e) {
         const host = _el('addHost').value.trim();
         if (!host) { _toast('Broker host is required', 'error'); return; }
         conn = { host, port: +_el('addPort').value||1883, username: _el('addUsername').value.trim(), password: _el('addPassword').value };
-    } else if (_selectedType === 'http') {
-        const url = _el('addUrl').value.trim();
-        if (!url) { _toast('URL is required', 'error'); return; }
-        conn = { url, method: _el('addMethod').value, apiKey: _el('addToken').value.trim() };
     } else {
         const host = _el('addFtpHost').value.trim();
         if (!host) { _toast('FTP host is required', 'error'); return; }

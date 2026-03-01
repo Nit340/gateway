@@ -24,7 +24,7 @@
                 var btn = el('pipeline-connect-btn');
                 if (btn) { btn.disabled = true; btn.classList.add('opacity-40'); }
                 var lbl = el('lc-device-label');
-                if (lbl) lbl.textContent = 'No device — add one in Device Management';
+                if (lbl) lbl.textContent = 'No device ï¿½ add one in Device Management';
                 return;
             }
             selectedDevice = devices[0];
@@ -338,7 +338,7 @@
 
 
 // ============================================================
-// PART 2: Static UI logic — NEW sections (no backend)
+// PART 2: Static UI logic ï¿½ NEW sections (no backend)
 // ============================================================
 (function () {
     'use strict';
@@ -366,7 +366,7 @@
         hoist_motor: [
             { name: 'Motor Speed',       address: '40301', type: 'REAL', description: 'Current motor RPM' },
             { name: 'Motor Current',     address: '40303', type: 'REAL', description: 'Motor current draw in Amps' },
-            { name: 'Motor Temperature', address: '40305', type: 'REAL', description: 'Motor winding temperature in °C' }
+            { name: 'Motor Temperature', address: '40305', type: 'REAL', description: 'Motor winding temperature in ï¿½C' }
         ],
         trolley_motor: [
             { name: 'Trolley Position', address: '40401', type: 'REAL', description: 'Trolley position on beam in meters' },
@@ -399,7 +399,7 @@
         weather_station: [
             { name: 'Wind Speed',    address: '41101', type: 'REAL',   description: 'Current wind speed in m/s' },
             { name: 'Wind Direction',address: '41103', type: 'UINT16', description: 'Wind direction in degrees (0-360)' },
-            { name: 'Temperature',   address: '41105', type: 'REAL',   description: 'Ambient temperature in °C' },
+            { name: 'Temperature',   address: '41105', type: 'REAL',   description: 'Ambient temperature in ï¿½C' },
             { name: 'Humidity',      address: '41107', type: 'REAL',   description: 'Relative humidity percentage' }
         ],
         vibration_sensor: [
@@ -407,9 +407,9 @@
             { name: 'Vibration Frequency',address: '41203', type: 'REAL', description: 'Dominant frequency in Hz' }
         ],
         temperature_sensor: [
-            { name: 'Temperature 1', address: '41301', type: 'REAL', description: 'First sensor reading °C' },
-            { name: 'Temperature 2', address: '41302', type: 'REAL', description: 'Second sensor reading °C' },
-            { name: 'Temperature 3', address: '41303', type: 'REAL', description: 'Third sensor reading °C' }
+            { name: 'Temperature 1', address: '41301', type: 'REAL', description: 'First sensor reading ï¿½C' },
+            { name: 'Temperature 2', address: '41302', type: 'REAL', description: 'Second sensor reading ï¿½C' },
+            { name: 'Temperature 3', address: '41303', type: 'REAL', description: 'Third sensor reading ï¿½C' }
         ],
         wind_sensor: [
             { name: 'Wind Speed', address: '41401', type: 'REAL', description: 'Current wind speed in m/s' },

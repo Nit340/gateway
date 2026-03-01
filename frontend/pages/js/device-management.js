@@ -258,24 +258,25 @@
     // ==================== INITIALIZATION ====================
     async function initApp() {
         console.log('Initializing Device Management...');
-        
+
+        // FIX BUG-15: Always reset attempt counter on a fresh init so a bad
+        // network session from a previous page visit never permanently disables reconnects.
+        wsConnectionAttempts = 0;
+
         await loadDevices();
         await loadGroups();
         renderDevicesTable();
         renderGroups();
         setupEventListeners();
         connectDeviceWebSocket();
-        
+
         console.log('Device Management initialized successfully');
-        
-        // Register cleanup on page unload
+
+        // FIX BUG-14: Store named references so we can remove these listeners
+        // in cleanupDeviceManagement() instead of stacking new ones every visit.
         window.addEventListener('beforeunload', cleanupWebSocket);
-        window.addEventListener('pagehide', cleanupWebSocket);
-        
-        // Also cleanup when navigating away (for SPA behavior)
-        if (typeof window.addEventListener !== 'undefined') {
-            window.addEventListener('popstate', cleanupWebSocket);
-        }
+        window.addEventListener('pagehide',     cleanupWebSocket);
+        window.addEventListener('popstate',     cleanupWebSocket);
     }
 
     // ==================== DATA LOADING ====================
@@ -432,20 +433,39 @@
             deviceWsConnection.onclose = () => {
                 console.log('Device WebSocket disconnected');
                 deviceWsConnection = null;
-                
+
                 // Only reconnect if we're still on the device management page
                 // and haven't exceeded max attempts
                 if (document.getElementById('devicesTableBody') && wsConnectionAttempts < 5) {
                     wsConnectionAttempts++;
-                    const delay = Math.min(1000 * Math.pow(2, wsConnectionAttempts), 30000); // Exponential backoff, max 30s
+                    const delay = Math.min(1000 * Math.pow(2, wsConnectionAttempts), 30000);
                     console.log(`Reconnecting in ${delay/1000}s (attempt ${wsConnectionAttempts}/5)`);
-                    
+
                     wsReconnectTimeout = setTimeout(() => {
                         connectDeviceWebSocket();
                     }, delay);
                 } else if (wsConnectionAttempts >= 5) {
+                    // FIX BUG-16: Show a persistent warning with a manual retry button
+                    // instead of a 3-second toast that disappears leaving the user with no action.
                     console.log('Max WebSocket reconnection attempts reached');
-                    showNotification('Real-time updates disconnected', 'warning', 3000);
+                    const existing = document.getElementById('ws-retry-banner');
+                    if (!existing) {
+                        const banner = document.createElement('div');
+                        banner.id = 'ws-retry-banner';
+                        banner.className = 'fixed bottom-4 right-4 z-50 bg-yellow-50 border border-yellow-300 rounded-lg shadow-lg p-4 flex items-center gap-3 max-w-sm';
+                        banner.innerHTML = `
+                            <i class="fa-solid fa-triangle-exclamation text-yellow-500 text-lg"></i>
+                            <span class="text-sm text-yellow-800 flex-1">Real-time updates disconnected.</span>
+                            <button id="ws-retry-btn" class="px-3 py-1 text-xs font-semibold bg-yellow-500 text-white rounded hover:bg-yellow-600">Retry</button>
+                            <button onclick="this.parentElement.remove()" class="text-yellow-500 hover:text-yellow-700 ml-1"><i class="fa-solid fa-times"></i></button>
+                        `;
+                        document.body.appendChild(banner);
+                        document.getElementById('ws-retry-btn').addEventListener('click', function() {
+                            banner.remove();
+                            wsConnectionAttempts = 0;
+                            connectDeviceWebSocket();
+                        });
+                    }
                 }
             };
         } catch (error) {
@@ -479,6 +499,11 @@
     window.cleanupDeviceManagement = function() {
         cleanupWebSocket();
         eventListenersBoundToNode = null;
+        // FIX BUG-14: Remove the window-level listeners that initApp() added.
+        // Without this, each visit stacks 3 more listeners that can never be removed.
+        window.removeEventListener('beforeunload', cleanupWebSocket);
+        window.removeEventListener('pagehide',     cleanupWebSocket);
+        window.removeEventListener('popstate',     cleanupWebSocket);
         console.log('✅ Device Management cleaned up — will re-bind listeners on next visit');
     };
 

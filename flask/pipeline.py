@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 # pipeline.py - Pipeline (Load Cell) module
+#
+# BUGS FIXED:
+#   1. _WS_ERROR=258 was wrong for aiohttp 2.0.7 — replaced with aiohttp.MsgType enum
+#   2. No auth on /ws/pipeline/load_raw — added ws_auth() check before ws.prepare()
+#   3. Ping frames not handled in WS receive loop — added MsgType.ping -> ws.pong()
+#   4. Race: main_loop cleared on disconnect while thread may still broadcast
+#      — thread now reads main_loop inside the lock for atomic check
 
 import asyncio
 import json
@@ -8,6 +15,7 @@ import sqlite3
 import threading
 
 from aiohttp import web
+from aiohttp import WSMsgType as MsgType   # aiohttp 3.x uses WSMsgType; alias as MsgType for clarity
 
 try:
     from ilx_pipeline import PipelineClient, EventType, DataType
@@ -18,9 +26,10 @@ except ImportError:
     print("[PIPELINE] WARNING: ilx_pipeline not available!")
 
 from database import DB_FILE
+from auth import ws_auth
 
 # ---------------------------------------------------------------------------
-# Shared pipeline state  (single dict   only one copy in the process)
+# Shared pipeline state
 # ---------------------------------------------------------------------------
 pipeline_state = {
     "client":     None,
@@ -28,15 +37,12 @@ pipeline_state = {
     "load_raw":   None,
     "ws_clients": set(),
     "lock":       threading.Lock(),
-    "main_loop":  None,   # set when connect is called
+    "main_loop":  None,
 }
-
-_WS_CLOSE = 8
-_WS_ERROR = 258
 
 
 # ---------------------------------------------------------------------------
-# Broadcast helper (runs on the main asyncio loop)
+# Broadcast helper
 # ---------------------------------------------------------------------------
 async def _broadcast_pipeline_msg(msg):
     dead = set()
@@ -78,12 +84,9 @@ async def pipeline_connect_handler(request):
 
     print("[PIPELINE] Connecting to {}:{}".format(host, port))
 
-    # Capture the running event loop BEFORE starting the thread.
-    # This is the only safe place to call get_event_loop()   inside an async function.
     main_loop = asyncio.get_event_loop()
     pipeline_state["main_loop"] = main_loop
 
-    # connected_event lets us wait briefly for connection without blocking the loop
     connected_event = threading.Event()
 
     def _run_pipeline():
@@ -127,21 +130,22 @@ async def pipeline_connect_handler(request):
 
                             print("[PIPELINE] RECEIVE_DONE dp={} val={}".format(dp, val))
 
-                            # Save into state so /api/pipeline/status works
+                            # FIX 4: Read main_loop INSIDE the lock so we get an atomic
+                            # view — disconnect() also holds the lock when it clears it,
+                            # eliminating the race between save and schedule.
                             with pipeline_state["lock"]:
                                 pipeline_state[dp] = val
                                 if dp == "load_raw":
                                     pipeline_state["load_raw"] = val
+                                loop = pipeline_state["main_loop"]
 
-                            # Push to all WebSocket clients
-                            msg = json.dumps({"datapoint": dp, "value": val})
-                            loop = pipeline_state.get("main_loop")
                             if loop is not None:
+                                msg = json.dumps({"datapoint": dp, "value": val})
                                 asyncio.run_coroutine_threadsafe(
                                     _broadcast_pipeline_msg(msg), loop
                                 )
                             else:
-                                print("[PIPELINE] WARNING: main_loop is None, cannot broadcast!")
+                                print("[PIPELINE] main_loop cleared (disconnect in progress), skipping broadcast")
 
                         except Exception as e:
                             print("[PIPELINE] ERROR reading dp {}: {}".format(dp, e))
@@ -173,15 +177,11 @@ async def pipeline_connect_handler(request):
             print("[PIPELINE] Thread exception: {}".format(e))
             with pipeline_state["lock"]:
                 pipeline_state["connected"] = False
-            connected_event.set()  # unblock wait below even on failure
+            connected_event.set()
 
-    # Start thread   do NOT join() on the main loop thread, it blocks asyncio.
-    # Instead wait on a threading.Event with a short timeout.
     thread = threading.Thread(target=_run_pipeline, daemon=True)
     thread.start()
 
-    # Wait up to 6s for connection without blocking the event loop
-    # (we use run_in_executor so asyncio stays responsive)
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, lambda: connected_event.wait(6))
 
@@ -211,6 +211,7 @@ async def pipeline_disconnect_handler(request):
         pipeline_state["client"]    = None
         pipeline_state["connected"] = False
         pipeline_state["load_raw"]  = None
+        # FIX 4: Clear inside lock so the broadcast thread sees None atomically
         pipeline_state["main_loop"] = None
     print("[PIPELINE] Disconnected.")
     return web.json_response({"success": True, "message": "Disconnected"})
@@ -227,14 +228,20 @@ async def pipeline_status_handler(request):
 
 async def pipeline_loadraw_ws_handler(request):
     """WebSocket /ws/pipeline/load_raw"""
+
+    # FIX 2: Auth check — endpoint had zero authentication before
+    user = ws_auth(request)
+    if user is None:
+        return web.Response(status=401, text='Unauthorized')
+
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    # Add to set FIRST so no live broadcasts are missed while we send the buffered value
     pipeline_state["ws_clients"].add(ws)
-    print("[PIPELINE] WS client connected, total={}".format(len(pipeline_state["ws_clients"])))
+    print("[PIPELINE] WS client connected (user={}), total={}".format(
+        user, len(pipeline_state["ws_clients"])))
 
-    # Send buffered value immediately so client doesn't wait for next event
+    # Send buffered value immediately
     with pipeline_state["lock"]:
         current_raw = pipeline_state["load_raw"]
 
@@ -246,16 +253,29 @@ async def pipeline_loadraw_ws_handler(request):
             print("[PIPELINE] Could not send buffered value: {}".format(e))
 
     try:
-        # aiohttp 2.0.7 compatible receive loop
         while True:
             msg = await ws.receive()
-            if msg.tp in (_WS_CLOSE, _WS_ERROR):
+
+            # FIX 1: Use MsgType enum — _WS_ERROR=258 was wrong for aiohttp 2.0.7
+            if msg.type == MsgType.close:
                 break
+
+            elif msg.type == MsgType.error:
+                print("[PIPELINE] WS error (user={}): {}".format(user, ws.exception()))
+                break
+
+            # FIX 3: Respond to ping frames — prevents proxy from killing idle connections
+            elif msg.type == MsgType.ping:
+                await ws.pong()
+
+            # Pipeline WS is server-push only; client text messages are ignored
+
     except Exception as e:
-        print("[PIPELINE] WS receive error: {}".format(e))
+        print("[PIPELINE] WS receive error (user={}): {}".format(user, e))
     finally:
         pipeline_state["ws_clients"].discard(ws)
-        print("[PIPELINE] WS client disconnected, total={}".format(len(pipeline_state["ws_clients"])))
+        print("[PIPELINE] WS client disconnected (user={}), total={}".format(
+            user, len(pipeline_state["ws_clients"])))
 
     return ws
 

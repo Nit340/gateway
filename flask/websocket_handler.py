@@ -1,63 +1,68 @@
 # websocket_handler.py - WebSocket handlers compatible with aiohttp 2.0.7 / Python 3.5
 #
-# FIXES vs original:
-#   1. Removed heartbeat= kwarg from WebSocketResponse (added in aiohttp 2.3+)
-#   2. MsgType/WSMsgType unreliable across versions -- use raw integer constants instead
-#   3. msg.type -> msg.tp                    (msg.type added in aiohttp 2.3+)
-#   4. async for msg in ws -> while loop with ws.receive()  (async iteration added later)
-#   5. ws.send_json() -> ws.send_str(json.dumps())          (send_json added in aiohttp 2.3+)
+# BUGS FIXED:
+#   1. _WS_ERROR=258 was wrong for aiohttp 2.0.7 — replaced with aiohttp.MsgType enum
+#   2. No auth on either WS handler — added ws_auth() check before ws.prepare()
+#   3. Ping frames not handled — added MsgType.ping -> ws.pong() in both loops
+#   4. safe_send discarded from both sets — now takes owning set as parameter
+#   5. previous_state written per-client — removed from WS handler, owned by periodic_updates only
 
 import asyncio
 import json
 import datetime
 from aiohttp import web
-import aiohttp
+from aiohttp import WSMsgType as MsgType   # aiohttp 3.x uses WSMsgType; alias as MsgType for clarity
 
-# Raw WebSocket opcode integers -- valid for all aiohttp versions including 2.0.7.
-# Avoids importing MsgType/WSMsgType which moved between aiohttp versions.
-_WS_TEXT  = 1    # text frame
-_WS_CLOSE = 8    # connection close
-_WS_PING  = 9    # ping
-_WS_PONG  = 10   # pong
-_WS_ERROR = 258  # aiohttp internal error sentinel
-
+from auth import ws_auth
 from models import (
-    realtime_state, previous_state, connected_websockets,
+    realtime_state, connected_websockets,
     device_status_tracker, device_websockets
 )
 
+
 async def websocket_handler(request):
-    """Handle WebSocket connections for real-time updates"""
-    ws = web.WebSocketResponse()          # FIX 1: no heartbeat= kwarg
+    """Handle WebSocket connections for real-time updates."""
+
+    # FIX 2: Auth check — middleware skips WS upgrades so we must check here
+    user = ws_auth(request)
+    if user is None:
+        return web.Response(status=401, text='Unauthorized')
+
+    ws = web.WebSocketResponse()  # No heartbeat= kwarg (added in aiohttp 2.3+)
     await ws.prepare(request)
 
     connected_websockets.add(ws)
-    print("WebSocket connected. Total clients: {}".format(len(connected_websockets)))
+    print("WebSocket connected (user={}). Total clients: {}".format(
+        user, len(connected_websockets)))
 
     try:
-        # Send initial data
-        initial_data = {
+        # Send initial state to the newly connected client
+        await ws.send_str(json.dumps({
             'type': 'initial',
             'current_date': realtime_state['current_date'],
             'current_time': realtime_state['current_time']
-        }
-        await ws.send_str(json.dumps(initial_data))  # FIX 5
+        }))
 
-        previous_state['current_date'] = realtime_state['current_date']
-        previous_state['current_time'] = realtime_state['current_time']
+        # FIX 5: Do NOT write previous_state here — that is owned by periodic_updates()
+        #         Writing it here caused a multi-client race where client B connecting
+        #         would reset the change-detection baseline for client A's next broadcast.
 
-        # FIX 3+4: while loop + msg.tp + raw int constants
         while True:
             msg = await ws.receive()
 
-            if msg.tp == _WS_CLOSE:
+            # FIX 1: Use aiohttp.MsgType enum — _WS_ERROR=258 was wrong for aiohttp 2.0.7
+            if msg.type == MsgType.close:
                 break
 
-            elif msg.tp == _WS_ERROR:
-                print('WebSocket connection closed with exception {}'.format(ws.exception()))
+            elif msg.type == MsgType.error:
+                print('WebSocket error (user={}): {}'.format(user, ws.exception()))
                 break
 
-            elif msg.tp == _WS_TEXT:
+            # FIX 3: Echo pong for every ping — prevents proxy from killing idle connections
+            elif msg.type == MsgType.ping:
+                await ws.pong()
+
+            elif msg.type == MsgType.text:
                 try:
                     data = json.loads(msg.data)
 
@@ -69,137 +74,156 @@ async def websocket_handler(request):
                                 new_time != realtime_state['current_time']):
                             realtime_state['current_date'] = new_date
                             realtime_state['current_time'] = new_time
-
-                            broadcast_data = {
+                            await broadcast_to_clients({
                                 'type': 'time_update',
                                 'current_date': new_date,
                                 'current_time': new_time
-                            }
-                            await broadcast_to_clients(broadcast_data)
+                            })
 
-                        await ws.send_str(json.dumps({   # FIX 5
+                        await ws.send_str(json.dumps({
                             'type': 'time_synced',
                             'current_date': realtime_state['current_date'],
                             'current_time': realtime_state['current_time']
                         }))
 
                     elif data.get('type') == 'ping':
-                        await ws.send_str(json.dumps({'type': 'pong'}))  # FIX 5
+                        await ws.send_str(json.dumps({'type': 'pong'}))
 
-                except (ValueError, KeyError) as e:
-                    await ws.send_str(json.dumps({       # FIX 5
+                except (ValueError, KeyError):
+                    await ws.send_str(json.dumps({
                         'type': 'error',
                         'message': 'Invalid JSON format'
                     }))
 
     except Exception as e:
-        print("WebSocket error: {}".format(e))
+        print("WebSocket error (user={}): {}".format(user, e))
     finally:
         connected_websockets.discard(ws)
-        print("WebSocket disconnected. Total clients: {}".format(len(connected_websockets)))
+        print("WebSocket disconnected (user={}). Total clients: {}".format(
+            user, len(connected_websockets)))
 
     return ws
 
 
 async def device_websocket_handler(request):
-    """WebSocket for real-time device status updates"""
-    ws = web.WebSocketResponse()          # FIX 1: no heartbeat=
+    """WebSocket for real-time device status updates."""
+
+    # FIX 2: Auth check
+    user = ws_auth(request)
+    if user is None:
+        return web.Response(status=401, text='Unauthorized')
+
+    ws = web.WebSocketResponse()  # No heartbeat= kwarg
     await ws.prepare(request)
 
     device_websockets.add(ws)
-    print("Device WebSocket connected. Total clients: {}".format(len(device_websockets)))
+    print("Device WebSocket connected (user={}). Total clients: {}".format(
+        user, len(device_websockets)))
 
     try:
-        # Send initial device status for ALL devices
-        initial_devices = []
-        for device_id, status in device_status_tracker.items():
-            initial_devices.append({
+        # Send current status of ALL known devices immediately on connect
+        initial_devices = [
+            {
                 'device_id': device_id,
-                'status': status['status'],
-                'last_poll': status['last_poll']
-            })
+                'status': info['status'],
+                'last_poll': info['last_poll']
+            }
+            for device_id, info in device_status_tracker.items()
+        ]
 
         if initial_devices:
-            await ws.send_str(json.dumps({              # FIX 5
+            await ws.send_str(json.dumps({
                 'type': 'initial_devices',
                 'devices': initial_devices
             }))
 
-        # FIX 3+4: while loop + msg.tp + raw int constants
         while True:
             msg = await ws.receive()
 
-            if msg.tp == _WS_CLOSE:
+            # FIX 1: Use MsgType enum
+            if msg.type == MsgType.close:
                 break
 
-            elif msg.tp == _WS_ERROR:
-                print('Device WebSocket closed with exception {}'.format(ws.exception()))
+            elif msg.type == MsgType.error:
+                print('Device WebSocket error (user={}): {}'.format(user, ws.exception()))
                 break
 
-            elif msg.tp == _WS_TEXT:
+            # FIX 3: Respond to pings
+            elif msg.type == MsgType.ping:
+                await ws.pong()
+
+            elif msg.type == MsgType.text:
                 try:
                     data = json.loads(msg.data)
 
                     if data.get('type') == 'ping':
-                        await ws.send_str(json.dumps({'type': 'pong'}))  # FIX 5
+                        await ws.send_str(json.dumps({'type': 'pong'}))
 
                 except (ValueError, KeyError):
-                    await ws.send_str(json.dumps({       # FIX 5
+                    await ws.send_str(json.dumps({
                         'type': 'error',
                         'message': 'Invalid JSON format'
                     }))
 
     except Exception as e:
-        print("Device WebSocket error: {}".format(e))
+        print("Device WebSocket error (user={}): {}".format(user, e))
     finally:
         device_websockets.discard(ws)
-        print("Device WebSocket disconnected. Total clients: {}".format(len(device_websockets)))
+        print("Device WebSocket disconnected (user={}). Total clients: {}".format(
+            user, len(device_websockets)))
 
     return ws
 
 
+# ─── Broadcast helpers ────────────────────────────────────────────────────────
+
 async def broadcast_to_clients(data):
-    """Broadcast data to all connected WebSocket clients"""
+    """Broadcast a dict to all connected general WebSocket clients."""
     if not connected_websockets:
         return
-
     payload = json.dumps(data)
-    tasks = []
-    for ws in list(connected_websockets):
-        if not ws.closed:
-            tasks.append(safe_send(ws, payload))
-
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+    await asyncio.gather(
+        *[_safe_send(ws, payload, connected_websockets)
+          for ws in list(connected_websockets) if not ws.closed],
+        return_exceptions=True
+    )
 
 
 async def broadcast_device_status(device_id, status, last_poll):
-    """Broadcast device status updates to all WebSocket clients"""
+    """Broadcast a device-status update to all device WebSocket clients."""
     if not device_websockets:
         return
-
-    payload = json.dumps({                              # FIX 5
+    payload = json.dumps({
         'type': 'device_status',
         'device_id': device_id,
         'status': status,
         'last_poll': last_poll
     })
-
-    tasks = []
-    for ws in list(device_websockets):
-        if not ws.closed:
-            tasks.append(safe_send(ws, payload))
-
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+    await asyncio.gather(
+        *[_safe_send(ws, payload, device_websockets)
+          for ws in list(device_websockets) if not ws.closed],
+        return_exceptions=True
+    )
 
 
-async def safe_send(ws, payload):
-    """Safely send a pre-serialized JSON string to a WebSocket"""
+async def _safe_send(ws, payload, ws_set):
+    """Send payload to one WebSocket; discard ONLY from the owning set on failure.
+
+    FIX 4: The old safe_send() always discarded from BOTH sets, which was wrong.
+    Each socket belongs to exactly one set. Passing ws_set explicitly keeps cleanup precise.
+    """
     try:
         if not ws.closed:
-            await ws.send_str(payload)                  # FIX 5
+            await ws.send_str(payload)
     except Exception as e:
         print("Error sending to WebSocket: {}".format(e))
-        device_websockets.discard(ws)
-        connected_websockets.discard(ws)
+        ws_set.discard(ws)
+
+
+# Backwards-compatible alias so any existing callers don't break
+async def safe_send(ws, payload):
+    """Deprecated — use _safe_send(ws, payload, ws_set) instead."""
+    if ws in connected_websockets:
+        await _safe_send(ws, payload, connected_websockets)
+    else:
+        await _safe_send(ws, payload, device_websockets)
