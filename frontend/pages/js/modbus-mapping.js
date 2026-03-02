@@ -1,4 +1,4 @@
-// modbus-mapping.js — Fixed API response handling
+// modbus-mapping.js — Full version with group dropdown
 'use strict';
 
 let _devices = [];
@@ -8,13 +8,16 @@ let _selectedDeviceData = null;
 let _editingTagId       = null;
 
 // Pagination variables
+let _groups = [];
 let _browserCurrentPage = 1;
 let _browserPageSize = 12;
 let _browserTotalPages = 1;
+let _selectedGroupColor = 'blue';
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
 function initializeModbusMapping() {
+    console.log('Initializing Modbus Mapping');
     _loadData();
     _bindStaticListeners();
 }
@@ -23,34 +26,89 @@ function initializeModbusMapping() {
 
 async function _loadData() {
     try {
-        // First load devices
-        const devResp = await fetch('/api/datapoints/devices');
+        console.log('Loading modbus mapping data...');
+        const [devResp, tagResp, grpResp] = await Promise.all([
+            fetch('/api/datapoints/devices'),
+            fetch('/api/datapoints'),
+            fetch('/api/tag-groups')
+        ]);
+        
+        if (!devResp.ok) {
+            console.error('Failed to load devices:', devResp.status);
+        }
         const devData = await devResp.json();
         _devices = devData.devices || [];
-        
-        // Then load tags - the API returns an array directly
-        const tagResp = await fetch('/api/datapoints');
-        const tagData = await tagResp.json();
-        
-        // Check if tagData is an array or has a tags property
-        if (Array.isArray(tagData)) {
-            _tags = tagData;
-        } else if (tagData.tags && Array.isArray(tagData.tags)) {
-            _tags = tagData.tags;
-        } else {
-            _tags = [];
+        console.log('Loaded devices:', _devices);
+
+        if (!tagResp.ok) {
+            console.error('Failed to load tags:', tagResp.status);
         }
-        
-        console.log('Devices loaded:', _devices);
-        console.log('Tags loaded:', _tags);
-        
+        const tagData = await tagResp.json();
+        _tags = Array.isArray(tagData) ? tagData : (tagData.tags || []);
+        console.log('Loaded tags:', _tags);
+
+        const grpData = await grpResp.json();
+        _groups = grpData.groups || [];
+        console.log('Loaded groups:', _groups);
+
+        // Populate group dropdowns
+        _populateGroupDropdowns();
+
         _renderTagsTable();
         _renderTagsBrowser();
         _updateDropdownFilters();
+        _renderGroupsPanel();
         _renderPaginationControls();
     } catch (err) {
         console.error('Failed to load data:', err);
         _toast('Failed to load data', 'error');
+    }
+}
+
+// ─── POPULATE GROUP DROPDOWNS ─────────────────────────────────────────────────
+
+function _populateGroupDropdowns() {
+    // Populate group dropdown in add modal
+    const mbGroupSelect = document.getElementById('mbGroup');
+    if (mbGroupSelect) {
+        const currentValue = mbGroupSelect.value;
+        mbGroupSelect.innerHTML = '<option value="">No Group</option>';
+        (_groups || []).forEach(g => {
+            const option = document.createElement('option');
+            option.value = g.name; // Use group name as value
+            option.textContent = g.name;
+            // Add background color based on group color
+            if (g.color) {
+                option.style.backgroundColor = g.color === 'blue' ? '#EFF6FF' : 
+                                              g.color === 'green' ? '#F0FDF4' :
+                                              g.color === 'purple' ? '#FAF5FF' :
+                                              g.color === 'orange' ? '#FFF7ED' :
+                                              g.color === 'red' ? '#FEF2F2' : '';
+            }
+            mbGroupSelect.appendChild(option);
+        });
+        mbGroupSelect.value = currentValue || '';
+    }
+
+    // Populate group dropdown in edit modal
+    const editMbGroup = document.getElementById('editMbGroup');
+    if (editMbGroup) {
+        const currentValue = editMbGroup.value;
+        editMbGroup.innerHTML = '<option value="">No Group</option>';
+        (_groups || []).forEach(g => {
+            const option = document.createElement('option');
+            option.value = g.name;
+            option.textContent = g.name;
+            if (g.color) {
+                option.style.backgroundColor = g.color === 'blue' ? '#EFF6FF' : 
+                                              g.color === 'green' ? '#F0FDF4' :
+                                              g.color === 'purple' ? '#FAF5FF' :
+                                              g.color === 'orange' ? '#FFF7ED' :
+                                              g.color === 'red' ? '#FEF2F2' : '';
+            }
+            editMbGroup.appendChild(option);
+        });
+        editMbGroup.value = currentValue || '';
     }
 }
 
@@ -62,16 +120,15 @@ function _renderTagsTable() {
     if (!tbody) return;
 
     const devId = document.getElementById('deviceFilter')?.value || '';
+    const grpId = document.getElementById('groupFilter')?.value || '';
     let rows = _tags || [];
-    
-    if (devId) {
-        rows = rows.filter(t => String(t.device_id) === String(devId));
-    }
+    if (devId) rows = rows.filter(t => String(t.device_id) === String(devId));
+    if (grpId) rows = rows.filter(t => String(t.group_id) === String(grpId));
 
     if (count) count.textContent = rows.length;
 
     if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-12 text-slate-400">
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-12 text-slate-400">
             <i class="fa-solid fa-tags text-3xl mb-3 block"></i>
             <p class="text-sm">No tags yet. Click <strong>Add Tag</strong> to get started.</p>
         </td></tr>`;
@@ -95,31 +152,57 @@ function _renderTagsTable() {
         const deviceName = tag.device_name || tag.deviceName || '—';
         const deviceType = tag.device_type || tag.protocol || (isLC ? 'Load Cell' : 'Modbus');
         const tagName = tag.tag_name || tag.name || '—';
-        const dataType = tag.data_type || '—';
+        const dataType = tag.data_type || tag.dataType || '—';
         const unit = tag.unit || '—';
-        const address = tag.register_address !== undefined ? tag.register_address : '—';
+        const address = tag.register_address !== undefined ? tag.register_address : (tag.address !== undefined ? tag.address : '—');
+        const registerType = tag.register_type || tag.registerType || '—';
+        // Format register type for display (capitalize first letter)
+        const registerTypeDisplay = registerType.charAt(0).toUpperCase() + registerType.slice(1);
+        const slaveId = tag.slave_id !== undefined ? tag.slave_id : (tag.slaveId !== undefined ? tag.slaveId : 1);
+        const groupName = tag.group_name || tag.group || '—';
         const enabled = tag.enabled !== undefined ? tag.enabled : true;
+        const writable = tag.writable !== undefined ? tag.writable : false;
 
-        tr.innerHTML = `
-            <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
-            <td><span class="protocol-badge ${_pClass(isLC, deviceType)}">${_esc(deviceType)}</span></td>
-            <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
-            ${isLC ? `
-            <td class="text-slate-300">—</td>
-            <td class="text-slate-300">—</td>
-            <td class="text-slate-300">—</td>
-            <td></td>` : `
-            <td class="text-slate-600 font-mono text-xs">${address}</td>
-            <td class="text-slate-600 text-xs">${_esc(dataType)}</td>
-            <td class="text-slate-600 text-xs">${_esc(unit)}</td>
-            <td><span class="px-2 py-0.5 rounded-full text-xs font-medium ${enabled ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}">${enabled ? 'Enabled' : 'Disabled'}</span></td>`}
-            <td class="text-right whitespace-nowrap">
-                ${!isLC ? `
-                <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, 'modbus')" title="Edit">
-                    <i class="fa-solid fa-pencil text-sm"></i>
-                </button>
-                <button class="text-red-500 hover:text-red-700" onclick="deleteTag(${tag.id}, 'modbus')" title="Delete"><i class="fa-solid fa-trash text-sm"></i></button>` : ''}
-            </td>`;
+        if (isLC) {
+            tr.innerHTML = `
+                <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
+                <td><span class="protocol-badge loadcell">Load Cell</span></td>
+                <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-600 text-xs">${_esc(unit)}</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Enabled</span></td>
+                <td class="text-right whitespace-nowrap">
+                    <button class="text-slate-400 hover:text-slate-600 mr-2" onclick="editTag(${tag.id}, 'loadcell')" title="Edit Unit Only">
+                        <i class="fa-solid fa-pencil text-sm"></i>
+                    </button>
+                </td>`;
+        } else {
+            tr.innerHTML = `
+                <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
+                <td><span class="protocol-badge ${tag.device_type === 'tcp' ? 'modbus-tcp' : 'modbus-rtu'}">${_esc(deviceType)}</span></td>
+                <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
+                <td class="text-slate-600 text-xs text-center">${slaveId}</td>
+                <td class="text-slate-600 font-mono text-xs">${address}</td>
+                <td class="text-slate-600 text-xs">${_esc(registerTypeDisplay)}</td>
+                <td class="text-slate-600 text-xs">${_esc(dataType)}</td>
+                <td class="text-slate-600 text-xs">${_esc(unit)}</td>
+                <td class="text-slate-600 text-xs">${_esc(groupName)}</td>
+                <td><span class="writable-badge ${writable}">${writable ? 'Yes' : 'No'}</span></td>
+                <td><span class="px-2 py-0.5 rounded-full text-xs font-medium ${enabled ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}">${enabled ? 'Enabled' : 'Disabled'}</span></td>
+                <td class="text-right whitespace-nowrap">
+                    <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, 'modbus')" title="Edit">
+                        <i class="fa-solid fa-pencil text-sm"></i>
+                    </button>
+                    <button class="text-red-500 hover:text-red-700" onclick="deleteTag(${tag.id}, 'modbus')" title="Delete">
+                        <i class="fa-solid fa-trash text-sm"></i>
+                    </button>
+                </td>`;
+        }
         tbody.appendChild(tr);
     });
 }
@@ -133,11 +216,10 @@ function _renderTagsBrowser() {
 
     const q    = (document.getElementById('tagSearch')?.value || '').toLowerCase();
     const devId = document.getElementById('tagDeviceFilter')?.value || '';
+    const grpId = document.getElementById('tagGroupFilter')?.value || '';
     let rows = _tags || [];
-    
-    if (devId) {
-        rows = rows.filter(t => String(t.device_id) === String(devId));
-    }
+    if (devId) rows = rows.filter(t => String(t.device_id) === String(devId));
+    if (grpId) rows = rows.filter(t => String(t.group_id) === String(grpId));
     
     if (q) {
         rows = rows.filter(t => {
@@ -184,49 +266,92 @@ function _renderTagsBrowser() {
         // Get values with fallbacks
         const tagName = tag.tag_name || tag.name || 'Unnamed';
         const deviceName = tag.device_name || tag.deviceName || '—';
-        const dataType = isLC ? null : (tag.data_type || '—');
+        const dataType = isLC ? null : (tag.data_type || tag.dataType || '—');
         const unit = tag.unit || '—';
-        const address = tag.register_address !== undefined ? tag.register_address : null;
+        const address = tag.register_address !== undefined ? tag.register_address : (tag.address !== undefined ? tag.address : null);
+        const registerType = tag.register_type || tag.registerType || null;
+        const registerTypeDisplay = registerType ? registerType.charAt(0).toUpperCase() + registerType.slice(1) : null;
+        const slaveId = tag.slave_id !== undefined ? tag.slave_id : (tag.slaveId !== undefined ? tag.slaveId : 1);
+        const groupName = tag.group_name || tag.group || null;
+        const writable = tag.writable !== undefined ? tag.writable : false;
+        const retryCount = tag.retry_count || tag.retryCount || 1;
+        const timeoutMs = tag.timeout_ms || tag.timeoutMs || 100;
+        const registerCount = tag.register_count || tag.registerCount || 1;
         
-        d.innerHTML = `
+        let badgeClass = 'modbus-tcp';
+        if (isLC) badgeClass = 'loadcell';
+        else if (tag.device_type === 'rtu') badgeClass = 'modbus-rtu';
+        
+        let html = `
             <div class="tag-card-header">
                 <div class="tag-card-name">${_esc(tagName)}</div>
-                <span class="protocol-badge ${_pClass(isLC, tag.device_type || tag.protocol)}">${isLC ? 'LOADCELL' : 'MODBUS'}</span>
+                <span class="protocol-badge ${badgeClass}">${isLC ? 'LOADCELL' : 'MODBUS'}</span>
             </div>
             <div class="tag-card-body">
                 <div class="tag-card-row">
                     <span>Device</span>
                     <span class="font-medium text-slate-700">${_esc(deviceName)}</span>
+                </div>`;
+        
+        if (!isLC) {
+            html += `
+                <div class="tag-card-row">
+                    <span>Slave ID</span>
+                    <span class="font-mono">${slaveId}</span>
                 </div>
-                ${!isLC && address !== null ? `
                 <div class="tag-card-row">
-                    <span>Address</span>
-                    <span class="font-mono">${address}</span>
-                </div>` : ''}
-                ${isLC && tagName === 'load' ? `
+                    <span>Address/Type</span>
+                    <span class="font-mono">${address} (${registerTypeDisplay})</span>
+                </div>
                 <div class="tag-card-row">
-                    <span>Load</span>
-                    <span class="font-mono">load</span>
-                </div>` : ''}
-                ${isLC && tagName === 'capacity' ? `
-                <div class="tag-card-row">
-                    <span>Capacity</span>
-                    <span class="font-mono">${tag.capacity_value != null ? tag.capacity_value : '—'}</span>
-                </div>` : ''}
-                ${!isLC ? `<div class="tag-card-row">
-                    <span>Type</span>
+                    <span>Data Type</span>
                     <span>${_esc(dataType)}</span>
-                </div>` : ''}
-                ${unit && unit !== '—' ? `
+                </div>
+                <div class="tag-card-row">
+                    <span>Scale/Offset</span>
+                    <span>${tag.scale || tag.scale_factor || 1.0} / ${tag.offset || 0.0}</span>
+                </div>
+                <div class="tag-card-row">
+                    <span>Count/Retry</span>
+                    <span>${registerCount} / ${retryCount}</span>
+                </div>
+                <div class="tag-card-row">
+                    <span>Timeout/Writable</span>
+                    <span>${timeoutMs}ms / ${writable ? 'Yes' : 'No'}</span>
+                </div>`;
+        } else {
+            html += `
+                <div class="tag-card-row">
+                    <span>Type</span>
+                    <span>Load Cell</span>
+                </div>`;
+        }
+        
+        if (unit && unit !== '—') {
+            html += `
                 <div class="tag-card-row">
                     <span>Unit</span>
                     <span>${_esc(unit)}</span>
-                </div>` : ''}
-                ${isLC ? `
-                <div class="tag-card-row text-xs text-green-600">
-                    <span><i class="fa-solid fa-scale-balanced mr-1"></i> Load Cell Tag</span>
-                </div>` : ''}
-            </div>`;
+                </div>`;
+        }
+        
+        if (groupName && groupName !== '—') {
+            html += `
+                <div class="tag-card-row">
+                    <span>Group</span>
+                    <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-${_groupColor(groupName)}-500"></span>${_esc(groupName)}</span>
+                </div>`;
+        }
+        
+        if (tag.description) {
+            html += `
+                <div class="tag-card-row text-slate-500 italic text-xs">
+                    <span>${_esc(tag.description)}</span>
+                </div>`;
+        }
+        
+        html += `</div>`;
+        d.innerHTML = html;
         container.appendChild(d);
     });
 
@@ -369,6 +494,24 @@ function _updateDropdownFilters() {
         });
         sel.value = cur;
     });
+
+    // Group filter dropdowns
+    ['groupFilter', 'tagGroupFilter'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">All Groups</option>';
+        (_groups || []).forEach(g => {
+            const o = document.createElement('option');
+            o.value = g.id;
+            o.textContent = g.name;
+            sel.appendChild(o);
+        });
+        sel.value = cur;
+    });
+
+    // Also populate the modal group dropdowns
+    _populateGroupDropdowns();
 }
 
 // ─── EVENT LISTENERS ─────────────────────────────────────────────────────────
@@ -376,6 +519,7 @@ function _updateDropdownFilters() {
 function _bindStaticListeners() {
     document.getElementById('addMappingBtn')?.addEventListener('click', () => _openAddTagModal(null));
     document.getElementById('deviceFilter')?.addEventListener('change', _renderTagsTable);
+    document.getElementById('groupFilter')?.addEventListener('change', _renderTagsTable);
     document.getElementById('tagSearch')?.addEventListener('input', () => {
         _browserCurrentPage = 1;
         _renderTagsBrowser();
@@ -384,6 +528,16 @@ function _bindStaticListeners() {
         _browserCurrentPage = 1;
         _renderTagsBrowser();
     });
+    document.getElementById('tagGroupFilter')?.addEventListener('change', () => {
+        _browserCurrentPage = 1;
+        _renderTagsBrowser();
+    });
+
+    // Group management buttons
+    document.getElementById('addTagGroupBtn')?.addEventListener('click', _openAddGroupModal);
+    document.getElementById('closeAddGroupModal')?.addEventListener('click', _closeAddGroupModal);
+    document.getElementById('cancelAddGroupBtn')?.addEventListener('click', _closeAddGroupModal);
+    document.getElementById('saveTagGroupBtn')?.addEventListener('click', _saveTagGroup);
 
     // Add tag modal
     document.getElementById('closeAddTagModal')?.addEventListener('click', _closeAddTagModal);
@@ -394,19 +548,29 @@ function _bindStaticListeners() {
     document.getElementById('modbusFormCancel')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('lcFormClose')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('modbusTagForm')?.addEventListener('submit', _handleModbusCreate);
-    document.getElementById('mbRegAddress')?.addEventListener('input', e => _autoDetect(e.target.value, 'mbDetectedType'));
     document.getElementById('addTagModal')?.addEventListener('click', e => { if (e.target.id === 'addTagModal') _closeAddTagModal(); });
 
     // Edit modal (modbus)
     document.getElementById('closeEditModbusModal')?.addEventListener('click', _closeEditModbus);
     document.getElementById('editModbusCancel')?.addEventListener('click', _closeEditModbus);
     document.getElementById('editModbusForm')?.addEventListener('submit', _handleModbusEdit);
-    document.getElementById('editMbRegAddress')?.addEventListener('input', e => _autoDetect(e.target.value, 'editMbDetectedType'));
     document.getElementById('editModbusModal')?.addEventListener('click', e => { if (e.target.id === 'editModbusModal') _closeEditModbus(); });
 
     // CSV
     document.getElementById('importCSVBtn')?.addEventListener('click', importCSV);
     document.getElementById('exportCSVBtn')?.addEventListener('click', exportCSV);
+
+    // Save Configuration → pipeline modbus service
+    document.getElementById('saveModbusConfigBtn')?.addEventListener('click', saveModbusConfig);
+
+    // Group color picker
+    document.querySelectorAll('[data-group-color]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            _selectedGroupColor = this.dataset.groupColor;
+            document.querySelectorAll('[data-group-color]').forEach(b => b.classList.remove('ring-2', 'ring-offset-1'));
+            this.classList.add('ring-2', 'ring-offset-1');
+        });
+    });
 
     // Escape
     document.addEventListener('keydown', e => {
@@ -556,6 +720,8 @@ async function _handleModbusCreate(e) {
     const btn = e.submitter || e.target.querySelector('[type=submit]');
     const tagName = document.getElementById('mbTagName')?.value?.trim();
     const address = document.getElementById('mbRegAddress')?.value?.trim();
+    const registerType = document.getElementById('mbRegisterType')?.value;
+    const groupValue = document.getElementById('mbGroup')?.value || '';
 
     if (!tagName) {
         _toast('Tag name is required', 'error');
@@ -565,14 +731,20 @@ async function _handleModbusCreate(e) {
         _toast('Register address is required', 'error');
         return;
     }
+    if (!registerType) {
+        _toast('Register type is required', 'error');
+        return;
+    }
     if (!_selectedDeviceId) {
         _toast('No device selected', 'error');
         return;
     }
 
-    // Duplicate check
+    // Duplicate check (same device + slave + tag name)
+    const newSlaveId = parseInt(document.getElementById('mbSlaveId')?.value) || 1;
     const dup = (_tags || []).some(t =>
-        String(t.device_id) === String(_selectedDeviceId) && 
+        String(t.device_id) === String(_selectedDeviceId) &&
+        (t.slave_id ?? 1) === newSlaveId &&
         (t.tag_name === tagName || t.name === tagName)
     );
     if (dup) {
@@ -583,24 +755,34 @@ async function _handleModbusCreate(e) {
     _setLoading(btn, true);
     const addr = parseInt(address, 10);
 
+    const payload = {
+        device_id: _selectedDeviceId,
+        tag_name: tagName,
+        slave_id: newSlaveId,
+        register_address: addr,
+        register_type: registerType,
+        data_type: document.getElementById('mbDataType').value,
+        byte_order: document.getElementById('mbByteOrder').value,
+        word_order: document.getElementById('mbWordOrder').value,
+        scale_factor: parseFloat(document.getElementById('mbScale').value) || 1.0,
+        offset: parseFloat(document.getElementById('mbOffset').value) || 0.0,
+        unit: document.getElementById('mbUnit').value.trim(),
+        group: groupValue,
+        writable: document.getElementById('mbWritable').checked,
+        retry_count: parseInt(document.getElementById('mbRetryCount').value) || 1,
+        timeout_ms: parseInt(document.getElementById('mbTimeoutMs').value) || 100,
+        register_count: parseInt(document.getElementById('mbRegisterCount').value) || 1,
+        description: document.getElementById('mbDescription').value.trim(),
+        enabled: true
+    };
+    
+    console.log('Creating tag with payload:', payload);
+
     try {
         const resp = await fetch('/api/datapoints/modbus', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                device_id: _selectedDeviceId,
-                tag_name: tagName,
-                register_address: addr,
-                register_type: _regType(addr),
-                data_type: document.getElementById('mbDataType').value,
-                byte_order: document.getElementById('mbByteOrder').value,
-                word_order: document.getElementById('mbWordOrder').value,
-                scale_factor: parseFloat(document.getElementById('mbScale').value) || 1.0,
-                offset: parseFloat(document.getElementById('mbOffset').value) || 0.0,
-                unit: document.getElementById('mbUnit').value.trim(),
-                description: document.getElementById('mbDescription').value.trim(),
-                enabled: true
-            })
+            body: JSON.stringify(payload)
         });
         const data = await resp.json();
         if (resp.ok) {
@@ -611,7 +793,7 @@ async function _handleModbusCreate(e) {
             _toast(data.error || 'Failed to create tag', 'error');
         }
     } catch (err) {
-        console.error(err);
+        console.error('Error creating tag:', err);
         _toast('Network error', 'error');
     } finally {
         _setLoading(btn, false);
@@ -626,6 +808,13 @@ function editTag(tagId, tagType) {
         _toast('Tag not found', 'error');
         return;
     }
+    
+    if (tagType === 'loadcell') {
+        _toast('Load cell tags can only edit unit', 'info');
+        // You could open a simple unit edit modal here
+        return;
+    }
+    
     _openEditModbusModal(tag);
 }
 
@@ -640,16 +829,26 @@ function _openEditModbusModal(tag) {
         ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${_pLabel(dev.protocol)}</span>` : '—';
 
     document.getElementById('editMbTagName').value = tag.tag_name || tag.name || '';
-    document.getElementById('editMbRegAddress').value = tag.register_address ?? '';
-    document.getElementById('editMbDataType').value = tag.data_type || 'int16';
-    document.getElementById('editMbByteOrder').value = tag.byte_order || 'big';
-    document.getElementById('editMbWordOrder').value = tag.word_order || 'big';
-    document.getElementById('editMbScale').value = tag.scale_factor ?? 1.0;
-    document.getElementById('editMbOffset').value = tag.offset ?? 0.0;
+    document.getElementById('editMbSlaveId').value = tag.slave_id ?? 1;
+    document.getElementById('editMbRegisterType').value = tag.register_type || tag.registerType || 'holding';
+    document.getElementById('editMbRegAddress').value = tag.register_address || tag.address || '';
+    document.getElementById('editMbRegisterCount').value = tag.register_count || tag.registerCount || 1;
+    document.getElementById('editMbDataType').value = tag.data_type || tag.dataType || 'uint16';
+    document.getElementById('editMbByteOrder').value = tag.byte_order || tag.byteOrder || 'big';
+    document.getElementById('editMbWordOrder').value = tag.word_order || tag.wordOrder || 'big';
+    document.getElementById('editMbScale').value = tag.scale_factor || tag.scale || 1.0;
+    document.getElementById('editMbOffset').value = tag.offset || 0.0;
     document.getElementById('editMbUnit').value = tag.unit || '';
+    
+    // Set the group dropdown value - use group name from tag.group or tag.group_name
+    const groupValue = tag.group || tag.group_name || '';
+    document.getElementById('editMbGroup').value = groupValue;
+    
+    document.getElementById('editMbWritable').checked = tag.writable || false;
+    document.getElementById('editMbRetryCount').value = tag.retry_count || tag.retryCount || 1;
+    document.getElementById('editMbTimeoutMs').value = tag.timeout_ms || tag.timeoutMs || 100;
     document.getElementById('editMbDescription').value = tag.description || '';
 
-    _autoDetect(tag.register_address, 'editMbDetectedType');
     _showModal('editModbusModal');
 }
 
@@ -659,6 +858,8 @@ async function _handleModbusEdit(e) {
     const tagId = document.getElementById('editMbTagId').value;
     const tagName = document.getElementById('editMbTagName').value.trim();
     const address = document.getElementById('editMbRegAddress').value.trim();
+    const registerType = document.getElementById('editMbRegisterType').value;
+    const groupValue = document.getElementById('editMbGroup')?.value || '';
 
     if (!tagName) {
         _toast('Tag name is required', 'error');
@@ -668,53 +869,51 @@ async function _handleModbusEdit(e) {
         _toast('Register address is required', 'error');
         return;
     }
+    if (!registerType) {
+        _toast('Register type is required', 'error');
+        return;
+    }
 
     _setLoading(btn, true);
     const addr = parseInt(address, 10);
+
+    const payload = {
+        tag_name: tagName,
+        slave_id: parseInt(document.getElementById('editMbSlaveId')?.value) || 1,
+        register_address: addr,
+        register_type: registerType,
+        data_type: document.getElementById('editMbDataType').value,
+        byte_order: document.getElementById('editMbByteOrder').value,
+        word_order: document.getElementById('editMbWordOrder').value,
+        scale_factor: parseFloat(document.getElementById('editMbScale').value) || 1.0,
+        offset: parseFloat(document.getElementById('editMbOffset').value) || 0.0,
+        unit: document.getElementById('editMbUnit').value.trim(),
+        group: groupValue,
+        writable: document.getElementById('editMbWritable').checked,
+        retry_count: parseInt(document.getElementById('editMbRetryCount').value) || 1,
+        timeout_ms: parseInt(document.getElementById('editMbTimeoutMs').value) || 100,
+        register_count: parseInt(document.getElementById('editMbRegisterCount').value) || 1,
+        description: document.getElementById('editMbDescription').value.trim()
+    };
+    
+    console.log('Updating tag with payload:', payload);
 
     try {
         const resp = await fetch(`/api/datapoints/modbus/${tagId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                tag_name: tagName,
-                register_address: addr,
-                register_type: _regType(addr),
-                data_type: document.getElementById('editMbDataType').value,
-                byte_order: document.getElementById('editMbByteOrder').value,
-                word_order: document.getElementById('editMbWordOrder').value,
-                scale_factor: parseFloat(document.getElementById('editMbScale').value) || 1.0,
-                offset: parseFloat(document.getElementById('editMbOffset').value) || 0.0,
-                unit: document.getElementById('editMbUnit').value.trim(),
-                description: document.getElementById('editMbDescription').value.trim()
-            })
+            body: JSON.stringify(payload)
         });
         const data = await resp.json();
         if (resp.ok) {
             _closeEditModbus();
-            // Update tag in memory — no page reload
-            const tagId = document.getElementById('editMbTagId').value;
-            const idx = (_tags || []).findIndex(t => String(t.id) === String(tagId));
-            if (idx !== -1) {
-                _tags[idx].tag_name      = document.getElementById('editMbTagName').value.trim();
-                _tags[idx].name          = _tags[idx].tag_name;
-                _tags[idx].register_address = parseInt(document.getElementById('editMbRegAddress').value, 10);
-                _tags[idx].data_type     = document.getElementById('editMbDataType').value;
-                _tags[idx].byte_order    = document.getElementById('editMbByteOrder').value;
-                _tags[idx].word_order    = document.getElementById('editMbWordOrder').value;
-                _tags[idx].scale_factor  = parseFloat(document.getElementById('editMbScale').value) || 1.0;
-                _tags[idx].offset        = parseFloat(document.getElementById('editMbOffset').value) || 0.0;
-                _tags[idx].unit          = document.getElementById('editMbUnit').value.trim();
-                _tags[idx].description   = document.getElementById('editMbDescription').value.trim();
-            }
-            _renderTagsTable();
-            _renderTagsBrowser();
+            await _loadData();
             _toast('Tag updated successfully', 'success');
         } else {
             _toast(data.error || 'Failed to update tag', 'error');
         }
     } catch (err) {
-        console.error(err);
+        console.error('Error updating tag:', err);
         _toast('Network error', 'error');
     } finally {
         _setLoading(btn, false);
@@ -722,8 +921,6 @@ async function _handleModbusEdit(e) {
 }
 
 function _closeEditModbus() { _hideModal('editModbusModal'); }
-
-// ─── LOADCELL TAGS: no edit modal (tag name and unit from device management) ───
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
@@ -744,7 +941,7 @@ async function deleteTag(tagId, tagType) {
             _toast(data.error || 'Failed to delete', 'error');
         }
     } catch (err) {
-        console.error(err);
+        console.error('Error deleting tag:', err);
         _toast('Network error', 'error');
     }
 }
@@ -756,13 +953,24 @@ async function exportCSV() {
         _toast('No tags to export', 'info');
         return;
     }
-    const headers = ['device_name', 'device_type', 'tag_name', 'register_address', 'register_type', 'data_type', 'byte_order', 'word_order', 'scale_factor', 'offset', 'unit', 'description', 'enabled'];
-    const rows = _tags.map(t => headers.map(h => {
-        let v = t[h];
-        if (v === undefined && h === 'tag_name') v = t.name;
-        if (v === undefined) v = '';
-        return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
-    }).join(','));
+    const headers = ['device_name', 'device_type', 'tag_name', 'slave_id', 'register_address', 'register_type', 'data_type', 'byte_order', 'word_order', 'scale_factor', 'offset', 'unit', 'group', 'writable', 'retry_count', 'timeout_ms', 'register_count', 'description', 'enabled'];
+    const rows = _tags.map(t => {
+        return headers.map(h => {
+            let v = t[h];
+            if (v === undefined && h === 'tag_name') v = t.name;
+            if (v === undefined && h === 'register_address') v = t.address;
+            if (v === undefined && h === 'slave_id') v = t.slaveId;
+            if (v === undefined && h === 'data_type') v = t.dataType;
+            if (v === undefined && h === 'register_type') v = t.registerType;
+            if (v === undefined && h === 'scale_factor') v = t.scale;
+            if (v === undefined && h === 'retry_count') v = t.retryCount;
+            if (v === undefined && h === 'timeout_ms') v = t.timeoutMs;
+            if (v === undefined && h === 'register_count') v = t.registerCount;
+            if (v === undefined && h === 'group') v = t.group || t.group_name;
+            if (v === undefined) v = '';
+            return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
+        }).join(',');
+    });
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -809,14 +1017,20 @@ async function importCSV() {
                     body: JSON.stringify({
                         device_id: dev.id,
                         tag_name: row['tag_name'] || `tag_${i}`,
+                        slave_id: parseInt(row['slave_id']) || 1,
                         register_address: addr,
-                        register_type: row['register_type'] || _regType(addr),
-                        data_type: row['data_type'] || 'int16',
+                        register_type: row['register_type'] || 'holding',
+                        data_type: row['data_type'] || 'uint16',
                         byte_order: row['byte_order'] || 'big',
                         word_order: row['word_order'] || 'big',
                         scale_factor: parseFloat(row['scale_factor']) || 1.0,
                         offset: parseFloat(row['offset']) || 0.0,
                         unit: row['unit'] || '',
+                        group: row['group'] || '',
+                        writable: row['writable'] === 'true' || row['writable'] === '1',
+                        retry_count: parseInt(row['retry_count']) || 1,
+                        timeout_ms: parseInt(row['timeout_ms']) || 100,
+                        register_count: parseInt(row['register_count']) || 1,
                         description: row['description'] || '',
                         enabled: row['enabled'] !== 'false'
                     })
@@ -836,67 +1050,44 @@ async function importCSV() {
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-function _regType(n) {
-    n = parseInt(n);
-    if (isNaN(n)) return 'holding';
-    if (n <= 9999) return 'coil';
-    if (n <= 19999) return 'discrete';
-    if (n <= 29999) return 'input';
-    return 'holding';
-}
-
-function _autoDetect(val, elId) {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    const n = parseInt(val);
-    if (isNaN(n) || val === '') {
-        el.textContent = 'Enter address…';
-        el.style.color = '#94a3b8';
-        return;
-    }
-    let label, color;
-    if (n <= 9999) {
-        label = 'Coil (0–9999)';
-        color = '#2563EB';
-    } else if (n <= 19999) {
-        label = 'Discrete Input (10000–19999)';
-        color = '#16A34A';
-    } else if (n <= 29999) {
-        label = 'Input Register (20000–29999)';
-        color = '#D97706';
-    } else if (n <= 49999) {
-        label = 'Holding Register (40000–49999)';
-        color = '#7C3AED';
-    } else {
-        label = 'Out of range';
-        color = '#DC2626';
-    }
-    el.textContent = label;
-    el.style.color = color;
-}
-
 function _clearModbusForm(prefix) {
     const ids = {
         [`${prefix}TagName`]: '',
+        [`${prefix}SlaveId`]: '1',
         [`${prefix}RegAddress`]: '',
+        [`${prefix}RegisterCount`]: '1',
         [`${prefix}Scale`]: '1.0',
         [`${prefix}Offset`]: '0.0',
         [`${prefix}Unit`]: '',
+        [`${prefix}RetryCount`]: '1',
+        [`${prefix}TimeoutMs`]: '100',
         [`${prefix}Description`]: ''
     };
     Object.entries(ids).forEach(([id, v]) => {
         const el = document.getElementById(id);
         if (el) el.value = v;
     });
-    [`${prefix}DataType`, `${prefix}ByteOrder`, `${prefix}WordOrder`].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.selectedIndex = 0;
-    });
-    const det = document.getElementById(`${prefix}DetectedType`);
-    if (det) {
-        det.textContent = 'Enter address…';
-        det.style.color = '#94a3b8';
-    }
+    
+    // Reset selects
+    const registerType = document.getElementById(`${prefix}RegisterType`);
+    if (registerType) registerType.value = 'holding';
+    
+    const dataType = document.getElementById(`${prefix}DataType`);
+    if (dataType) dataType.value = 'uint16';
+    
+    const byteOrder = document.getElementById(`${prefix}ByteOrder`);
+    if (byteOrder) byteOrder.value = 'big';
+    
+    const wordOrder = document.getElementById(`${prefix}WordOrder`);
+    if (wordOrder) wordOrder.value = 'big';
+    
+    // Reset group dropdown
+    const groupSelect = document.getElementById(`${prefix}Group`);
+    if (groupSelect) groupSelect.value = '';
+    
+    // Reset checkbox
+    const writable = document.getElementById(`${prefix}Writable`);
+    if (writable) writable.checked = false;
 }
 
 function _setLoading(btn, loading) {
@@ -926,14 +1117,6 @@ function _pBadge(p) {
     if (p === 'modbus-tcp') return 'modbus-tcp';
     if (p === 'modbus-rtu') return 'modbus-rtu';
     return 'loadcell';
-}
-
-function _pClass(isLC, deviceType) {
-    if (isLC) return 'loadcell';
-    const dt = (deviceType || '').toLowerCase();
-    if (dt.includes('tcp')) return 'modbus-tcp';
-    if (dt.includes('rtu')) return 'modbus-rtu';
-    return 'modbus-tcp';
 }
 
 function _esc(s) {
@@ -1025,6 +1208,129 @@ function _toast(msg, type = 'info') {
     }, 3500);
 }
 
+// ─── SAVE MODBUS CONFIGURATION TO PIPELINE ───────────────────────────────────
+
+async function saveModbusConfig() {
+    // Debug: log what _tags contains
+    console.log('[MODBUS-CFG] _tags total:', (_tags || []).length);
+    console.log('[MODBUS-CFG] _tags sample:', JSON.stringify((_tags || []).slice(0, 2)));
+
+    // Filter to modbus-only tags — API sets type:'modbus' on modbus tags
+    // and type:'loadcell' on load cell tags. Also guard by device_type field.
+    const modbusTags = (_tags || []).filter(t => {
+        const isLoadcell = t.type === 'loadcell' || t.protocol === 'loadcell' || t.device_type === 'Loadcell';
+        return !isLoadcell;
+    });
+
+    console.log('[MODBUS-CFG] modbusTags after filter:', modbusTags.length);
+
+    if (!modbusTags.length) {
+        _toast('No Modbus tags to save', 'warning');
+        return;
+    }
+
+    // 2. Build connections (one per unique device) + assets array
+    const connectionMap = {};
+    const assets = [];
+
+    modbusTags.forEach(tag => {
+        const devId   = tag.device_id;
+        const devName = tag.device_name || tag.deviceName || String(devId);
+        const devType = (tag.device_type || '').toLowerCase().includes('tcp') ? 'tcp' : 'rtu';
+
+        if (!connectionMap[devId]) {
+            if (devType === 'tcp') {
+                connectionMap[devId] = {
+                    id:                devName,
+                    type:              'tcp',
+                    host:              tag.device_ip || '127.0.0.1',
+                    port:              tag.device_port_num || 502,
+                    responseTimeoutMs: tag.device_response_timeout || 100,
+                    byteTimeoutMs:     tag.device_byte_timeout || 100,
+                    maxRetries:        tag.device_max_retries || 2,
+                    pollingIntervalMs: tag.device_polling_interval || 300
+                };
+            } else {
+                connectionMap[devId] = {
+                    id:                devName,
+                    type:              'rtu',
+                    device:            tag.device_serial_port || '/dev/ttyUSB0',
+                    baud:              tag.device_baud || 9600,
+                    parity:            tag.device_parity || 'N',
+                    dataBits:          tag.device_data_bits || 8,
+                    stopBits:          tag.device_stop_bits || 1,
+                    responseTimeoutMs: tag.device_response_timeout || 100,
+                    byteTimeoutMs:     tag.device_byte_timeout || 100,
+                    maxRetries:        tag.device_max_retries || 2,
+                    pollingIntervalMs: tag.device_polling_interval || 300
+                };
+            }
+        }
+
+        const asset = {
+            name:          tag.tag_name || tag.name,
+            connection_id: devName,
+            slaveId:       tag.slave_id       !== undefined ? tag.slave_id       : (tag.slaveId       !== undefined ? tag.slaveId       : 1),
+            registerType:  tag.register_type  || tag.registerType  || 'holding',
+            address:       tag.register_address !== undefined ? tag.register_address : (tag.address !== undefined ? tag.address : 0),
+            registerCount: tag.register_count || tag.registerCount || 1,
+            dataType:      tag.data_type      || tag.dataType      || 'uint16',
+            scale:         tag.scale_factor   !== undefined ? tag.scale_factor   : (tag.scale   !== undefined ? tag.scale   : 1.0),
+            offset:        tag.offset         !== undefined ? tag.offset         : 0.0,
+            byteOrder:     tag.byte_order     || tag.byteOrder     || 'big',
+            wordOrder:     tag.word_order     || tag.wordOrder     || 'big',
+            retryCount:    tag.retry_count    !== undefined ? tag.retry_count    : (tag.retryCount !== undefined ? tag.retryCount : 1),
+            timeoutMs:     tag.timeout_ms     !== undefined ? tag.timeout_ms     : (tag.timeoutMs !== undefined ? tag.timeoutMs : 100),
+            writable:      tag.writable       || false
+        };
+
+        if (tag.group || tag.group_name) {
+            asset.group = tag.group || tag.group_name;
+        }
+
+        assets.push(asset);
+    });
+
+    const configPayload = {
+        connections: Object.values(connectionMap),
+        assets
+    };
+
+    console.log('[MODBUS-CFG] Payload:', configPayload);
+
+    // 3. Show connecting state on button
+    const btn = document.getElementById('saveModbusConfigBtn');
+    const origHTML = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Connecting…';
+    }
+
+    try {
+        const resp = await fetch('/api/pipeline/modbus-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ host: '127.0.0.1', port: 7000, config: configPayload })
+        });
+
+        const data = await resp.json();
+
+        if (resp.ok && data.success) {
+            _toast(`✓ ${data.message || 'Configuration sent to modbus service'}`, 'success');
+        } else {
+            _toast(data.error || 'Failed to send configuration', 'error');
+        }
+    } catch (err) {
+        console.error('[MODBUS-CFG] fetch error:', err);
+        _toast('Network error — could not reach pipeline service', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled  = false;
+            btn.innerHTML = origHTML;
+        }
+    }
+}
+
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
 window.initializeModbusMapping = initializeModbusMapping;
 window.editTag = editTag;
@@ -1033,3 +1339,98 @@ window.importCSV = importCSV;
 window.exportCSV = exportCSV;
 window.highlightTagRow = highlightTagRow;
 window.changeBrowserPage = changeBrowserPage;
+window.saveModbusConfig = saveModbusConfig;
+
+// ─── GROUPS PANEL ────────────────────────────────────────────────────────────
+
+function _renderGroupsPanel() {
+    const container = document.getElementById('tagGroupsContainer');
+    if (!container) return;
+
+    if (!_groups.length) {
+        container.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">
+            <i class="fa-solid fa-layer-group text-2xl mb-2 block"></i>No groups yet</div>`;
+        return;
+    }
+
+    container.innerHTML = '';
+    _groups.forEach(g => {
+        const card = document.createElement('div');
+        card.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg';
+        card.innerHTML = `
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-${g.color || 'blue'}-500"></span>
+                <span class="text-sm font-medium text-slate-800">${_esc(g.name)}</span>
+                <span class="text-xs text-slate-400">${g.tag_count} tag${g.tag_count !== 1 ? 's' : ''}</span>
+            </div>
+            <button class="text-slate-400 hover:text-red-500 transition-colors" onclick="_deleteTagGroup(${g.id}, '${_esc(g.name)}')" title="Delete group">
+                <i class="fa-solid fa-trash text-xs"></i>
+            </button>`;
+        container.appendChild(card);
+    });
+}
+
+function _openAddGroupModal() {
+    const m = document.getElementById('addTagGroupModal');
+    if (m) {
+        m.style.display = 'flex';
+        document.getElementById('newGroupName').value = '';
+        document.getElementById('newGroupDescription').value = '';
+        _selectedGroupColor = 'blue';
+        document.querySelectorAll('[data-group-color]').forEach(b => {
+            b.classList.toggle('ring-2', b.dataset.groupColor === 'blue');
+        });
+    }
+}
+
+function _closeAddGroupModal() {
+    const m = document.getElementById('addTagGroupModal');
+    if (m) m.style.display = 'none';
+}
+
+async function _saveTagGroup() {
+    const name = document.getElementById('newGroupName')?.value.trim();
+    if (!name) { _toast('Group name is required', 'error'); return; }
+    try {
+        const resp = await fetch('/api/tag-groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, color: _selectedGroupColor, description: document.getElementById('newGroupDescription')?.value.trim() || '' })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            _closeAddGroupModal();
+            await _loadData();
+            _toast('Group created', 'success');
+        } else {
+            _toast(data.error || 'Failed to create group', 'error');
+        }
+    } catch (e) {
+        _toast('Network error', 'error');
+    }
+}
+
+async function _deleteTagGroup(groupId, groupName) {
+    if (!confirm(`Delete group "${groupName}"?\nTags in this group will become ungrouped.`)) return;
+    try {
+        const resp = await fetch(`/api/tag-groups/${groupId}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (resp.ok) {
+            await _loadData();
+            _toast('Group deleted', 'success');
+        } else {
+            _toast(data.error || 'Failed to delete group', 'error');
+        }
+    } catch (e) {
+        _toast('Network error', 'error');
+    }
+}
+
+// ─── HELPER ──────────────────────────────────────────────────────────────────
+
+function _groupColor(groupName) {
+    const g = (_groups || []).find(gr => gr.name === groupName);
+    return g ? (g.color || 'blue') : 'slate';
+}
+
+window._deleteTagGroup = _deleteTagGroup;

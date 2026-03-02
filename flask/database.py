@@ -9,46 +9,34 @@ DB_FILE = 'gateway_config.db'
 def get_db_connection():
     """Get a database connection with proper timeout and WAL mode for concurrency"""
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
-    conn.execute('PRAGMA journal_mode=WAL')  # Write-Ahead Logging for better concurrency
-    conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints (including CASCADE)
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 def init_database():
-    """Initialize SQLite database with new schema
-    
-    DEVICE ID SYSTEM:
-    - LoadCell devices use ID prefix: LC1, LC2, LC3, etc.
-    - Modbus devices use ID prefix: MB1, MB2, MB3, etc.
-    - This prevents ID collisions between different device types
-    - IDs are generated in device_management.py during device creation
-    """
+    """Initialize SQLite database with new schema"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Create all tables
     create_tables(cursor)
-    
-    # Insert default data
     insert_default_data(cursor)
     
     conn.commit()
     conn.close()
     print("Database initialized with new schema")
-    print("[OK] General configuration table (no JSON)")
+    print("[OK] General configuration table")
     print("[OK] Services table (modbus, loadcell)")
-    print("[OK] Modbus_device table (tcp/rtu with connection details) - NO status column")
-    print("[OK] Loadcell_device table (with calibration) - NO status column")
+    print("[OK] Modbus_device table (tcp/rtu with connection details)")
+    print("[OK] Loadcell_device table (with calibration)")
     print("[OK] Modbus_datapoints table")
-    print("[OK] Loadcell_datapoints table (auto-created: load, capacity)")
-    print("[OK] Dynamic device groups")
-    print("[OK] Status and last_poll handled via WebSocket real-time only")
-    print("[OK] Device IDs: LoadCell=LC1,LC2... Modbus=MB1,MB2... (NO COLLISIONS)")
-    print("[OK] Cloud Integration: cloud_connections | mqtt_datapoints | ftp_datapoints | cloud_connection_stats")
+    print("[OK] Loadcell_datapoints table")
+    print("[OK] Device groups table")
+    print("[OK] Cloud Integration tables")
 
 def create_tables(cursor):
     """Create all tables with proper schema"""
     
-    # General configuration table - NO JSON, all columns
+    # General configuration table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS general_configuration (
             id INTEGER PRIMARY KEY,
@@ -79,7 +67,7 @@ def create_tables(cursor):
         )
     ''')
     
-    # Services table - ONLY names (modbus and loadcell)
+    # Services table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS services (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +78,7 @@ def create_tables(cursor):
         )
     ''')
     
-    # Device groups table - DYNAMIC, users create any groups
+    # Device groups table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS device_groups (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +89,7 @@ def create_tables(cursor):
         )
     ''')
     
-    # Modbus device table - NO STATUS COLUMN (status is real-time via WebSocket)
+    # Modbus device table - MATCHING YOUR SPECIFIED FORMAT
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS modbus_device (
             id TEXT PRIMARY KEY,
@@ -110,39 +98,35 @@ def create_tables(cursor):
             group_id INTEGER,
             service_id INTEGER,
             
-            -- Common modbus config
-            slave_id INTEGER DEFAULT 1,
-            timeout_ms INTEGER DEFAULT 1000,
-            retry_count INTEGER DEFAULT 3,
-            polling_interval_ms INTEGER DEFAULT 100,
+            -- Common parameters matching your format
+            response_timeout_ms INTEGER DEFAULT 100,
+            byte_timeout_ms INTEGER DEFAULT 100,
+            max_retries INTEGER DEFAULT 2,
+            polling_interval_ms INTEGER DEFAULT 300,
             
             -- TCP specific
             ip_address TEXT,
             port INTEGER DEFAULT 502,
             
             -- RTU specific
-            serial_port TEXT DEFAULT '/dev/ttymxc2',
+            serial_port TEXT DEFAULT '/dev/ttymxc5',
             baud_rate INTEGER DEFAULT 9600,
             parity TEXT DEFAULT 'N',
             data_bits INTEGER DEFAULT 8,
             stop_bits INTEGER DEFAULT 1,
             
-            -- Only enabled flag, no status
             enabled BOOLEAN DEFAULT 1,
-            
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES device_groups(id),
             FOREIGN KEY (service_id) REFERENCES services(id)
         )
     ''')
     
-    # Loadcell device table - NO STATUS COLUMN (status is real-time via WebSocket)
+    # Loadcell device table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_device (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
-            group_id INTEGER,
             service_id INTEGER,
             device_path TEXT NOT NULL,
             channel INTEGER DEFAULT 0,
@@ -181,17 +165,19 @@ def create_tables(cursor):
             enabled BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES device_groups(id),
             FOREIGN KEY (service_id) REFERENCES services(id)
         )
     ''')
     
-    # Modbus datapoints table
+    # Modbus datapoints table - UPDATED with group field (quoted) and writable flag
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS modbus_datapoints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id TEXT NOT NULL,
             name TEXT NOT NULL,
+            slave_id INTEGER DEFAULT 1,
+            group_id INTEGER,
+            "group" TEXT,
             register_address INTEGER NOT NULL,
             register_type TEXT NOT NULL CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
             data_type TEXT NOT NULL CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
@@ -202,14 +188,19 @@ def create_tables(cursor):
             unit TEXT,
             description TEXT,
             enabled BOOLEAN DEFAULT 1,
+            writable BOOLEAN DEFAULT 0,
+            retry_count INTEGER DEFAULT 1,
+            timeout_ms INTEGER DEFAULT 100,
+            register_count INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(device_id, name),
-            FOREIGN KEY (device_id) REFERENCES modbus_device(id) ON DELETE CASCADE
+            UNIQUE(device_id, slave_id, name),
+            FOREIGN KEY (device_id) REFERENCES modbus_device(id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES device_groups(id) ON DELETE SET NULL
         )
     ''')
     
-    # Loadcell datapoints table - name and unit only (auto-created)
+    # Loadcell datapoints table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_datapoints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -223,8 +214,7 @@ def create_tables(cursor):
         )
     ''')
 
-    # -- Cloud Integration -----------------------------------------------------
-    # cloud_connections: one row per broker/endpoint (mqtt or ftp)
+    # Cloud Integration tables
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connections (
             id         TEXT PRIMARY KEY,
@@ -237,7 +227,6 @@ def create_tables(cursor):
         )
     ''')
 
-    # mqtt_datapoints: tags published via a specific MQTT connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS mqtt_datapoints (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,7 +242,6 @@ def create_tables(cursor):
         )
     ''')
 
-    # ftp_datapoints: tags exported via a specific FTP connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ftp_datapoints (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -269,7 +257,6 @@ def create_tables(cursor):
         )
     ''')
 
-    # cloud_connection_stats: runtime counters per connection
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connection_stats (
             connection_id   TEXT PRIMARY KEY,
@@ -282,6 +269,27 @@ def create_tables(cursor):
         )
     ''')
     
+    # Migration for new columns (with proper quoting)
+    try:
+        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN "group" TEXT')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN writable BOOLEAN DEFAULT 0')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN retry_count INTEGER DEFAULT 1')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN timeout_ms INTEGER DEFAULT 100')
+    except Exception:
+        pass
+    try:
+        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN register_count INTEGER DEFAULT 1')
+    except Exception:
+        pass
 
 def insert_default_data(cursor):
     """Insert default data"""
@@ -300,121 +308,6 @@ def insert_default_data(cursor):
             INSERT OR IGNORE INTO services (name, description)
             VALUES (?, ?)
         ''', service)
-    
-    # Insert default device groups
-    for group in [
-        ('Crane-01', 'blue', 'Main Crane Devices'),
-        ('Safety Sensors', 'red', 'Safety-critical sensors'),
-        ('RTU Devices', 'green', 'RTU Communication Devices')
-    ]:
-        cursor.execute('''
-            INSERT OR IGNORE INTO device_groups (name, color, description)
-            VALUES (?, ?, ?)
-        ''', group)
-
-# -- Python replacement for modbus_device_config_view -------------------------
-# Builds the same JSON config that the SQL view would have produced,
-# but entirely in Python so it works with old SQLite (pre-3.9.0).
-
-def get_modbus_device_config_view(device_id=None):
-    """Return a list of dicts: {device_id, device_name, device_type, config}.
-    config is a dict (not a string) matching the old SQL view's JSON shape.
-    Pass device_id to filter to a single device."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        if device_id:
-            cursor.execute("""
-                SELECT id, name, device_type, baud_rate, timeout_ms, data_bits,
-                       serial_port, ip_address, retry_count, parity,
-                       polling_interval_ms, stop_bits, slave_id, group_id
-                FROM modbus_device WHERE enabled=1 AND id=?
-            """, (device_id,))
-        else:
-            cursor.execute("""
-                SELECT id, name, device_type, baud_rate, timeout_ms, data_bits,
-                       serial_port, ip_address, retry_count, parity,
-                       polling_interval_ms, stop_bits, slave_id, group_id
-                FROM modbus_device WHERE enabled=1
-            """)
-
-        devices = cursor.fetchall()
-        results = []
-
-        parity_map = {'N': 'None', 'E': 'Even', 'O': 'Odd'}
-
-        for d in devices:
-            (d_id, d_name, d_type, baud_rate, timeout_ms, data_bits,
-             serial_port, ip_address, retry_count, parity,
-             polling_interval_ms, stop_bits, slave_id, group_id) = d
-
-            # Resolve group name
-            group_name = 'default_group'
-            if group_id is not None:
-                cursor.execute("SELECT name FROM device_groups WHERE id=?", (group_id,))
-                row = cursor.fetchone()
-                if row:
-                    group_name = row[0]
-
-            # Resolve datapoints
-            cursor.execute("""
-                SELECT register_address, data_type, name, register_type
-                FROM modbus_datapoints
-                WHERE device_id=? AND enabled=1
-                ORDER BY register_address
-            """, (d_id,))
-            assets = []
-            for dp in cursor.fetchall():
-                assets.append({
-                    'address':       dp[0],
-                    'dataType':      dp[1],
-                    'group':         group_name,
-                    'name':          dp[2],
-                    'registerCount': 1,
-                    'registerType':  dp[3],
-                    'slaveId':       slave_id
-                })
-
-            device_path = serial_port if d_type == 'rtu' else (ip_address or '127.0.0.1')
-
-            config = {
-                'system': {
-                    'baud':                baud_rate or 9600,
-                    'byteTimeoutMs':       (timeout_ms or 1000) * 2,
-                    'dataBits':            data_bits or 8,
-                    'device':              device_path or '/dev/ttymxc2',
-                    'enablePacking':       True,
-                    'interRequestDelayMs': 10,
-                    'logLevel':            'info',
-                    'maxBlockGap':         5,
-                    'maxBlockSize':        125,
-                    'maxRetries':          retry_count or 2,
-                    'mode':                d_type,
-                    'parity':              parity_map.get(parity or 'N', 'None'),
-                    'pipelinePort':        7000,
-                    'pipelineServer':      '127.0.0.1',
-                    'pollingIntervalMs':   polling_interval_ms or 500,
-                    'readStrategy':        'auto',
-                    'responseTimeoutMs':   timeout_ms or 1000,
-                    'serviceName':         'modbus',
-                    'stopBits':            stop_bits or 1
-                },
-                'assets': assets
-            }
-
-            results.append({
-                'device_id':   d_id,
-                'device_name': d_name,
-                'device_type': d_type,
-                'config':      config
-            })
-
-        conn.close()
-        return results
-    except Exception as e:
-        print("Error in get_modbus_device_config_view: {}".format(e))
-        return []
 
 def get_general_configuration():
     """Get general configuration"""
@@ -472,7 +365,6 @@ def update_general_configuration(config_data):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Extract fields from nested structure
         updates = []
         values = []
         
@@ -600,11 +492,7 @@ def delete_device_group(group_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # First, unassign all devices from this group (set group_id to NULL)
-        cursor.execute('UPDATE modbus_device SET group_id = NULL WHERE group_id = ?', (group_id,))
-        cursor.execute('UPDATE loadcell_device SET group_id = NULL WHERE group_id = ?', (group_id,))
-        
-        # Then delete the group
+        cursor.execute('UPDATE modbus_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
         cursor.execute('DELETE FROM device_groups WHERE id = ?', (group_id,))
         
         conn.commit()
@@ -657,7 +545,6 @@ def get_service_by_name(name):
         print("Error getting service by name: {}".format(e))
         return None
 
-# Database statistics
 def get_database_stats():
     """Get database statistics"""
     try:
@@ -679,9 +566,6 @@ def get_database_stats():
         cursor.execute('SELECT COUNT(*) FROM device_groups')
         group_count = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM modbus_device WHERE enabled=1")
-        view_device_count = cursor.fetchone()[0]
-
         conn.close()
 
         return {
@@ -691,8 +575,7 @@ def get_database_stats():
             'modbus_datapoints': modbus_datapoint_count,
             'loadcell_datapoints': loadcell_datapoint_count,
             'total_datapoints': modbus_datapoint_count + loadcell_datapoint_count,
-            'groups': group_count,
-            'enabled_modbus_devices': view_device_count
+            'groups': group_count
         }
     except Exception as e:
         print("Error getting stats: {}".format(e))

@@ -39,6 +39,7 @@ class DataTypeCode(IntEnum):
     FLOAT = 0x04   # 32-bit floating point
     DOUBLE = 0x05  # 64-bit floating point
     BOOL = 0x06    # Boolean value
+    ACTION = 0x07  # Action type (global action identifier)
 
 
 class CommandCode(IntEnum):
@@ -53,6 +54,11 @@ class CommandCode(IntEnum):
     DELETE_DATAPOINT = 0x000A # Delete a datapoint
     UPDATE_DATAPOINT = 0x000B # Update a datapoint
     SERVICE_STATUS = 0x000C   # Service added/removed notification
+    PUBLISH_ACTION = 0x000D       # Publish a supported action to the central service
+    TRIGGER_ACTION = 0x000E       # Trigger a global action
+    PUBLISH_CONFIG = 0x000F       # Publish a configuration entry to the central service
+    CONFIG_UPDATE = 0x0010        # Config update broadcast from server to all clients
+    PUBLISH_NOTIFICATION = 0x0011 # Publish/broadcast a notification to all connected services
 
 
 # Constants for the binary protocol
@@ -270,12 +276,14 @@ class BinaryFrameHandler:
         frame_data.append(frame.start_of_frame)  # 0xAA
         frame_data.append(frame.api_version)     # 0x02
         
-        # Calculate frame length: everything after this field until CRC (exclusive)
-        # Includes: command_code(2) + command_payload_id(2) + payload_count(2) + all payloads
+        # Calculate frame length: everything after this field up to and including CRC,
+        # but excluding the frame_len field itself and the end-of-frame marker.
+        # Includes: command_code(2) + command_payload_id(2) + payload_count(2) + all payloads + CRC(2)
         frame_len = 6  # Base size for command_code, command_payload_id, payload_count
         for payload in frame.payloads:
             # Each payload: length(4) + type(1) + data(n)
             frame_len += 4 + 1 + len(payload.data)
+        frame_len += 2  # Include CRC in frame length (matches C++ serialization)
         
         # Add frame length (4 bytes, big-endian)
         frame_data.extend(struct.pack('>I', frame_len))

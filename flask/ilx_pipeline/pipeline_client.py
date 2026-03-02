@@ -44,6 +44,7 @@ class DataType(IntEnum):
     FLOAT = 3   # 32-bit floating point type
     DOUBLE = 4 # 64-bit floating point type
     BOOL = 5    # Boolean type
+    ACTION = 6  # Action type (global action identifier)
 
 
 class EventType(IntEnum):
@@ -57,6 +58,9 @@ class EventType(IntEnum):
     DELETE_DONE = 6        # Datapoint delete operation completed (success/failure)
     SERVICE_ADDED = 7      # New service connected to pipeline (notified during refresh)
     SERVICE_REMOVED = 8    # Service disconnected from pipeline (notified during refresh)
+    ACTION_TRIGGERED = 9   # A global action was triggered by any connected service
+    CONFIG_RECEIVED = 10   # A configuration entry was published or updated
+    NOTIFICATION_RECEIVED = 11  # A notification was broadcast by any connected service
 
 
 class EventStatus(IntEnum):
@@ -92,9 +96,92 @@ class EventData:
         self.event_status = event_status
         self.timestamp = get_iso8601_timestamp()
         self.data_timestamp_us = data_timestamp_us
+        self.config = None          # type: Optional[Config]  # Populated for CONFIG_RECEIVED events
+        self.notification = None    # type: Optional[NotificationData]  # Populated for NOTIFICATION_RECEIVED events
 
 
-# Define EventCallback as a type alias for function that takes EventData and returns None
+class Config:
+    """
+    Configuration entry with name, value, version, and optional target service.
+    
+    Mirrors Pipeline::Config from the C++ API.
+    """
+    def __init__(self, name: str = "", value: str = "", version: int = -1, service: str = ""):
+        """
+        Initialize a Config entry.
+        
+        Args:
+            name: Configuration key name
+            value: Configuration value (string-encoded)
+            version: Configuration version (-1 = unset)
+            service: Target service name (empty = broadcast to all services)
+        """
+        self.name = name
+        self.value = value
+        self.version = version
+        self.service = service  # Target service name (empty = broadcast to all)
+
+
+class NotificationType(IntEnum):
+    """Notification type describing the urgency class (mirrors Pipeline::Notification::Type)."""
+    Alarm      = 0  # Abnormal condition requiring immediate operator action
+    Alert      = 1  # Abnormal condition requiring awareness (lower urgency)
+    Prompt     = 2  # Operational request (e.g., "Insert Batch ID")
+    Event      = 3  # Normal state change (e.g., "Motor Started"). Log-only.
+    Diagnostic = 4  # System-level debug info (e.g., "IPC Buffer 80% full")
+
+
+class NotificationPriority(IntEnum):
+    """Notification priority (mirrors Pipeline::Notification::Priority)."""
+    Critical = 0  # Immediate threat to life, environment, or expensive equipment
+    High     = 1  # Significant process deviation; requires fast response
+    Medium   = 2  # Moderate deviation; needs response to avoid high-priority alarm
+    Low      = 3  # Minor issue or "Information" that still requires a task
+    NoPriority = 4  # Used for "Events" or "Diagnostics" that have no urgency
+
+
+class NotificationCategory(IntEnum):
+    """Notification category describing the origin domain (mirrors Pipeline::Notification::Category)."""
+    Process     = 0  # Normal process deviations
+    Safety      = 1  # High-criticality safety triggers
+    System      = 2  # IPC/Host machine health
+    Network     = 3  # Communication/Connectivity
+    Maintenance = 4  # Service reminders
+    Security    = 5  # Unauthorized access
+
+
+class NotificationData:
+    """
+    Data carried within a NOTIFICATION_RECEIVED event.
+    
+    Mirrors Pipeline::Notification::Data from the C++ API.
+    """
+    def __init__(self,
+                 notif_type: NotificationType = NotificationType.Event,
+                 priority: NotificationPriority = NotificationPriority.NoPriority,
+                 category: NotificationCategory = NotificationCategory.System,
+                 subsystem: str = "",
+                 entity: str = "",
+                 message: str = ""):
+        """
+        Initialize NotificationData.
+        
+        Args:
+            notif_type: Notification type (Alarm, Alert, Prompt, Event, Diagnostic)
+            priority: Notification priority (Critical, High, Medium, Low, NoPriority)
+            category: Notification category (Process, Safety, System, Network, …)
+            subsystem: Originating module (e.g., "IO_Driver")
+            entity: Specific tag/device (e.g., "Pump_01")
+            message: Human-readable summary
+        """
+        self.type = notif_type
+        self.priority = priority
+        self.category = category
+        self.subsystem = subsystem
+        self.entity = entity
+        self.message = message
+
+
 # Define EventCallback as a type alias for function that takes EventData and returns None
 EventCallback = Callable[[Any], None]  # Using Any to avoid issues with Callable in Python 3.5
 
@@ -257,6 +344,12 @@ class PipelineClient:
         # Producer: datapoint_set(), Consumer: sender_thread_func()
         self.dirty_datapoint_queue = deque()  # type: deque
         self.dirty_queue_mutex = threading.Lock()
+        
+        # Config store: maps config name -> Config object
+        # Populated when CONFIG_UPDATE frames are received from the server
+        self.config_store = {}  # type: Dict[str, Config]
+        self.config_store_mutex = threading.Lock()
+        self.config_cv = threading.Condition(self.config_store_mutex)
     
     def start(self):
         """Start the client and establish connection to the server."""
@@ -521,6 +614,68 @@ class PipelineClient:
                     elif status_str == "REMOVED":
                         self.trigger_event(EventType.SERVICE_REMOVED, service_name, "", EventStatus.SUCCESS, 0)
                         logger.info("Service removed: {}".format(service_name))
+            elif frame.command_code == CommandCode.TRIGGER_ACTION:
+                # Handle action trigger broadcast from the server
+                if len(frame.payloads) >= 1:
+                    action_name = frame.payloads[0].data.decode('utf-8')
+                    logger.debug("Action triggered: '{}'".format(action_name))
+                    self.trigger_event(EventType.ACTION_TRIGGERED, "", action_name, EventStatus.SUCCESS, 0)
+            elif frame.command_code == CommandCode.PUBLISH_ACTION:
+                # Informational: the server broadcasts published actions to all clients
+                if len(frame.payloads) >= 1:
+                    action_name = frame.payloads[0].data.decode('utf-8')
+                    logger.debug("Action published: '{}'".format(action_name))
+            elif frame.command_code == CommandCode.CONFIG_UPDATE:
+                # Handle config update broadcast from the server
+                if len(frame.payloads) >= 3:
+                    cfg = Config()
+                    cfg.name = frame.payloads[0].data.decode('utf-8')
+                    cfg.value = frame.payloads[1].data.decode('utf-8')
+                    if len(frame.payloads[2].data) >= 4:
+                        d = frame.payloads[2].data
+                        ver = (d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]
+                        # Convert unsigned to signed 32-bit
+                        if ver >= 0x80000000:
+                            ver -= 0x100000000
+                        cfg.version = ver
+                    # payload[3] = target service name (empty = was broadcast to all)
+                    if len(frame.payloads) >= 4 and frame.payloads[3].data:
+                        cfg.service = frame.payloads[3].data.decode('utf-8')
+                    logger.debug("Config update received: name='{}', version={}, target='{}'".format(cfg.name, cfg.version, cfg.service))
+
+                    # Store in local cache and notify waiters
+                    with self.config_cv:
+                        self.config_store[cfg.name] = cfg
+                        self.config_cv.notify_all()
+
+                    # Trigger CONFIG_RECEIVED event
+                    evt = EventData(EventType.CONFIG_RECEIVED, "", cfg.name, EventStatus.SUCCESS, 0)
+                    evt.config = cfg
+                    with self.callback_cv:
+                        self.event_queue.append(evt)
+                        self.callback_cv.notify()
+            elif frame.command_code == CommandCode.PUBLISH_NOTIFICATION:
+                # Handle notification broadcast from the server
+                if len(frame.payloads) >= 6:
+                    notif = NotificationData()
+                    if frame.payloads[0].data:
+                        notif.type = NotificationType(frame.payloads[0].data[0])
+                    if frame.payloads[1].data:
+                        notif.priority = NotificationPriority(frame.payloads[1].data[0])
+                    if frame.payloads[2].data:
+                        notif.category = NotificationCategory(frame.payloads[2].data[0])
+                    notif.subsystem = frame.payloads[3].data.decode('utf-8')
+                    notif.entity = frame.payloads[4].data.decode('utf-8')
+                    notif.message = frame.payloads[5].data.decode('utf-8')
+
+                    logger.debug("Notification received: type={}, subsystem='{}', entity='{}'".format(
+                        int(notif.type), notif.subsystem, notif.entity))
+
+                    evt = EventData(EventType.NOTIFICATION_RECEIVED, notif.subsystem, notif.entity, EventStatus.SUCCESS, 0)
+                    evt.notification = notif
+                    with self.callback_cv:
+                        self.event_queue.append(evt)
+                        self.callback_cv.notify()
             else:
                 # Log unknown command codes for debugging
                 logger.warning("Received unknown command code: {}".format(frame.command_code))
@@ -799,6 +954,200 @@ class PipelineClient:
         
         return result
     
+    def publish_action(self, action_name: str) -> bool:
+        """
+        Publish a supported action to the central service.
+
+        Registers a named action with the pipeline server so that any connected
+        service can discover and trigger it. The server stores actions globally
+        (not per-service).
+
+        Args:
+            action_name: The name of the action to publish
+
+        Returns:
+            True if the publish request was sent successfully, False otherwise
+        """
+        if not self.connected or not self.socket_manager:
+            logger.warning("Cannot publish action - not connected")
+            return False
+
+        frame = BinaryFrameHandler.create_frame(CommandCode.PUBLISH_ACTION)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.ACTION, action_name)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, self.service_name)
+
+        data = BinaryFrameHandler.serialize_frame(frame)
+        result = self.socket_manager.send_data(data)
+
+        if result:
+            logger.info("Sent PUBLISH_ACTION request: action='{}', service='{}'".format(action_name, self.service_name))
+
+        return result
+
+    def trigger_action(self, action_name: str) -> bool:
+        """
+        Trigger a global action on the central service.
+
+        Sends a trigger request to the pipeline server for the named action.
+        The server broadcasts the trigger to all connected services, which receive
+        an ACTION_TRIGGERED event. Actions are global – no service name is required.
+
+        Args:
+            action_name: The name of the action to trigger
+
+        Returns:
+            True if the trigger request was sent successfully, False otherwise
+        """
+        if not self.connected or not self.socket_manager:
+            logger.warning("Cannot trigger action - not connected")
+            return False
+
+        frame = BinaryFrameHandler.create_frame(CommandCode.TRIGGER_ACTION)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.ACTION, action_name)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, self.service_name)
+
+        data = BinaryFrameHandler.serialize_frame(frame)
+        result = self.socket_manager.send_data(data)
+
+        if result:
+            logger.info("Sent TRIGGER_ACTION request: action='{}', service='{}'".format(action_name, self.service_name))
+
+        return result
+
+    def publish_config(self, config) -> bool:
+        """
+        Publish a configuration entry to the central service.
+
+        Stores a named configuration entry (name, value, version) on the pipeline
+        server. If config.service is non-empty the config is delivered only to that
+        service; if empty it is broadcast to all connected clients.
+        Recipients receive a CONFIG_RECEIVED event with the updated Config data.
+
+        Args:
+            config: A Config object with name, value, version, and optional service fields
+
+        Returns:
+            True if the publish request was sent successfully, False otherwise
+        """
+        if not self.connected or not self.socket_manager:
+            logger.warning("Cannot publish config - not connected")
+            return False
+
+        if not config.name:
+            logger.warning("Cannot publish config with empty name")
+            return False
+
+        # Encode version as 4-byte big-endian payload (matches C++ implementation)
+        ver = int(config.version)
+        version_data = bytes([
+            (ver >> 24) & 0xFF,
+            (ver >> 16) & 0xFF,
+            (ver >> 8) & 0xFF,
+            ver & 0xFF
+        ])
+
+        target_service = getattr(config, 'service', '')
+
+        frame = BinaryFrameHandler.create_frame(CommandCode.PUBLISH_CONFIG)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, config.name)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, config.value)
+        BinaryFrameHandler.add_payload(frame, DataTypeCode.INT, version_data)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, self.service_name)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, target_service)
+
+        data = BinaryFrameHandler.serialize_frame(frame)
+        result = self.socket_manager.send_data(data)
+
+        if result:
+            logger.info("Sent PUBLISH_CONFIG: name='{}', version={}, sender='{}', target='{}'".format(
+                config.name, config.version, self.service_name,
+                target_service if target_service else "(all)"))
+
+        return result
+
+    def wait_for_config(self, name: str, timeout_ms: int = 5000):
+        """
+        Wait for a named configuration entry to be available.
+
+        Blocks until a config entry with the given name is received from the server,
+        or until the timeout expires. If the config is already cached locally it is
+        returned immediately.
+
+        Args:
+            name: The configuration key to wait for
+            timeout_ms: Maximum time to wait in milliseconds (default 5000 ms)
+
+        Returns:
+            The matching Config object, or a Config with version==-1 if not found within timeout
+        """
+        with self.config_cv:
+            # Check if already cached
+            if name in self.config_store:
+                return self.config_store[name]
+
+            timeout_s = timeout_ms / 1000.0
+            end_time = time.time() + timeout_s
+
+            while name not in self.config_store:
+                remaining = end_time - time.time()
+                if remaining <= 0:
+                    break
+                self.config_cv.wait(timeout=remaining)
+
+            if name in self.config_store:
+                return self.config_store[name]
+
+        logger.warning("wait_for_config: timeout waiting for config '{}'".format(name))
+        empty = Config(name=name)
+        return empty
+
+    def publish_notification(self,
+                             notif_type: NotificationType,
+                             priority: NotificationPriority,
+                             category: NotificationCategory,
+                             subsystem: str,
+                             entity: str,
+                             message: str):
+        """
+        Publish a notification to all connected services.
+
+        Broadcasts a structured notification (ISA-18.2 inspired) to all services
+        connected to the pipeline. Recipients receive a NOTIFICATION_RECEIVED event
+        with the full NotificationData filled in.
+
+        Args:
+            notif_type: Notification type (Alarm, Alert, Prompt, Event, Diagnostic)
+            priority: Notification priority (Critical, High, Medium, Low, NoPriority)
+            category: Notification category (Process, Safety, System, Network, …)
+            subsystem: Originating module (e.g., "IO_Driver")
+            entity: Specific tag/device (e.g., "Pump_01")
+            message: Human-readable summary
+        """
+        if not self.connected or not self.socket_manager:
+            logger.warning("Cannot publish notification - not connected")
+            return
+
+        # Encode type, priority, category as single-byte payloads (matches C++ implementation)
+        type_data     = bytes([int(notif_type)])
+        priority_data = bytes([int(priority)])
+        category_data = bytes([int(category)])
+
+        frame = BinaryFrameHandler.create_frame(CommandCode.PUBLISH_NOTIFICATION)
+        BinaryFrameHandler.add_payload(frame, DataTypeCode.STRING, type_data)
+        BinaryFrameHandler.add_payload(frame, DataTypeCode.STRING, priority_data)
+        BinaryFrameHandler.add_payload(frame, DataTypeCode.STRING, category_data)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, subsystem)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, entity)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, message)
+        BinaryFrameHandler.add_string_payload(frame, DataTypeCode.STRING, self.service_name)
+
+        data = BinaryFrameHandler.serialize_frame(frame)
+        result = self.socket_manager.send_data(data)
+
+        if result:
+            logger.info("Sent PUBLISH_NOTIFICATION: type={}, priority={}, category={}, subsystem='{}', entity='{}'".format(
+                int(notif_type), int(priority), int(category), subsystem, entity))
+
     def datapoint_update(self, target_service: str, datapoint_name: str, value: Any) -> int:
         """
         Update a datapoint in another service (with acknowledgment via UPDATE_DONE event).
@@ -815,12 +1164,9 @@ class PipelineClient:
             logger.warning("Cannot update datapoint - not connected")
             return 0
         
-        # Generate unique request ID
+        # Generate unique request ID (1-65535, wraps around, never 0)
         request_id = self.request_id_counter
-        self.request_id_counter += 1
-        if request_id == 0:
-            request_id = self.request_id_counter
-            self.request_id_counter += 1
+        self.request_id_counter = (self.request_id_counter % 65535) + 1
         
         # Track pending request
         with self.pending_requests_mutex:
@@ -1161,6 +1507,9 @@ class PipelineClient:
             EventType.DELETE_DONE: "DELETE_DONE",
             EventType.SERVICE_ADDED: "SERVICE_ADDED",
             EventType.SERVICE_REMOVED: "SERVICE_REMOVED",
+            EventType.ACTION_TRIGGERED: "ACTION_TRIGGERED",
+            EventType.CONFIG_RECEIVED: "CONFIG_RECEIVED",
+            EventType.NOTIFICATION_RECEIVED: "NOTIFICATION_RECEIVED",
             EventType.UNKNOWN: "UNKNOWN"
         }
         return type_map.get(event_type, "UNKNOWN")

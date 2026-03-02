@@ -6,6 +6,7 @@ import uuid
 import sqlite3
 import io
 import csv
+import re
 from datetime import datetime
 from aiohttp import web
 
@@ -21,8 +22,8 @@ from utils import initialize_device_status, remove_device_status, update_device_
 def get_db_connection():
     """Get a database connection with proper timeout and WAL mode for concurrency"""
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
-    conn.execute('PRAGMA journal_mode=WAL')  # Write-Ahead Logging for better concurrency
-    conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints (including CASCADE)
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 # ============================================================================
@@ -40,15 +41,14 @@ async def get_all_devices(request):
         # Get Modbus devices
         cursor.execute('''
             SELECT m.id, m.name, m.device_type, m.ip_address, m.port, m.serial_port,
-                   g.name as group_name, g.color, m.enabled, s.name as service_name
+                   m.enabled, s.name as service_name
             FROM modbus_device m
-            LEFT JOIN device_groups g ON m.group_id = g.id
             LEFT JOIN services s ON m.service_id = s.id
             ORDER BY m.id
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_type, ip, port, serial_port, group_name, color, enabled, service_name = row
+            device_id, name, device_type, ip, port, serial_port, enabled, service_name = row
             
             # Determine address display
             if device_type == 'tcp':
@@ -59,8 +59,6 @@ async def get_all_devices(request):
                 protocol = "modbus-rtu"
             
             # Get or initialize real-time status
-            # FIX BUG-10: Always initialise as Offline — the real service will set Online.
-            # Random status caused spurious WS broadcasts and wrong UI state on every GET.
             if device_id not in device_status_tracker:
                 initialize_device_status(device_id, 'Offline')
             
@@ -74,26 +72,23 @@ async def get_all_devices(request):
                 'address': address,
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
-                'group': group_name or 'None',
                 'enabled': bool(enabled),
                 'service': service_name
             })
         
         # Get Loadcell devices
         cursor.execute('''
-            SELECT l.id, l.name, l.device_path, 
-                   g.name as group_name, g.color, l.enabled, s.name as service_name
+            SELECT l.id, l.name, l.device_path,
+                   l.enabled, s.name as service_name
             FROM loadcell_device l
-            LEFT JOIN device_groups g ON l.group_id = g.id
             LEFT JOIN services s ON l.service_id = s.id
             ORDER BY l.id
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, group_name, color, enabled, service_name = row
+            device_id, name, device_path, enabled, service_name = row
             
             # Get or initialize real-time status
-            # FIX BUG-10: Always initialise as Offline — same reason as above.
             if device_id not in device_status_tracker:
                 initialize_device_status(device_id, 'Offline')
             
@@ -107,7 +102,6 @@ async def get_all_devices(request):
                 'address': device_path,
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
-                'group': group_name or 'None',
                 'enabled': bool(enabled),
                 'service': service_name
             })
@@ -133,13 +127,12 @@ async def get_device_details(request):
         
         # Try Modbus first
         cursor.execute('''
-            SELECT m.id, m.name, m.device_type, m.group_id,
-                   m.slave_id, m.timeout_ms, m.retry_count, m.polling_interval_ms,
+            SELECT m.id, m.name, m.device_type,
+                   m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
                    m.ip_address, m.port,
                    m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
-                   m.enabled, g.name as group_name, s.name as service_name
+                   m.enabled, s.name as service_name
             FROM modbus_device m
-            LEFT JOIN device_groups g ON m.group_id = g.id
             LEFT JOIN services s ON m.service_id = s.id
             WHERE m.id = ?
         ''', (device_id,))
@@ -148,9 +141,9 @@ async def get_device_details(request):
         
         if row:
             # It's a Modbus device
-            (dev_id, name, device_type, group_id, slave_id, timeout_ms, retry_count, 
-             polling_interval_ms, ip_address, port, serial_port, baud_rate, parity, 
-             data_bits, stop_bits, enabled, group_name, service_name) = row
+            (dev_id, name, device_type, response_timeout_ms, byte_timeout_ms,
+             max_retries, polling_interval_ms, ip_address, port, serial_port, 
+             baud_rate, parity, data_bits, stop_bits, enabled, service_name) = row
             
             # Get or initialize status
             if device_id not in device_status_tracker:
@@ -163,16 +156,14 @@ async def get_device_details(request):
                 'name': name,
                 'type': 'Modbus',
                 'device_type': device_type,
-                'group': group_name or 'None',
-                'group_id': group_id,
                 'service': service_name,
                 'enabled': bool(enabled),
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'config': {
-                    'slave_id': slave_id,
-                    'timeout_ms': timeout_ms,
-                    'retry_count': retry_count,
+                    'response_timeout_ms': response_timeout_ms,
+                    'byte_timeout_ms': byte_timeout_ms,
+                    'max_retries': max_retries,
                     'polling_interval_ms': polling_interval_ms
                 }
             }
@@ -194,7 +185,7 @@ async def get_device_details(request):
         
         # Try Loadcell
         cursor.execute('''
-            SELECT l.id, l.name, l.group_id, l.device_path, l.channel,
+            SELECT l.id, l.name, l.device_path, l.channel,
                    l.tare_offset, l.known_weight, l.known_weight_raw, l.shift_bits,
                    l.unit, l.capacity, l.load_name, l.capacity_name,
                    l.pipeline_server, l.pipeline_port, l.log_level, l.polling_interval_ms,
@@ -206,9 +197,8 @@ async def get_device_details(request):
                    l.adaptive_deadband_grow_rate, l.adaptive_deadband_shrink_rate,
                    l.publish_step_grams, l.overload_threshold, l.overload_relay,
                    l.overload_action, l.overload_cooldown_ms, l.confirm_count,
-                   l.enabled, g.name as group_name, s.name as service_name
+                   l.enabled, s.name as service_name
             FROM loadcell_device l
-            LEFT JOIN device_groups g ON l.group_id = g.id
             LEFT JOIN services s ON l.service_id = s.id
             WHERE l.id = ?
         ''', (device_id,))
@@ -222,8 +212,7 @@ async def get_device_details(request):
             
             status = device_status_tracker[device_id]
             
-            # Build loadcell details
-            (dev_id, name, group_id, device_path, channel,
+            (dev_id, name, device_path, channel,
              tare_offset, known_weight, known_weight_raw, shift_bits,
              unit, capacity, load_name, capacity_name,
              pipeline_server, pipeline_port, log_level, polling_interval_ms,
@@ -235,15 +224,13 @@ async def get_device_details(request):
              adaptive_deadband_grow_rate, adaptive_deadband_shrink_rate,
              publish_step_grams, overload_threshold, overload_relay,
              overload_action, overload_cooldown_ms, confirm_count,
-             enabled, group_name, service_name) = row
+             enabled, service_name) = row
             
             details = {
                 'id': dev_id,
                 'name': name,
                 'type': 'Loadcell',
                 'protocol': 'loadcell',
-                'group': group_name or 'None',
-                'group_id': group_id,
                 'service': service_name,
                 'enabled': bool(enabled),
                 'status': status['status'],
@@ -324,7 +311,7 @@ async def add_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Generate device ID with unique prefix to prevent collisions
+        # Generate device ID with unique prefix
         if device_type == 'loadcell':
             # ENFORCE: Only one loadcell device allowed (LC1 only)
             cursor.execute('SELECT COUNT(*) FROM loadcell_device')
@@ -336,31 +323,21 @@ async def add_device(request):
                     'error': 'Only one Load Cell device (LC1) is allowed. A load cell device already exists.'
                 }, status=400)
             
-            device_id = 'LC1'  # Always LC1 - only one allowed
+            device_id = 'LC1'
         else:  # modbus
-            # Modbus devices get MB prefix - find max existing ID number
             cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
             
-            # Extract numbers from IDs and find max
             max_num = 0
             for existing_id in existing_ids:
                 try:
-                    num = int(existing_id[2:])  # Skip 'MB' prefix
+                    num = int(existing_id[2:])
                     if num > max_num:
                         max_num = num
                 except ValueError:
                     continue
             
             device_id = 'MB{}'.format(max_num + 1)
-        
-        # Get group_id if group name is provided
-        group_id = None
-        if data.get('group') and data['group'] != 'None':
-            cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['group'],))
-            group_row = cursor.fetchone()
-            if group_row:
-                group_id = group_row[0]
         
         # Get service_id
         service_name = 'loadcell' if device_type == 'loadcell' else 'modbus'
@@ -372,14 +349,13 @@ async def add_device(request):
             
             cursor.execute('''
                 INSERT INTO loadcell_device (
-                    id, name, group_id, service_id, device_path, channel,
+                    id, name, service_id, device_path, channel,
                     capacity, unit, shift_bits, load_name, capacity_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 data.get('name', 'Loadcell Device'),
-                group_id,
                 service_id,
                 config.get('device_path', '/dev/spidev0.0'),
                 config.get('channel', 0),
@@ -403,39 +379,43 @@ async def add_device(request):
         else:  # Modbus (TCP or RTU)
             config = data.get('config', {})
             
-            # Determine device_type from protocol - handle various formats
+            # Determine device_type from protocol
             protocol_lower = protocol.lower()
             if 'tcp' in protocol_lower:
                 modbus_type = 'tcp'
             elif 'rtu' in protocol_lower:
                 modbus_type = 'rtu'
             else:
-                # Fallback: check if IP address is provided (indicates TCP)
                 modbus_type = 'tcp' if config.get('ip_address') else 'rtu'
             
-            print("Creating Modbus device - Protocol received: '{}', Type determined: '{}'".format(protocol, modbus_type))
+            print("Creating Modbus device - Protocol: '{}', Type: '{}'".format(protocol, modbus_type))
+            
+            # Set default values matching your specified format
+            response_timeout_ms = config.get('response_timeout_ms', 100)
+            byte_timeout_ms = config.get('byte_timeout_ms', 100)
+            max_retries = config.get('max_retries', 2)
+            polling_interval_ms = config.get('polling_interval_ms', 300)
             
             cursor.execute('''
                 INSERT INTO modbus_device (
-                    id, name, device_type, group_id, service_id,
-                    slave_id, timeout_ms, retry_count, polling_interval_ms,
+                    id, name, device_type, service_id,
+                    response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                     ip_address, port,
                     serial_port, baud_rate, parity, data_bits, stop_bits
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 data.get('name', 'Modbus Device'),
                 modbus_type,
-                group_id,
                 service_id,
-                config.get('slave_id', 1),
-                config.get('timeout_ms', 1000),
-                config.get('retry_count', 3),
-                config.get('polling_interval_ms', 100),
+                response_timeout_ms,
+                byte_timeout_ms,
+                max_retries,
+                polling_interval_ms,
                 config.get('ip_address') if modbus_type == 'tcp' else None,
                 config.get('port', 502) if modbus_type == 'tcp' else None,
-                config.get('serial_port', '/dev/ttymxc2') if modbus_type == 'rtu' else None,
+                config.get('serial_port', '/dev/ttymxc5') if modbus_type == 'rtu' else None,
                 config.get('baud_rate', 9600) if modbus_type == 'rtu' else None,
                 config.get('parity', 'N') if modbus_type == 'rtu' else None,
                 config.get('data_bits', 8) if modbus_type == 'rtu' else None,
@@ -478,32 +458,24 @@ async def update_device(request):
         cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (device_id,))
         is_modbus = cursor.fetchone() is not None
         
-        # Get group_id if group name is provided
-        group_id = None
-        if data.get('group') and data['group'] != 'None':
-            cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['group'],))
-            group_row = cursor.fetchone()
-            if group_row:
-                group_id = group_row[0]
-        
         if is_modbus:
             # Update Modbus device
             config = data.get('config', {})
             device_type = data.get('device_type', 'tcp')
             
-            update_fields = ['name = ?', 'device_type = ?', 'group_id = ?']
-            values = [data.get('name'), device_type, group_id]
+            update_fields = ['name = ?', 'device_type = ?']
+            values = [data.get('name'), device_type]
             
-            # Common fields
-            if 'slave_id' in config:
-                update_fields.append('slave_id = ?')
-                values.append(config['slave_id'])
-            if 'timeout_ms' in config:
-                update_fields.append('timeout_ms = ?')
-                values.append(config['timeout_ms'])
-            if 'retry_count' in config:
-                update_fields.append('retry_count = ?')
-                values.append(config['retry_count'])
+            # Common fields - using new column names
+            if 'response_timeout_ms' in config:
+                update_fields.append('response_timeout_ms = ?')
+                values.append(config['response_timeout_ms'])
+            if 'byte_timeout_ms' in config:
+                update_fields.append('byte_timeout_ms = ?')
+                values.append(config['byte_timeout_ms'])
+            if 'max_retries' in config:
+                update_fields.append('max_retries = ?')
+                values.append(config['max_retries'])
             if 'polling_interval_ms' in config:
                 update_fields.append('polling_interval_ms = ?')
                 values.append(config['polling_interval_ms'])
@@ -549,8 +521,8 @@ async def update_device(request):
             # Update Loadcell device
             config = data.get('config', {})
             
-            update_fields = ['name = ?', 'group_id = ?']
-            values = [data.get('name'), group_id]
+            update_fields = ['name = ?']
+            values = [data.get('name')]
             
             # Device connection
             if 'device_path' in config:
@@ -603,8 +575,6 @@ async def update_device(request):
             '''.format(fields=', '.join(update_fields))
             
             cursor.execute(query, values)
-            
-
         
         conn.commit()
         conn.close()
@@ -630,14 +600,12 @@ async def delete_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Try deleting from both tables (cascade will handle datapoints)
         cursor.execute('DELETE FROM modbus_device WHERE id = ?', (device_id,))
         cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
         
         conn.commit()
         conn.close()
         
-        # Remove from status tracker
         remove_device_status(device_id)
         
         return web.json_response({
@@ -658,9 +626,8 @@ async def test_device(request):
     try:
         device_id = request.match_info['device_id']
         
-        # Simulate connection test
         await asyncio.sleep(0.5)
-        success = random.choice([True, True, True, False])  # 75% success rate
+        success = random.choice([True, True, True, False])
         
         if success:
             update_device_status(device_id, 'Online', 'Just now')
@@ -689,14 +656,12 @@ async def disable_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Update both tables
         cursor.execute('UPDATE modbus_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         cursor.execute('UPDATE loadcell_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         
         conn.commit()
         conn.close()
         
-        # Update status based on enabled state
         if enabled:
             update_device_status(device_id, 'Online', 'Just now')
         else:
@@ -728,23 +693,20 @@ async def duplicate_device(request):
         modbus_row = cursor.fetchone()
         
         if modbus_row:
-            # It's a Modbus device - duplicate it
             # Get column names
             cursor.execute('PRAGMA table_info(modbus_device)')
             columns = [col[1] for col in cursor.fetchall()]
             
-            # Create dictionary of old device data
             old_device = dict(zip(columns, modbus_row))
             
-            # Generate new device ID with MB prefix - find max existing ID number
+            # Generate new device ID
             cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
             
-            # Extract numbers from IDs and find max
             max_num = 0
             for existing_id in existing_ids:
                 try:
-                    num = int(existing_id[2:])  # Skip 'MB' prefix
+                    num = int(existing_id[2:])
                     if num > max_num:
                         max_num = num
                 except ValueError:
@@ -752,10 +714,8 @@ async def duplicate_device(request):
             
             new_device_id = 'MB{}'.format(max_num + 1)
             
-            # Generate new device name with -001, -002 suffix
+            # Generate new device name with -001 suffix
             base_name = old_device['name']
-            # Remove any existing -XXX suffix from base name
-            import re
             base_name_clean = re.sub(r'-\d+$', '', base_name)
             
             cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
@@ -771,7 +731,6 @@ async def duplicate_device(request):
             if numbers:
                 counter = max(numbers) + 1
             else:
-                # First duplicate should be -001
                 counter = 1
             
             new_name = "{}-{}".format(base_name_clean, str(counter).zfill(3))
@@ -779,17 +738,19 @@ async def duplicate_device(request):
             # Insert new device
             cursor.execute('''
                 INSERT INTO modbus_device (
-                    id, name, device_type, group_id, service_id,
-                    slave_id, timeout_ms, retry_count, polling_interval_ms,
+                    id, name, device_type, service_id,
+                    response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                     ip_address, port, serial_port, baud_rate, parity,
                     data_bits, stop_bits, enabled
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 new_device_id, new_name, old_device['device_type'],
-                old_device['group_id'], old_device['service_id'],
-                old_device['slave_id'], old_device['timeout_ms'],
-                old_device['retry_count'], old_device['polling_interval_ms'],
+                old_device['service_id'],
+                old_device['response_timeout_ms'],
+                old_device['byte_timeout_ms'],
+                old_device['max_retries'],
+                old_device['polling_interval_ms'],
                 old_device['ip_address'], old_device['port'],
                 old_device['serial_port'], old_device['baud_rate'],
                 old_device['parity'], old_device['data_bits'],
@@ -798,7 +759,7 @@ async def duplicate_device(request):
             
             # Duplicate all Modbus datapoints
             cursor.execute('''
-                SELECT name, register_address, register_type, data_type,
+                SELECT name, slave_id, register_address, register_type, data_type,
                        byte_order, word_order, scale_factor, offset, unit, description
                 FROM modbus_datapoints
                 WHERE device_id = ?
@@ -808,13 +769,12 @@ async def duplicate_device(request):
             for dp in datapoints:
                 cursor.execute('''
                     INSERT INTO modbus_datapoints (
-                        device_id, name, register_address, register_type, data_type,
+                        device_id, name, slave_id, register_address, register_type, data_type,
                         byte_order, word_order, scale_factor, offset, unit, description
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (new_device_id,) + dp)
             
-            # Initialize status for new device
             initialize_device_status(new_device_id, 'Online')
             
             conn.commit()
@@ -834,111 +794,18 @@ async def duplicate_device(request):
             loadcell_row = cursor.fetchone()
             
             if loadcell_row:
-                # Block duplicating loadcell - only one loadcell (LC1) allowed
+                # Block duplicating loadcell
                 conn.close()
                 return web.json_response({
                     'success': False,
                     'error': 'Cannot duplicate Load Cell device. Only one Load Cell (LC1) is allowed.'
                 }, status=400)
             
-            if False and loadcell_row:  # unreachable - kept for reference
-                # It's a Loadcell device - duplicate it
-                cursor.execute('PRAGMA table_info(loadcell_device)')
-                columns = [col[1] for col in cursor.fetchall()]
-                
-                old_device = dict(zip(columns, loadcell_row))
-                
-                # Generate new device ID with LC prefix - find max existing ID number
-                cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
-                existing_ids = [row[0] for row in cursor.fetchall()]
-                
-                # Extract numbers from IDs and find max
-                max_num = 0
-                for existing_id in existing_ids:
-                    try:
-                        num = int(existing_id[2:])  # Skip 'LC' prefix
-                        if num > max_num:
-                            max_num = num
-                    except ValueError:
-                        continue
-                
-                new_device_id = 'LC{}'.format(max_num + 1)
-                
-                # Generate new device name with -001, -002 suffix
-                base_name = old_device['name']
-                # Remove any existing -XXX suffix from base name
-                import re
-                base_name_clean = re.sub(r'-\d+$', '', base_name)
-                
-                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
-                existing_names = [row[0] for row in cursor.fetchall()]
-                
-                counter = 1
-                numbers = []
-                for name in existing_names:
-                    match = re.search(r'-(\d+)$', name)
-                    if match:
-                        numbers.append(int(match.group(1)))
-                
-                if numbers:
-                    counter = max(numbers) + 1
-                else:
-                    # First duplicate should be -001
-                    counter = 1
-                
-                new_name = "{}-{}".format(base_name_clean, str(counter).zfill(3))
-                
-                # Insert new loadcell device
-                cursor.execute('''
-                    INSERT INTO loadcell_device (
-                        id, name, group_id, service_id, device_path, channel,
-                        tare_offset, known_weight, known_weight_raw, shift_bits,
-                        unit, capacity, capacity_name, enabled
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    new_device_id, new_name, old_device['group_id'],
-                    old_device['service_id'], old_device['device_path'],
-                    old_device['channel'], old_device['tare_offset'],
-                    old_device['known_weight'], old_device['known_weight_raw'],
-                    old_device['shift_bits'], old_device['unit'],
-                    old_device['capacity'], old_device['capacity_name'],
-                    old_device['enabled']
-                ))
-                
-                # Duplicate all Loadcell datapoints
-                cursor.execute('''
-                    SELECT name
-                    FROM loadcell_datapoints
-                    WHERE device_id = ?
-                ''', (device_id,))
-                
-                datapoints = cursor.fetchall()
-                for dp in datapoints:
-                    cursor.execute('''
-                        INSERT INTO loadcell_datapoints (device_id, name)
-                        VALUES (?, ?)
-                    ''', (new_device_id, dp[0]))
-                
-                # Initialize status for new device
-                initialize_device_status(new_device_id, 'Online')
-                
-                conn.commit()
-                conn.close()
-                
-                return web.json_response({
-                    'success': True,
-                    'message': 'Device duplicated successfully as {}'.format(new_name),
-                    'device_id': new_device_id,
-                    'device_name': new_name,
-                    'datapoints_copied': len(datapoints)
-                })
-            else:
-                conn.close()
-                return web.json_response({
-                    'success': False,
-                    'message': 'Device not found'
-                }, status=404)
+            conn.close()
+            return web.json_response({
+                'success': False,
+                'message': 'Device not found'
+            }, status=404)
         
     except Exception as e:
         print("Error duplicating device: {}".format(e))
@@ -947,98 +814,7 @@ async def duplicate_device(request):
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
-# DEVICE GROUPS
-# ============================================================================
-
-async def get_all_groups(request):
-    """GET all device groups"""
-    try:
-        from database import get_all_device_groups
-        groups = get_all_device_groups()
-        return web.json_response({'groups': groups})
-    except Exception as e:
-        print("Error getting groups: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def add_group(request):
-    """POST - Add new group"""
-    try:
-        data = await request.json()
-        
-        from database import add_device_group
-        group_id = add_device_group(
-            data.get('name'),
-            data.get('color', 'blue'),
-            data.get('description', '')
-        )
-        
-        if group_id:
-            return web.json_response({
-                'success': True,
-                'message': 'Group created successfully',
-                'group_id': group_id
-            })
-        else:
-            return web.json_response({
-                'success': False,
-                'message': 'Failed to create group'
-            }, status=500)
-            
-    except Exception as e:
-        print("Error adding group: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def delete_group(request):
-    """DELETE - Delete group"""
-    try:
-        group_id = request.match_info['group_id']
-        
-        from database import delete_device_group
-        success = delete_device_group(group_id)
-        
-        if success:
-            return web.json_response({
-                'success': True,
-                'message': 'Group deleted successfully'
-            })
-        else:
-            return web.json_response({
-                'success': False,
-                'message': 'Failed to delete group'
-            }, status=500)
-            
-    except Exception as e:
-        print("Error deleting group: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-async def assign_devices_to_group(request):
-    """POST - Assign devices to group"""
-    try:
-        group_id = request.match_info['group_id']
-        data = await request.json()
-        device_ids = data.get('device_ids', [])
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        for device_id in device_ids:
-            cursor.execute('UPDATE modbus_device SET group_id = ? WHERE id = ?', (group_id, device_id))
-            cursor.execute('UPDATE loadcell_device SET group_id = ? WHERE id = ?', (group_id, device_id))
-        
-        conn.commit()
-        conn.close()
-        
-        return web.json_response({
-            'success': True,
-            'message': 'Devices assigned to group successfully'
-        })
-        
-    except Exception as e:
-        print("Error assigning devices to group: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)
-
-# ============================================================================
-# IMPORT / EXPORT DEVICES
+# EXPORT DEVICES TO CSV
 # ============================================================================
 
 async def export_devices_csv(request):
@@ -1047,56 +823,58 @@ async def export_devices_csv(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Create CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
         
         # Write header
         writer.writerow([
-            'ID', 'Name', 'Type', 'Protocol', 'Group',
-            'IP Address', 'Port', 'Serial Port', 'Slave ID',
+            'ID', 'Name', 'Type', 'Protocol',
+            'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
+            'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
             'Device Path', 'Channel', 'Capacity', 'Unit', 'Enabled'
         ])
         
         # Export Modbus devices
         cursor.execute('''
-            SELECT m.id, m.name, m.device_type, g.name as group_name,
-                   m.ip_address, m.port, m.serial_port, m.slave_id,
-                   m.baud_rate, m.data_bits, m.parity, m.stop_bits, m.enabled
+            SELECT m.id, m.name, m.device_type,
+                   m.ip_address, m.port, m.serial_port,
+                   m.baud_rate, m.data_bits, m.parity, m.stop_bits,
+                   m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
+                   m.enabled
             FROM modbus_device m
-            LEFT JOIN device_groups g ON m.group_id = g.id
-            ORDER BY CAST(m.id AS INTEGER)
+            ORDER BY m.id
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_type, group_name, ip, port, serial, slave_id, \
-                baud, data_bits, parity, stop_bits, enabled = row
+            (device_id, name, device_type, ip, port, serial,
+             baud, data_bits, parity, stop_bits,
+             resp_timeout, byte_timeout, max_retries, polling_interval,
+             enabled) = row
             
             protocol = 'modbus-tcp' if device_type == 'tcp' else 'modbus-rtu'
             
             writer.writerow([
-                device_id, name, 'Modbus', protocol, group_name or '',
-                ip or '', port or '', serial or '', slave_id or '',
+                device_id, name, 'Modbus', protocol,
+                ip or '', port or '', serial or '',
                 baud or '', data_bits or '', parity or '', stop_bits or '',
+                resp_timeout or '', byte_timeout or '', max_retries or '', polling_interval or '',
                 '', '', '', '', '1' if enabled else '0'
             ])
         
-        # Export Loadcell devices (only LC1 is valid - enforce single loadcell)
+        # Export Loadcell devices
         cursor.execute('''
-            SELECT l.id, l.name, g.name as group_name,
+            SELECT l.id, l.name,
                    l.device_path, l.channel, l.capacity, l.unit, l.enabled
             FROM loadcell_device l
-            LEFT JOIN device_groups g ON l.group_id = g.id
             WHERE l.id = 'LC1'
-            LIMIT 1
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, group_name, device_path, channel, capacity, unit, enabled = row
-            # Only export LC1 - system enforces single loadcell
+            device_id, name, device_path, channel, capacity, unit, enabled = row
             writer.writerow([
-                'LC1', name, 'Loadcell', 'loadcell', group_name or '',
+                'LC1', name, 'Loadcell', 'loadcell',
+                '', '', '',
                 '', '', '', '',
                 '', '', '', '',
                 device_path or '', channel or 0, capacity or '', unit or 'g', '1' if enabled else '0'
@@ -1104,15 +882,12 @@ async def export_devices_csv(request):
         
         conn.close()
         
-        # Get CSV content
         csv_content = output.getvalue()
         output.close()
         
-        # Create filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = 'devices_export_{}.csv'.format(timestamp)
         
-        # Return CSV file
         return web.Response(
             text=csv_content,
             headers={
@@ -1125,24 +900,24 @@ async def export_devices_csv(request):
         print("Error exporting devices: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# IMPORT DEVICES FROM CSV
+# ============================================================================
+
 async def import_devices_csv(request):
     """POST - Import devices from CSV with duplicate detection"""
     try:
-        # Get multipart data
         reader = await request.multipart()
         field = await reader.next()
         
         if field.name != 'file':
             return web.json_response({'error': 'No file provided'}, status=400)
         
-        # Read CSV content
         csv_content = await field.read(decode=True)
         
-        # Check if this is a confirmation request (skip_existing parameter)
         skip_existing = request.rel_url.query.get('skip_existing', 'false').lower() == 'true'
         replace_existing = request.rel_url.query.get('replace_existing', 'false').lower() == 'true'
         
-        # Parse CSV
         csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
         
         conn = get_db_connection()
@@ -1160,15 +935,11 @@ async def import_devices_csv(request):
                 if not name:
                     continue
                 
-                # Check if device with same name already exists
                 if device_type.lower() == 'loadcell':
-                    # ENFORCE: Only one loadcell allowed - check if LC1 already exists
                     cursor.execute('SELECT COUNT(*) FROM loadcell_device')
                     lc_existing_count = cursor.fetchone()[0]
-                    # Also count how many loadcell rows are already in new_devices
                     lc_in_new = sum(1 for d in new_devices if d.get('data', {}).get('Type', '').lower() == 'loadcell')
                     if lc_existing_count > 0 or lc_in_new > 0:
-                        errors_pre = errors_pre if 'errors_pre' in dir() else []
                         duplicates.append({
                             'row': row_num,
                             'name': name,
@@ -1211,13 +982,12 @@ async def import_devices_csv(request):
                 'message': 'Found {} duplicate device(s). Please choose how to proceed.'.format(len(duplicates))
             })
         
-        # Second pass: Import devices based on user choice
+        # Second pass: Import devices
         imported_count = 0
         replaced_count = 0
         skipped_count = 0
         errors = []
         
-        # Reset CSV reader
         csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
         
         for row_num, row in enumerate(csv_reader, start=2):
@@ -1225,13 +995,10 @@ async def import_devices_csv(request):
                 name = row.get('Name', '').strip()
                 device_type = row.get('Type', '').strip()
                 protocol = row.get('Protocol', '').strip().lower()
-                group_name = row.get('Group', '').strip()
-                
                 if not name:
                     errors.append("Row {}: Missing device name".format(row_num))
                     continue
                 
-                # Check if device exists
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id FROM loadcell_device WHERE name = ?', (name,))
                 else:
@@ -1244,7 +1011,6 @@ async def import_devices_csv(request):
                         skipped_count += 1
                         continue
                     elif replace_existing:
-                        # Delete existing device
                         device_id = existing_device[0]
                         if device_type.lower() == 'loadcell':
                             cursor.execute('DELETE FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
@@ -1256,36 +1022,48 @@ async def import_devices_csv(request):
                         remove_device_status(device_id)
                         replaced_count += 1
                     else:
-                        # Should not reach here if confirmation flow works
                         skipped_count += 1
                         continue
                 
-                # Get or create group
-                group_id = None
-                if group_name:
-                    cursor.execute('SELECT id FROM device_groups WHERE name = ?', (group_name,))
-                    group_row = cursor.fetchone()
-                    if group_row:
-                        group_id = group_row[0]
-                    else:
-                        # Create group if it doesn't exist
-                        cursor.execute('INSERT INTO device_groups (name, color) VALUES (?, ?)', 
-                                     (group_name, 'blue'))
-                        group_id = cursor.lastrowid
-                
-                # Get service_id
                 service_name = 'loadcell' if device_type.lower() == 'loadcell' else 'modbus'
                 service_id = get_service_by_name(service_name)
                 
-                # Generate device ID using max ID logic
                 if device_type.lower() == 'loadcell':
-                    # ENFORCE: Only LC1 allowed
                     cursor.execute('SELECT COUNT(*) FROM loadcell_device')
                     if cursor.fetchone()[0] >= 1:
                         errors.append('Row {}: Only one Load Cell (LC1) is allowed. Skipping.'.format(row_num))
                         skipped_count += 1
                         continue
                     device_id = 'LC1'
+                    
+                    device_path = row.get('Device Path', '/dev/spidev0.0').strip()
+                    capacity = float(row.get('Capacity', '40000'))
+                    unit = row.get('Unit', 'g').strip() or 'g'
+                    channel = int(row.get('Channel', '0') or '0')
+                    enabled = row.get('Enabled', '1').strip() == '1'
+                    
+                    cursor.execute('''
+                        INSERT INTO loadcell_device (
+                            id, name, service_id, device_path,
+                            channel, capacity, unit, load_name, capacity_name, enabled
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        device_id, name, service_id, device_path,
+                        channel, capacity, unit, 'load', 'capacity', enabled
+                    ))
+                    
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'load', '')",
+                        (device_id,)
+                    )
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'capacity', '')",
+                        (device_id,)
+                    )
+                    
+                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
+                    
                 else:
                     cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
@@ -1298,45 +1076,15 @@ async def import_devices_csv(request):
                         except ValueError:
                             continue
                     device_id = 'MB{}'.format(max_num + 1)
-                
-                if device_type.lower() == 'loadcell':
-                    # Import Loadcell device
-                    device_path = row.get('Device Path', '/dev/spidev0.0').strip()
-                    capacity = float(row.get('Capacity', '40000'))
-                    unit = row.get('Unit', 'g').strip() or 'g'
-                    channel = int(row.get('Channel', '0') or '0')
-                    enabled = row.get('Enabled', '1').strip() == '1'
                     
-                    cursor.execute('''
-                        INSERT INTO loadcell_device (
-                            id, name, group_id, service_id, device_path, 
-                            channel, capacity, unit, load_name, capacity_name, enabled
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        device_id, name, group_id, service_id, device_path,
-                        channel, capacity, unit, 'load', 'capacity', enabled
-                    ))
-                    
-                    # Create default datapoints
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'load', '')",
-                        (device_id,)
-                    )
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'capacity', '')",
-                        (device_id,)
-                    )
-                    
-                    # Initialize status
-                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
-                    
-                else:
-                    # Import Modbus device
                     modbus_type = 'tcp' if 'tcp' in protocol else 'rtu'
-                    
-                    slave_id = int(row.get('Slave ID', '1') or '1')
                     enabled = row.get('Enabled', '1').strip() == '1'
+                    
+                    # Get timeout values with defaults
+                    resp_timeout = int(row.get('Response Timeout (ms)', '100') or '100')
+                    byte_timeout = int(row.get('Byte Timeout (ms)', '100') or '100')
+                    max_retries = int(row.get('Max Retries', '2') or '2')
+                    polling_interval = int(row.get('Polling Interval (ms)', '300') or '300')
                     
                     if modbus_type == 'tcp':
                         ip_address = row.get('IP Address', '').strip()
@@ -1344,18 +1092,18 @@ async def import_devices_csv(request):
                         
                         cursor.execute('''
                             INSERT INTO modbus_device (
-                                id, name, device_type, group_id, service_id,
-                                slave_id, timeout_ms, retry_count, polling_interval_ms,
+                                id, name, device_type, service_id,
+                                response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                                 ip_address, port, enabled
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
-                            device_id, name, modbus_type, group_id, service_id,
-                            slave_id, 1000, 3, 100,
+                            device_id, name, modbus_type, service_id,
+                            resp_timeout, byte_timeout, max_retries, polling_interval,
                             ip_address, port, enabled
                         ))
                     else:  # RTU
-                        serial_port = row.get('Serial Port', '/dev/ttymxc2').strip()
+                        serial_port = row.get('Serial Port', '/dev/ttymxc5').strip()
                         baud_rate = int(row.get('Baud Rate', '9600') or '9600')
                         data_bits = int(row.get('Data Bits', '8') or '8')
                         parity = row.get('Parity', 'N').strip()
@@ -1363,18 +1111,17 @@ async def import_devices_csv(request):
                         
                         cursor.execute('''
                             INSERT INTO modbus_device (
-                                id, name, device_type, group_id, service_id,
-                                slave_id, timeout_ms, retry_count, polling_interval_ms,
+                                id, name, device_type, service_id,
+                                response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                                 serial_port, baud_rate, parity, data_bits, stop_bits, enabled
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
-                            device_id, name, modbus_type, group_id, service_id,
-                            slave_id, 1000, 3, 100,
+                            device_id, name, modbus_type, service_id,
+                            resp_timeout, byte_timeout, max_retries, polling_interval,
                             serial_port, baud_rate, parity, data_bits, stop_bits, enabled
                         ))
                     
-                    # Initialize status
                     initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                 
                 imported_count += 1
@@ -1411,40 +1158,46 @@ async def import_devices_csv(request):
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
 
+# ============================================================================
+# DOWNLOAD CSV TEMPLATE
+# ============================================================================
+
 async def download_csv_template(request):
     """GET - Download CSV template for device import"""
     try:
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write header
         writer.writerow([
-            'ID', 'Name', 'Type', 'Protocol', 'Group',
-            'IP Address', 'Port', 'Serial Port', 'Slave ID',
+            'ID', 'Name', 'Type', 'Protocol',
+            'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
-            'Device Path', 'Capacity', 'Enabled'
-        ])
-        
-        # Write example rows
-        writer.writerow([
-            '', 'Example Modbus TCP', 'Modbus', 'modbus-tcp', 'Crane-01',
-            '192.168.1.100', '502', '', '1',
-            '', '', '', '',
-            '', '', '1'
+            'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
+            'Device Path', 'Channel', 'Capacity', 'Unit', 'Enabled'
         ])
         
         writer.writerow([
-            '', 'Example Modbus RTU', 'Modbus', 'modbus-rtu', 'Crane-01',
-            '', '', '/dev/ttyUSB0', '1',
-            '9600', '8', 'None', '1',
-            '', '', '1'
+            '', 'Example Modbus TCP', 'Modbus', 'modbus-tcp',
+            '192.168.1.100', '502', '',
+            '', '', '', '',
+            '100', '100', '2', '300',
+            '', '', '', '', '1'
         ])
         
         writer.writerow([
-            '', 'Example Loadcell', 'Loadcell', 'loadcell', 'Safety Sensors',
+            '', 'Example Modbus RTU', 'Modbus', 'modbus-rtu',
+            '', '', '/dev/ttymxc5',
+            '9600', '8', 'N', '1',
+            '100', '100', '2', '300',
+            '', '', '', '', '1'
+        ])
+        
+        writer.writerow([
+            '', 'Example Loadcell', 'Loadcell', 'loadcell',
+            '', '', '',
             '', '', '', '',
             '', '', '', '',
-            '/dev/spidev0.0', '40000', '1'
+            '/dev/spidev0.0', '0', '40000', 'g', '1'
         ])
         
         csv_content = output.getvalue()
@@ -1474,14 +1227,12 @@ async def get_device_datapoints(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check device type
         cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (device_id,))
         is_modbus = cursor.fetchone() is not None
         
         datapoints = []
         
         if is_modbus:
-            # Get Modbus datapoints
             cursor.execute('''
                 SELECT id, name, register_address, register_type, data_type,
                        byte_order, word_order, scale_factor, offset, unit, description
@@ -1506,7 +1257,6 @@ async def get_device_datapoints(request):
                     'type': 'Modbus'
                 })
         else:
-            # Get Loadcell datapoints
             cursor.execute('''
                 SELECT id, name
                 FROM loadcell_datapoints
@@ -1541,10 +1291,8 @@ async def update_device_status_api(request):
         status = data.get('status', 'Offline')
         last_poll = data.get('last_poll')
         
-        # Update status
         result = update_device_status(device_id, status, last_poll)
         
-        # Broadcast to all connected clients
         await broadcast_device_status(device_id, result['status'], result['last_poll'])
         
         return web.json_response({

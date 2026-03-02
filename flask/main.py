@@ -13,22 +13,21 @@ from general_config import get_config_handler, put_config_handler
 from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
     delete_device, test_device, disable_device, duplicate_device,
-    get_all_groups, add_group, delete_group, assign_devices_to_group,
-    export_devices_csv, import_devices_csv, download_csv_template, get_device_datapoints
+    export_devices_csv, import_devices_csv, download_csv_template, get_device_datapoints,
+    update_device_status_api
 )
 
 from tag_mapping import (
     get_all_datapoints, add_modbus_datapoint, update_modbus_datapoint,
     delete_datapoint, get_available_devices, get_protocol_form,
-    update_loadcell_datapoint
+    update_loadcell_datapoint,
+    get_all_tag_groups, add_tag_group, update_tag_group,
+    delete_tag_group, assign_tags_to_group
 )
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
-
-# All pipeline state + handlers live ONLY in pipeline.py.
-# main.py just calls register_pipeline_routes() - no duplicate pipeline_state here.
 from pipeline import register_pipeline_routes
 
 
@@ -39,7 +38,7 @@ async def database_viewer_handler(request):
         conn.execute('PRAGMA foreign_keys = ON')
         cursor = conn.cursor()
         
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' OR type='view' ORDER BY name")
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = cursor.fetchall()
         
         html_content = """
@@ -51,15 +50,12 @@ async def database_viewer_handler(request):
                 body { font-family: monospace; margin: 20px; background: #f5f5f5; }
                 h1 { color: #333; }
                 h2 { color: #555; margin-top: 30px; background: #fff; padding: 10px; border-left: 4px solid #4CAF50; }
-                .view-header { border-left-color: #2196F3; }
                 table { border-collapse: collapse; width: 100%; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
                 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                 th { background-color: #4CAF50; color: white; font-weight: bold; }
-                .view-th { background-color: #2196F3; }
                 tr:nth-child(even) { background-color: #f9f9f9; }
                 tr:hover { background-color: #f0f0f0; }
                 .count { background-color: #4CAF50; color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.9em; }
-                .view-count { background-color: #2196F3; }
                 .empty { color: #999; font-style: italic; padding: 20px; }
                 pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
                 .stats { background: white; padding: 20px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -67,11 +63,6 @@ async def database_viewer_handler(request):
                 .stat-item { display: inline-block; margin-right: 30px; }
                 .stat-value { font-size: 24px; font-weight: bold; color: #4CAF50; }
                 .stat-label { color: #666; font-size: 14px; }
-                .view-badge { 
-                    display: inline-block; background: #2196F3; color: white;
-                    padding: 2px 8px; border-radius: 3px; font-size: 12px;
-                    margin-left: 10px; font-weight: normal;
-                }
                 .json-cell { max-width: 500px; overflow-x: auto; }
                 .json-cell pre { margin: 0; background: #f8f8f8; }
             </style>
@@ -84,89 +75,51 @@ async def database_viewer_handler(request):
         html_content += '<div class="stats"><h3>Database Statistics</h3>'
         
         for key, value in stats.items():
-            if key != 'views':
-                label = key.replace('_', ' ').title()
-                html_content += """
-                    <div class="stat-item">
-                        <div class="stat-value">{value}</div>
-                        <div class="stat-label">{label}</div>
-                    </div>
-                """.format(value=value, label=label)
-        
-        if 'views' in stats:
-            for vname, vinfo in stats['views'].items():
-                if vinfo['exists']:
-                    html_content += """
-                    <div class="stat-item">
-                        <div class="stat-value" style="color: #2196F3;">{enabled_devices}</div>
-                        <div class="stat-label">Devices in View</div>
-                    </div>
-                    """.format(enabled_devices=vinfo['enabled_devices'])
+            label = key.replace('_', ' ').title()
+            html_content += """
+                <div class="stat-item">
+                    <div class="stat-value">{value}</div>
+                    <div class="stat-label">{label}</div>
+                </div>
+            """.format(value=value, label=label)
         
         html_content += "</div>"
         
         for table in tables:
             table_name = table[0]
             
-            cursor.execute("SELECT type FROM sqlite_master WHERE name = ?", (table_name,))
-            object_type = cursor.fetchone()[0]
-            is_view = (object_type == 'view')
-            
             cursor.execute("PRAGMA table_info({table_name})".format(table_name=table_name))
             columns = cursor.fetchall()
             column_names = [col[1] for col in columns]
             
-            if is_view and table_name == 'modbus_device_config_view':
-                from database import get_modbus_device_config_view
-                view_data = get_modbus_device_config_view()
-                column_names = ['device_id', 'device_name', 'device_type', 'config']
-                rows = [
-                    (r['device_id'], r['device_name'], r['device_type'], json.dumps(r['config'], indent=2))
-                    for r in view_data
-                ]
-            else:
-                try:
-                    cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
-                    rows = cursor.fetchall()
-                except Exception as tbl_err:
-                    rows = []
-                    print("DB viewer: could not query {}: {}".format(table_name, tbl_err))
-            
-            header_class = "view-header" if is_view else ""
-            count_class  = "view-count"  if is_view else ""
-            view_badge   = '<span class="view-badge">VIEW</span>' if is_view else ''
+            try:
+                cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
+                rows = cursor.fetchall()
+            except Exception as tbl_err:
+                rows = []
+                print("DB viewer: could not query {}: {}".format(table_name, tbl_err))
             
             html_content += """
-            <h2 class="{header_class}">{table_name} {view_badge}
-                <span class="count {count_class}">{row_count} rows</span>
+            <h2>{table_name}
+                <span class="count">{row_count} rows</span>
             </h2>
-            """.format(header_class=header_class, table_name=table_name,
-                       view_badge=view_badge, count_class=count_class, row_count=len(rows))
+            """.format(table_name=table_name, row_count=len(rows))
             
             if rows:
-                th_class = "view-th" if is_view else ""
                 html_content += "<table><tr>{}</tr>".format(
-                    ''.join(['<th class="{}">{}</th>'.format(th_class, col) for col in column_names])
+                    ''.join(['<th>{}</th>'.format(col) for col in column_names])
                 )
                 for row in rows:
                     html_content += "<tr>"
                     for i, cell in enumerate(row):
-                        if is_view and column_names[i] == 'config' and isinstance(cell, str):
-                            try:
-                                formatted_json = json.dumps(json.loads(cell), indent=2)
-                                html_content += '<td class="json-cell"><pre>{}</pre></td>'.format(formatted_json)
-                            except:
-                                cell_str = str(cell)[:100]
-                                html_content += "<td>{}</td>".format(cell_str)
-                        else:
-                            cell_str = str(cell)
-                            if len(cell_str) > 100:
-                                cell_str = cell_str[:100] + "..."
-                            html_content += "<td>{}</td>".format(cell_str)
+                        cell_str = str(cell)
+                        if len(cell_str) > 100:
+                            cell_str = cell_str[:100] + "..."
+                        html_content += "<td>{}</td>".format(cell_str)
                     html_content += "</tr>"
                 html_content += "</table>"
             else:
-                html_content += "<p class='empty'>Table/View is empty</p>"
+                html_content += "<p class='empty'>Table is empty</p>"
         
         html_content += "</body></html>"
         conn.close()
@@ -237,6 +190,60 @@ async def api_docs_handler(request):
             <span class="method delete">DELETE</span><span class="path">/api/devices/{device_id}</span>
             <p>Delete device</p>
         </div>
+        <div class="endpoint">
+            <span class="method post">POST</span><span class="path">/api/devices/{device_id}/test</span>
+            <p>Test device connection</p>
+        </div>
+        <div class="endpoint">
+            <span class="method post">POST</span><span class="path">/api/devices/{device_id}/disable</span>
+            <p>Enable/Disable device</p>
+        </div>
+        <div class="endpoint">
+            <span class="method post">POST</span><span class="path">/api/devices/{device_id}/duplicate</span>
+            <p>Duplicate device with all datapoints</p>
+        </div>
+
+        <h2> Device Import/Export</h2>
+        <div class="endpoint">
+            <span class="method get">GET</span><span class="path">/api/devices/export/csv</span>
+            <p>Export all devices to CSV</p>
+        </div>
+        <div class="endpoint">
+            <span class="method post">POST</span><span class="path">/api/devices/import/csv</span>
+            <p>Import devices from CSV</p>
+        </div>
+        <div class="endpoint">
+            <span class="method get">GET</span><span class="path">/api/devices/template/csv</span>
+            <p>Download CSV import template</p>
+        </div>
+
+        <h2> Datapoints (Tag Mapping)</h2>
+        <div class="endpoint">
+            <span class="method get">GET</span><span class="path">/api/datapoints</span>
+            <p>Get all datapoints</p>
+        </div>
+        <div class="endpoint">
+            <span class="method post">POST</span><span class="path">/api/datapoints/modbus</span>
+            <p>Add Modbus datapoint</p>
+        </div>
+        <div class="endpoint">
+            <span class="method get">GET</span><span class="path">/api/datapoints/devices</span>
+            <p>Get available devices for datapoint creation</p>
+        </div>
+        <div class="endpoint">
+            <span class="method get">GET</span><span class="path">/api/devices/{device_id}/datapoints</span>
+            <p>Get datapoints for specific device</p>
+        </div>
+
+        <h2> Tag Groups</h2>
+        <div class="endpoint">
+            <span class="method get">GET</span><span class="path">/api/tag-groups</span>
+            <p>Get all tag groups</p>
+        </div>
+        <div class="endpoint">
+            <span class="method post">POST</span><span class="path">/api/tag-groups</span>
+            <p>Create tag group</p>
+        </div>
 
         <h2> Pipeline / Load Cell</h2>
         <div class="endpoint">
@@ -258,7 +265,7 @@ async def api_docs_handler(request):
 
         <h2> WebSocket</h2>
         <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/ws</span>
+            <span class="method get">GET</span><span class="path">/ws/general</span>
             <p>Real-time time/date updates</p>
         </div>
         <div class="endpoint">
@@ -302,6 +309,7 @@ def create_app():
     register_auth_routes(app)
     register_cloud_routes(app)
 
+    # Device Management Routes
     app.router.add_get   ('/api/devices',                    get_all_devices)
     app.router.add_post  ('/api/devices',                    add_device)
     app.router.add_get   ('/api/devices/{device_id}/details',get_device_details)
@@ -311,15 +319,22 @@ def create_app():
     app.router.add_post  ('/api/devices/{device_id}/disable',disable_device)
     app.router.add_post  ('/api/devices/{device_id}/duplicate', duplicate_device)
     
+    # Device Import/Export Routes
     app.router.add_get ('/api/devices/export/csv',   export_devices_csv)
     app.router.add_post('/api/devices/import/csv',   import_devices_csv)
     app.router.add_get ('/api/devices/template/csv', download_csv_template)
     
-    app.router.add_get   ('/api/groups',                          get_all_groups)
-    app.router.add_post  ('/api/groups',                          add_group)
-    app.router.add_delete('/api/groups/{group_id}',               delete_group)
-    app.router.add_post  ('/api/groups/{group_id}/assign-devices',assign_devices_to_group)
+    # Device Status Update (for testing)
+    app.router.add_post('/api/devices/{device_id}/status', update_device_status_api)
     
+    # Tag group routes
+    app.router.add_get   ('/api/tag-groups',                        get_all_tag_groups)
+    app.router.add_post  ('/api/tag-groups',                        add_tag_group)
+    app.router.add_put   ('/api/tag-groups/{group_id}',             update_tag_group)
+    app.router.add_delete('/api/tag-groups/{group_id}',             delete_tag_group)
+    app.router.add_post  ('/api/tag-groups/{group_id}/assign-tags', assign_tags_to_group)
+    
+    # Datapoint routes
     app.router.add_get   ('/api/datapoints',                      get_all_datapoints)
     app.router.add_post  ('/api/datapoints/modbus',               add_modbus_datapoint)
     app.router.add_put   ('/api/datapoints/modbus/{id}',          update_modbus_datapoint)
@@ -329,12 +344,14 @@ def create_app():
     app.router.add_get   ('/api/datapoints/protocol-form/{protocol}', get_protocol_form)
     app.router.add_get   ('/api/devices/{device_id}/datapoints',  get_device_datapoints)
 
+    # Database viewer
     app.router.add_get('/db', database_viewer_handler)
+    
+    # WebSocket routes
     app.router.add_get('/ws/general', websocket_handler)
     app.router.add_get('/ws/devices', device_websocket_handler)
 
-    # Pipeline routes - pipeline.py owns the one and only pipeline_state.
-    # Do NOT add any pipeline routes here in main.py.
+    # Pipeline routes
     register_pipeline_routes(app)
     
     app.on_startup.append(start_background_tasks)
@@ -351,10 +368,17 @@ if __name__ == '__main__':
     print(" Gateway Configuration Server Starting")
     print("="*60)
     print("\n Server: http://0.0.0.0:8082")
-    print("  GET  /api/pipeline/status       - Status + load_raw value")
-    print("  GET  /ws/pipeline/load_raw      - Live WebSocket stream")
-    print("  GET  /ws                        - Real-time updates")
-    print("  GET  /ws/devices                - Device status")
+    print("\n Device Management API:")
+    print("  GET  /api/devices                   - List all devices")
+    print("  POST /api/devices                    - Add new device")
+    print("  GET  /api/devices/export/csv         - Export to CSV")
+    print("  POST /api/devices/import/csv         - Import from CSV")
+    print("\n WebSocket:")
+    print("  GET  /ws/devices                     - Real-time device status")
+    print("  GET  /ws/general                      - Time updates")
+    print("  GET  /ws/pipeline/load_raw            - Live load cell data")
+    print("\n Database Viewer:")
+    print("  GET  /db                              - View all tables")
     print("="*60 + "\n")
     
     web.run_app(create_app(), host='0.0.0.0', port=8082)

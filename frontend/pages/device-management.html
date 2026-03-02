@@ -42,29 +42,19 @@
                     <label class="block text-sm font-medium text-slate-700 mb-1">Device Name <span class="text-red-500">*</span></label>
                     <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter device name" id="deviceNameInput">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Group (Optional)</label>
-                    <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="deviceGroupSelect">
-                        <option value="">None</option>
-                    </select>
-                </div>
             </div>
         </div>
         
         <!-- Protocol Specific Configuration -->
         <div id="protocolConfigs">
-            <!-- Modbus RTU Configuration -->
+            <!-- Modbus RTU Configuration - Updated with correct parameters -->
             <div id="modbus-rtu-config" class="protocol-config active">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus RTU Settings</h3>
                 <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
-                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusAddress">
-                    </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
-                        <input type="text" value="/dev/ttyUSB0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="serialPort">
+                        <input type="text" value="/dev/ttymxc5" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="serialPort">
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4">
@@ -93,9 +83,9 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
                             <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="parity">
-                                <option>None</option>
-                                <option>Even</option>
-                                <option>Odd</option>
+                                <option>N</option>
+                                <option>E</option>
+                                <option>O</option>
                             </select>
                         </div>
                         <div>
@@ -107,27 +97,32 @@
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Retry Count</label>
-                            <input type="number" min="0" max="10" value="3" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="retryCount">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
+                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="responseTimeout">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
-                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
+                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="byteTimeout">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
+                            <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="maxRetries">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                        <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
                     </div>
                 </div>
             </div>
             
-            <!-- Modbus TCP Configuration -->
+            <!-- Modbus TCP Configuration - Updated with correct parameters -->
             <div id="modbus-tcp-config" class="protocol-config">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Modbus TCP Settings</h3>
                 <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave Address</label>
-                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpSlaveAddress">
-                    </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
@@ -139,15 +134,24 @@
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Retry Count</label>
-                            <input type="number" min="0" max="10" value="3" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpRetryCount">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
+                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpResponseTimeout">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
-                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpPollingInterval">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
+                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpByteTimeout">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
+                            <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpMaxRetries">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                        <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpPollingInterval">
                     </div>
                 </div>
             </div>
@@ -166,7 +170,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Capacity</label>
-                        <input type="number" step="0.1" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="capacity">
+                        <input type="number" step="0.1" value="40000" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="capacity">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Unit</label>
@@ -175,6 +179,10 @@
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Shift Bits</label>
                         <input type="number" min="0" max="32" value="10" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcShiftBits">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                        <input type="number" min="1" max="1000" value="15" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcPollingInterval">
                     </div>
                 </div>
             </div>
@@ -217,47 +225,6 @@
     </div>
 </div>
 
-<!-- Add Group Modal -->
-<div class="modal-overlay" id="addGroupModal">
-    <div class="modal p-6">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-semibold text-slate-800">Add New Group</h2>
-            <button class="text-slate-400 hover:text-slate-600" id="closeGroupModal">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-        </div>
-        
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Group Name</label>
-                <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter group name" id="groupNameInput">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
-                <textarea class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary h-24" placeholder="Group description..." id="groupDescription"></textarea>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Color Tag</label>
-                <div class="flex space-x-2">
-                    <button class="w-8 h-8 rounded-full bg-blue-500 border-2 border-blue-700 hover:border-blue-300 transition-colors" data-color="blue"></button>
-                    <button class="w-8 h-8 rounded-full bg-green-500 border-2 border-transparent hover:border-green-300 transition-colors" data-color="green"></button>
-                    <button class="w-8 h-8 rounded-full bg-purple-500 border-2 border-transparent hover:border-purple-300 transition-colors" data-color="purple"></button>
-                    <button class="w-8 h-8 rounded-full bg-orange-500 border-2 border-transparent hover:border-orange-300 transition-colors" data-color="orange"></button>
-                    <button class="w-8 h-8 rounded-full bg-red-500 border-2 border-transparent hover:border-red-300 transition-colors" data-color="red"></button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
-            <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelGroupBtn">
-                Cancel
-            </button>
-            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveGroupBtn">
-                Create Group
-            </button>
-        </div>
-    </div>
-</div>
 
 <!-- Scan Devices Modal -->
 <div class="modal-overlay" id="scanDevicesModal">
@@ -300,7 +267,7 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
-                        <input type="text" value="/dev/ttyUSB0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanSerialPort">
+                        <input type="text" value="/dev/ttymxc5" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanSerialPort">
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -309,6 +276,8 @@
                                 <option>9600</option>
                                 <option>19200</option>
                                 <option>38400</option>
+                                <option>57600</option>
+                                <option>115200</option>
                             </select>
                         </div>
                         <div>
@@ -418,7 +387,7 @@
                                 <span class="mr-2">Device Overview Table</span>
                                 <span class="text-xs font-normal text-slate-500">SECTION A</span>
                             </h2>
-                            <!-- Refresh button added here -->
+                            <!-- Refresh button -->
                             <button id="refreshBtn" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm flex items-center transition-colors" title="Refresh Devices">
                                 <i class="fa-solid fa-rotate mr-2"></i>
                                 Refresh
@@ -457,7 +426,7 @@
                     </div>
                 </section>
 
-                 <!-- SECTION C: Device Details (Inline View) - Modern Theme -->
+                <!-- SECTION C: Device Details (Inline View) -->
                 <section id="section-details" class="bg-white rounded-xl shadow-sm border border-border p-6" style="display: none;">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-3">
@@ -499,24 +468,6 @@
                             <span>Delete</span>
                         </button>
                     </div>
-                </section>
-                <!-- SECTION D: Device Group Management -->
-                <section id="section-groups" class="bg-white rounded-xl shadow-sm border border-border p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                            <i class="fa-solid fa-layer-group mr-2 text-primary"></i> 
-                            <span class="mr-2">Device Group Management</span>
-                            <span class="text-xs font-normal text-slate-500">SECTION D</span>
-                        </h2>
-                        <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addGroupBtn">
-                            <i class="fa-solid fa-plus mr-2"></i> Add New Group
-                        </button>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="groupsContainer">
-                        <!-- Groups will be populated by JavaScript -->
-                    </div>
-                    <p class="text-sm text-slate-500 mt-4">Assign/unassign devices quickly for organized management.</p>
                 </section>
 
                 <!-- SECTION E: Import / Export - CSV ONLY -->

@@ -6,7 +6,9 @@ allowing Python applications to connect to the pipeline server and exchange data
 with other services.
 """
 
-from .pipeline_client import PipelineClient, DataType, EventType, EventStatus, EventData
+from .pipeline_client import (PipelineClient, DataType, EventType, EventStatus, EventData,
+                               Config, NotificationType, NotificationPriority,
+                               NotificationCategory, NotificationData)
 from .pipeline_socket import PipelineSocket, SocketMode, SocketEvent, SocketEventData
 from .binary_frame import BinaryFrame, BinaryFrameHandler, DataTypeCode, CommandCode, TypedPayload
 
@@ -18,6 +20,11 @@ __all__ = [
     'EventType',
     'EventStatus',
     'EventData',
+    'Config',
+    'NotificationType',
+    'NotificationPriority',
+    'NotificationCategory',
+    'NotificationData',
     'PipelineSocket',
     'SocketMode',
     'SocketEvent',

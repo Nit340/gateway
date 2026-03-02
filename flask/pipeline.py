@@ -443,6 +443,114 @@ async def pipeline_filters_post_handler(request):
 
 
 # ---------------------------------------------------------------------------
+# Modbus Service Config handler
+# ---------------------------------------------------------------------------
+
+async def pipeline_modbus_config_handler(request):
+    """POST /api/pipeline/modbus-config"""
+    if not PIPELINE_AVAILABLE:
+        return web.json_response({"success": False, "error": "ilx_pipeline not available"})
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"success": False, "error": "Invalid JSON body"})
+
+    host       = body.get("host", "127.0.0.1")
+    port       = int(body.get("port", 7000))
+    modbus_cfg = body.get("config")
+
+    if not modbus_cfg:
+        return web.json_response({"success": False, "error": "Missing 'config' field"})
+
+    # Reuse the existing pipeline client - same one used for load cell
+    with pipeline_state["lock"]:
+        client    = pipeline_state.get("client")
+        connected = pipeline_state.get("connected", False)
+
+    if not (connected and client):
+        print("[MODBUS-CFG] Pipeline not connected - connecting to {}:{}".format(host, port))
+
+        connected_event = threading.Event()
+
+        def _run():
+            try:
+                c = PipelineClient("craneiq_loadcell_listener", host, port, 1000, 10)
+                c.set_connection_timeout(5)
+
+                def on_event(ev):
+                    if ev.event_type == EventType.PIPELINE_CONNECTED:
+                        print("[MODBUS-CFG] EVENT: CONNECTED")
+                        with pipeline_state["lock"]:
+                            pipeline_state["connected"] = True
+                    elif ev.event_type == EventType.PIPELINE_OFFLINE:
+                        print("[MODBUS-CFG] EVENT: OFFLINE")
+                        with pipeline_state["lock"]:
+                            pipeline_state["connected"] = False
+
+                c.set_event_callback(on_event)
+                print("[MODBUS-CFG] Starting client...")
+                c.start()
+
+                print("[MODBUS-CFG] Waiting for connection (5s)...")
+                ok = c.wait_until_connected(5000)
+                print("[MODBUS-CFG] wait_until_connected returned: {}".format(ok))
+
+                with pipeline_state["lock"]:
+                    pipeline_state["client"]    = c
+                    pipeline_state["connected"] = ok
+
+                connected_event.set()
+            except Exception as ex:
+                print("[MODBUS-CFG] Thread exception: {}".format(ex))
+                connected_event.set()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: connected_event.wait(7))
+
+        with pipeline_state["lock"]:
+            client    = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+
+        if not (connected and client):
+            return web.json_response({
+                "success": False,
+                "error": "Could not connect to pipeline at {}:{}".format(host, port)
+            })
+
+        print("[MODBUS-CFG] Connected successfully")
+
+    # Publish config targeted to the modbus service
+    try:
+        from ilx_pipeline import Config
+        cfg         = Config()
+        cfg.name    = "modbus_config"
+        cfg.value   = json.dumps(modbus_cfg)
+        cfg.version = 1
+        cfg.service = "modbus"
+
+        ok = client.publish_config(cfg)
+        if ok:
+            asset_count = len(modbus_cfg.get("assets", []))
+            print("[MODBUS-CFG] Config published - {} assets".format(asset_count))
+            return web.json_response({
+                "success": True,
+                "message": "Configuration sent to modbus service ({} assets)".format(asset_count)
+            })
+        else:
+            return web.json_response({
+                "success": False,
+                "error": "publish_config returned False - check pipeline connection"
+            })
+    except Exception as ex:
+        print("[MODBUS-CFG] publish_config error: {}".format(ex))
+        return web.json_response({"success": False, "error": str(ex)})
+
+
+# ---------------------------------------------------------------------------
 # Route registration
 # ---------------------------------------------------------------------------
 def register_pipeline_routes(app):
@@ -454,4 +562,6 @@ def register_pipeline_routes(app):
     app.router.add_get ('/api/pipeline/calibration',      pipeline_calibration_get_handler)
     app.router.add_post('/api/pipeline/calibration',      pipeline_calibration_post_handler)
     app.router.add_post('/api/pipeline/filters',          pipeline_filters_post_handler)
+
+    app.router.add_post('/api/pipeline/modbus-config',    pipeline_modbus_config_handler)
     print("[PIPELINE] Routes registered OK")

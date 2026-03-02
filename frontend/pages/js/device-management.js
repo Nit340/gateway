@@ -1,7 +1,5 @@
-// device-management.js - Complete Fixed Version with Import/Export, View Details, and Real-time Updates
+// device-management.js - Complete Fixed Version with Updated Modbus Parameters
 
-// CRITICAL FIX: Removed the wrapper check that prevented re-execution after navigation
-// The IIFE will now execute every time the script loads, allowing proper re-initialization
 (function() {
     'use strict';
         
@@ -17,14 +15,12 @@
 
     // ==================== STATE ====================
     let devices = [];
-    let groups = [];
     let selectedDeviceId = null;
-    let selectedColor = 'blue';
     let isSaving = false;
     let deviceWsConnection = null;
     let currentViewingDeviceId = null;
     let currentViewingDevice = null;
-    let eventListenersBoundToNode = null; // DOM node reference to detect when page HTML has been replaced
+    let eventListenersBoundToNode = null;
     let isRefreshing = false;
 
     // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
@@ -155,7 +151,7 @@
                 to { opacity: 1; }
             }
             
-            /* View Details Modal specific styles */
+            /* View Details specific styles */
             .device-details-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -259,21 +255,15 @@
     async function initApp() {
         console.log('Initializing Device Management...');
 
-        // FIX BUG-15: Always reset attempt counter on a fresh init so a bad
-        // network session from a previous page visit never permanently disables reconnects.
         wsConnectionAttempts = 0;
 
         await loadDevices();
-        await loadGroups();
         renderDevicesTable();
-        renderGroups();
         setupEventListeners();
         connectDeviceWebSocket();
 
         console.log('Device Management initialized successfully');
 
-        // FIX BUG-14: Store named references so we can remove these listeners
-        // in cleanupDeviceManagement() instead of stacking new ones every visit.
         window.addEventListener('beforeunload', cleanupWebSocket);
         window.addEventListener('pagehide',     cleanupWebSocket);
         window.addEventListener('popstate',     cleanupWebSocket);
@@ -299,36 +289,6 @@
         }
     }
 
-    async function loadGroups() {
-        try {
-            const response = await fetch('/api/groups');
-            const data = await response.json();
-            
-            if (data.groups) {
-                groups = data.groups;
-                updateGroupSelect();
-            } else {
-                groups = [];
-            }
-        } catch (error) {
-            console.error('Error loading groups:', error);
-            groups = [];
-        }
-    }
-
-    function updateGroupSelect() {
-        const groupSelect = document.getElementById('deviceGroupSelect');
-        if (!groupSelect) return;
-        
-        groupSelect.innerHTML = '<option value="">None</option>';
-        groups.forEach(group => {
-            const option = document.createElement('option');
-            option.value = group.name;
-            option.textContent = group.name;
-            groupSelect.appendChild(option);
-        });
-    }
-
     // ==================== REFRESH FUNCTIONALITY ====================
     async function refreshData() {
         if (isRefreshing) {
@@ -341,31 +301,21 @@
         const refreshIcon = refreshBtn?.querySelector('i');
         
         try {
-            // Add spinning animation to refresh icon
             if (refreshIcon) {
                 refreshIcon.classList.add('fa-spin');
             }
             
             console.log('Refreshing device data...');
             
-            // Fetch fresh data from server
-            await Promise.all([
-                loadDevices(),
-                loadGroups()
-            ]);
-            
-            // Re-render the UI without page reload
+            await loadDevices();
             renderDevicesTable();
-            renderGroups();
-            updateGroupSelect();
-            
+                    
             showNotification('Data refreshed successfully', 'success', 2000);
             
         } catch (error) {
             console.error('Error refreshing data:', error);
             showNotification('Failed to refresh data', 'error');
         } finally {
-            // Remove spinning animation
             if (refreshIcon) {
                 refreshIcon.classList.remove('fa-spin');
             }
@@ -373,9 +323,8 @@
         }
     }
 
-    // ==================== WEBSOCKET CONNECTION (FIXED) ====================
+    // ==================== WEBSOCKET CONNECTION ====================
     function connectDeviceWebSocket() {
-        // Prevent multiple connections
         if (deviceWsConnection && 
             (deviceWsConnection.readyState === WebSocket.OPEN || 
              deviceWsConnection.readyState === WebSocket.CONNECTING)) {
@@ -383,7 +332,6 @@
             return;
         }
 
-        // Clear any pending reconnection
         if (wsReconnectTimeout) {
             clearTimeout(wsReconnectTimeout);
             wsReconnectTimeout = null;
@@ -399,7 +347,7 @@
             
             deviceWsConnection.onopen = () => {
                 console.log('Device WebSocket connected');
-                wsConnectionAttempts = 0; // Reset connection attempts
+                wsConnectionAttempts = 0;
                 showNotification('Real-time updates enabled', 'success', 2000);
             };
             
@@ -407,7 +355,6 @@
                 try {
                     const data = JSON.parse(event.data);
                     
-                    // Handle initial device data (all devices at once)
                     if (data.type === 'initial_devices' && data.devices) {
                         console.log('Received initial device status:', data.devices.length, 'devices');
                         data.devices.forEach(device => {
@@ -434,8 +381,6 @@
                 console.log('Device WebSocket disconnected');
                 deviceWsConnection = null;
 
-                // Only reconnect if we're still on the device management page
-                // and haven't exceeded max attempts
                 if (document.getElementById('devicesTableBody') && wsConnectionAttempts < 5) {
                     wsConnectionAttempts++;
                     const delay = Math.min(1000 * Math.pow(2, wsConnectionAttempts), 30000);
@@ -445,8 +390,6 @@
                         connectDeviceWebSocket();
                     }, delay);
                 } else if (wsConnectionAttempts >= 5) {
-                    // FIX BUG-16: Show a persistent warning with a manual retry button
-                    // instead of a 3-second toast that disappears leaving the user with no action.
                     console.log('Max WebSocket reconnection attempts reached');
                     const existing = document.getElementById('ws-retry-banner');
                     if (!existing) {
@@ -473,7 +416,6 @@
         }
     }
 
-    // WEBSOCKET CLEANUP FUNCTION
     function cleanupWebSocket() {
         if (wsReconnectTimeout) {
             clearTimeout(wsReconnectTimeout);
@@ -493,18 +435,13 @@
         wsConnectionAttempts = 0;
     }
 
-    // Called by the router when navigating away from this page.
-    // Resets the DOM node reference so setupEventListeners() re-binds
-    // to the fresh nodes that exist after the router replaces innerHTML.
     window.cleanupDeviceManagement = function() {
         cleanupWebSocket();
         eventListenersBoundToNode = null;
-        // FIX BUG-14: Remove the window-level listeners that initApp() added.
-        // Without this, each visit stacks 3 more listeners that can never be removed.
         window.removeEventListener('beforeunload', cleanupWebSocket);
         window.removeEventListener('pagehide',     cleanupWebSocket);
         window.removeEventListener('popstate',     cleanupWebSocket);
-        console.log('✅ Device Management cleaned up — will re-bind listeners on next visit');
+        console.log('✅ Device Management cleaned up');
     };
 
     function handleDeviceStatusUpdate(data) {
@@ -513,29 +450,24 @@
             const status = data.status;
             const lastPoll = data.last_poll;
             
-            // Only log status changes, not every poll update
             const device = devices.find(d => d.id === deviceId);
             if (device && device.status !== status) {
                 console.log(`Device ${deviceId} status changed: ${device.status} -> ${status}`);
             }
             
-            // Update in-memory device data
             if (device) {
                 device.status = status;
                 device.lastPoll = lastPoll;
             }
             
-            // Update UI if device row exists
             updateDeviceRowUI(deviceId, status, lastPoll);
             
-            // Update inline view if viewing this device
             if (currentViewingDeviceId === deviceId) {
                 updateInlineViewStatus(status, lastPoll);
             }
         }
     }
 
-    // Update inline view status
     function updateInlineViewStatus(status, lastPoll) {
         const statusElement = document.getElementById('viewDeviceStatus');
         const pollElement = document.getElementById('viewDeviceLastPoll');
@@ -557,17 +489,14 @@
     }
 
     function updateDeviceRowUI(deviceId, status, lastPoll) {
-        // Find the row for this device
         const row = document.querySelector(`tr[id="device-${deviceId}"]`);
         if (!row) return;
         
-        // Update status cell
         const statusCell = row.querySelector('.device-status-cell');
         if (statusCell) {
             statusCell.innerHTML = getStatusBadge({ status: status, lastPoll: lastPoll });
         }
         
-        // Update last poll cell
         const pollCell = row.querySelector('.device-poll-cell');
         if (pollCell) {
             pollCell.textContent = lastPoll || 'Never';
@@ -609,7 +538,6 @@
             row.className = 'hover:bg-slate-50';
             row.id = `device-${device.id}`;
             
-            // Get display values
             const deviceTypeBadge = getDeviceTypeBadge(device);
             const statusBadge = getStatusBadge(device);
             const address = getDeviceAddress(device);
@@ -632,7 +560,6 @@
                     ${escapeHtml(lastPoll)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <!-- Using viewDeviceInline for modern inline view -->
                     <button class="text-green-600 hover:text-green-800 mr-3" onclick="window.deviceManagement.viewDeviceInline('${device.id}')" title="View Details">
                         <i class="fa-solid fa-eye"></i>
                     </button>
@@ -703,55 +630,13 @@
         `;
     }
 
-    function renderGroups() {
-        const container = document.getElementById('groupsContainer');
-        if (!container) return;
-        
-        if (groups.length === 0) {
-            container.innerHTML = `
-                <div class="col-span-4 text-center py-8 text-slate-500">
-                    <i class="fa-solid fa-layer-group text-3xl mb-2 block"></i>
-                    <p>No groups created yet</p>
-                </div>
-            `;
-            return;
-        }
-        
-        container.innerHTML = '';
-        
-        groups.forEach(group => {
-            const groupCard = document.createElement('div');
-            groupCard.className = 'border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow';
-            
-            const color = group.color || 'blue';
-            const deviceCount = devices.filter(d => d.group === group.name).length;
-            
-            groupCard.innerHTML = `
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center">
-                        <div class="w-3 h-3 rounded-full bg-${color}-500 mr-2"></div>
-                        <h3 class="font-medium text-slate-900">${escapeHtml(group.name)}</h3>
-                    </div>
-                    <button class="text-slate-400 hover:text-red-600" onclick="window.deviceManagement.deleteGroup('${group.id}')" title="Delete Group">
-                        <i class="fa-solid fa-trash text-sm"></i>
-                    </button>
-                </div>
-                <p class="text-sm text-slate-600">${deviceCount} device${deviceCount !== 1 ? 's' : ''}</p>
-                ${group.description ? `<p class="text-xs text-slate-500 mt-1">${escapeHtml(group.description)}</p>` : ''}
-            `;
-            
-            container.appendChild(groupCard);
-        });
-    }
-
-    // ==================== VIEW DEVICE DETAILS - MODERN VERSION ====================
+    // ==================== VIEW DEVICE DETAILS ====================
     function renderDeviceDetails(device) {
         const contentDiv = document.getElementById('deviceDetailsContent');
         if (!contentDiv) return;
         
         console.log('Rendering device details:', device);
         
-        // Status configuration
         const statusConfig = {
             'Online': { dot: 'bg-green-500', bg: 'bg-green-50', text: 'text-green-700', label: 'Online' },
             'Warning': { dot: 'bg-yellow-500', bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Warning' },
@@ -761,7 +646,6 @@
         const status = device.status || 'Offline';
         const statusStyle = statusConfig[status] || statusConfig['Offline'];
         
-        // Type configuration
         const protocol = (device.protocol || '').toLowerCase();
         let typeStyle = { bg: 'bg-slate-100', text: 'text-slate-700', label: device.type || 'Unknown' };
         
@@ -773,16 +657,12 @@
             typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell' };
         }
         
-        // Get config data
         const config = device.config || {};
         const isTCP = protocol === 'modbus-tcp' || protocol === 'tcp';
         
-        // Build the HTML with modern, compact styling
         let detailsHtml = `
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <!-- Left Column - Basic Info -->
                 <div class="space-y-4">
-                    <!-- Basic Information Card -->
                     <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
                         <div class="px-4 py-2 bg-slate-50 border-b border-slate-200">
                             <h3 class="text-xs font-semibold text-slate-600 uppercase tracking-wider">Basic Information</h3>
@@ -809,10 +689,6 @@
                                     <div class="text-sm font-mono text-slate-600">${escapeHtml(device.id)}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Group</div>
-                                    <div class="text-sm text-slate-700">${escapeHtml(device.group || 'None')}</div>
-                                </div>
-                                <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Last Polled</div>
                                     <div class="text-sm text-slate-700">${escapeHtml(device.lastPoll || 'Never')}</div>
                                 </div>
@@ -825,9 +701,7 @@
                     </div>
                 </div>
                 
-                <!-- Right Column - Connection Details -->
                 <div class="space-y-4">
-                    <!-- Connection Details Card -->
                     <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
                         <div class="px-4 py-2 bg-slate-50 border-b border-slate-200">
                             <h3 class="text-xs font-semibold text-slate-600 uppercase tracking-wider">Connection Details</h3>
@@ -836,23 +710,38 @@
                             <div class="grid grid-cols-2 gap-3">
         `;
         
-        // Add protocol-specific fields
         if (isTCP) {
             detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">IP Address</div>
-                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.ip_address || device.address || 'Not configured')}</div>
+                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.ip_address || device.address || '192.168.1.100')}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Port</div>
                                     <div class="text-sm text-slate-700">${config.port || 502}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Response Timeout (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.response_timeout_ms || 100}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Byte Timeout (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.byte_timeout_ms || 100}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Max Retries</div>
+                                    <div class="text-sm text-slate-700">${config.max_retries || 2}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Polling Interval (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.polling_interval_ms || 300}</div>
                                 </div>
             `;
         } else if (protocol === 'modbus-rtu') {
             detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Serial Port</div>
-                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.serial_port || device.address || '/dev/ttyUSB0')}</div>
+                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.serial_port || device.address || '/dev/ttymxc5')}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Baud Rate</div>
@@ -864,11 +753,27 @@
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Parity</div>
-                                    <div class="text-sm text-slate-700">${config.parity || 'None'}</div>
+                                    <div class="text-sm text-slate-700">${config.parity || 'N'}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Stop Bits</div>
                                     <div class="text-sm text-slate-700">${config.stop_bits || 1}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Response Timeout (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.response_timeout_ms || 100}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Byte Timeout (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.byte_timeout_ms || 100}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Max Retries</div>
+                                    <div class="text-sm text-slate-700">${config.max_retries || 2}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Polling Interval (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.polling_interval_ms || 300}</div>
                                 </div>
             `;
         } else if (protocol === 'loadcell') {
@@ -885,63 +790,28 @@
                                     <div class="text-xs text-slate-500 mb-0.5">Capacity</div>
                                     <div class="text-sm text-slate-700">${config.capacity || 40000} g</div>
                                 </div>
-            `;
-        }
-        
-        // Common fields for all protocols
-        detailsHtml += `
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Slave Address</div>
-                                    <div class="text-sm text-slate-700">${config.slave_id || 1}</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Unit</div>
+                                    <div class="text-sm text-slate-700">${config.unit || 'g'}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Timeout (ms)</div>
-                                    <div class="text-sm text-slate-700">${config.timeout_ms || 1000}</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Retry Count</div>
-                                    <div class="text-sm text-slate-700">${config.retry_count || 3}</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Shift Bits</div>
+                                    <div class="text-sm text-slate-700">${config.shift_bits || 10}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Polling Interval (ms)</div>
-                                    <div class="text-sm text-slate-700">${config.polling_interval_ms || 100}</div>
+                                    <div class="text-sm text-slate-700">${config.polling_interval_ms || 15}</div>
                                 </div>
+            `;
+        }
+        
+        detailsHtml += `
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-        
-        // Add calibration section for loadcell
-        if (protocol === 'loadcell') {
-            const calibration = config.calibration || {};
-            detailsHtml += `
-                <div class="mt-4">
-                    <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                        <div class="px-4 py-2 bg-slate-50 border-b border-slate-200">
-                            <h3 class="text-xs font-semibold text-slate-600 uppercase tracking-wider">Calibration</h3>
-                        </div>
-                        <div class="p-4">
-                            <div class="grid grid-cols-3 gap-3">
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Tare Offset</div>
-                                    <div class="text-sm text-slate-700">${calibration.tare_offset || config.tare_offset || 0}</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Known Weight</div>
-                                    <div class="text-sm text-slate-700">${calibration.known_weight || config.known_weight || 1000} g</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Unit</div>
-                                    <div class="text-sm text-slate-700">${calibration.unit || 'g'}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
         
         contentDiv.innerHTML = detailsHtml;
     }
@@ -960,26 +830,11 @@
         }
     }
 
-    // ==================== MODAL CONTROL FUNCTIONS (kept for backward compatibility) ====================
-    function openViewModal(deviceId) {
-        window.deviceManagement.viewDevice(deviceId);
-    }
-
-    function closeViewModal() {
-        const modal = document.getElementById('viewDeviceModal');
-        if (modal) {
-            modal.classList.remove('active');
-        }
-        currentViewingDeviceId = null;
-        currentViewingDevice = null;
-    }
-
     // ==================== DUPLICATE DEVICE FUNCTION ====================
     async function duplicateDevice(deviceId) {
         try {
             console.log(`Duplicating device: ${deviceId}`);
             
-            // Call backend duplicate endpoint - it handles device AND datapoints
             const response = await fetch(`/api/devices/${deviceId}/duplicate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -990,11 +845,8 @@
             if (response.ok && result.success) {
                 showNotification(result.message, 'success');
                 console.log(`Device duplicated: ${result.device_name} (ID: ${result.device_id})`);
-                console.log(`Datapoints copied: ${result.datapoints_copied}`);
                 
                 closeInlineView();
-                
-                // Refresh data to show new device
                 await refreshData();
             } else {
                 showNotification('Failed to duplicate device: ' + (result.message || result.error), 'error');
@@ -1013,11 +865,8 @@
         if (panel) {
             panel.classList.add('active');
             
-            // Reset form
             document.getElementById('deviceNameInput').value = '';
-            document.getElementById('deviceGroupSelect').value = '';
             
-            // Select first device type (Modbus RTU)
             const firstRadio = document.querySelector('input[name="device-type"][value="modbus-rtu"]');
             if (firstRadio) {
                 firstRadio.checked = true;
@@ -1063,41 +912,37 @@
                 return;
             }
             
-            const group = document.getElementById('deviceGroupSelect')?.value || '';
-            
-            // Build request based on backend API structure
             let requestData = {
                 name: deviceName,
-                group: group,
                 config: {}
             };
             
             if (deviceType === 'modbus-rtu') {
                 requestData.type = 'modbus';
                 requestData.protocol = 'modbus-rtu';
-                requestData.device_type = 'rtu'; // Add device_type for backend
+                requestData.device_type = 'rtu';
                 requestData.config = {
-                    serial_port: document.getElementById('serialPort')?.value || '/dev/ttyUSB0',
-                    slave_id: parseInt(document.getElementById('modbusAddress')?.value) || 1,
+                    serial_port: document.getElementById('serialPort')?.value || '/dev/ttymxc5',
                     baud_rate: parseInt(document.getElementById('baudRate')?.value) || 9600,
                     data_bits: parseInt(document.getElementById('dataBits')?.value) || 8,
-                    parity: document.getElementById('parity')?.value || 'None',
+                    parity: document.getElementById('parity')?.value || 'N',
                     stop_bits: parseInt(document.getElementById('stopBits')?.value) || 1,
-                    timeout_ms: 1000,
-                    retry_count: parseInt(document.getElementById('retryCount')?.value) || 3,
-                    polling_interval_ms: parseInt(document.getElementById('pollingInterval')?.value) || 100
+                    response_timeout_ms: parseInt(document.getElementById('responseTimeout')?.value) || 100,
+                    byte_timeout_ms: parseInt(document.getElementById('byteTimeout')?.value) || 100,
+                    max_retries: parseInt(document.getElementById('maxRetries')?.value) || 2,
+                    polling_interval_ms: parseInt(document.getElementById('pollingInterval')?.value) || 300
                 };
             } else if (deviceType === 'modbus-tcp') {
                 requestData.type = 'modbus';
                 requestData.protocol = 'modbus-tcp';
-                requestData.device_type = 'tcp'; // Add device_type for backend
+                requestData.device_type = 'tcp';
                 requestData.config = {
                     ip_address: document.getElementById('modbusTcpIp')?.value || '192.168.1.100',
                     port: parseInt(document.getElementById('modbusTcpPort')?.value) || 502,
-                    slave_id: parseInt(document.getElementById('modbusTcpSlaveAddress')?.value) || 1,
-                    timeout_ms: 1000,
-                    retry_count: parseInt(document.getElementById('tcpRetryCount')?.value) || 3,
-                    polling_interval_ms: parseInt(document.getElementById('tcpPollingInterval')?.value) || 100
+                    response_timeout_ms: parseInt(document.getElementById('tcpResponseTimeout')?.value) || 100,
+                    byte_timeout_ms: parseInt(document.getElementById('tcpByteTimeout')?.value) || 100,
+                    max_retries: parseInt(document.getElementById('tcpMaxRetries')?.value) || 2,
+                    polling_interval_ms: parseInt(document.getElementById('tcpPollingInterval')?.value) || 300
                 };
             } else if (deviceType === 'loadcell') {
                 requestData.type = 'loadcell';
@@ -1108,6 +953,8 @@
                     capacity: parseFloat(document.getElementById('capacity')?.value) || 40000.0,
                     unit: document.getElementById('lcUnit')?.value?.trim() || 'g',
                     shift_bits: parseInt(document.getElementById('lcShiftBits')?.value) || 10,
+                    polling_interval_ms: parseInt(document.getElementById('lcPollingInterval')?.value) || 15,
+                    load_name: 'load',
                     capacity_name: 'capacity'
                 };
             }
@@ -1131,8 +978,6 @@
                     'success'
                 );
                 closeAddDevicePanel();
-                
-                // Refresh data to show updated/added device
                 await refreshData();
             } else {
                 showNotification('Failed to save device: ' + (result.message || result.error || 'Unknown error'), 'error');
@@ -1147,60 +992,13 @@
 
     // ==================== DEVICE ACTIONS ====================
     window.deviceManagement = {
-        // Keep original viewDevice for backward compatibility
-        viewDevice: async function(deviceId) {
-            try {
-                // Show modal
-                const modal = document.getElementById('viewDeviceModal');
-                if (modal) {
-                    modal.classList.add('active');
-                }
-                
-                // Show loading
-                const contentDiv = document.getElementById('deviceDetailsContent');
-                if (contentDiv) {
-                    contentDiv.innerHTML = `
-                        <div class="text-center py-8 text-slate-500">
-                            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
-                            <p>Loading device details...</p>
-                        </div>
-                    `;
-                }
-                
-                // Load device details
-                const response = await fetch(`/api/devices/${deviceId}/details`);
-                const device = await response.json();
-                
-                console.log('Device details API response:', device);
-                
-                if (!device || device.error) {
-                    showNotification('Device not found', 'error');
-                    return;
-                }
-                
-                // Store device ID for later use
-                currentViewingDeviceId = deviceId;
-                currentViewingDevice = device;
-                
-                // Render device details
-                renderDeviceDetails(device);
-                
-            } catch (error) {
-                console.error('Error loading device for view:', error);
-                showNotification('Failed to load device details', 'error');
-            }
-        },
-
-        // NEW: Modern inline view function
         viewDeviceInline: async function(deviceId) {
             try {
-                // Show section
                 const section = document.getElementById('section-details');
                 if (section) {
                     section.style.display = 'block';
                 }
                 
-                // Show loading
                 const contentDiv = document.getElementById('deviceDetailsContent');
                 if (contentDiv) {
                     contentDiv.innerHTML = `
@@ -1211,13 +1009,11 @@
                     `;
                 }
                 
-                // Update selected device name
                 const selectedNameEl = document.getElementById('selectedDeviceName');
                 if (selectedNameEl) {
                     selectedNameEl.textContent = 'Loading...';
                 }
                 
-                // Load device details
                 const response = await fetch(`/api/devices/${deviceId}/details`);
                 const device = await response.json();
                 
@@ -1228,16 +1024,13 @@
                     return;
                 }
                 
-                // Store device ID for later use
                 currentViewingDeviceId = deviceId;
                 currentViewingDevice = device;
                 
-                // Update selected device name
                 if (selectedNameEl) {
                     selectedNameEl.textContent = device.name;
                 }
                 
-                // Render device details using modern function
                 renderDeviceDetails(device);
                 
             } catch (error) {
@@ -1248,7 +1041,6 @@
 
         editDevice: async function(deviceId) {
             try {
-                // Get device details from API
                 const response = await fetch(`/api/devices/${deviceId}/details`);
                 const device = await response.json();
                 
@@ -1259,74 +1051,70 @@
                 
                 selectedDeviceId = deviceId;
                 
-                // Open panel
                 const panel = document.getElementById('addDevicePanel');
                 if (panel) {
                     panel.classList.add('active');
                 }
                 
-                // Fill common fields
                 document.getElementById('deviceNameInput').value = device.name || '';
-                // FIXED: Use group_id instead of group name to properly select the group
-                document.getElementById('deviceGroupSelect').value = device.group_id || '';
                 
-                // Determine device type from protocol and device_type
                 let deviceTypeValue = 'modbus-rtu';
                 const protocol = device.protocol || '';
-                const deviceType = device.device_type || '';
                 
                 console.log('Editing device:', device);
-                console.log('Protocol:', protocol, 'Device Type:', deviceType);
+                console.log('Protocol:', protocol);
                 
-                if (protocol === 'modbus-tcp' || deviceType === 'tcp' || device.protocol === 'tcp') {
+                if (protocol === 'modbus-tcp' || protocol === 'tcp') {
                     deviceTypeValue = 'modbus-tcp';
-                } else if (protocol === 'modbus-rtu' || deviceType === 'rtu' || device.protocol === 'rtu') {
+                } else if (protocol === 'modbus-rtu' || protocol === 'rtu') {
                     deviceTypeValue = 'modbus-rtu';
-                } else if (protocol === 'loadcell' || device.type === 'Loadcell' || device.type === 'loadcell') {
+                } else if (protocol === 'loadcell') {
                     deviceTypeValue = 'loadcell';
                 }
                 
                 console.log('Selected device type value:', deviceTypeValue);
                 
-                // Select device type
                 const deviceTypeRadio = document.querySelector(`input[name="device-type"][value="${deviceTypeValue}"]`);
                 if (deviceTypeRadio) {
                     deviceTypeRadio.checked = true;
                     switchDeviceType(deviceTypeValue);
                 }
                 
-                // Fill device-specific fields
                 setTimeout(() => {
                     const config = device.config || {};
                     
                     if (deviceTypeValue === 'modbus-rtu') {
                         if (document.getElementById('serialPort')) 
-                            document.getElementById('serialPort').value = config.serial_port || '/dev/ttyUSB0';
-                        if (document.getElementById('modbusAddress')) 
-                            document.getElementById('modbusAddress').value = config.slave_id || 1;
+                            document.getElementById('serialPort').value = config.serial_port || '/dev/ttymxc5';
                         if (document.getElementById('baudRate')) 
                             document.getElementById('baudRate').value = config.baud_rate || 9600;
                         if (document.getElementById('dataBits')) 
                             document.getElementById('dataBits').value = config.data_bits || 8;
                         if (document.getElementById('parity')) 
-                            document.getElementById('parity').value = config.parity || 'None';
+                            document.getElementById('parity').value = config.parity || 'N';
                         if (document.getElementById('stopBits')) 
                             document.getElementById('stopBits').value = config.stop_bits || 1;
-                        if (document.getElementById('retryCount')) 
-                            document.getElementById('retryCount').value = config.retry_count || 3;
+                        if (document.getElementById('responseTimeout')) 
+                            document.getElementById('responseTimeout').value = config.response_timeout_ms || 100;
+                        if (document.getElementById('byteTimeout')) 
+                            document.getElementById('byteTimeout').value = config.byte_timeout_ms || 100;
+                        if (document.getElementById('maxRetries')) 
+                            document.getElementById('maxRetries').value = config.max_retries || 2;
                         if (document.getElementById('pollingInterval')) 
-                            document.getElementById('pollingInterval').value = config.polling_interval_ms || 100;
+                            document.getElementById('pollingInterval').value = config.polling_interval_ms || 300;
                     } else if (deviceTypeValue === 'modbus-tcp') {
                         if (document.getElementById('modbusTcpIp')) 
                             document.getElementById('modbusTcpIp').value = config.ip_address || '192.168.1.100';
                         if (document.getElementById('modbusTcpPort')) 
                             document.getElementById('modbusTcpPort').value = config.port || 502;
-                        if (document.getElementById('modbusTcpSlaveAddress')) 
-                            document.getElementById('modbusTcpSlaveAddress').value = config.slave_id || 1;
-                        if (document.getElementById('tcpRetryCount')) 
-                            document.getElementById('tcpRetryCount').value = config.retry_count || 3;
+                        if (document.getElementById('tcpResponseTimeout')) 
+                            document.getElementById('tcpResponseTimeout').value = config.response_timeout_ms || 100;
+                        if (document.getElementById('tcpByteTimeout')) 
+                            document.getElementById('tcpByteTimeout').value = config.byte_timeout_ms || 100;
+                        if (document.getElementById('tcpMaxRetries')) 
+                            document.getElementById('tcpMaxRetries').value = config.max_retries || 2;
                         if (document.getElementById('tcpPollingInterval')) 
-                            document.getElementById('tcpPollingInterval').value = config.polling_interval_ms || 100;
+                            document.getElementById('tcpPollingInterval').value = config.polling_interval_ms || 300;
                     } else if (deviceTypeValue === 'loadcell') {
                         if (document.getElementById('devicePath')) 
                             document.getElementById('devicePath').value = config.device_path || '/dev/spidev0.0';
@@ -1338,6 +1126,8 @@
                             document.getElementById('lcUnit').value = config.unit || 'g';
                         if (document.getElementById('lcShiftBits'))
                             document.getElementById('lcShiftBits').value = config.shift_bits ?? 10;
+                        if (document.getElementById('lcPollingInterval'))
+                            document.getElementById('lcPollingInterval').value = config.polling_interval_ms || 15;
                     }
                 }, 100);
                 
@@ -1361,7 +1151,6 @@
                 
                 if (response.ok && result.success) {
                     showNotification('Device and associated datapoints deleted successfully', 'success');
-                    // Refresh data to remove deleted device
                     await refreshData();
                 } else {
                     showNotification('Failed to delete device: ' + (result.message || result.error), 'error');
@@ -1372,99 +1161,8 @@
             }
         },
 
-        deleteGroup: async function(groupId) {
-            if (!confirm('Are you sure you want to delete this group?\n\nDevices in this group will be unassigned (moved to "None").\n\nThis action cannot be undone.')) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/api/groups/${groupId}`, {
-                    method: 'DELETE'
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok && result.success) {
-                    showNotification('Group deleted successfully', 'success');
-                    // Refresh data to update group list and device assignments
-                    await refreshData();
-                } else {
-                    showNotification('Failed to delete group: ' + (result.message || result.error), 'error');
-                }
-            } catch (error) {
-                console.error('Error deleting group:', error);
-                showNotification('Error deleting group: ' + error.message, 'error');
-            }
-        },
-
-        // Expose refresh function
         refreshData: refreshData
     };
-
-    // ==================== GROUP MANAGEMENT ====================
-    function openAddGroupModal() {
-        const modal = document.getElementById('addGroupModal');
-        if (modal) {
-            modal.classList.add('active');
-            document.getElementById('groupNameInput').value = '';
-            document.getElementById('groupDescription').value = '';
-            selectedColor = 'blue';
-            
-            // Reset color selection
-            document.querySelectorAll('[data-color]').forEach(btn => {
-                btn.classList.remove('border-2');
-                if (btn.dataset.color === 'blue') {
-                    btn.classList.add('border-2');
-                }
-            });
-        }
-    }
-
-    function closeAddGroupModal() {
-        const modal = document.getElementById('addGroupModal');
-        if (modal) {
-            modal.classList.remove('active');
-        }
-    }
-
-    async function saveGroup() {
-        const name = document.getElementById('groupNameInput').value.trim();
-        if (!name) {
-            showNotification('Please enter a group name', 'error');
-            return;
-        }
-        
-        const description = document.getElementById('groupDescription').value.trim();
-        
-        try {
-            const response = await fetch('/api/groups', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    description: description,
-                    color: selectedColor
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                showNotification('Group created successfully', 'success');
-                closeAddGroupModal();
-                
-                // Refresh groups data
-                await loadGroups();
-                renderGroups();
-                updateGroupSelect();
-            } else {
-                showNotification('Failed to create group: ' + (result.message || result.error), 'error');
-            }
-        } catch (error) {
-            console.error('Error creating group:', error);
-            showNotification('Error creating group: ' + error.message, 'error');
-        }
-    }
 
     // ==================== IMPORT / EXPORT ====================
     async function exportDevices() {
@@ -1477,10 +1175,8 @@
                 throw new Error('Export failed');
             }
             
-            // Get the blob
             const blob = await response.blob();
             
-            // Get filename from Content-Disposition header or use default
             const contentDisposition = response.headers.get('Content-Disposition');
             let filename = 'devices_export.csv';
             if (contentDisposition) {
@@ -1490,7 +1186,6 @@
                 }
             }
             
-            // Create download link
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -1498,7 +1193,6 @@
             document.body.appendChild(a);
             a.click();
             
-            // Cleanup
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
@@ -1519,7 +1213,6 @@
             return;
         }
         
-        // Validate file type
         if (!file.name.endsWith('.csv')) {
             showNotification('Please select a valid CSV file', 'error');
             return;
@@ -1528,7 +1221,6 @@
         try {
             showNotification('Checking for duplicates...', 'info');
             
-            // Show import status
             const statusDiv = document.getElementById('importStatus');
             const statusText = document.getElementById('statusText');
             const statusCount = document.getElementById('statusCount');
@@ -1541,11 +1233,9 @@
                 progressBar.style.width = '0%';
             }
             
-            // Create FormData
             const formData = new FormData();
             formData.append('file', file);
             
-            // First upload to check for duplicates
             const response = await fetch('/api/devices/import/csv', {
                 method: 'POST',
                 body: formData
@@ -1553,9 +1243,7 @@
             
             const result = await response.json();
             
-            // Check if duplicates were found
             if (result.requires_confirmation && result.duplicates && result.duplicates.length > 0) {
-                // Show confirmation dialog
                 const action = await showDuplicateConfirmation(result.duplicates, result.new_devices_count);
                 
                 if (action === 'cancel') {
@@ -1564,7 +1252,6 @@
                     return;
                 }
                 
-                // Re-upload with user's choice
                 const formData2 = new FormData();
                 formData2.append('file', file);
                 
@@ -1587,7 +1274,6 @@
                     throw new Error(result2.error || 'Import failed');
                 }
             } else if (response.ok && result.success) {
-                // No duplicates, import succeeded
                 handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
             } else {
                 throw new Error(result.error || 'Import failed');
@@ -1605,7 +1291,6 @@
     }
     
     function handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar) {
-        // Update progress
         if (progressBar) {
             progressBar.style.width = '100%';
         }
@@ -1620,7 +1305,6 @@
             statusCount.textContent = countText || '0 devices';
         }
         
-        // Show success message
         let message = result.message;
         if (result.errors && result.errors.length > 0) {
             message += `\nWarnings: ${result.errors.length} row(s) had errors`;
@@ -1629,13 +1313,10 @@
         
         showNotification(message, 'success', 5000);
         
-        // Refresh data to show imported devices
         refreshData();
         
-        // Clear file input
         if (fileInput) fileInput.value = '';
         
-        // Hide status after delay
         setTimeout(() => {
             if (statusDiv) {
                 statusDiv.classList.add('hidden');
@@ -1650,7 +1331,6 @@
             
             const message = `Found ${duplicates.length} duplicate device(s) with the same name:\n\n${duplicateNames}${moreText}\n\n${newDevicesCount} new device(s) will be imported.\n\nHow would you like to proceed?`;
             
-            // Create custom confirmation dialog
             const overlay = document.createElement('div');
             overlay.style.cssText = `
                 position: fixed;
@@ -1724,7 +1404,6 @@
             
             const blob = await response.blob();
             
-            // Create download link
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -1732,7 +1411,6 @@
             document.body.appendChild(a);
             a.click();
             
-            // Cleanup
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
@@ -1745,28 +1423,24 @@
     }
 
     function setupImportExportListeners() {
-        // Export button
         const exportBtn = document.getElementById('exportBtn');
         if (exportBtn && !exportBtn.hasListener) {
             exportBtn.addEventListener('click', exportDevices);
             exportBtn.hasListener = true;
         }
         
-        // Import button
         const importBtn = document.getElementById('importBtn');
         if (importBtn && !importBtn.hasListener) {
             importBtn.addEventListener('click', importDevices);
             importBtn.hasListener = true;
         }
         
-        // Template download button
         const templateBtn = document.getElementById('downloadCsvTemplateBtn');
         if (templateBtn && !templateBtn.hasListener) {
             templateBtn.addEventListener('click', downloadCsvTemplate);
             templateBtn.hasListener = true;
         }
         
-        // File input
         const fileInput = document.getElementById('fileInput');
         
         if (fileInput && !fileInput.hasListener) {
@@ -1778,7 +1452,6 @@
             fileInput.hasListener = true;
         }
         
-        // Browse files button
         const browseBtn = document.getElementById('browseFilesBtn');
         if (browseBtn && !browseBtn.hasListener) {
             browseBtn.addEventListener('click', () => {
@@ -1787,7 +1460,6 @@
             browseBtn.hasListener = true;
         }
         
-        // Drag and drop
         const dropArea = document.getElementById('dropArea');
         
         if (dropArea && !dropArea.hasListener) {
@@ -1813,7 +1485,6 @@
                 if (files.length > 0) {
                     fileInput.files = files;
                     
-                    // Trigger change event
                     const event = new Event('change');
                     fileInput.dispatchEvent(event);
                 }
@@ -1824,11 +1495,6 @@
 
     // ==================== EVENT LISTENERS ====================
     function setupEventListeners() {
-        // Use DOM node identity instead of a boolean flag.
-        // After navigation the router replaces innerHTML, creating fresh DOM nodes.
-        // The old nodes are detached (not in document), so document.contains() returns false.
-        // This means we re-bind whenever the DOM has been replaced, but still skip
-        // duplicate calls within the same page load (both calls see the same live node).
         const anchorNode = document.getElementById('addDeviceBtn');
         if (anchorNode && document.contains(anchorNode) && eventListenersBoundToNode === anchorNode) {
             console.log('📌 Event listeners already setup, skipping...');
@@ -1838,13 +1504,11 @@
         
         console.log('📌 Setting up Device Management event listeners...');
         
-        // Refresh button
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
             refreshBtn.addEventListener('click', refreshData);
         }
         
-        // Add Device
         const addDeviceBtn = document.getElementById('addDeviceBtn');
         const closeAddDevicePanelBtn = document.getElementById('closeAddDevicePanel');
         const cancelAddDeviceBtn = document.getElementById('cancelAddDevice');
@@ -1863,20 +1527,12 @@
             saveDeviceBtn.addEventListener('click', saveDevice);
         }
         
-        // Device Type radios
         document.querySelectorAll('input[name="device-type"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 switchDeviceType(this.value);
             });
         });
         
-        // View Details Modal (keep for backward compatibility)
-        const closeViewModalBtn = document.getElementById('closeViewModal');
-        if (closeViewModalBtn) {
-            closeViewModalBtn.addEventListener('click', closeViewModal);
-        }
-        
-        // ===== NEW: Inline view event listeners =====
         const closeDetailsBtn = document.getElementById('closeDetailsBtn');
         if (closeDetailsBtn) {
             closeDetailsBtn.addEventListener('click', closeInlineView);
@@ -1887,7 +1543,6 @@
             closeViewDetailsBtn.addEventListener('click', closeInlineView);
         }
         
-        // Edit from inline view
         const editFromViewBtn = document.getElementById('editFromViewBtn');
         if (editFromViewBtn) {
             editFromViewBtn.addEventListener('click', function() {
@@ -1900,7 +1555,6 @@
             });
         }
         
-        // Delete from inline view
         const deleteFromViewBtn = document.getElementById('deleteFromViewBtn');
         if (deleteFromViewBtn) {
             deleteFromViewBtn.addEventListener('click', function() {
@@ -1915,7 +1569,6 @@
             });
         }
         
-        // Duplicate from inline view
         const duplicateDeviceBtn = document.getElementById('duplicateDeviceBtn');
         if (duplicateDeviceBtn) {
             duplicateDeviceBtn.addEventListener('click', function() {
@@ -1925,44 +1578,14 @@
             });
         }
         
-        // Add Group
-        const addGroupBtn = document.getElementById('addGroupBtn');
-        const closeGroupModalBtn = document.getElementById('closeGroupModal');
-        const cancelGroupBtn = document.getElementById('cancelGroupBtn');
-        const saveGroupBtn = document.getElementById('saveGroupBtn');
-        
-        if (addGroupBtn) {
-            addGroupBtn.addEventListener('click', openAddGroupModal);
-        }
-        if (closeGroupModalBtn) {
-            closeGroupModalBtn.addEventListener('click', closeAddGroupModal);
-        }
-        if (cancelGroupBtn) {
-            cancelGroupBtn.addEventListener('click', closeAddGroupModal);
-        }
-        if (saveGroupBtn) {
-            saveGroupBtn.addEventListener('click', saveGroup);
-        }
-        
-        // Color selection
-        document.querySelectorAll('[data-color]').forEach(btn => {
-            btn.addEventListener('click', function() {
-                selectedColor = this.dataset.color;
-                document.querySelectorAll('[data-color]').forEach(b => b.classList.remove('border-2'));
-                this.classList.add('border-2');
-            });
-        });
-        
-        // Search
         const searchInput = document.getElementById('searchDevices');
         if (searchInput) {
             searchInput.addEventListener('input', renderDevicesTable);
         }
         
-        // Import/Export
         setupImportExportListeners();
         
-        console.log('✅ Device Management event listeners setup complete - modern inline view ready!');
+        console.log('✅ Device Management event listeners setup complete');
     }
 
     // ==================== UTILITY ====================
@@ -2017,4 +1640,3 @@
     }
 
 })();
-// IIFE ends here
