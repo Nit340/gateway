@@ -1209,128 +1209,56 @@ function _toast(msg, type = 'info') {
 }
 
 // ─── SAVE MODBUS CONFIGURATION TO PIPELINE ───────────────────────────────────
-
+// modbus-mapping.js - COMPLETE FIXED saveModbusConfig function
 async function saveModbusConfig() {
-    // Debug: log what _tags contains
-    console.log('[MODBUS-CFG] _tags total:', (_tags || []).length);
-    console.log('[MODBUS-CFG] _tags sample:', JSON.stringify((_tags || []).slice(0, 2)));
-
-    // Filter to modbus-only tags — API sets type:'modbus' on modbus tags
-    // and type:'loadcell' on load cell tags. Also guard by device_type field.
-    const modbusTags = (_tags || []).filter(t => {
-        const isLoadcell = t.type === 'loadcell' || t.protocol === 'loadcell' || t.device_type === 'Loadcell';
-        return !isLoadcell;
-    });
-
-    console.log('[MODBUS-CFG] modbusTags after filter:', modbusTags.length);
-
-    if (!modbusTags.length) {
-        _toast('No Modbus tags to save', 'warning');
-        return;
-    }
-
-    // 2. Build connections (one per unique device) + assets array
-    const connectionMap = {};
-    const assets = [];
-
-    modbusTags.forEach(tag => {
-        const devId   = tag.device_id;
-        const devName = tag.device_name || tag.deviceName || String(devId);
-        const devType = (tag.device_type || '').toLowerCase().includes('tcp') ? 'tcp' : 'rtu';
-
-        if (!connectionMap[devId]) {
-            if (devType === 'tcp') {
-                connectionMap[devId] = {
-                    id:                devName,
-                    type:              'tcp',
-                    host:              tag.device_ip || '127.0.0.1',
-                    port:              tag.device_port_num || 502,
-                    responseTimeoutMs: tag.device_response_timeout || 100,
-                    byteTimeoutMs:     tag.device_byte_timeout || 100,
-                    maxRetries:        tag.device_max_retries || 2,
-                    pollingIntervalMs: tag.device_polling_interval || 300
-                };
-            } else {
-                connectionMap[devId] = {
-                    id:                devName,
-                    type:              'rtu',
-                    device:            tag.device_serial_port || '/dev/ttyUSB0',
-                    baud:              tag.device_baud || 9600,
-                    parity:            tag.device_parity || 'N',
-                    dataBits:          tag.device_data_bits || 8,
-                    stopBits:          tag.device_stop_bits || 1,
-                    responseTimeoutMs: tag.device_response_timeout || 100,
-                    byteTimeoutMs:     tag.device_byte_timeout || 100,
-                    maxRetries:        tag.device_max_retries || 2,
-                    pollingIntervalMs: tag.device_polling_interval || 300
-                };
-            }
-        }
-
-        const asset = {
-            name:          tag.tag_name || tag.name,
-            connection_id: devName,
-            slaveId:       tag.slave_id       !== undefined ? tag.slave_id       : (tag.slaveId       !== undefined ? tag.slaveId       : 1),
-            registerType:  tag.register_type  || tag.registerType  || 'holding',
-            address:       tag.register_address !== undefined ? tag.register_address : (tag.address !== undefined ? tag.address : 0),
-            registerCount: tag.register_count || tag.registerCount || 1,
-            dataType:      tag.data_type      || tag.dataType      || 'uint16',
-            scale:         tag.scale_factor   !== undefined ? tag.scale_factor   : (tag.scale   !== undefined ? tag.scale   : 1.0),
-            offset:        tag.offset         !== undefined ? tag.offset         : 0.0,
-            byteOrder:     tag.byte_order     || tag.byteOrder     || 'big',
-            wordOrder:     tag.word_order     || tag.wordOrder     || 'big',
-            retryCount:    tag.retry_count    !== undefined ? tag.retry_count    : (tag.retryCount !== undefined ? tag.retryCount : 1),
-            timeoutMs:     tag.timeout_ms     !== undefined ? tag.timeout_ms     : (tag.timeoutMs !== undefined ? tag.timeoutMs : 100),
-            writable:      tag.writable       || false
-        };
-
-        if (tag.group || tag.group_name) {
-            asset.group = tag.group || tag.group_name;
-        }
-
-        assets.push(asset);
-    });
-
-    const configPayload = {
-        connections: Object.values(connectionMap),
-        assets
-    };
-
-    console.log('[MODBUS-CFG] Payload:', configPayload);
-
-    // 3. Show connecting state on button
+    console.log('[MODBUS-CFG] Save button clicked');
+    
     const btn = document.getElementById('saveModbusConfigBtn');
     const origHTML = btn ? btn.innerHTML : '';
+    
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Connecting…';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sending…';
     }
 
     try {
-        const resp = await fetch('/api/pipeline/modbus-config', {
+        // SIMPLE: Just tell backend to save modbus config
+        const resp = await fetch('/api/pipeline/modbus-config/save', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ host: '127.0.0.1', port: 7000, config: configPayload })
+            headers: { 'Content-Type': 'application/json' }
         });
 
-        const data = await resp.json();
+        // Check if response is OK
+        if (!resp.ok) {
+            const text = await resp.text();
+            console.error('[MODBUS-CFG] Server responded with:', resp.status, text);
+            throw new Error(`Server error: ${resp.status}`);
+        }
 
-        if (resp.ok && data.success) {
-            _toast(`✓ ${data.message || 'Configuration sent to modbus service'}`, 'success');
+        // Try to parse JSON
+        let data;
+        try {
+            data = await resp.json();
+        } catch (e) {
+            console.error('[MODBUS-CFG] Failed to parse JSON response');
+            throw new Error('Invalid response from server');
+        }
+
+        if (data.success) {
+            _toast('✓ ' + (data.message || 'Configuration sent to modbus service'), 'success');
         } else {
             _toast(data.error || 'Failed to send configuration', 'error');
         }
     } catch (err) {
-        console.error('[MODBUS-CFG] fetch error:', err);
-        _toast('Network error — could not reach pipeline service', 'error');
+        console.error('[MODBUS-CFG] Error:', err);
+        _toast('Network error: ' + err.message, 'error');
     } finally {
         if (btn) {
-            btn.disabled  = false;
+            btn.disabled = false;
             btn.innerHTML = origHTML;
         }
     }
 }
-
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
 window.initializeModbusMapping = initializeModbusMapping;
 window.editTag = editTag;

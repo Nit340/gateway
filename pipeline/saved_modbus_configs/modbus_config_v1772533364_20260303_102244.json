@@ -1,0 +1,40 @@
+{
+  "config": {
+    "assets": [
+      {
+        "registerType": "holding",
+        "byteOrder": "big",
+        "timeoutMs": 100,
+        "wordOrder": "big",
+        "dataType": "uint16",
+        "address": 3846,
+        "connection_id": "PLC Controller - Main",
+        "offset": 0,
+        "registerCount": 1,
+        "writable": false,
+        "group": "hoist_group",
+        "name": "Hoist_power",
+        "slaveId": 1,
+        "retryCount": 1,
+        "scale": 0.10000000000000001
+      }
+    ],
+    "connections": [
+      {
+        "baud": 9600,
+        "parity": "N",
+        "byteTimeoutMs": 100,
+        "dataBits": 8,
+        "responseTimeoutMs": 100,
+        "maxRetries": 2,
+        "pollingIntervalMs": 300,
+        "id": "PLC Controller - Main",
+        "type": "rtu",
+        "stopBits": 1,
+        "device": "/dev/ttyUSB0"
+      }
+    ]
+  },
+  "version": 1772533364,
+  "saved_at": "2026-03-03T10:22:44.839725"
+}

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# pipeline.py - COMPLETE FIXED VERSION with enhanced config format
+# pipeline.py - COMPLETE VERSION with all functions
 
 import asyncio
 import json
@@ -8,6 +8,7 @@ import sqlite3
 import threading
 import time
 import os
+import datetime
 from datetime import datetime
 
 from aiohttp import web
@@ -41,9 +42,7 @@ pipeline_state = {
     "config_version": 1,
     "last_config_time": 0,
     "connection_attempts": 0,
-    "last_connection_attempt": 0,
-    "subscribed_datapoints": set(),
-    "modbus_config_pending": None
+    "last_connection_attempt": 0
 }
 
 # ---------------------------------------------------------------------------
@@ -52,7 +51,7 @@ pipeline_state = {
 async def _broadcast_pipeline_msg(msg):
     dead = set()
     clients = list(pipeline_state["ws_clients"])
-    if clients and len(clients) > 0:
+    if clients:
         print("[PIPELINE] Broadcasting to {} WS clients".format(len(clients)))
     for ws in clients:
         if ws.closed:
@@ -115,25 +114,19 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     
                     # Subscribe to datapoints
                     try:
-                        if hasattr(client, 'subscribe'):
-                            client.subscribe("modbus_config")
-                            print("[PIPELINE] Subscribed to 'modbus_config' via subscribe()")
-                            client.subscribe("load_raw")
-                            print("[PIPELINE] Subscribed to 'load_raw' via subscribe()")
-                            
-                            with pipeline_state["lock"]:
-                                pipeline_state["subscribed_datapoints"].add("modbus_config")
-                                pipeline_state["subscribed_datapoints"].add("load_raw")
-                        else:
-                            print("[PIPELINE] No subscribe method found, using refresh")
-                            client.refresh()
+                        client.subscribe("modbus_config")
+                        print("[PIPELINE] Subscribed to 'modbus_config'")
+                        client.subscribe("load_raw")
+                        print("[PIPELINE] Subscribed to 'load_raw'")
                     except Exception as e:
                         print("[PIPELINE] Subscribe failed: {}".format(e))
-                        try:
-                            client.refresh()
-                            print("[PIPELINE] Requested service refresh as fallback")
-                        except Exception as e2:
-                            print("[PIPELINE] Refresh failed: {}".format(e2))
+                    
+                    # Request service list
+                    try:
+                        client.refresh()
+                        print("[PIPELINE] Requested service refresh")
+                    except Exception as e:
+                        print("[PIPELINE] Refresh failed: {}".format(e))
                 
                 elif etype == EventType.PIPELINE_OFFLINE:
                     print("[PIPELINE] PIPELINE OFFLINE")
@@ -148,21 +141,6 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     
                     if 'modbus' in service_name.lower():
                         print("[PIPELINE] FOUND MODBUS SERVICE: '{}'".format(service_name))
-                        
-                        # When modbus service appears, try to send any pending config
-                        with pipeline_state["lock"]:
-                            if pipeline_state.get("modbus_config_pending"):
-                                pending_config = pipeline_state["modbus_config_pending"]
-                                print("[PIPELINE] Found pending config for modbus service")
-                                try:
-                                    request_id = client.datapoint_update(service_name, "modbus_config", pending_config)
-                                    if request_id > 0:
-                                        print("[PIPELINE] Sent pending config to {} (request_id={})".format(service_name, request_id))
-                                        pipeline_state["modbus_config_pending"] = None
-                                    else:
-                                        print("[PIPELINE] Failed to send pending config")
-                                except Exception as e:
-                                    print("[PIPELINE] Failed to send pending config: {}".format(e))
                 
                 elif etype == EventType.SERVICE_REMOVED:
                     service_name = event.service_name
@@ -175,7 +153,6 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     print("[PIPELINE] RECEIVE_DONE: {} from {}".format(dp, event.service_name))
                     
                     try:
-                        # Get the value based on its type
                         dtype = client.get_datapoint_type(dp)
                         
                         if dtype == DataType.STRING:
@@ -193,37 +170,19 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         else:
                             val = client.get_datapoint_string(dp)
                         
-                        # For modbus_config, try to parse JSON to show structure
-                        if dp == "modbus_config" and isinstance(val, str):
-                            try:
-                                parsed = json.loads(val)
-                                print("[PIPELINE]   Config structure: {}".format(list(parsed.keys())))
-                                if "version" in parsed:
-                                    print("[PIPELINE]   Config version: {}".format(parsed["version"]))
-                                if "connections" in parsed:
-                                    print("[PIPELINE]   Connections: {}".format(len(parsed["connections"])))
-                                if "assets" in parsed:
-                                    print("[PIPELINE]   Assets: {}".format(len(parsed["assets"])))
-                                if "timestamp_str" in parsed:
-                                    print("[PIPELINE]   Timestamp: {}".format(parsed["timestamp_str"]))
-                            except Exception as e:
-                                print("[PIPELINE]   Config is not valid JSON: {}".format(e))
+                        print("[PIPELINE]   Value: {}".format(str(val)[:100]))
                         
-                        print("[PIPELINE]   Value length: {}".format(len(str(val))))
-                        
-                        # IMPORTANT: Store the value in pipeline_state
                         with pipeline_state["lock"]:
                             pipeline_state[dp] = val
                             if dp == "load_raw":
                                 pipeline_state["load_raw"] = val
-                                print("[PIPELINE] Stored load_raw value")
                             elif dp == "modbus_config":
                                 pipeline_state["modbus_config"] = val
-                                print("[PIPELINE] Stored modbus_config value")
+                                print("[PIPELINE] Received modbus_config")
                         
-                        # Broadcast to websocket clients
+                        # Broadcast to websocket clients using the main loop
                         main_loop = pipeline_state.get("main_loop")
-                        if main_loop and main_loop.is_running():
+                        if main_loop:
                             try:
                                 msg = json.dumps({"datapoint": dp, "value": val})
                                 asyncio.run_coroutine_threadsafe(
@@ -265,10 +224,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
             # Check connection status periodically
             with pipeline_state["lock"]:
                 was_connected = pipeline_state["connected"]
-                client_ref = pipeline_state["client"]
             
             # If disconnected for a while, try to reconnect
-            if not was_connected and client_ref:
+            if not was_connected:
                 now = time.time()
                 with pipeline_state["lock"]:
                     last_attempt = pipeline_state["last_connection_attempt"]
@@ -282,10 +240,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         pipeline_state["last_connection_attempt"] = now
                     
                     try:
-                        client_ref.refresh()
-                        print("[PIPELINE] Refresh sent")
-                    except Exception as e:
-                        print("[PIPELINE] Refresh failed: {}".format(e))
+                        client.refresh()
+                    except:
+                        pass
         
     except Exception as e:
         print("[PIPELINE] Thread crashed: {}".format(e))
@@ -293,12 +250,6 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
         traceback.print_exc()
     finally:
         print("[PIPELINE] Thread exiting")
-        try:
-            with pipeline_state["lock"]:
-                if pipeline_state.get("client"):
-                    pipeline_state["client"].stop()
-        except:
-            pass
 
 # ---------------------------------------------------------------------------
 # Start background thread
@@ -315,18 +266,16 @@ def start_pipeline_background(app=None):
             return
         
         pipeline_state["should_run"] = True
-        pipeline_state["modbus_config_pending"] = None
     
-    # Store the main loop for broadcasts
+    # Store the main loop for broadcasts (this runs in main thread)
     try:
         main_loop = asyncio.get_event_loop()
         with pipeline_state["lock"]:
             pipeline_state["main_loop"] = main_loop
-        print("[PIPELINE] Main event loop captured")
-    except Exception as e:
-        print("[PIPELINE] Warning: Could not get main event loop: {}".format(e))
+    except:
+        print("[PIPELINE] Warning: Could not get main event loop")
     
-    # Start thread
+    # Start thread without passing loop
     thread = threading.Thread(
         target=_run_pipeline_thread,
         args=("127.0.0.1", 7000),
@@ -367,16 +316,15 @@ async def pipeline_connect_handler(request):
     if old_thread:
         time.sleep(1)
     
-    with pipeline_state["lock"]:
-        pipeline_state["should_run"] = True
+    pipeline_state["should_run"] = True
     
     # Store the main loop for broadcasts
     try:
         main_loop = asyncio.get_event_loop()
         with pipeline_state["lock"]:
             pipeline_state["main_loop"] = main_loop
-    except Exception as e:
-        print("[PIPELINE] Could not get main loop: {}".format(e))
+    except:
+        pass
     
     # Start thread
     thread = threading.Thread(
@@ -419,8 +367,6 @@ async def pipeline_disconnect_handler(request):
         pipeline_state["load_raw"] = None
         pipeline_state["modbus_config"] = None
         pipeline_state["connected_services"].clear()
-        pipeline_state["subscribed_datapoints"].clear()
-        pipeline_state["modbus_config_pending"] = None
     
     print("[PIPELINE] Disconnected")
     return web.json_response({"success": True, "message": "Disconnected"})
@@ -429,59 +375,16 @@ async def pipeline_status_handler(request):
     """GET /api/pipeline/status"""
     with pipeline_state["lock"]:
         modbus_service = _find_modbus_service()
-        config_preview = None
-        if pipeline_state["modbus_config"]:
-            try:
-                # Show preview of config structure
-                parsed = json.loads(pipeline_state["modbus_config"])
-                config_preview = {
-                    "version": parsed.get("version"),
-                    "connections": len(parsed.get("connections", [])),
-                    "assets": len(parsed.get("assets", [])),
-                    "timestamp": parsed.get("timestamp_str")
-                }
-            except:
-                config_preview = {"note": "config is not JSON"}
-        
         return web.json_response({
             "connected": pipeline_state["connected"],
             "load_raw": pipeline_state["load_raw"],
-            "modbus_config_preview": config_preview,
-            "modbus_config_length": len(pipeline_state["modbus_config"]) if pipeline_state["modbus_config"] else 0,
+            "modbus_config": pipeline_state["modbus_config"],
             "services": list(pipeline_state["connected_services"]),
             "modbus_service": modbus_service,
             "config_version": pipeline_state["config_version"],
             "last_config_time": pipeline_state["last_config_time"],
-            "connection_attempts": pipeline_state["connection_attempts"],
-            "subscribed": list(pipeline_state["subscribed_datapoints"])
+            "connection_attempts": pipeline_state["connection_attempts"]
         })
-
-async def pipeline_config_view_handler(request):
-    """GET /api/pipeline/config - View the full current modbus_config"""
-    with pipeline_state["lock"]:
-        config = pipeline_state.get("modbus_config")
-        if config:
-            try:
-                # Try to parse as JSON for display
-                parsed = json.loads(config)
-                return web.json_response({
-                    "success": True,
-                    "config": parsed,
-                    "raw_length": len(config)
-                })
-            except Exception as e:
-                return web.json_response({
-                    "success": True,
-                    "config": config,
-                    "raw_length": len(config),
-                    "note": "Raw string (not valid JSON)",
-                    "error": str(e)
-                })
-        else:
-            return web.json_response({
-                "success": False,
-                "message": "No config stored"
-            })
 
 async def pipeline_services_handler(request):
     """GET /api/pipeline/services"""
@@ -492,34 +395,6 @@ async def pipeline_services_handler(request):
             "count": len(pipeline_state["connected_services"]),
             "modbus_service": modbus_service
         })
-
-async def pipeline_debug_handler(request):
-    """GET /api/pipeline/debug - Show pipeline state"""
-    with pipeline_state["lock"]:
-        # Get all keys except non-serializable ones
-        state_copy = {}
-        for k, v in pipeline_state.items():
-            if k not in ["client", "ws_clients", "lock", "main_loop", "background_thread"]:
-                if k == "connected_services":
-                    state_copy[k] = list(v)
-                elif k == "subscribed_datapoints":
-                    state_copy[k] = list(v)
-                elif k == "modbus_config" and v:
-                    state_copy[k + "_length"] = len(v)
-                    try:
-                        parsed = json.loads(v)
-                        state_copy[k + "_preview"] = {
-                            "keys": list(parsed.keys()),
-                            "version": parsed.get("version"),
-                            "connections": len(parsed.get("connections", [])),
-                            "assets": len(parsed.get("assets", []))
-                        }
-                    except:
-                        state_copy[k + "_preview"] = "not JSON"
-                else:
-                    state_copy[k] = v
-        
-        return web.json_response(state_copy)
 
 async def pipeline_loadraw_ws_handler(request):
     """WebSocket /ws/pipeline/load_raw"""
@@ -545,18 +420,7 @@ async def pipeline_loadraw_ws_handler(request):
     
     if current_config is not None:
         try:
-            # Try to parse config for better display
-            try:
-                parsed = json.loads(current_config)
-                display_config = {
-                    "version": parsed.get("version"),
-                    "timestamp": parsed.get("timestamp_str"),
-                    "connections": len(parsed.get("connections", [])),
-                    "assets": len(parsed.get("assets", []))
-                }
-                await ws.send_str(json.dumps({"datapoint": "modbus_config", "value": display_config, "full": parsed}))
-            except:
-                await ws.send_str(json.dumps({"datapoint": "modbus_config", "value": current_config}))
+            await ws.send_str(json.dumps({"datapoint": "modbus_config", "value": current_config}))
         except Exception as e:
             print("[PIPELINE] Could not send buffered config: {}".format(e))
     
@@ -736,7 +600,7 @@ async def pipeline_filters_post_handler(request):
         return web.json_response({"success": False, "error": str(e)})
 
 # ---------------------------------------------------------------------------
-# MODBUS CONFIG SAVE HANDLER - ENHANCED VERSION
+# MODBUS CONFIG SAVE HANDLER - Saves JSON to file first, then sends
 # ---------------------------------------------------------------------------
 
 async def pipeline_save_modbus_config(request):
@@ -745,7 +609,7 @@ async def pipeline_save_modbus_config(request):
        1. Fetch tags from database
        2. Build connections and assets
        3. Save to JSON file
-       4. Send to pipeline service with enhanced format
+       4. Send to pipeline service
     """
     print("\n" + "="*80)
     print("[MODBUS-CFG] BACKEND: Saving Modbus Configuration")
@@ -884,6 +748,7 @@ async def pipeline_save_modbus_config(request):
             len(connection_map), len(assets)))
         
         # 3. SAVE TO JSON FILE FIRST
+        # Create configs directory if it doesn't exist
         config_dir = "modbus_configs"
         if not os.path.exists(config_dir):
             os.makedirs(config_dir)
@@ -903,14 +768,14 @@ async def pipeline_save_modbus_config(request):
         with open(filename, 'w') as f:
             json.dump(save_payload, f, indent=2)
         
-        print("[MODBUS-CFG] Saved configuration to: {}".format(filename))
+        print("[MODBUS-CFG] ? Saved configuration to: {}".format(filename))
         
         # Also save a latest copy (overwrite)
         latest_file = "{}/modbus_config_latest.json".format(config_dir)
         with open(latest_file, 'w') as f:
             json.dump(save_payload, f, indent=2)
         
-        print("[MODBUS-CFG] Updated latest file: {}".format(latest_file))
+        print("[MODBUS-CFG] ? Updated latest file: {}".format(latest_file))
         
         # 4. Check pipeline connection
         with pipeline_state["lock"]:
@@ -920,11 +785,10 @@ async def pipeline_save_modbus_config(request):
         
         print("[MODBUS-CFG] Pipeline connected: {}, Services: {}".format(connected, services))
         
-        # 5. If pipeline is connected, send the config with ENHANCED FORMAT
+        # 5. If pipeline is connected, send the config
         pipeline_sent = False
         pipeline_message = "Not sent - pipeline not connected"
         target_service = None
-        new_version = None
         
         if connected and client:
             # Find modbus service
@@ -933,81 +797,33 @@ async def pipeline_save_modbus_config(request):
                     target_service = service
                     break
             
-            # Create ENHANCED payload with version and metadata
-            with pipeline_state["lock"]:
-                current_version = pipeline_state.get("config_version", 1)
-                new_version = current_version + 1
-                pipeline_state["config_version"] = new_version
-                pipeline_state["last_config_time"] = time.time()
-            
-            enhanced_payload = {
-                "connections": config_payload["connections"],
-                "assets": config_payload["assets"],
-                "version": new_version,
-                "timestamp": time.time(),
-                "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "source": "web_ui",
-                "tag_count": len(rows)
-            }
-            
-            enhanced_json = json.dumps(enhanced_payload)
-            print("[MODBUS-CFG] Enhanced payload structure: {}".format(list(enhanced_payload.keys())))
-            
             if target_service:
-                # Send to specific service using datapoint_update
-                try:
-                    request_id = client.datapoint_update(target_service, "modbus_config", enhanced_json)
-                    if request_id > 0:
-                        print("[MODBUS-CFG] Sent ENHANCED config to pipeline (v{}) targeting '{}', request_id={}".format(
-                            new_version, target_service, request_id))
-                        pipeline_sent = True
-                        pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
-                    else:
-                        print("[MODBUS-CFG] Failed to send - request_id=0")
-                        pipeline_message = "Send failed (request_id=0)"
-                        # Store as pending
-                        with pipeline_state["lock"]:
-                            pipeline_state["modbus_config_pending"] = enhanced_json
-                except Exception as e:
-                    print("[MODBUS-CFG] Error sending to {}: {}".format(target_service, e))
-                    pipeline_message = "Error: {}".format(e)
-                    # Store as pending
-                    with pipeline_state["lock"]:
-                        pipeline_state["modbus_config_pending"] = enhanced_json
+                # Increment version and send
+                with pipeline_state["lock"]:
+                    current_version = pipeline_state.get("config_version", 1)
+                    new_version = current_version + 1
+                    pipeline_state["config_version"] = new_version
+                    pipeline_state["last_config_time"] = time.time()
+                
+                # Add metadata for pipeline
+                send_payload = config_payload.copy()
+                send_payload['_config_version'] = new_version
+                send_payload['_config_sent_at'] = time.time()
+                send_payload['_target_service'] = target_service
+                
+                # Send to pipeline
+                config_json = json.dumps(send_payload)
+                client.datapoint_set("modbus_config", config_json)
+                
+                print("[MODBUS-CFG] ? Sent to pipeline (v{}) targeting '{}'".format(
+                    new_version, target_service))
+                
+                pipeline_sent = True
+                pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
             else:
-                # No modbus service found, try broadcast or store pending
-                print("[MODBUS-CFG] No modbus service found, trying broadcast")
-                try:
-                    # Try broadcast via datapoint_set
-                    client.datapoint_set("modbus_config", enhanced_json)
-                    print("[MODBUS-CFG] Broadcast sent via datapoint_set")
-                    pipeline_sent = True
-                    pipeline_message = "Broadcast sent (v{})".format(new_version)
-                    
-                    # Also store as pending
-                    with pipeline_state["lock"]:
-                        pipeline_state["modbus_config_pending"] = enhanced_json
-                except Exception as e:
-                    print("[MODBUS-CFG] Broadcast failed: {}".format(e))
-                    pipeline_message = "Broadcast failed"
-                    # Store as pending
-                    with pipeline_state["lock"]:
-                        pipeline_state["modbus_config_pending"] = enhanced_json
+                pipeline_message = "No modbus service found"
         else:
-            # Not connected, store as pending
-            enhanced_payload = {
-                "connections": config_payload["connections"],
-                "assets": config_payload["assets"],
-                "version": pipeline_state.get("config_version", 1) + 1,
-                "timestamp": time.time(),
-                "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "source": "web_ui",
-                "tag_count": len(rows)
-            }
-            enhanced_json = json.dumps(enhanced_payload)
-            with pipeline_state["lock"]:
-                pipeline_state["modbus_config_pending"] = enhanced_json
-                print("[MODBUS-CFG] Stored as pending config (not connected)")
+            pipeline_message = "Pipeline not connected"
         
         # 6. Return response
         return web.json_response({
@@ -1021,10 +837,7 @@ async def pipeline_save_modbus_config(request):
             "connections": len(connection_map),
             "assets": len(assets),
             "target_service": target_service,
-            "version": new_version if new_version else pipeline_state.get("config_version", 1),
-            "enhanced_format": {
-                "keys": ["connections", "assets", "version", "timestamp", "timestamp_str", "source", "tag_count"]
-            }
+            "version": pipeline_state.get("config_version", 1) if pipeline_sent else None
         })
         
     except Exception as e:
@@ -1042,16 +855,14 @@ async def pipeline_modbus_config_handler(request):
     return await pipeline_save_modbus_config(request)
 
 # ---------------------------------------------------------------------------
-# Route registration
+# Route registration - THIS IS THE MISSING FUNCTION
 # ---------------------------------------------------------------------------
 def register_pipeline_routes(app):
     """Register all pipeline routes with the aiohttp app"""
     app.router.add_post('/api/pipeline/connect', pipeline_connect_handler)
     app.router.add_post('/api/pipeline/disconnect', pipeline_disconnect_handler)
     app.router.add_get('/api/pipeline/status', pipeline_status_handler)
-    app.router.add_get('/api/pipeline/config', pipeline_config_view_handler)
     app.router.add_get('/api/pipeline/services', pipeline_services_handler)
-    app.router.add_get('/api/pipeline/debug', pipeline_debug_handler)
     app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
     app.router.add_get('/api/pipeline/loadcell-devices', pipeline_loadcell_devices_handler)
     app.router.add_get('/api/pipeline/calibration', pipeline_calibration_get_handler)

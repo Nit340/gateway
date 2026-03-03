@@ -30,9 +30,6 @@ except ImportError:
 # Set up logger for the module
 logger = logging.getLogger(__name__)
 
-# Sentinel placed in the event queue by stop() to unblock event_thread_func immediately.
-_STOP_SENTINEL = object()
-
 
 class SocketMode(IntEnum):
     """Socket operation mode (client or server)."""
@@ -336,8 +333,8 @@ class PipelineSocket:
         with self.send_queue_mutex:
             self.send_queue_cv.notify_all()
         
-        # Unblock event_thread immediately via sentinel (avoids polling timeout)
-        self.event_queue.put(_STOP_SENTINEL)
+        with self.event_queue_mutex:
+            self.event_queue_cv.notify_all()
         
         # Notify any threads waiting on stop_cv
         with self.stop_cv:
@@ -526,14 +523,16 @@ class PipelineSocket:
                             self.handle_client_disconnection(failed_client)
     
     def event_thread_func(self):
-        """Deliver queued socket events to the registered callback (purely event-driven)."""
-        while True:
-            event_data = self.event_queue.get()
-            if event_data is _STOP_SENTINEL:
-                break
-            with self.callback_mutex:
-                if self.event_callback:
-                    self.event_callback(event_data)
+        """Thread function for handling event notifications."""
+        while self.running:
+            try:
+                # Wait for events to process
+                event_data = self.event_queue.get(timeout=0.5)  # 500ms timeout
+                with self.callback_mutex:
+                    if self.event_callback:
+                        self.event_callback(event_data)
+            except queue.Empty:
+                continue
     
     def handle_client_mode(self):
         """Handle client mode operations."""
