@@ -1,0 +1,43 @@
+{
+  "service_name": "ilx_craneiq_core",
+  "pipeline": {
+    "server": "127.0.0.1",
+    "port": 7000,
+    "connection_timeout_s": 5,
+    "max_queue_size": 10,
+    "reconnect_interval_ms": 100
+  },
+  "services": {
+    "modbus": {
+      "service_name": "modbus_service",
+      "groups": [
+        {
+          "datapoint": "hoist",
+          "name": "hoist",
+          "datapoints": [
+            "ct",
+            "hoist"
+          ]
+        },
+        {
+          "datapoint": "ct",
+          "name": "ct",
+          "datapoints": []
+        },
+        {
+          "datapoint": "lt",
+          "name": "lt",
+          "datapoints": []
+        }
+      ]
+    },
+    "loadcell": {
+      "service_name": "load_cell_service",
+      "datapoint_name": "load_weight",
+      "unit_datapoint_name": "load_unit"
+    }
+  },
+  "logging": {
+    "level": "info"
+  }
+}

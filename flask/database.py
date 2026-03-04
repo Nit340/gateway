@@ -434,6 +434,27 @@ def _migrate_existing_db(cursor):
         ''')
         print("[DB] Migration: created admin_users table")
 
+    # rules table — stores each rule as a flat row with groups/datapoints as JSON
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rules'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE rules (
+                id              TEXT    PRIMARY KEY,
+                name            TEXT    NOT NULL DEFAULT '',
+                rule_type       TEXT    NOT NULL DEFAULT 'group',
+                priority        TEXT    NOT NULL DEFAULT 'medium',
+                description     TEXT    DEFAULT '',
+                enabled         INTEGER DEFAULT 1,
+                groups_json     TEXT    DEFAULT '{}',
+                relay_datapoint TEXT    DEFAULT '',
+                trigger_count   INTEGER DEFAULT 0,
+                last_triggered  TIMESTAMP,
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("[DB] Migration: created rules table")
+
 
 def _hash_password(plain):
     return hashlib.sha256(plain.encode()).hexdigest()
@@ -1075,6 +1096,91 @@ def delete_webui_user(user_id):
     except Exception as e:
         print("Error deleting webui user: {}".format(e))
         return False
+
+
+# ---------------------------------------------------------------------------
+# Rules helpers
+# ---------------------------------------------------------------------------
+
+def get_all_rules():
+    import json as _json
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM rules ORDER BY created_at DESC')
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        for r in rows:
+            try:
+                r['groups'] = _json.loads(r.get('groups_json') or '{}')
+            except Exception:
+                r['groups'] = {}
+        return rows
+    except Exception as e:
+        print("get_all_rules error: {}".format(e))
+        return []
+
+
+def save_rule(rule):
+    import json as _json
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT INTO rules (id, name, rule_type, priority, description, enabled,
+                               groups_json, relay_datapoint, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name, priority=excluded.priority,
+                description=excluded.description, enabled=excluded.enabled,
+                groups_json=excluded.groups_json,
+                relay_datapoint=excluded.relay_datapoint,
+                updated_at=CURRENT_TIMESTAMP
+        ''', (
+            rule['id'],
+            rule.get('name', ''),
+            rule.get('ruleType', rule.get('rule_type', 'group')),
+            rule.get('priority', 'medium'),
+            rule.get('description', ''),
+            1 if rule.get('enabled', True) else 0,
+            _json.dumps(rule.get('groups', {})),
+            rule.get('relayDatapoint', rule.get('relay_datapoint', '')),
+        ))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("save_rule error: {}".format(e))
+        return False
+
+
+def delete_rule(rule_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute('DELETE FROM rules WHERE id=?', (rule_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("delete_rule error: {}".format(e))
+        return False
+
+
+def get_all_modbus_tags():
+    """Return all enabled modbus tag names as a flat list."""
+    try:
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute('SELECT name FROM modbus_datapoints WHERE enabled=1 ORDER BY name')
+        tags = [row['name'] for row in cur.fetchall()]
+        conn.close()
+        return tags
+    except Exception as e:
+        print("get_all_modbus_tags error: {}".format(e))
+        return []
 
 
 # ---------------------------------------------------------------------------

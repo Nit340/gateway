@@ -189,6 +189,7 @@ pipeline_state = {
     "modbus_config_pending":       None,
     "loadcell_config_pending":     None,
     "iot_gateway_config_pending":  None,
+    "core_config_pending":         None,
 }
 
 # ============================================================================
@@ -357,6 +358,21 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                     print("[PIPELINE] Pending iot_gateway send failed (rid=0)")
                             except Exception as e:
                                 print("[PIPELINE] Pending iot_gateway send error: {}".format(e))
+
+                    if svc == "ilx_craneiq_core":
+                        with pipeline_state["lock"]:
+                            pending = pipeline_state.get("core_config_pending")
+                        if pending:
+                            try:
+                                rid = client.datapoint_update(svc, "core_config", pending)
+                                if rid > 0:
+                                    print("[PIPELINE] Sent pending core config (rid={})".format(rid))
+                                    with pipeline_state["lock"]:
+                                        pipeline_state["core_config_pending"] = None
+                                else:
+                                    print("[PIPELINE] Pending core config send failed (rid=0)")
+                            except Exception as e:
+                                print("[PIPELINE] Pending core config send error: {}".format(e))
 
                 # -- Service removed --------------------------------------
                 elif etype == EventType.SERVICE_REMOVED:
@@ -1486,7 +1502,6 @@ async def pipeline_send_log_handler(request):
     from database import get_all_pipeline_send_logs
     logs = get_all_pipeline_send_logs()
     return web.json_response({"logs": logs})
-
 
 
 def register_pipeline_routes(app):

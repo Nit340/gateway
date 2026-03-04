@@ -34,6 +34,7 @@ from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
+from rules import register_rules_routes
 from pipeline import (
     register_pipeline_routes, start_pipeline_background,
     PIPELINE_AVAILABLE, send_modbus_config_now,
@@ -594,6 +595,7 @@ def create_app():
 
     register_auth_routes(app)
     register_cloud_routes(app)
+    register_rules_routes(app)
 
     # -- Device Management ------------------------------------------------
     app.router.add_get   ('/api/devices',                          get_all_devices)

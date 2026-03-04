@@ -5,7 +5,7 @@
     "wifi_password": "operator123"
   },
   "heartbeat": {
-    "interval_sec": 300,
+    "interval_sec": 30,
     "channel": "default_publish"
   },
   "servers": {},
