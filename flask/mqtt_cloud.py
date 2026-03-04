@@ -17,8 +17,9 @@ def register_cloud_routes(app):
     app.router.add_delete('/api/cloud-integration/connections/{id}/tags/{tag}',   _remove_tag)
     app.router.add_get   ('/api/cloud-integration/available-tags',                _available_tags)
     app.router.add_put   ('/api/cloud-integration/save-config',                   _save_all)
+    app.router.add_post  ('/api/cloud-integration/send-iot-config',                _send_iot_config)
 
-# ─── TYPE DEFAULTS ────────────────────────────────────────────────────────────
+# --- TYPE DEFAULTS ------------------------------------------------------------
 _DEFAULTS = {
     'mqtt': {
         'protocol':'mqtts','host':'','port':8883,'clientId':'','keepAlive':60,
@@ -42,7 +43,7 @@ _DEFAULTS = {
     },
 }
 
-# ─── HELPERS ──────────────────────────────────────────────────────────────────
+# --- HELPERS ------------------------------------------------------------------
 def _ok(d, s=200): return web.Response(text=json.dumps(d), content_type='application/json', status=s)
 def _err(m, s=400): return web.Response(text=json.dumps({'error':m}), content_type='application/json', status=s)
 def _cfg(raw):
@@ -73,7 +74,7 @@ def _row_dict(r, cur):
             'config':_cfg(cfg_raw),'tags':_fetch_tags(cur,cid,ctype),
             'statistics':_fetch_stats(cur,cid),'created_at':ca,'updated_at':ua}
 
-# ─── HANDLERS ─────────────────────────────────────────────────────────────────
+# --- HANDLERS -----------------------------------------------------------------
 async def _connection_types(req):
     return _ok({'types':[
         {'id':'mqtt','name':'MQTT Broker',   'description':'Standard IoT messaging protocol','icon':'fa-solid fa-cloud','color':'#3B82F6'},
@@ -149,7 +150,7 @@ async def _delete(req):
     except Exception as e: return _err(str(e),500)
 
 async def _toggle(req):
-    """Toggle enabled. Returns the NEW state read back from DB — never trust body."""
+    """Toggle enabled. Returns the NEW state read back from DB -- never trust body."""
     cid=req.match_info['id']
     try:
         db=get_db_connection(); cur=db.cursor()
@@ -228,5 +229,167 @@ async def _save_all(req):
         db=get_db_connection(); cur=db.cursor()
         cur.execute('SELECT COUNT(*) FROM cloud_connections')
         n=cur.fetchone()[0]; db.close()
+        # Sync iot_gateway_config whenever connections are saved
+        try:
+            await send_iot_gateway_config_now()
+        except Exception as _e:
+            print('[IOT-CFG] sync error in _save_all: {}'.format(_e))
         return _ok({'message':'Saved ({} connections)'.format(n),'total':n})
     except Exception as e: return _err(str(e),500)
+
+# =============================================================================
+# IOT GATEWAY CONFIG BUILDER
+# =============================================================================
+#
+#  JSON structure matches ilx_iot_gateway-config.json schema:
+#
+#  {
+#    version, system:{wifi_ssid, wifi_password},
+#    heartbeat:{interval_sec, channel},
+#    servers:{
+#      mqtt:{enabled, host, port, client_id, device_token, username, password,
+#            keepalive_sec, channels:{publish:[...], subscribe:[...]}},
+#      mqtt_cloud:{...same...}
+#    },
+#    mappings:[
+#      {alias, channel, datapoints:{int:[...], float:[...], bool:[...]}},
+#      {channel, datapoints:{...}}          // individual (no alias)
+#    ]
+#  }
+#
+#  Channel auto-assign rules:
+#    - Group (has alias): use mapping.channel if set,
+#                         else use connection's first default publish channel,
+#                         else 'default_publish'
+#    - Individual (no alias): same fallback
+#
+# =============================================================================
+
+def _get_default_channel_for_connection(conn_config):
+    """Return the name of the default (or first) publish channel for a connection."""
+    channels = conn_config.get('channels', {})
+    publish  = channels.get('publish', [])
+    if not publish:
+        return 'default_publish'
+    # Prefer channel explicitly marked default=True
+    for ch in publish:
+        if ch.get('default'):
+            return ch.get('name', 'default_publish')
+    # Fall back to first channel
+    return publish[0].get('name', 'default_publish')
+
+
+def build_iot_gateway_config():
+    """Build the complete iot_gateway JSON config from the database.
+
+    Returns a dict ready to be json.dumps()-ed.
+
+    - wifi credentials come from general_configuration (network.wifi.ssid / .password)
+    - heartbeat.channel is taken from the first publish channel of the local MQTT
+      broker connection so it always matches whatever is configured in the MQTT form
+    """
+    from database import get_general_configuration, get_db_connection
+    import time as _time
+
+    # -- 1. General config: wifi + heartbeat ----------------------------------
+    gen  = get_general_configuration()
+    wifi = gen.get('network', {}).get('wifi', {})
+    hb   = gen.get('heartbeat', {})
+
+    wifi_ssid     = wifi.get('ssid',     '')
+    wifi_password = wifi.get('password', '')
+    heartbeat_sec = int(hb.get('interval', 30))
+
+    # -- 2. Load all enabled MQTT connections ---------------------------------
+    db  = get_db_connection()
+    cur = db.cursor()
+    cur.execute(
+        "SELECT id, name, enabled, config FROM cloud_connections WHERE type='mqtt' ORDER BY created_at")
+    rows = cur.fetchall()
+    db.close()
+
+    servers          = {}
+    all_mappings     = []
+    heartbeat_channel = 'default_publish'   # updated from local broker's first publish channel
+
+    for row in rows:
+        cid, name, enabled, cfg_raw = row
+        cfg = _cfg(cfg_raw)
+
+        # Canonical server key: local broker → 'mqtt', cloud/CMS → 'mqtt_cloud'
+        server_key = name.lower().replace(' ', '_').replace('-', '_')
+        if 'cloud' in server_key or 'cms' in server_key:
+            server_key = 'mqtt_cloud'
+        else:
+            server_key = 'mqtt'
+
+        server_entry = {
+            'enabled':       bool(enabled),
+            'host':          cfg.get('host', '127.0.0.1'),
+            'port':          int(cfg.get('port', 1883)),
+            'client_id':     cfg.get('client_id', ''),
+            'device_token':  cfg.get('device_token', ''),
+            'username':      cfg.get('username', ''),
+            'password':      cfg.get('password', ''),
+            'keepalive_sec': int(cfg.get('keepalive_sec', 60)),
+            'channels':      cfg.get('channels', {'publish': [], 'subscribe': []}),
+        }
+        if cfg.get('secure_token'):
+            server_entry['secure_token'] = cfg['secure_token']
+
+        servers[server_key] = server_entry
+
+        # Derive heartbeat channel from local broker's first publish channel
+        if server_key == 'mqtt':
+            pub = cfg.get('channels', {}).get('publish', [])
+            if pub:
+                heartbeat_channel = pub[0].get('name', 'default_publish')
+
+        # Collect mappings with auto-assigned channels
+        default_ch   = _get_default_channel_for_connection(cfg)
+        raw_mappings = cfg.get('mappings', [])
+        for m in raw_mappings:
+            channel = m.get('channel') or default_ch
+            entry   = {'channel': channel, 'datapoints': m.get('datapoints', {})}
+            if m.get('alias'):
+                entry['alias'] = m['alias']
+            all_mappings.append(entry)
+
+    # -- 3. Assemble ---------------------------------------------------------
+    return {
+        'version': 2,
+        'system': {
+            'wifi_ssid':     wifi_ssid,
+            'wifi_password': wifi_password,
+        },
+        'heartbeat': {
+            'interval_sec': heartbeat_sec,
+            'channel':      heartbeat_channel,
+        },
+        'servers':  servers,
+        'mappings': all_mappings,
+    }
+
+
+async def send_iot_gateway_config_now():
+    """Convenience coroutine: build config and dispatch via pipeline.
+    Safe to call from any async context (general_config save, cloud save, startup).
+    """
+    try:
+        from pipeline import send_iot_gateway_config_now as _pipeline_send
+        return await _pipeline_send()
+    except Exception as e:
+        print('[IOT-CFG] send_iot_gateway_config_now error: {}'.format(e))
+        return {'success': False, 'error': str(e)}
+
+
+async def _send_iot_config(req):
+    """POST /api/cloud-integration/send-iot-config
+    Build and push the iot_gateway_config to the pipeline service.
+    """
+    result = await send_iot_gateway_config_now()
+    if result.get('success'):
+        return _ok({'message': result.get('pipeline_message', 'Sent'),
+                    'version': result.get('version'),
+                    'pipeline_sent': result.get('pipeline_sent')})
+    return _err(result.get('error', 'Failed to send'), 500)

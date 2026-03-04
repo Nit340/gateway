@@ -1,57 +1,11 @@
 // rules.js - Rules Engine Page Script
-// WITH NEW GROUP RULE TYPE
+// FIXED: All groups have Add buttons, proper rule type selection, no static data
 
 if (typeof window.rulesLoaded === 'undefined') {
     window.rulesLoaded = true;
 
-    // ========== STATIC DATA ==========
-    let rules = [
-        // Regular rules
-        {
-            id: 'rule_001', name: 'High Load Warning', enabled: true, priority: 'high',
-            description: 'Trigger warning when crane load exceeds 90% of capacity',
-            trigger: { device: 'Load Cell LC-001', parameter: 'current_load', operator: '>', value: '22500', unit: 'kg' },
-            alertMessage: 'High Load Warning', alertClass: 'Warning',
-            triggerCount: 45, lastTriggered: '2025-06-12T10:30:00Z', created: '2025-01-15T08:00:00Z'
-        },
-        {
-            id: 'rule_002', name: 'Emergency Stop Alert', enabled: true, priority: 'critical',
-            description: 'Immediate alert when emergency stop is activated',
-            trigger: { device: 'Emergency Stop ESM-001', parameter: 'e_stop_status', operator: '==', value: 'true', unit: 'boolean' },
-            alertMessage: 'Critical Temperature', alertClass: 'Critical',
-            triggerCount: 3, lastTriggered: '2025-06-10T14:22:00Z', created: '2025-01-15T08:00:00Z'
-        },
-        
-        // NEW GROUP RULE - contains all three groups
-        {
-            id: 'rule_100', name: 'Crane Group Rules', enabled: true, priority: 'high', ruleType: 'group',
-            description: 'Combined rules for HOIST, CT, and LT groups',
-            groups: {
-                hoist: {
-                    enabled: true,
-                    datapoints: ['hoist_up_current_load']
-                },
-                ct: {
-                    enabled: true,
-                    datapoints: ['ct_left_position']
-                },
-                lt: {
-                    enabled: true,
-                    datapoints: ['lt_forward_speed']
-                }
-            },
-            triggerCount: 12, lastTriggered: '2025-06-12T10:30:00Z', created: '2025-01-15T08:00:00Z'
-        },
-        
-        // More regular rules
-        {
-            id: 'rule_003', name: 'Device Offline Detection', enabled: true, priority: 'medium',
-            description: 'Alert when a critical device goes offline',
-            trigger: { device: 'Any Modbus Device', parameter: 'connection_status', operator: '==', value: 'offline', unit: 'status' },
-            alertMessage: 'Device Offline', alertClass: 'High',
-            triggerCount: 12, lastTriggered: '2025-06-11T18:45:00Z', created: '2025-01-20T09:00:00Z'
-        }
-    ];
+    // ========== EMPTY INITIAL DATA ==========
+    let rules = []; // Start with empty array - no static data
 
     var selectedRuleId = null;
     
@@ -135,7 +89,7 @@ if (typeof window.rulesLoaded === 'undefined') {
         if (!container) return;
 
         if (!rules.length) {
-            container.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-inbox text-3xl mb-3 block"></i>No rules yet</div>';
+            container.innerHTML = '<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-inbox text-3xl mb-3 block"></i>No rules yet. Click "Create New Rule" to get started.</div>';
             return;
         }
 
@@ -154,14 +108,14 @@ if (typeof window.rulesLoaded === 'undefined') {
                             <span class="w-2 h-2 rounded-full ${rule.enabled ? 'bg-green-500' : 'bg-slate-300'} flex-shrink-0"></span>
                             ${groupBadge}
                         </div>
-                        <div class="font-medium text-sm text-slate-900 truncate">${rule.name} ${isGroupRule ? '(HOIST+CT+LT)' : ''}</div>
+                        <div class="font-medium text-sm text-slate-900 truncate">${rule.name}</div>
                         <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
                             <i class="fa-solid fa-microchip text-[10px]"></i>
-                            ${isGroupRule ? '3 groups combined' : rule.trigger.device}
+                            ${isGroupRule ? `${Object.keys(rule.groups || {}).filter(g => rule.groups[g]?.enabled).length} groups enabled` : (rule.trigger?.device || 'No device')}
                         </div>
                     </div>
                     <div class="text-right flex-shrink-0">
-                        <div class="text-sm font-semibold text-slate-900">${rule.triggerCount}</div>
+                        <div class="text-sm font-semibold text-slate-900">${rule.triggerCount || 0}</div>
                         <div class="text-[10px] text-slate-400">triggers</div>
                     </div>
                 </div>
@@ -196,7 +150,8 @@ if (typeof window.rulesLoaded === 'undefined') {
                 lt: { enabled: true, datapoints: [] }
             };
             
-            content.innerHTML = renderStep1(null);
+            // Show rule type selector first
+            content.innerHTML = renderRuleTypeSelector();
             return;
         }
 
@@ -226,27 +181,54 @@ if (typeof window.rulesLoaded === 'undefined') {
         if (rule.ruleType === 'group') {
             content.innerHTML = renderGroupRuleEditor(rule);
         } else {
-            content.innerHTML = renderStep1(rule);
+            content.innerHTML = renderStandardRuleEditor(rule);
         }
     }
 
-    // Regular rule editor
-    function renderStep1(rule) {
+    // New function to render rule type selector
+    function renderRuleTypeSelector() {
+        return `<div class="space-y-6">
+            <div class="text-center mb-6">
+                <h3 class="text-lg font-medium text-slate-900">Select Rule Type</h3>
+                <p class="text-sm text-slate-500 mt-1">Choose the type of rule you want to create</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Standard Rule Card -->
+                <div class="border border-slate-200 rounded-xl p-6 cursor-pointer hover:border-primary hover:shadow-md transition-all" onclick="window.selectRuleType('standard')">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-bolt text-blue-600 text-xl"></i>
+                    </div>
+                    <h4 class="font-semibold text-slate-900 mb-2">Standard Rule</h4>
+                    <p class="text-sm text-slate-500">Create a rule based on a single device parameter with threshold conditions.</p>
+                    <div class="mt-4 text-xs text-slate-400">
+                        <i class="fa-regular fa-circle-check text-primary mr-1"></i> Single device trigger
+                    </div>
+                </div>
+                
+                <!-- Group Rule Card -->
+                <div class="border border-slate-200 rounded-xl p-6 cursor-pointer hover:border-primary hover:shadow-md transition-all" onclick="window.selectRuleType('group')">
+                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fa-solid fa-layer-group text-purple-600 text-xl"></i>
+                    </div>
+                    <h4 class="font-semibold text-slate-900 mb-2">Group Rule</h4>
+                    <p class="text-sm text-slate-500">Combine multiple datapoints from HOIST, CT, and LT groups into one rule.</p>
+                    <div class="mt-4 text-xs text-slate-400">
+                        <i class="fa-regular fa-circle-check text-primary mr-1"></i> Multiple groups supported
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Standard rule editor
+    function renderStandardRuleEditor(rule) {
         var t = rule ? rule.trigger : {};
         return `<div class="space-y-6">
             <!-- Rule name -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Rule Name <span class="text-red-500">*</span></label>
                 <input type="text" id="rule-name-input" value="${rule ? rule.name : ''}" placeholder="e.g., High Temperature Alert" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
-            </div>
-            
-            <!-- Rule Type Selection -->
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1.5">Rule Type</label>
-                <select id="rule-type-select" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" onchange="window.onRuleTypeChange()">
-                    <option value="standard" ${!rule || !rule.ruleType ? 'selected' : ''}>Standard Rule</option>
-                    <option value="group" ${rule && rule.ruleType === 'group' ? 'selected' : ''}>Group Rule (HOIST+CT+LT)</option>
-                </select>
             </div>
             
             <!-- Description -->
@@ -321,6 +303,13 @@ if (typeof window.rulesLoaded === 'undefined') {
                     </select>
                 </div>
             </div>
+            
+            <!-- Change Rule Type Button -->
+            <div class="flex justify-center pt-2">
+                <button type="button" class="text-sm text-primary hover:text-primaryHover" onclick="window.changeRuleType()">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Change Rule Type
+                </button>
+            </div>
         </div>`;
     }
 
@@ -344,19 +333,19 @@ if (typeof window.rulesLoaded === 'undefined') {
         }).join('');
     }
 
-    // NEW: Group rule editor with all three groups - WITH DATAPOINT DROPDOWN AND ADD BUTTON
+    // Group rule editor with all three groups - WITH DATAPOINT DROPDOWN AND ADD BUTTON
     function renderGroupRuleEditor(rule) {
         return `<div class="space-y-6">
             <!-- Rule name -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Rule Name <span class="text-red-500">*</span></label>
-                <input type="text" id="rule-name-input" value="${rule.name}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                <input type="text" id="rule-name-input" value="${rule ? rule.name : ''}" placeholder="e.g., Crane Group Monitoring" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
             </div>
             
             <!-- Description -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
-                <textarea id="rule-desc-input" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${rule.description}</textarea>
+                <textarea id="rule-desc-input" rows="2" placeholder="Describe what this rule does..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${rule ? rule.description : ''}</textarea>
             </div>
             
             <!-- Priority -->
@@ -364,8 +353,8 @@ if (typeof window.rulesLoaded === 'undefined') {
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Priority</label>
                 <div class="grid grid-cols-4 gap-2">
                     ${['critical','high','medium','low'].map(function(p) {
-                        var active = rule.priority === p;
-                        return `<button type="button" class="py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${active ? 'border-primary bg-primary text-white' : 'border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}" onclick="window.setPriority('${rule.id}', '${p}')">${p.charAt(0).toUpperCase() + p.slice(1)}</button>`;
+                        var active = rule && rule.priority === p;
+                        return `<button type="button" class="py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${active ? 'border-primary bg-primary text-white' : 'border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}" onclick="window.setPriority('${rule ? rule.id : 'new'}', '${p}')">${p.charAt(0).toUpperCase() + p.slice(1)}</button>`;
                     }).join('')}
                 </div>
             </div>
@@ -380,7 +369,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                         <span class="font-semibold text-sm text-purple-800">HOIST Group</span>
                     </div>
                     <label class="toggle-switch scale-75">
-                        <input type="checkbox" id="hoist-enabled" ${currentGroupData.hoist.enabled ? 'checked' : ''}>
+                        <input type="checkbox" id="hoist-enabled" ${currentGroupData.hoist.enabled ? 'checked' : ''} onchange="window.toggleGroup('hoist', this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -419,7 +408,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                         <span class="font-semibold text-sm text-cyan-800">CT Group</span>
                     </div>
                     <label class="toggle-switch scale-75">
-                        <input type="checkbox" id="ct-enabled" ${currentGroupData.ct.enabled ? 'checked' : ''}>
+                        <input type="checkbox" id="ct-enabled" ${currentGroupData.ct.enabled ? 'checked' : ''} onchange="window.toggleGroup('ct', this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -458,7 +447,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                         <span class="font-semibold text-sm text-emerald-800">LT Group</span>
                     </div>
                     <label class="toggle-switch scale-75">
-                        <input type="checkbox" id="lt-enabled" ${currentGroupData.lt.enabled ? 'checked' : ''}>
+                        <input type="checkbox" id="lt-enabled" ${currentGroupData.lt.enabled ? 'checked' : ''} onchange="window.toggleGroup('lt', this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -486,13 +475,19 @@ if (typeof window.rulesLoaded === 'undefined') {
                     ${renderDatapointsList(currentGroupData.lt.datapoints, 'lt')}
                 </div>
             </div>
+            
+            <!-- Change Rule Type Button -->
+            <div class="flex justify-center pt-2">
+                <button type="button" class="text-sm text-primary hover:text-primaryHover" onclick="window.changeRuleType()">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Change Rule Type
+                </button>
+            </div>
         </div>`;
     }
 
-    // Handle rule type change
-    window.onRuleTypeChange = function() {
-        var ruleType = document.getElementById('rule-type-select').value;
-        if (ruleType === 'group') {
+    // New function to select rule type
+    window.selectRuleType = function(type) {
+        if (type === 'group') {
             // Reset group data for new group rule
             currentGroupData = {
                 hoist: { enabled: true, datapoints: [] },
@@ -500,24 +495,43 @@ if (typeof window.rulesLoaded === 'undefined') {
                 lt: { enabled: true, datapoints: [] }
             };
             
-            // Show group rule editor with default values
+            // Show group rule editor
             var defaultGroupRule = {
                 id: 'temp',
-                name: document.getElementById('rule-name-input')?.value || 'New Group Rule',
-                description: document.getElementById('rule-desc-input')?.value || '',
+                name: '',
+                description: '',
                 priority: 'medium',
                 ruleType: 'group'
             };
             document.getElementById('wizard-content').innerHTML = renderGroupRuleEditor(defaultGroupRule);
         } else {
             // Show standard rule editor
-            document.getElementById('wizard-content').innerHTML = renderStep1(null);
+            document.getElementById('wizard-content').innerHTML = renderStandardRuleEditor(null);
+        }
+    };
+
+    // New function to change rule type (go back to selector)
+    window.changeRuleType = function() {
+        if (confirm('Changing rule type will discard unsaved changes. Continue?')) {
+            document.getElementById('wizard-content').innerHTML = renderRuleTypeSelector();
+        }
+    };
+
+    // New function to toggle group enabled state
+    window.toggleGroup = function(group, enabled) {
+        if (currentGroupData[group]) {
+            currentGroupData[group].enabled = enabled;
         }
     };
 
     // Generic function to add datapoint to any group
     window.addDatapoint = function(group) {
         const select = document.getElementById(`${group}-datapoint-select`);
+        if (!select) {
+            showNotification('Could not find dropdown', 'error');
+            return;
+        }
+        
         const selectedValue = select.value;
         
         if (!selectedValue) {
@@ -536,7 +550,9 @@ if (typeof window.rulesLoaded === 'undefined') {
         
         // Update the list display
         const listElement = document.getElementById(`${group}-datapoints-list`);
-        listElement.innerHTML = renderDatapointsList(currentGroupData[group].datapoints, group);
+        if (listElement) {
+            listElement.innerHTML = renderDatapointsList(currentGroupData[group].datapoints, group);
+        }
         
         // Reset select
         select.value = '';
@@ -551,7 +567,9 @@ if (typeof window.rulesLoaded === 'undefined') {
         
         // Update the list display
         const listElement = document.getElementById(`${group}-datapoints-list`);
-        listElement.innerHTML = renderDatapointsList(currentGroupData[group].datapoints, group);
+        if (listElement) {
+            listElement.innerHTML = renderDatapointsList(currentGroupData[group].datapoints, group);
+        }
         
         showNotification('Datapoint removed', 'info');
     };
@@ -559,12 +577,16 @@ if (typeof window.rulesLoaded === 'undefined') {
     function updateStatistics() {
         var total   = rules.length;
         var active  = rules.filter(function(r){ return r.enabled; }).length;
-        var triggers = rules.reduce(function(sum, r){ return sum + r.triggerCount; }, 0);
-        var els = { 'total-rules': total, 'active-rules': active, 'total-triggers': triggers };
-        Object.keys(els).forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.textContent = els[id];
-        });
+        var triggers = rules.reduce(function(sum, r){ return sum + (r.triggerCount || 0); }, 0);
+        
+        // Update stats if elements exist
+        var totalEl = document.getElementById('total-rules');
+        var activeEl = document.getElementById('active-rules');
+        var triggersEl = document.getElementById('total-triggers');
+        
+        if (totalEl) totalEl.textContent = total;
+        if (activeEl) activeEl.textContent = active;
+        if (triggersEl) triggersEl.textContent = triggers;
     }
 
     // ========== WINDOW ACTIONS ==========
@@ -575,6 +597,12 @@ if (typeof window.rulesLoaded === 'undefined') {
     };
 
     window.setPriority = function(ruleId, priority) {
+        // For new rules (not saved yet), we just update the UI
+        if (ruleId === 'new') {
+            showNotification(`Priority set to ${priority}`, 'success');
+            return;
+        }
+        
         var rule = rules.find(function(r){ return r.id === ruleId; });
         if (rule) { 
             rule.priority = priority; 
@@ -592,15 +620,36 @@ if (typeof window.rulesLoaded === 'undefined') {
     };
 
     window.saveRule = function() {
-        // Check if it's a group rule
-        var isGroupRule = document.getElementById('rule-type-select')?.value === 'group' || 
-                          (selectedRuleId && rules.find(r => r.id === selectedRuleId)?.ruleType === 'group');
+        // Check what type of editor we're in
+        const hasRuleTypeSelector = document.querySelector('#wizard-content .grid-cols-1.md\\:grid-cols-2');
+        
+        if (hasRuleTypeSelector) {
+            showNotification('Please select a rule type first', 'warning');
+            return;
+        }
+        
+        // Check if it's a group rule editor (look for group-specific elements)
+        const isGroupRule = document.getElementById('hoist-datapoint-select') !== null;
         
         if (isGroupRule) {
             // Get current enabled states
-            currentGroupData.hoist.enabled = document.getElementById('hoist-enabled')?.checked || false;
-            currentGroupData.ct.enabled = document.getElementById('ct-enabled')?.checked || false;
-            currentGroupData.lt.enabled = document.getElementById('lt-enabled')?.checked || false;
+            const hoistEnabled = document.getElementById('hoist-enabled');
+            const ctEnabled = document.getElementById('ct-enabled');
+            const ltEnabled = document.getElementById('lt-enabled');
+            
+            currentGroupData.hoist.enabled = hoistEnabled ? hoistEnabled.checked : false;
+            currentGroupData.ct.enabled = ctEnabled ? ctEnabled.checked : false;
+            currentGroupData.lt.enabled = ltEnabled ? ltEnabled.checked : false;
+            
+            // Validate at least one group has datapoints if enabled
+            const hasData = (currentGroupData.hoist.enabled && currentGroupData.hoist.datapoints.length > 0) ||
+                           (currentGroupData.ct.enabled && currentGroupData.ct.datapoints.length > 0) ||
+                           (currentGroupData.lt.enabled && currentGroupData.lt.datapoints.length > 0);
+            
+            if (!hasData) {
+                showNotification('At least one enabled group must have datapoints', 'warning');
+                return;
+            }
             
             // Save group rule
             var groupRuleData = {
@@ -608,7 +657,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                 name: document.getElementById('rule-name-input')?.value || 'New Group Rule',
                 enabled: document.getElementById('rule-status-toggle')?.checked || true,
                 ruleType: 'group',
-                priority: 'medium',
+                priority: 'medium', // Default, can be updated
                 description: document.getElementById('rule-desc-input')?.value || '',
                 groups: {
                     hoist: {
@@ -640,9 +689,16 @@ if (typeof window.rulesLoaded === 'undefined') {
             }
         } else {
             // Save standard rule
+            // Validate required fields
+            const ruleName = document.getElementById('rule-name-input')?.value;
+            if (!ruleName) {
+                showNotification('Rule name is required', 'warning');
+                return;
+            }
+            
             const ruleData = {
                 id: selectedRuleId || 'rule_' + Date.now(),
-                name: document.getElementById('rule-name-input')?.value || 'New Rule',
+                name: ruleName,
                 enabled: document.getElementById('rule-status-toggle')?.checked || true,
                 priority: 'medium',
                 description: document.getElementById('rule-desc-input')?.value || '',

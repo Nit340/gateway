@@ -28,7 +28,7 @@ from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
-from pipeline import register_pipeline_routes, start_pipeline_background, PIPELINE_AVAILABLE
+from pipeline import register_pipeline_routes, start_pipeline_background, PIPELINE_AVAILABLE, send_modbus_config_now
 
 
 async def database_viewer_handler(request):
@@ -68,7 +68,7 @@ async def database_viewer_handler(request):
             </style>
         </head>
         <body>
-            <h1> Database Viewer: gateway_config.db</h1>
+            <h1> Database Viewer: /mnt/data/gateway_config.db</h1>
         """
         
         stats = get_database_stats()
@@ -298,12 +298,50 @@ async def start_background_tasks(app):
     # Start device status updater
     app['device_status_updater'] = asyncio.ensure_future(device_status_updater())
     
-    # Start pipeline background thread automatically (don't await it)
+    # Start pipeline background thread automatically (non-blocking)
     if PIPELINE_AVAILABLE:
         print("[MAIN] Starting pipeline background thread...")
-        # Just call it directly - it's non-blocking
         start_pipeline_background(app)
         print("[MAIN] Pipeline background thread started")
+
+        # Auto-send modbus config once the pipeline connects on startup.
+        # Runs in background so it does not block server startup.
+        async def _auto_send_modbus_on_startup():
+            """Wait for pipeline to connect, then push the current modbus config.
+
+            Waits up to 30 s.  If the pipeline is not yet connected by then the
+            config is still stored as pending inside pipeline_state and will be
+            dispatched automatically the moment the modbus service appears
+            (SERVICE_ADDED handler in pipeline.py).
+            """
+            from pipeline import pipeline_state
+            print("[MAIN] Auto-send: waiting for pipeline connection (max 30 s)...")
+            for _ in range(30):
+                await asyncio.sleep(1)
+                with pipeline_state["lock"]:
+                    connected = pipeline_state["connected"]
+                if connected:
+                    break
+
+            with pipeline_state["lock"]:
+                connected = pipeline_state["connected"]
+
+            if connected:
+                print("[MAIN] Auto-send: pipeline connected — sending modbus config")
+                try:
+                    result = await send_modbus_config_now()
+                    if result.get("success"):
+                        print("[MAIN] Auto-send: OK — {}".format(
+                            result.get("pipeline_message", "sent")))
+                    else:
+                        print("[MAIN] Auto-send: build/send failed — {}".format(
+                            result.get("error", "unknown")))
+                except Exception as e:
+                    print("[MAIN] Auto-send: exception: {}".format(e))
+            else:
+                print("[MAIN] Auto-send: pipeline not connected after 30 s — "                      "config queued as pending, will send on first pipeline connection")
+
+        app["auto_send_modbus"] = asyncio.ensure_future(_auto_send_modbus_on_startup())
     else:
         print("[MAIN] Pipeline not available - skipping")
 
@@ -328,6 +366,14 @@ async def cleanup_background_tasks(app):
         except asyncio.CancelledError:
             pass
     
+    # Cancel auto-send task if still running
+    if "auto_send_modbus" in app:
+        app["auto_send_modbus"].cancel()
+        try:
+            await app["auto_send_modbus"]
+        except (asyncio.CancelledError, Exception):
+            pass
+
     # Stop pipeline
     if PIPELINE_AVAILABLE:
         try:

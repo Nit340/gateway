@@ -4,7 +4,15 @@ import sqlite3
 import json
 from datetime import datetime
 
-DB_FILE = 'gateway_config.db'
+import os
+
+# Database stored at /mnt/data/ so it survives across working-directory changes
+# and is kept outside the application source tree.
+_DB_DIR  = '/mnt/data'
+DB_FILE  = os.path.join(_DB_DIR, 'gateway_config.db')
+
+# Create the directory if it does not exist (runs once at import time)
+os.makedirs(_DB_DIR, exist_ok=True)
 
 def get_db_connection():
     """Get a database connection with proper timeout and WAL mode for concurrency"""
@@ -17,53 +25,100 @@ def init_database():
     """Initialize SQLite database with new schema"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     create_tables(cursor)
     insert_default_data(cursor)
-    
+    _migrate_general_config_columns(cursor)   # safe additive migration for existing DBs
+
     conn.commit()
     conn.close()
     print("Database initialized with new schema")
     print("[OK] General configuration table")
     print("[OK] Services table (modbus, loadcell)")
     print("[OK] Modbus_device table (tcp/rtu with connection details)")
-    print("[OK] Loadcell_device table (sysfs_hx711 hardware params + JSON filters/levels)")
+    print("[OK] Loadcell_device table (with calibration)")
     print("[OK] Modbus_datapoints table")
     print("[OK] Loadcell_datapoints table")
     print("[OK] Device groups table")
     print("[OK] Cloud Integration tables")
 
+
+def _migrate_general_config_columns(cursor):
+    """Add any new columns to general_configuration on an existing live DB.
+    Uses ALTER TABLE ADD COLUMN which is safe and additive — never drops data."""
+    cursor.execute("PRAGMA table_info(general_configuration)")
+    existing = {row[1] for row in cursor.fetchall()}
+    new_cols = [
+        ("network_mode",      "TEXT    DEFAULT 'wifi'"),
+        ("wifi_ssid",         "TEXT    DEFAULT ''"),
+        ("wifi_password",     "TEXT    DEFAULT ''"),
+        ("eth_ip_assignment", "TEXT    DEFAULT 'dhcp'"),
+        ("eth_static_ip",     "TEXT    DEFAULT ''"),
+        ("eth_subnet_mask",   "TEXT    DEFAULT ''"),
+        ("eth_gateway",       "TEXT    DEFAULT ''"),
+        ("eth_dns1",          "TEXT    DEFAULT ''"),
+        ("eth_dns2",          "TEXT    DEFAULT ''"),
+        ("cell_apn",          "TEXT    DEFAULT 'internet'"),
+        ("cell_username",     "TEXT    DEFAULT ''"),
+        ("cell_password",     "TEXT    DEFAULT ''"),
+    ]
+    for col, defn in new_cols:
+        if col not in existing:
+            cursor.execute(
+                "ALTER TABLE general_configuration ADD COLUMN {} {}".format(col, defn))
+            print("[DB] Migration: added general_configuration.{}".format(col))
+
 def create_tables(cursor):
     """Create all tables with proper schema"""
     
-    # General configuration table
+    # General configuration table — single-row store (id always = 1)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS general_configuration (
             id INTEGER PRIMARY KEY,
-            
+
             -- Gateway Identity
-            gateway_name TEXT DEFAULT 'Univa-GW-01',
-            serial_number TEXT DEFAULT 'GW2025-1190021',
-            deployment_site TEXT DEFAULT 'Chennai Port - Zone A',
-            location_mode TEXT DEFAULT 'manual',
-            latitude REAL DEFAULT 12.99123,
-            longitude REAL DEFAULT 80.12312,
-            asset_id TEXT DEFAULT 'CRN-CT-12',
-            mac_address TEXT DEFAULT '00:1A:2B:3C:4D:5E',
-            
+            gateway_name        TEXT    DEFAULT 'Univa-GW-01',
+            serial_number       TEXT    DEFAULT 'GW2025-1190021',
+            deployment_site     TEXT    DEFAULT 'Chennai Port - Zone A',
+            location_mode       TEXT    DEFAULT 'manual',
+            latitude            REAL    DEFAULT 12.99123,
+            longitude           REAL    DEFAULT 80.12312,
+            asset_id            TEXT    DEFAULT 'CRN-CT-12',
+            mac_address         TEXT    DEFAULT '00:1A:2B:3C:4D:5E',
+
             -- Date & Time
-            timezone TEXT DEFAULT 'Asia/Kolkata',
-            ntp_server TEXT DEFAULT 'pool.ntp.org',
-            date_format TEXT DEFAULT 'DD/MM/YYYY',
-            time_format TEXT DEFAULT '24-hour',
-            language TEXT DEFAULT 'en',
-            
+            timezone            TEXT    DEFAULT 'Asia/Kolkata',
+            ntp_server          TEXT    DEFAULT 'pool.ntp.org',
+            date_format         TEXT    DEFAULT 'DD/MM/YYYY',
+            time_format         TEXT    DEFAULT '24-hour',
+            language            TEXT    DEFAULT 'en',
+
             -- Heartbeat
-            heartbeat_interval INTEGER DEFAULT 30,
-            offline_threshold INTEGER DEFAULT 120,
-            
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            heartbeat_interval  INTEGER DEFAULT 30,
+            offline_threshold   INTEGER DEFAULT 120,
+
+            -- Network: active mode selector
+            network_mode        TEXT    DEFAULT 'wifi',
+
+            -- WiFi (network_mode = 'wifi')
+            wifi_ssid           TEXT    DEFAULT '',
+            wifi_password       TEXT    DEFAULT '',
+
+            -- Ethernet (network_mode = 'ethernet')
+            eth_ip_assignment   TEXT    DEFAULT 'dhcp',
+            eth_static_ip       TEXT    DEFAULT '',
+            eth_subnet_mask     TEXT    DEFAULT '',
+            eth_gateway         TEXT    DEFAULT '',
+            eth_dns1            TEXT    DEFAULT '',
+            eth_dns2            TEXT    DEFAULT '',
+
+            -- Cellular / LTE (network_mode = 'lte')
+            cell_apn            TEXT    DEFAULT 'internet',
+            cell_username       TEXT    DEFAULT '',
+            cell_password       TEXT    DEFAULT '',
+
+            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
@@ -122,15 +177,26 @@ def create_tables(cursor):
         )
     ''')
     
-    # Loadcell device table — hardware-aligned schema (sysfs_hx711)
+    # Loadcell device table -- sysfs_hx711 hardware-aligned schema
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_device (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             service_id INTEGER,
 
-            -- sysfs_hx711 device parameters
+            -- SysFS / IIO device path  (sysfs_hx711 driver)
             device_path TEXT NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+
+            -- Auto-generated names (not entered by user)
+            load_name TEXT DEFAULT 'load',
+            capacity_name TEXT DEFAULT 'capacity',
+
+            -- Pipeline connection
+            pipeline_server TEXT DEFAULT '127.0.0.1',
+            pipeline_port INTEGER DEFAULT 7000,
+            log_level TEXT DEFAULT 'info',
+
+            -- ADC hardware parameters (sysfs_hx711 device block)
             poll_ms INTEGER DEFAULT 10,
             resolution_bits INTEGER DEFAULT 24,
             effective_bits INTEGER DEFAULT 14,
@@ -145,25 +211,17 @@ def create_tables(cursor):
             capacity_max REAL DEFAULT 1000,
             unit TEXT DEFAULT 'kg',
 
-            -- Auto-generated datapoint names
-            load_name TEXT DEFAULT 'load',
-            capacity_name TEXT DEFAULT 'capacity',
-
-            -- Pipeline connection
-            pipeline_server TEXT DEFAULT '127.0.0.1',
-            pipeline_port INTEGER DEFAULT 7000,
-            log_level TEXT DEFAULT 'info',
-
-            -- Calibration — set via CraneIQ page
+            -- Calibration (single_point method)
             tare_offset REAL DEFAULT 0.0,
-            known_weight REAL DEFAULT 1000.0,
+            known_weight REAL DEFAULT 0.0,
             known_weight_raw REAL DEFAULT 0.0,
 
-            -- Filters stored as JSON arrays — set via CraneIQ page
+            -- Filter and level arrays stored as JSON strings
+            -- raw_filters:    [{type, parameters, enabled}, ...]
+            -- weight_filters: [{type, parameters, enabled}, ...]
+            -- levels:         [{name, ratio, enabled}, ...]
             raw_filters TEXT DEFAULT '[]',
             weight_filters TEXT DEFAULT '[]',
-
-            -- Levels stored as JSON array — set via CraneIQ page
             levels TEXT DEFAULT '[]',
 
             enabled BOOLEAN DEFAULT 1,
@@ -273,6 +331,7 @@ def create_tables(cursor):
         )
     ''')
     
+    # Migration for new columns (with proper quoting)
     try:
         cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN "group" TEXT')
     except Exception:
@@ -294,28 +353,6 @@ def create_tables(cursor):
     except Exception:
         pass
 
-    # Loadcell device schema migration — add new hardware columns, drop old ones gracefully
-    lc_new_columns = [
-        ("poll_ms",          "INTEGER DEFAULT 10"),
-        ("resolution_bits",  "INTEGER DEFAULT 24"),
-        ("effective_bits",   "INTEGER DEFAULT 14"),
-        ("signed",           "BOOLEAN DEFAULT 0"),
-        ("gain",             "REAL DEFAULT 1"),
-        ("vref",             "REAL DEFAULT 5"),
-        ("raw_min",          "REAL DEFAULT 0"),
-        ("raw_max",          "REAL DEFAULT 16383"),
-        ("capacity_min",     "REAL DEFAULT 0"),
-        ("capacity_max",     "REAL DEFAULT 1000"),
-        ("raw_filters",      "TEXT DEFAULT '[]'"),
-        ("weight_filters",   "TEXT DEFAULT '[]'"),
-        ("levels",           "TEXT DEFAULT '[]'"),
-    ]
-    for col, definition in lc_new_columns:
-        try:
-            cursor.execute('ALTER TABLE loadcell_device ADD COLUMN {} {}'.format(col, definition))
-        except Exception:
-            pass  # Column already exists
-
 def insert_default_data(cursor):
     """Insert default data"""
     
@@ -335,128 +372,174 @@ def insert_default_data(cursor):
         ''', service)
 
 def get_general_configuration():
-    """Get general configuration"""
+    """Get general configuration.
+
+    The returned dict shape matches exactly what both the JS (populateFormWithConfig)
+    and build_iot_gateway_config expect:
+
+        network.mode
+        network.wifi     = { ssid, password }
+        network.ethernet = { ip_assignment, static_ip, subnet_mask, gateway, dns1, dns2 }
+        network.cellular = { apn, username, password }
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
-            SELECT gateway_name, serial_number, deployment_site, location_mode,
-                   latitude, longitude, asset_id, mac_address,
-                   timezone, ntp_server, date_format, time_format, language,
-                   heartbeat_interval, offline_threshold
+            SELECT
+                gateway_name, serial_number, deployment_site, location_mode,
+                latitude, longitude, asset_id, mac_address,
+                timezone, ntp_server, date_format, time_format, language,
+                heartbeat_interval, offline_threshold,
+                COALESCE(network_mode,      'wifi')     AS network_mode,
+                COALESCE(wifi_ssid,         '')         AS wifi_ssid,
+                COALESCE(wifi_password,     '')         AS wifi_password,
+                COALESCE(eth_ip_assignment, 'dhcp')     AS eth_ip_assignment,
+                COALESCE(eth_static_ip,     '')         AS eth_static_ip,
+                COALESCE(eth_subnet_mask,   '')         AS eth_subnet_mask,
+                COALESCE(eth_gateway,       '')         AS eth_gateway,
+                COALESCE(eth_dns1,          '')         AS eth_dns1,
+                COALESCE(eth_dns2,          '')         AS eth_dns2,
+                COALESCE(cell_apn,          'internet') AS cell_apn,
+                COALESCE(cell_username,     '')         AS cell_username,
+                COALESCE(cell_password,     '')         AS cell_password
             FROM general_configuration WHERE id = 1
         ''')
-        
+
         row = cursor.fetchone()
-        
+        conn.close()
+
         if not row:
-            conn.close()
             return {}
-        
-        config = {
+
+        return {
             'gateway_identity': {
-                'name': row[0],
-                'serial_number': row[1],
+                'name':            row[0],
+                'serial_number':   row[1],
                 'deployment_site': row[2],
-                'location_mode': row[3],
-                'latitude': row[4],
-                'longitude': row[5],
-                'asset_id': row[6]
+                'location_mode':   row[3],
+                'latitude':        row[4],
+                'longitude':       row[5],
+                'asset_id':        row[6],
             },
             'date_time': {
-                'timezone': row[8],
-                'ntp_server': row[9],
+                'timezone':    row[8],
+                'ntp_server':  row[9],
                 'date_format': row[10],
                 'time_format': row[11],
-                'language': row[12]
+                'language':    row[12],
             },
             'heartbeat': {
-                'interval': row[13],
-                'offline_threshold': row[14]
+                'interval':          row[13],
+                'offline_threshold': row[14],
             },
-            'mac_address': row[7]
+            'mac_address': row[7],
+            # network shape matches JS populateFormWithConfig exactly
+            'network': {
+                'mode': row[15],
+                'wifi': {
+                    'ssid':     row[16],
+                    'password': row[17],
+                },
+                'ethernet': {
+                    'ip_assignment': row[18],
+                    'static_ip':     row[19],
+                    'subnet_mask':   row[20],
+                    'gateway':       row[21],
+                    'dns1':          row[22],
+                    'dns2':          row[23],
+                },
+                'cellular': {
+                    'apn':      row[24],
+                    'username': row[25],
+                    'password': row[26],
+                },
+            },
         }
-        
-        conn.close()
-        return config
     except Exception as e:
         print("Error getting general config: {}".format(e))
         return {}
 
 def update_general_configuration(config_data):
-    """Update general configuration"""
+    """Update general configuration.
+
+    Accepts the nested shape the JS sends:
+        gateway_identity, date_time, heartbeat, mac_address
+        network.mode
+        network.wifi.ssid / .password
+        network.ethernet.ip_assignment / .static_ip / .subnet_mask / .gateway / .dns1 / .dns2
+        network.cellular.apn / .username / .password
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        updates = []
+
+        sets   = []
         values = []
-        
-        if 'gateway_identity' in config_data:
-            gi = config_data['gateway_identity']
-            if 'name' in gi:
-                updates.append('gateway_name = ?')
-                values.append(gi['name'])
-            if 'serial_number' in gi:
-                updates.append('serial_number = ?')
-                values.append(gi['serial_number'])
-            if 'deployment_site' in gi:
-                updates.append('deployment_site = ?')
-                values.append(gi['deployment_site'])
-            if 'location_mode' in gi:
-                updates.append('location_mode = ?')
-                values.append(gi['location_mode'])
-            if 'latitude' in gi:
-                updates.append('latitude = ?')
-                values.append(gi['latitude'])
-            if 'longitude' in gi:
-                updates.append('longitude = ?')
-                values.append(gi['longitude'])
-            if 'asset_id' in gi:
-                updates.append('asset_id = ?')
-                values.append(gi['asset_id'])
-        
-        if 'date_time' in config_data:
-            dt = config_data['date_time']
-            if 'timezone' in dt:
-                updates.append('timezone = ?')
-                values.append(dt['timezone'])
-            if 'ntp_server' in dt:
-                updates.append('ntp_server = ?')
-                values.append(dt['ntp_server'])
-            if 'date_format' in dt:
-                updates.append('date_format = ?')
-                values.append(dt['date_format'])
-            if 'time_format' in dt:
-                updates.append('time_format = ?')
-                values.append(dt['time_format'])
-            if 'language' in dt:
-                updates.append('language = ?')
-                values.append(dt['language'])
-        
-        if 'heartbeat' in config_data:
-            hb = config_data['heartbeat']
-            if 'interval' in hb:
-                updates.append('heartbeat_interval = ?')
-                values.append(hb['interval'])
-            if 'offline_threshold' in hb:
-                updates.append('offline_threshold = ?')
-                values.append(hb['offline_threshold'])
-        
+
+        def _add(col, val):
+            sets.append('{} = ?'.format(col))
+            values.append(val)
+
+        # Gateway Identity
+        gi = config_data.get('gateway_identity', {})
+        if 'name'            in gi: _add('gateway_name',    gi['name'])
+        if 'serial_number'   in gi: _add('serial_number',   gi['serial_number'])
+        if 'deployment_site' in gi: _add('deployment_site', gi['deployment_site'])
+        if 'location_mode'   in gi: _add('location_mode',   gi['location_mode'])
+        if 'latitude'        in gi: _add('latitude',        gi['latitude'])
+        if 'longitude'       in gi: _add('longitude',       gi['longitude'])
+        if 'asset_id'        in gi: _add('asset_id',        gi['asset_id'])
+
+        # Date & Time
+        dt = config_data.get('date_time', {})
+        if 'timezone'    in dt: _add('timezone',    dt['timezone'])
+        if 'ntp_server'  in dt: _add('ntp_server',  dt['ntp_server'])
+        if 'date_format' in dt: _add('date_format', dt['date_format'])
+        if 'time_format' in dt: _add('time_format', dt['time_format'])
+        if 'language'    in dt: _add('language',    dt['language'])
+
+        # Heartbeat
+        hb = config_data.get('heartbeat', {})
+        if 'interval'          in hb: _add('heartbeat_interval', hb['interval'])
+        if 'offline_threshold' in hb: _add('offline_threshold',  hb['offline_threshold'])
+
+        # MAC Address
         if 'mac_address' in config_data:
-            updates.append('mac_address = ?')
-            values.append(config_data['mac_address'])
-        
-        if updates:
-            query = '''
-                UPDATE general_configuration 
-                SET {fields}, updated_at = CURRENT_TIMESTAMP
-                WHERE id = 1
-            '''.format(fields=', '.join(updates))
-            cursor.execute(query, values)
+            _add('mac_address', config_data['mac_address'])
+
+        # Network
+        net = config_data.get('network', {})
+        if 'mode' in net: _add('network_mode', net['mode'])
+
+        # WiFi — JS sends network.wifi.ssid / .password
+        wifi = net.get('wifi', {})
+        if 'ssid'     in wifi: _add('wifi_ssid',      wifi['ssid'])
+        if 'password' in wifi: _add('wifi_password',  wifi['password'])
+
+        # Ethernet — JS sends network.ethernet.*
+        eth = net.get('ethernet', {})
+        if 'ip_assignment' in eth: _add('eth_ip_assignment', eth['ip_assignment'])
+        if 'static_ip'     in eth: _add('eth_static_ip',     eth['static_ip'])
+        if 'subnet_mask'   in eth: _add('eth_subnet_mask',   eth['subnet_mask'])
+        if 'gateway'       in eth: _add('eth_gateway',       eth['gateway'])
+        if 'dns1'          in eth: _add('eth_dns1',          eth['dns1'])
+        if 'dns2'          in eth: _add('eth_dns2',          eth['dns2'])
+
+        # Cellular — JS sends network.cellular.*
+        cell = net.get('cellular', {})
+        if 'apn'      in cell: _add('cell_apn',      cell['apn'])
+        if 'username' in cell: _add('cell_username',  cell['username'])
+        if 'password' in cell: _add('cell_password',  cell['password'])
+
+        if sets:
+            cursor.execute(
+                'UPDATE general_configuration SET {}, updated_at = CURRENT_TIMESTAMP WHERE id = 1'
+                .format(', '.join(sets)),
+                values)
             conn.commit()
-        
+
         conn.close()
         return True
     except Exception as e:

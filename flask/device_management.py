@@ -185,11 +185,14 @@ async def get_device_details(request):
         
         # Try Loadcell
         cursor.execute('''
-            SELECT l.id, l.name, l.device_path, l.poll_ms,
-                   l.resolution_bits, l.effective_bits, l.signed, l.gain, l.vref, l.raw_min, l.raw_max,
-                   l.capacity_min, l.capacity_max, l.unit, l.load_name, l.capacity_name,
-                   l.tare_offset, l.known_weight, l.known_weight_raw,
+            SELECT l.id, l.name, l.device_path,
+                   l.poll_ms, l.resolution_bits, l.effective_bits, l.signed, l.gain, l.vref,
+                   l.raw_min, l.raw_max,
+                   l.capacity_min, l.capacity_max, l.unit,
+                   l.load_name, l.capacity_name,
                    l.pipeline_server, l.pipeline_port, l.log_level,
+                   l.tare_offset, l.known_weight, l.known_weight_raw,
+                   l.raw_filters, l.weight_filters, l.levels,
                    l.enabled, s.name as service_name
             FROM loadcell_device l
             LEFT JOIN services s ON l.service_id = s.id
@@ -199,18 +202,25 @@ async def get_device_details(request):
         row = cursor.fetchone()
         
         if row:
-            # Get or initialize status
             if device_id not in device_status_tracker:
                 initialize_device_status(device_id, 'Offline')
             
             status = device_status_tracker[device_id]
             
-            (dev_id, name, device_path, poll_ms,
-             resolution_bits, effective_bits, signed_val, gain, vref, raw_min, raw_max,
-             capacity_min, capacity_max, unit, load_name, capacity_name,
-             tare_offset, known_weight, known_weight_raw,
+            (dev_id, name, device_path,
+             poll_ms, resolution_bits, effective_bits, signed, gain, vref,
+             raw_min, raw_max,
+             capacity_min, capacity_max, unit,
+             load_name, capacity_name,
              pipeline_server, pipeline_port, log_level,
+             tare_offset, known_weight, known_weight_raw,
+             raw_filters_json, weight_filters_json, levels_json,
              enabled, service_name) = row
+            
+            import json as _json
+            def _parse(v):
+                try: return _json.loads(v) if v else []
+                except: return []
             
             details = {
                 'id': dev_id,
@@ -222,30 +232,29 @@ async def get_device_details(request):
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'config': {
-                    'device_path': device_path,
-                    'poll_ms': poll_ms,
+                    'device_path':    device_path,
+                    'poll_ms':        poll_ms,
                     'resolution_bits': resolution_bits,
-                    'effective_bits': effective_bits,
-                    'signed': bool(signed_val),
-                    'gain': gain,
-                    'vref': vref,
-                    'raw_min': raw_min,
-                    'raw_max': raw_max,
-                    'capacity_min': capacity_min,
-                    'capacity_max': capacity_max,
-                    'unit': unit or 'kg',
-                    'load_name': load_name or 'load',
-                    'capacity_name': capacity_name or 'capacity',
-                    'calibration': {
-                        'tare_offset': tare_offset,
-                        'known_weight': known_weight,
-                        'known_weight_raw': known_weight_raw
-                    },
-                    'pipeline': {
-                        'server': pipeline_server,
-                        'port': pipeline_port,
-                        'log_level': log_level
-                    }
+                    'effective_bits':  effective_bits,
+                    'signed':          bool(signed),
+                    'gain':            gain,
+                    'vref':            vref,
+                    'raw_min':         raw_min,
+                    'raw_max':         raw_max,
+                    'capacity_min':    capacity_min,
+                    'capacity_max':    capacity_max,
+                    'unit':            unit,
+                    'load_name':       load_name or 'load',
+                    'capacity_name':   capacity_name or 'capacity',
+                    'pipeline_server': pipeline_server,
+                    'pipeline_port':   pipeline_port,
+                    'log_level':       log_level,
+                    'tare_offset':     tare_offset,
+                    'known_weight':    known_weight,
+                    'known_weight_raw': known_weight_raw,
+                    'raw_filters':     _parse(raw_filters_json),
+                    'weight_filters':  _parse(weight_filters_json),
+                    'levels':          _parse(levels_json)
                 }
             }
             
@@ -312,9 +321,11 @@ async def add_device(request):
             
             cursor.execute('''
                 INSERT INTO loadcell_device (
-                    id, name, service_id, device_path, poll_ms,
-                    resolution_bits, effective_bits, signed, gain, vref, raw_min, raw_max,
-                    capacity_min, capacity_max, unit, load_name, capacity_name
+                    id, name, service_id, device_path,
+                    poll_ms, resolution_bits, effective_bits, signed, gain, vref,
+                    raw_min, raw_max,
+                    capacity_min, capacity_max, unit,
+                    load_name, capacity_name
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
@@ -325,7 +336,7 @@ async def add_device(request):
                 config.get('poll_ms', 10),
                 config.get('resolution_bits', 24),
                 config.get('effective_bits', 14),
-                1 if config.get('signed', False) else 0,
+                1 if config.get('signed') else 0,
                 config.get('gain', 1),
                 config.get('vref', 5),
                 config.get('raw_min', 0),
@@ -495,36 +506,25 @@ async def update_device(request):
             update_fields = ['name = ?']
             values = [data.get('name')]
             
-            # Device connection & ADC hardware
-            field_map = {
-                'device_path': 'device_path',
-                'poll_ms': 'poll_ms',
-                'resolution_bits': 'resolution_bits',
-                'effective_bits': 'effective_bits',
-                'gain': 'gain',
-                'vref': 'vref',
-                'raw_min': 'raw_min',
-                'raw_max': 'raw_max',
-                'capacity_min': 'capacity_min',
-                'capacity_max': 'capacity_max',
-                'unit': 'unit',
-            }
-            for key, col in field_map.items():
-                if key in config:
-                    update_fields.append('{} = ?'.format(col))
-                    values.append(config[key])
+            # Hardware parameters
+            for field in ('device_path', 'poll_ms', 'resolution_bits', 'effective_bits',
+                          'gain', 'vref', 'raw_min', 'raw_max',
+                          'capacity_min', 'capacity_max', 'unit',
+                          'pipeline_server', 'pipeline_port', 'log_level'):
+                if field in config:
+                    update_fields.append('{} = ?'.format(field))
+                    values.append(config[field])
             
+            # signed is a boolean
             if 'signed' in config:
                 update_fields.append('signed = ?')
                 values.append(1 if config['signed'] else 0)
             
-            # Calibration
-            if 'calibration' in config:
-                cal = config['calibration']
-                for key, col in [('tare_offset', 'tare_offset'), ('known_weight', 'known_weight'), ('known_weight_raw', 'known_weight_raw')]:
-                    if key in cal:
-                        update_fields.append('{} = ?'.format(col))
-                        values.append(cal[key])
+            # Calibration fields (flat or nested)
+            for field in ('tare_offset', 'known_weight', 'known_weight_raw'):
+                if field in config:
+                    update_fields.append('{} = ?'.format(field))
+                    values.append(config[field])
             
             values.append(device_id)
             
@@ -825,19 +825,19 @@ async def export_devices_csv(request):
         # Export Loadcell devices
         cursor.execute('''
             SELECT l.id, l.name,
-                   l.device_path, l.channel, l.capacity, l.unit, l.enabled
+                   l.device_path, l.capacity_max, l.unit, l.enabled
             FROM loadcell_device l
             WHERE l.id = 'LC1'
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, channel, capacity, unit, enabled = row
+            device_id, name, device_path, capacity_max, unit, enabled = row
             writer.writerow([
                 'LC1', name, 'Loadcell', 'loadcell',
                 '', '', '',
                 '', '', '', '',
                 '', '', '', '',
-                device_path or '', channel or 0, capacity or '', unit or 'g', '1' if enabled else '0'
+                device_path or '', capacity_max or 1000, unit or 'kg', '1' if enabled else '0'
             ])
         
         conn.close()
@@ -1005,12 +1005,18 @@ async def import_devices_csv(request):
                     cursor.execute('''
                         INSERT INTO loadcell_device (
                             id, name, service_id, device_path,
-                            channel, capacity, unit, load_name, capacity_name, enabled
+                            poll_ms, resolution_bits, effective_bits, signed, gain, vref,
+                            raw_min, raw_max,
+                            capacity_min, capacity_max, unit,
+                            load_name, capacity_name, enabled
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         device_id, name, service_id, device_path,
-                        channel, capacity, unit, 'load', 'capacity', enabled
+                        10, 24, 14, 0, 1, 5,
+                        0, 16383,
+                        0, capacity, unit,
+                        'load', 'capacity', enabled
                     ))
                     
                     cursor.execute(

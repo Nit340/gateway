@@ -100,7 +100,7 @@ async function _loadForm(conn) {
         if (!r.ok) throw new Error(`${r.status}`);
         fc.innerHTML = await r.text();
 
-        // Init form UI (toggles, protocol↔port, anonymous hide/show)
+        // Init form UI
         if (conn.type === 'mqtt' && typeof window.initializeMqttForm  === 'function') window.initializeMqttForm();
         if (conn.type === 'ftp'  && typeof window.initializeFtpForm   === 'function') window.initializeFtpForm();
 
@@ -125,84 +125,414 @@ async function _loadForm(conn) {
 // ─── POPULATE MQTT ────────────────────────────────────────────────────────────
 function _populateMqtt(conn) {
     const c = conn.config || {};
-    _sv('field-protocol',    c.protocol    ?? 'mqtts');
-    _sv('field-host',        c.host        ?? '');
-    _sv('field-port',        c.port        ?? 8883);
-    _sv('field-clientId',    c.clientId    ?? '');
-    _sv('field-keepAlive',   c.keepAlive   ?? 60);
-    _sv('field-username',    c.username    ?? '');
-    _sv('field-password',    c.password    ?? '');
-    _sc('field-tls',         c.tls         ?? true);
-    _sc('field-cleanSession',c.cleanSession ?? true);
-    _sc('field-retainMessages', c.retainMessages ?? false);
-    _radio('field-qos', String(c.qos ?? 1));
-    _sv('field-baseTopic',    c.baseTopic    ?? '');
-    _sv('field-json-template',c.jsonTemplate ?? '{"timestamp":"%TIMESTAMP%","device":"%DEVICE_ID%","data":%DATA%}');
-    _sv('field-advanced-keep-alive',         c.keepAlive         ?? 60);
-    _sv('field-advanced-reconnect-interval', c.reconnectInterval ?? 5);
-    _sv('field-advanced-connect-timeout',    c.connectTimeout    ?? 30);
-    _sv('field-advanced-max-retries',        c.maxRetries        ?? 5);
-    _sc('field-advanced-auto-reconnect',     c.autoReconnect     ?? true);
-    _sc('field-advanced-store-forward',      c.storeForward      ?? false);
-    _sc('field-advanced-validate-certs',     c.validateCerts     ?? true);
-    _sv('field-advanced-log-level',          c.logLevel          ?? 'info');
-    _sv('field-advanced-max-log-size',       c.maxLogSize        ?? 10);
-    _sv('field-advanced-log-retention',      c.logRetention      ?? 7);
-    _sc('field-advanced-connection-logging', c.connLogging       ?? true);
-    _sc('field-advanced-message-logging',    c.msgLogging        ?? false);
-    _sv('field-advanced-max-inflight',       c.maxInflight       ?? 10);
-    _sv('field-advanced-queue-size',         c.queueSize         ?? 100);
-    _sv('field-advanced-buffer-size',        c.bufferSize        ?? 1024);
-    _sv('field-advanced-ping-timeout',       c.pingTimeout       ?? 10);
-    _sc('field-advanced-enable-compression', c.compression       ?? false);
-    _sv('field-advanced-compression-level',  c.compressionLevel  ?? 6);
-    _sv('field-advanced-min-compress-size',  c.minCompressSize   ?? 256);
-    _sv('field-advanced-tls-version',        c.tlsVersion        ?? 'auto');
-    _sv('field-advanced-cipher-suite',       c.cipherSuite       ?? 'default');
-    _sc('field-advanced-enable-lwt',         c.lwt               ?? false);
-    _sv('field-advanced-lwt-topic',          c.lwtTopic          ?? '');
-    _sv('field-advanced-lwt-message',        c.lwtMessage        ?? '');
-    _sv('field-advanced-lwt-qos',            c.lwtQos            ?? 1);
-    _sc('field-advanced-lwt-retain',         c.lwtRetain         ?? false);
-    _renderMqttTagsTable(conn);
+    
+    // SIMPLIFIED CONNECTION SETTINGS
+    _sc('field-enabled',       c.enabled        ?? true);
+    _sv('field-host',          c.host           ?? '127.0.0.1');
+    _sv('field-port',          c.port           ?? 1883);
+    _sv('field-clientId',      c.client_id      ?? _generateClientId());
+    _sv('field-deviceToken',   c.device_token   ?? _generateDeviceToken());
+    _sv('field-keepAlive',     c.keepalive_sec  ?? 60);
+    _sv('field-username',      c.username       ?? '');
+    _sv('field-password',      c.password       ?? '');
+    
+    // Channels
+    const channels = c.channels || {};
+    _renderPublishChannels(channels.publish   || []);
+    _renderSubscribeChannels(channels.subscribe || []);
+    
+    // Mappings
+    _renderMappingsTable(conn);
 }
 
-function _renderMqttTagsTable(conn) {
-    const tbody = _el('mqtt-tags-table');
+// ─── GENERATE CLIENT ID ───────────────────────────────────────────────────────
+function _generateClientId() {
+    return 'univa-gateway-' + Math.random().toString(36).substring(2, 10);
+}
+
+// ─── GENERATE DEVICE TOKEN ────────────────────────────────────────────────────
+function _generateDeviceToken() {
+    return 'dev_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6);
+}
+
+// ─── RENDER PUBLISH CHANNELS ──────────────────────────────────────────────────
+function _renderPublishChannels(list) {
+    const tbody = _el('publish-channels-table');
     if (!tbody) return;
-    const tags = conn.tags || [];
-    const base = conn.config?.baseTopic || '';
     tbody.innerHTML = '';
-    if (!tags.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No tags assigned. Click "Add Tags" to publish data.</td></tr>';
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400 text-xs">No publish channels. Click "Add Publish Channel".</td></tr>`;
         return;
     }
-    tags.forEach(tag => {
+    list.forEach((ch, idx) => {
         const tr = document.createElement('tr');
         tr.className = 'border-t border-slate-100';
-        tr.dataset.tagName = tag.name;
+        tr.dataset.idx = idx;
         tr.innerHTML = `
-          <td class="p-2"><input type="checkbox" class="tag-select"></td>
-          <td class="p-2 font-mono text-xs">${_esc(tag.name)}</td>
-          <td class="p-2"><input type="text" class="compact-input text-xs tag-topic" value="${_esc(tag.topic||base)}" placeholder="${_esc(base)}/..."></td>
-          <td class="p-2">
-            <select class="compact-select text-xs tag-publish-mode">
-              <option value="onChange" ${tag.publishMode==='onChange'?'selected':''}>On Change</option>
-              <option value="100"  ${tag.publishMode==='100'?'selected':''}>100 ms</option>
-              <option value="500"  ${tag.publishMode==='500'?'selected':''}>500 ms</option>
-              <option value="1000" ${tag.publishMode==='1000'?'selected':''}>1 sec</option>
-              <option value="5000" ${tag.publishMode==='5000'?'selected':''}>5 sec</option>
+          <td class="p-2"><input type="text" class="compact-input text-xs ch-name"  value="${_esc(ch.name||'')}"  placeholder="channel name"></td>
+          <td class="p-2"><input type="text" class="compact-input text-xs ch-topic" value="${_esc(ch.topic||'')}" placeholder="gateway/topic"></td>
+          <td class="p-2 text-center">
+            <select class="compact-select text-xs ch-qos">
+              <option value="0" ${(ch.qos??0)===0?'selected':''}>0</option>
+              <option value="1" ${ch.qos===1?'selected':''}>1</option>
+              <option value="2" ${ch.qos===2?'selected':''}>2</option>
             </select>
           </td>
-          <td class="p-2">
-            <div class="flex items-center gap-2">
-              <label class="toggle-switch"><input type="checkbox" class="tag-enabled" ${tag.enabled?'checked':''}><span class="toggle-slider"></span></label>
-              <button class="text-red-500 hover:text-red-700 text-xs" onclick="window._cloudRemoveTag('${_esc(conn.id)}','${_esc(tag.name)}')"><i class="fa-solid fa-trash"></i></button>
-            </div>
-          </td>`;
+          <td class="p-2 text-center"><input type="checkbox" class="ch-retain" ${ch.retain?'checked':''}></td>
+          <td class="p-2 text-center"><input type="radio" name="pub-default" class="ch-default" value="${idx}" ${ch.default?'checked':''}></td>
+          <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
     });
 }
+
+// ─── RENDER SUBSCRIBE CHANNELS ────────────────────────────────────────────────
+function _renderSubscribeChannels(list) {
+    const tbody = _el('subscribe-channels-table');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400 text-xs">No subscribe channels. Click "Add Subscribe Channel".</td></tr>`;
+        return;
+    }
+    list.forEach((ch, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-slate-100';
+        tr.dataset.idx = idx;
+        tr.innerHTML = `
+          <td class="p-2"><input type="text" class="compact-input text-xs sch-name"  value="${_esc(ch.name||'')}"  placeholder="channel name"></td>
+          <td class="p-2"><input type="text" class="compact-input text-xs sch-topic" value="${_esc(ch.topic||'')}" placeholder="gateway/topic"></td>
+          <td class="p-2 text-center">
+            <select class="compact-select text-xs sch-qos">
+              <option value="0" ${(ch.qos??0)===0?'selected':''}>0</option>
+              <option value="1" ${ch.qos===1?'selected':''}>1</option>
+              <option value="2" ${ch.qos===2?'selected':''}>2</option>
+            </select>
+          </td>
+          <td class="p-2 text-center"><input type="radio" name="sub-default" class="sch-default" value="${idx}" ${ch.default?'checked':''}></td>
+          <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ─── ADD CHANNEL ROWS ─────────────────────────────────────────────────────────
+window._addPublishChannel = function () {
+    const tbody = _el('publish-channels-table');
+    if (!tbody) return;
+    const empty = tbody.querySelector('td[colspan]');
+    if (empty) empty.closest('tr').remove();
+    const idx = tbody.querySelectorAll('tr').length;
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-slate-100';
+    tr.dataset.idx = idx;
+    tr.innerHTML = `
+      <td class="p-2"><input type="text" class="compact-input text-xs ch-name"  placeholder="channel name"></td>
+      <td class="p-2"><input type="text" class="compact-input text-xs ch-topic" placeholder="gateway/topic"></td>
+      <td class="p-2 text-center">
+        <select class="compact-select text-xs ch-qos">
+          <option value="0" selected>0</option><option value="1">1</option><option value="2">2</option>
+        </select>
+      </td>
+      <td class="p-2 text-center"><input type="checkbox" class="ch-retain"></td>
+      <td class="p-2 text-center"><input type="radio" name="pub-default" class="ch-default" value="${idx}"></td>
+      <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
+    tbody.appendChild(tr);
+};
+
+window._addSubscribeChannel = function () {
+    const tbody = _el('subscribe-channels-table');
+    if (!tbody) return;
+    const empty = tbody.querySelector('td[colspan]');
+    if (empty) empty.closest('tr').remove();
+    const idx = tbody.querySelectorAll('tr').length;
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-slate-100';
+    tr.dataset.idx = idx;
+    tr.innerHTML = `
+      <td class="p-2"><input type="text" class="compact-input text-xs sch-name"  placeholder="channel name"></td>
+      <td class="p-2"><input type="text" class="compact-input text-xs sch-topic" placeholder="gateway/topic"></td>
+      <td class="p-2 text-center">
+        <select class="compact-select text-xs sch-qos">
+          <option value="0" selected>0</option><option value="1">1</option><option value="2">2</option>
+        </select>
+      </td>
+      <td class="p-2 text-center"><input type="radio" name="sub-default" class="sch-default" value="${idx}"></td>
+      <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
+    tbody.appendChild(tr);
+};
+
+// ─── RENDER MAPPINGS TABLE ────────────────────────────────────────────────────
+// New and improved: groups as cards, individuals in table
+function _renderMappingsTable(conn) {
+    const groupsContainer = _el('groups-container');
+    const individualSection = _el('individual-tags-section');
+    const noMappingsMsg = _el('no-mappings-message');
+    const individualTable = _el('individual-tags-table');
+    
+    if (!groupsContainer) return;
+    
+    const mappings = conn.config?.mappings || [];
+    const groups = mappings.filter(m => m.alias);
+    const individuals = mappings.filter(m => !m.alias);
+    
+    // Update stats
+    _st('stat-group-count', groups.length);
+    _st('stat-individual-count', individuals.reduce((sum, m) => sum + _flattenDatapoints(m.datapoints || {}).length, 0));
+    
+    if (!mappings.length) {
+        noMappingsMsg.style.display = 'block';
+        groupsContainer.style.display = 'none';
+        individualSection.style.display = 'none';
+        return;
+    }
+    
+    noMappingsMsg.style.display = 'none';
+    
+    // Render Groups as Cards
+    if (groups.length) {
+        groupsContainer.style.display = 'block';
+        groupsContainer.innerHTML = groups.map((mapping, idx) => {
+            const points = _flattenDatapoints(mapping.datapoints || {});
+            const groupId = `group-${idx}`;
+            
+            return `
+                <div class="group-card border border-slate-200 rounded-lg overflow-hidden bg-white" data-group-idx="${idx}">
+                    <!-- Group Header -->
+                    <div class="bg-blue-50 px-3 py-2 flex items-center justify-between border-b border-blue-100">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" class="tag-select group-select" data-group="${idx}" onchange="window._updateTagCount()">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-layer-group text-blue-500"></i>
+                                <span class="font-medium text-sm text-blue-700">${_esc(mapping.alias)}</span>
+                                <span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">${points.length} tags</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-500 mr-2">
+                                Channel: <span class="font-mono text-blue-600">${_esc(mapping.channel || 'default')}</span>
+                            </span>
+                            <button class="text-slate-400 hover:text-slate-600 text-xs" onclick="window._toggleGroup('${groupId}')">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </button>
+                            <button class="text-red-400 hover:text-red-600 text-xs" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${idx})" title="Remove group">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Group Tags Table -->
+                    <div id="${groupId}" class="group-tags">
+                        <table class="w-full text-xs">
+                            <tbody class="divide-y divide-slate-100">
+                                ${points.map(({name, dtype}) => `
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="p-2 pl-8 w-8">
+                                            <input type="checkbox" class="tag-select" data-tag="${_esc(name)}" data-group="${idx}" onchange="window._updateTagCount()">
+                                        </td>
+                                        <td class="p-2 font-mono text-xs">
+                                            <i class="fa-regular fa-arrow-right text-xs text-slate-300 mr-1"></i>${_esc(name)}
+                                        </td>
+                                        <td class="p-2">
+                                            <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">${_esc(dtype)}</span>
+                                        </td>
+                                        <td class="p-2 text-slate-400">via group</td>
+                                        <td class="p-2 w-20">
+                                            <button class="text-red-400 hover:text-red-600" onclick="window._cloudRemoveTagFromMapping('${_esc(conn.id)}',${idx},'${_esc(name)}')" title="Remove tag">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } else {
+        groupsContainer.style.display = 'none';
+    }
+    
+    // Render Individual Tags
+    if (individuals.length) {
+        individualSection.style.display = 'block';
+        
+        const allIndividualTags = [];
+        individuals.forEach((mapping, mIdx) => {
+            const points = _flattenDatapoints(mapping.datapoints || {});
+            points.forEach(({name, dtype}) => {
+                allIndividualTags.push({
+                    mappingIdx: mIdx,
+                    name,
+                    dtype,
+                    channel: mapping.channel || ''
+                });
+            });
+        });
+        
+        individualTable.innerHTML = allIndividualTags.map((item, idx) => `
+            <tr class="hover:bg-slate-50" data-individual-idx="${idx}">
+                <td class="p-2">
+                    <input type="checkbox" class="tag-select individual-select" data-tag="${_esc(item.name)}" onchange="window._updateTagCount()">
+                </td>
+                <td class="p-2 font-mono text-xs">${_esc(item.name)}</td>
+                <td class="p-2">
+                    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">${_esc(item.dtype)}</span>
+                </td>
+                <td class="p-2">
+                    <input type="text" class="compact-input text-xs tag-channel" value="${_esc(item.channel)}" 
+                           placeholder="channel name" style="width: 120px;"
+                           onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
+                </td>
+                <td class="p-2 text-center">
+                    <button class="text-red-400 hover:text-red-600" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${item.mappingIdx})" title="Remove tag">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } else {
+        individualSection.style.display = 'none';
+    }
+}
+
+function _flattenDatapoints(dp) {
+    const out = [];
+    ['bool','int','float','string'].forEach(dtype => (dp[dtype]||[]).forEach(name => out.push({name,dtype})));
+    return out;
+}
+
+// Helper to update individual tag channel
+window._updateIndividualChannel = async function(connId, mappingIdx, tagName, channel) {
+    const conn = _connections.find(c => c.id === connId);
+    if (!conn) return;
+    
+    const mappings = conn.config?.mappings || [];
+    const mapping = mappings[mappingIdx];
+    if (!mapping || mapping.alias) return; // Don't update groups here
+    
+    // Update the channel for this mapping
+    if (channel) {
+        mapping.channel = channel;
+    } else {
+        delete mapping.channel;
+    }
+    
+    try {
+        await _api('PUT', `${API}/connections/${connId}`, { config: { mappings } });
+        // No need to reload, just update locally
+        _toast('Channel updated', 'success');
+    } catch {
+        _toast('Update failed', 'error');
+    }
+};
+
+// Toggle group expansion
+window._toggleGroup = function(groupId) {
+    const group = document.getElementById(groupId);
+    const btn = event.currentTarget;
+    if (group) {
+        if (group.style.display === 'none') {
+            group.style.display = 'block';
+            btn.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+        } else {
+            group.style.display = 'none';
+            btn.innerHTML = '<i class="fa-solid fa-chevron-right"></i>';
+        }
+    }
+};
+
+// Collapse all groups
+window.collapseAllGroups = function() {
+    document.querySelectorAll('.group-tags').forEach(group => {
+        group.style.display = 'none';
+    });
+    document.querySelectorAll('.group-card .fa-chevron-down').forEach(icon => {
+        icon.className = 'fa-solid fa-chevron-right';
+    });
+};
+
+// Expand all groups
+window.expandAllGroups = function() {
+    document.querySelectorAll('.group-tags').forEach(group => {
+        group.style.display = 'block';
+    });
+    document.querySelectorAll('.group-card .fa-chevron-right').forEach(icon => {
+        icon.className = 'fa-solid fa-chevron-down';
+    });
+};
+
+// Toggle all individual tags
+window.toggleAllIndividual = function() {
+    const all = document.getElementById('select-all-individual');
+    const isChecked = all?.checked || false;
+    document.querySelectorAll('.individual-select').forEach(cb => {
+        cb.checked = isChecked;
+    });
+    _updateTagCount();
+};
+
+// Remove selected tags (both from groups and individuals)
+window.removeSelectedTags = function() {
+    const selected = document.querySelectorAll('.tag-select:checked');
+    if (!selected.length) {
+        _toast('No tags selected', 'error');
+        return;
+    }
+    
+    if (!confirm(`Remove ${selected.length} selected tag(s)?`)) return;
+    
+    // Group selected tags by mapping
+    const toRemove = {
+        groups: new Set(),
+        individuals: []
+    };
+    
+    selected.forEach(cb => {
+        const groupIdx = cb.dataset.group;
+        const tagName = cb.dataset.tag;
+        
+        if (groupIdx !== undefined && !tagName) {
+            // Group header checkbox
+            toRemove.groups.add(parseInt(groupIdx));
+        } else if (groupIdx !== undefined && tagName) {
+            // Tag within a group
+            toRemove.individuals.push({
+                type: 'group',
+                groupIdx: parseInt(groupIdx),
+                tagName
+            });
+        } else if (tagName) {
+            // Individual tag
+            toRemove.individuals.push({
+                type: 'individual',
+                tagName
+            });
+        }
+    });
+    
+    // This would need to be implemented with actual API calls
+    // For now, show what would be removed
+    console.log('Would remove:', toRemove);
+    _toast('Remove selected tags - implement API call', 'warning');
+};
+
+// Update the _updateTagCount function to handle the new structure
+window._updateTagCount = function() {
+    const n = document.querySelectorAll('.tag-select:checked').length;
+    const el = document.getElementById('selected-tags-count');
+    if (el) el.textContent = n;
+    
+    // Update select all in individual table
+    const individualCheckboxes = document.querySelectorAll('.individual-select');
+    const checkedIndividuals = document.querySelectorAll('.individual-select:checked');
+    const selectAll = document.getElementById('select-all-individual');
+    if (selectAll) {
+        if (individualCheckboxes.length > 0) {
+            selectAll.checked = individualCheckboxes.length === checkedIndividuals.length;
+            selectAll.indeterminate = checkedIndividuals.length > 0 && checkedIndividuals.length < individualCheckboxes.length;
+        }
+    }
+};
 
 // ─── POPULATE FTP ─────────────────────────────────────────────────────────────
 function _populateFtp(conn) {
@@ -222,11 +552,6 @@ function _populateFtp(conn) {
     _sc('field-appendMode',      c.appendMode      ?? true);
     _sc('field-compressFiles',   c.compressFiles   ?? true);
     _sv('field-retryAttempts',   c.retryAttempts   ?? 3);
-    _renderFtpTagsTable(conn);
-}
-
-function _renderFtpTagsTable(conn) {
-    // FTP has no datapoints — nothing to render
 }
 
 // ─── WIRE SAVE BUTTONS ────────────────────────────────────────────────────────
@@ -234,11 +559,9 @@ function _wireFormSaves(conn) {
     if (conn.type === 'mqtt') {
         if (!window.mqttFormLogic) window.mqttFormLogic = {};
         window.mqttFormLogic.saveMqttConnectionSettings = () => _saveMqttConnection(conn.id);
-        window.mqttFormLogic.saveMqttTopicSettings      = () => _saveMqttTopics(conn.id);
+        window.mqttFormLogic.saveMqttChannelSettings = () => _saveMqttChannels(conn.id);
         window.mqttFormLogic.saveMqttPublishingSettings = () => _saveMqttPublishing(conn.id);
-        window.mqttFormLogic.saveMqttAdvancedSettings   = () => _saveMqttAdvanced(conn.id);
     } else {
-        // ftp — wire via ftpFormLogic (same pattern as mqtt) AND by button id
         if (!window.ftpFormLogic) window.ftpFormLogic = {};
         window.ftpFormLogic.saveFtpSettings = () => _saveFtp(conn.id);
         const saveBtn = _el('ftp-save-btn');
@@ -251,7 +574,15 @@ function _wireAddTagsBtn(conn) {
     const openFn = () => _openTagsModal(conn);
     window.showAddTagModal = openFn;
     if (!window.mqttFormLogic) window.mqttFormLogic = {};
-    window.mqttFormLogic.showAddTagModal = openFn;
+    
+    // Add all the new methods
+    Object.assign(window.mqttFormLogic, {
+        showAddTagModal: openFn,
+        collapseAllGroups: window.collapseAllGroups || function() {},
+        expandAllGroups: window.expandAllGroups || function() {},
+        toggleAllIndividual: window.toggleAllIndividual || function() {},
+        removeSelectedTags: window.removeSelectedTags || function() {}
+    });
 
     window.removeKeyValueItem = btn => btn.closest('.key-value-item')?.remove();
     window.addKeyValueItem    = btn => {
@@ -267,65 +598,58 @@ function _wireAddTagsBtn(conn) {
     };
 }
 
-// ─── SAVE: MQTT ───────────────────────────────────────────────────────────────
+// ─── SAVE: MQTT CONNECTION ────────────────────────────────────────────────────
 async function _saveMqttConnection(id) {
     await _putCfg(id, {
-        protocol:_gv('field-protocol'), host:_gv('field-host'), port:+_gv('field-port')||8883,
-        clientId:_gv('field-clientId'), keepAlive:+_gv('field-keepAlive')||60,
-        username:_gv('field-username'), password:_gv('field-password'),
-        tls:_gc('field-tls'), cleanSession:_gc('field-cleanSession'),
-        retainMessages:_gc('field-retainMessages'), qos:+_gr('field-qos')||1,
+        enabled:       _gc('field-enabled'),
+        host:          _gv('field-host') || '127.0.0.1',
+        port:          +_gv('field-port') || 1883,
+        client_id:     _gv('field-clientId') || _generateClientId(),
+        device_token:  _gv('field-deviceToken') || _generateDeviceToken(),
+        keepalive_sec: +_gv('field-keepAlive') || 60,
+        username:      _gv('field-username'),
+        password:      _gv('field-password'),
     }, 'Connection settings saved');
 }
 
-async function _saveMqttTopics(id) {
-    await _putCfg(id, { baseTopic:_gv('field-baseTopic'), jsonTemplate:_gv('field-json-template') }, 'Topics & Format saved');
+// ─── SAVE: MQTT CHANNELS ──────────────────────────────────────────────────────
+async function _saveMqttChannels(id) {
+    // Save channels (publish + subscribe arrays)
+    const publish = [];
+    document.querySelectorAll('#publish-channels-table tr[data-idx]').forEach(tr => {
+        publish.push({
+            name:    tr.querySelector('.ch-name')?.value.trim()  || '',
+            topic:   tr.querySelector('.ch-topic')?.value.trim() || '',
+            qos:     +(tr.querySelector('.ch-qos')?.value  ?? 0),
+            retain:  tr.querySelector('.ch-retain')?.checked ?? false,
+            default: tr.querySelector('.ch-default')?.checked ?? false,
+        });
+    });
+    const subscribe = [];
+    document.querySelectorAll('#subscribe-channels-table tr[data-idx]').forEach(tr => {
+        subscribe.push({
+            name:    tr.querySelector('.sch-name')?.value.trim()  || '',
+            topic:   tr.querySelector('.sch-topic')?.value.trim() || '',
+            qos:     +(tr.querySelector('.sch-qos')?.value  ?? 0),
+            default: tr.querySelector('.sch-default')?.checked ?? false,
+        });
+    });
+    await _putCfg(id, { channels: { publish, subscribe } }, 'Channel settings saved');
 }
 
+// ─── SAVE: MQTT PUBLISHING (MAPPINGS) ─────────────────────────────────────────
 async function _saveMqttPublishing(id) {
-    const rows = document.querySelectorAll('#mqtt-tags-table tr[data-tag-name]');
-    const tags = [...rows].map(tr => ({
-        name: tr.dataset.tagName,
-        topic: tr.querySelector('.tag-topic')?.value || '',
-        publishMode: tr.querySelector('.tag-publish-mode')?.value || 'onChange',
-        enabled: tr.querySelector('.tag-enabled')?.checked ?? true,
-    }));
-    try {
-        await _api('POST', `${API}/connections/${id}/tags`, { tags: tags.map(t=>t.name), publishMode:'onChange', replace:true });
-        _toast('Publishing settings saved', 'success');
-    } catch { _toast('Save failed', 'error'); }
-}
-
-async function _saveMqttAdvanced(id) {
-    const conn = _connections.find(c=>c.id===id);
-    await _putCfg(id, { ...(conn?.config||{}),
-        keepAlive:+_gv('field-advanced-keep-alive')||60,
-        reconnectInterval:+_gv('field-advanced-reconnect-interval')||5,
-        connectTimeout:+_gv('field-advanced-connect-timeout')||30,
-        maxRetries:+_gv('field-advanced-max-retries')||5,
-        autoReconnect:_gc('field-advanced-auto-reconnect'),
-        storeForward:_gc('field-advanced-store-forward'),
-        validateCerts:_gc('field-advanced-validate-certs'),
-        logLevel:_gv('field-advanced-log-level'),
-        maxLogSize:+_gv('field-advanced-max-log-size')||10,
-        logRetention:+_gv('field-advanced-log-retention')||7,
-        connLogging:_gc('field-advanced-connection-logging'),
-        msgLogging:_gc('field-advanced-message-logging'),
-        maxInflight:+_gv('field-advanced-max-inflight')||10,
-        queueSize:+_gv('field-advanced-queue-size')||100,
-        bufferSize:+_gv('field-advanced-buffer-size')||1024,
-        pingTimeout:+_gv('field-advanced-ping-timeout')||10,
-        compression:_gc('field-advanced-enable-compression'),
-        compressionLevel:+_gv('field-advanced-compression-level')||6,
-        minCompressSize:+_gv('field-advanced-min-compress-size')||256,
-        tlsVersion:_gv('field-advanced-tls-version'),
-        cipherSuite:_gv('field-advanced-cipher-suite'),
-        lwt:_gc('field-advanced-enable-lwt'),
-        lwtTopic:_gv('field-advanced-lwt-topic'),
-        lwtMessage:_gv('field-advanced-lwt-message'),
-        lwtQos:+_gv('field-advanced-lwt-qos')||1,
-        lwtRetain:_gc('field-advanced-lwt-retain'),
-    }, 'Advanced settings saved');
+    // Save mappings — update channel overrides on individual (non-group) rows
+    const conn = _connections.find(c => c.id === id);
+    const mappings = (conn?.config?.mappings || []).map((mapping, mIdx) => {
+        const channelInput = document.querySelector(`tr[data-mapping-idx="${mIdx}"] .tag-channel`);
+        if (channelInput) {
+            const ch = channelInput.value.trim();
+            return { ...mapping, ...(ch ? { channel: ch } : {}) };
+        }
+        return mapping;
+    });
+    await _putCfg(id, { mappings }, 'Mapping settings saved');
 }
 
 // ─── SAVE: FTP ────────────────────────────────────────────────────────────────
@@ -360,11 +684,32 @@ async function _putCfg(id, cfg, msg) {
     } catch { _toast('Save failed', 'error'); }
 }
 
-// ─── REMOVE TAG (inline trash) ────────────────────────────────────────────────
-window._cloudRemoveTag = async function (connId, tagName) {
-    if (!confirm(`Remove tag "${tagName}"?`)) return;
+// ─── REMOVE MAPPING ───────────────────────────────────────────────────────────
+window._cloudRemoveMapping = async function (connId, mappingIdx) {
+    const conn = _connections.find(c => c.id === connId);
+    if (!conn) return;
+    const mappings = conn.config?.mappings || [];
+    const label = mappings[mappingIdx]?.alias || `mapping #${mappingIdx + 1}`;
+    if (!confirm(`Remove "${label}"?`)) return;
+    mappings.splice(mappingIdx, 1);
     try {
-        await _api('DELETE', `${API}/connections/${connId}/tags/${encodeURIComponent(tagName)}`);
+        await _api('PUT', `${API}/connections/${connId}`, { config: { mappings } });
+        await _selectConnection(connId);
+        _toast('Mapping removed', 'success');
+    } catch { _toast('Remove failed', 'error'); }
+};
+
+// ─── REMOVE SINGLE TAG FROM GROUP MAPPING ────────────────────────────────────
+window._cloudRemoveTagFromMapping = async function (connId, mappingIdx, tagName) {
+    const conn = _connections.find(c => c.id === connId);
+    if (!conn || !confirm(`Remove tag "${tagName}"?`)) return;
+    const mappings = conn.config?.mappings || [];
+    const dp = mappings[mappingIdx]?.datapoints || {};
+    ['bool','int','float','string'].forEach(dtype => {
+        if (dp[dtype]) dp[dtype] = dp[dtype].filter(n => n !== tagName);
+    });
+    try {
+        await _api('PUT', `${API}/connections/${connId}`, { config: { mappings } });
         await _selectConnection(connId);
         _toast(`Tag "${tagName}" removed`, 'success');
     } catch { _toast('Remove failed', 'error'); }
@@ -376,32 +721,111 @@ async function _openTagsModal(conn) {
     _el('tagsSelectedCount').textContent = '0';
     _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Loading…</td></tr>';
 
+    // Inject alias + channel controls for creating a group
+    if (!_el('modal-mapping-controls')) {
+        const footer = _el('tagsCancel')?.closest('div');
+        if (footer) {
+            const ctrl = document.createElement('div');
+            ctrl.id = 'modal-mapping-controls';
+            ctrl.className = 'bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200';
+            ctrl.innerHTML = `
+                <h6 class="text-xs font-semibold text-slate-700 mb-3">Create Group (Optional)</h6>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">
+                            <i class="fa-regular fa-layer-group text-blue-500 mr-1"></i>Group Alias
+                        </label>
+                        <input id="modal-alias-input" type="text" class="compact-input w-full" placeholder="e.g., motor_group, sensor_panel">
+                        <p class="help-text mt-1">All selected tags will be grouped under this name</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">
+                            <i class="fa-regular fa-envelope text-amber-500 mr-1"></i>Channel Override
+                        </label>
+                        <input id="modal-channel-input" type="text" class="compact-input w-full" placeholder="e.g., telemetry_channel">
+                        <p class="help-text mt-1">Optional: Override default channel for this group</p>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">
+                    <i class="fa-regular fa-circle-info mr-1"></i> 
+                    Leave Alias empty to add tags individually
+                </p>`;
+            footer.parentElement.insertBefore(ctrl, footer);
+        }
+    } else {
+        // Reset values on re-open
+        _sv('modal-alias-input', '');
+        _sv('modal-channel-input', '');
+    }
+
     try {
         const d = await _api('GET', `${API}/available-tags`);
         _availTags = d.tags || [];
-        const assigned = new Set((conn.tags || []).map(t => t.name));
-        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name)));
-    } catch { _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">Failed to load tags</td></tr>'; }
+        _renderTagsModal(_availTags);
+    } catch { 
+        _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">Failed to load tags</td></tr>'; 
+    }
 
     _el('tagSearch').oninput = e => {
         const q = e.target.value.toLowerCase();
-        const assigned = new Set((conn.tags || []).map(t => t.name));
-        _renderTagsModal(_availTags.filter(t => !assigned.has(t.name) && (t.name.toLowerCase().includes(q) || (t.device||'').toLowerCase().includes(q))));
+        _renderTagsModal(_availTags.filter(t => t.name.toLowerCase().includes(q) || (t.device||'').toLowerCase().includes(q)));
     };
-    _el('selectAllTags').onchange = e => { document.querySelectorAll('.modal-tag-cb').forEach(cb => cb.checked = e.target.checked); _updateTagCount(); };
+    
+    _el('selectAllTags').onchange = e => { 
+        document.querySelectorAll('.modal-tag-cb').forEach(cb => cb.checked = e.target.checked); 
+        _updateTagCount(); 
+    };
+    
     _el('tagsCancel').onclick     = () => _hideM('addTagsModal');
     _el('closeTagsModal').onclick = () => _hideM('addTagsModal');
+    
     _el('tagsConfirm').onclick    = async () => {
-        const sel = [...document.querySelectorAll('.modal-tag-cb:checked')].map(cb => cb.dataset.tag);
-        if (!sel.length) { _toast('Select at least one tag', 'error'); return; }
+        const checked = [...document.querySelectorAll('.modal-tag-cb:checked')];
+        if (!checked.length) { 
+            _toast('Select at least one tag', 'error'); 
+            return; 
+        }
+
+        // Build datapoints grouped by data type
+        const datapoints = {};
+        checked.forEach(cb => {
+            const dtype = cb.dataset.dtype || 'float';
+            if (!datapoints[dtype]) datapoints[dtype] = [];
+            datapoints[dtype].push(cb.dataset.tag);
+        });
+
+        const alias   = _gv('modal-alias-input').trim();
+        const channel = _gv('modal-channel-input').trim();
+        
+        // Create the mapping object
+        const newMapping = { datapoints };
+        if (alias) {
+            newMapping.alias = alias;  // This creates a GROUP
+        }
+        if (channel) {
+            newMapping.channel = channel;  // Channel override for the group/individual tags
+        }
+
+        const existingMappings = (_connections.find(c => c.id === conn.id)?.config?.mappings) || [];
+        const updatedMappings  = [...existingMappings, newMapping];
+
         _setLoading(_el('tagsConfirm'), true);
         try {
-            await _api('POST', `${API}/connections/${conn.id}/tags`, { tags: sel, publishMode:'onChange', replace:false });
+            await _api('PUT', `${API}/connections/${conn.id}`, { config: { mappings: updatedMappings } });
             _hideM('addTagsModal');
             await _selectConnection(conn.id);
-            _toast(`${sel.length} tag(s) added`, 'success');
-        } catch { _toast('Failed to add tags', 'error'); }
-        finally { _setLoading(_el('tagsConfirm'), false); }
+            
+            if (alias) {
+                _toast(`${checked.length} tag(s) added to group "${alias}"`, 'success');
+            } else {
+                _toast(`${checked.length} tag(s) added individually`, 'success');
+            }
+        } catch { 
+            _toast('Failed to add tags', 'error'); 
+        }
+        finally { 
+            _setLoading(_el('tagsConfirm'), false); 
+        }
     };
 }
 
@@ -410,14 +834,15 @@ function _renderTagsModal(tags) {
     if (!tags.length) { tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">No tags available</td></tr>'; return; }
     tbody.innerHTML = tags.map(t => `
       <tr class="border-t border-slate-100 hover:bg-slate-50">
-        <td class="p-2"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" onchange="window._updateTagCount()"></td>
+        <td class="p-2"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" onchange="window._updateTagCount()"></td>
         <td class="p-2 font-mono text-xs">${_esc(t.name)}</td>
         <td class="p-2 text-xs text-slate-600">${_esc(t.device||'—')}</td>
         <td class="p-2 text-xs text-slate-500">${_esc(t.unit||'—')}</td>
         <td class="p-2"><span class="cc-badge ${t.source==='modbus'?'mqtt':'http'}">${_esc(t.source)}</span></td>
       </tr>`).join('');
 }
-window._updateTagCount = function () {
+
+window._updateTagCount = function() {
     const n = document.querySelectorAll('.modal-tag-cb:checked').length;
     const el = _el('tagsSelectedCount'); if (el) el.textContent = n;
 };
@@ -506,7 +931,7 @@ async function _handleCreate(e) {
 function _updateStatusBar(conn) {
     const s = conn?.statistics || {};
     _st('panelName',    conn ? _esc(conn.name) : 'No Connection Selected');
-    _st('panelDesc',    conn ? `${conn.type.toUpperCase()} — ${conn.enabled?'Active':'Disabled'} — ${(conn.tags||[]).length} tag(s)` : 'Select a connection');
+    _st('panelDesc',    conn ? `${conn.type.toUpperCase()} — ${conn.enabled?'Active':'Disabled'} — ${(conn.config?.mappings||[]).reduce((a,m)=>a+_flattenDatapoints(m.datapoints||{}).length,0)} tag(s)` : 'Select a connection');
     _st('statMessages', (s.messages||0).toLocaleString());
     _st('statErrors',   (s.failed  ||0).toLocaleString());
     _st('statLastSent', s.lastActive||'Never');
@@ -525,12 +950,10 @@ function _updateDiagnostics(conn) {
 }
 
 function _showActionButtons(conn) {
-    // Only show delete, no test button
     const db = _el('deleteBtn'); if (db) db.style.display = 'inline-flex';
-    // Set toggle to DB value — do NOT use local state
     const tog = _el('enabledToggle');
     if (tog) {
-        tog.checked  = conn.enabled;   // from DB
+        tog.checked  = conn.enabled;
         tog.disabled = false;
     }
 }
@@ -554,27 +977,21 @@ function _bindPageListeners() {
         catch { _toast('Save failed','error'); }
     });
 
-    // ENABLE TOGGLE — fixed: read confirmed state from API response, then re-render
     _el('enabledToggle')?.addEventListener('change', async function () {
-        if (!_selectedId) { this.checked = !this.checked; return; }  // revert if no selection
-        const previousState = !this.checked;   // what it was before this click
-        this.disabled = true;                  // prevent double-click
+        if (!_selectedId) { this.checked = !this.checked; return; }
+        const previousState = !this.checked;
+        this.disabled = true;
         try {
             const d = await _api('POST', `${API}/connections/${_selectedId}/toggle`);
-            // Use the confirmed value the server read back
             this.checked  = d.enabled;
             this.disabled = false;
-            // Update local cache
             const idx = _connections.findIndex(c => c.id === _selectedId);
             if (idx !== -1) _connections[idx].enabled = d.enabled;
-            // Re-render list to show new Active/Inactive badge
             _renderList();
-            // Update status bar desc
             const conn = _connections[idx];
             if (conn) _updateStatusBar(conn);
             _toast(d.enabled ? 'Connection enabled' : 'Connection disabled', 'success');
         } catch {
-            // Revert toggle to previous state on error
             this.checked  = previousState;
             this.disabled = false;
             _toast('Toggle failed', 'error');

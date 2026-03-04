@@ -1,0 +1,55 @@
+{
+  "version": 5,
+  "system": {
+    "wifi_ssid": "",
+    "wifi_password": ""
+  },
+  "heartbeat": {
+    "interval_sec": 30,
+    "channel": "default_publish"
+  },
+  "servers": {
+    "mqtt": {
+      "enabled": true,
+      "host": "mcs.univa.cloud",
+      "port": 1883,
+      "client_id": "univa-gateway-b67j9cj3",
+      "device_token": "dev_lxvog15joeqw",
+      "username": "admin",
+      "password": "admin",
+      "keepalive_sec": 60,
+      "channels": {
+        "publish": [],
+        "subscribe": []
+      }
+    }
+  },
+  "mappings": [
+    {
+      "channel": "default_publish",
+      "datapoints": {
+        "float": [
+          "capacity",
+          "load"
+        ]
+      },
+      "alias": "hoist"
+    },
+    {
+      "channel": "default_publish",
+      "datapoints": {
+        "float": [
+          "capacity"
+        ]
+      }
+    },
+    {
+      "channel": "default_publish",
+      "datapoints": {
+        "float": [
+          "load"
+        ]
+      }
+    }
+  ]
+}

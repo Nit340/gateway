@@ -38,9 +38,10 @@ async def websocket_handler(request):
     try:
         # Send initial state to the newly connected client
         await ws.send_str(json.dumps({
-            'type': 'initial',
-            'current_date': realtime_state['current_date'],
-            'current_time': realtime_state['current_time']
+            'type':                 'initial',
+            'current_date':         realtime_state['current_date'],
+            'current_time':         realtime_state['current_time'],
+            'wifi_signal_strength': realtime_state.get('wifi_signal_strength', 3)
         }))
 
         # FIX 5: Do NOT write previous_state here — that is owned by periodic_updates()
@@ -84,6 +85,16 @@ async def websocket_handler(request):
                             'type': 'time_synced',
                             'current_date': realtime_state['current_date'],
                             'current_time': realtime_state['current_time']
+                        }))
+
+                    elif data.get('type') == 'get_wifi_signal':
+                        # Return current wifi signal strength (0–4 scale)
+                        # In production, read from OS (e.g. iwconfig / nmcli)
+                        # For now, return the last known value from realtime_state
+                        strength = realtime_state.get('wifi_signal_strength', 3)
+                        await ws.send_str(json.dumps({
+                            'type':     'wifi_signal_update',
+                            'strength': strength
                         }))
 
                     elif data.get('type') == 'ping':

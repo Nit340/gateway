@@ -132,20 +132,15 @@
 
     const updateWiFiSignalDisplay = function(strength) {
         const wifiConfig = document.getElementById('wifi-config');
-        if (!wifiConfig || wifiConfig.style.display === 'none') {
-            return;
-        }
+        if (!wifiConfig) return;
         
         updateWiFiSignalStrength(strength);
         
-        // Update strength text
-        const strengthText = getSignalStrengthText(strength);
-        const strengthSpans = wifiConfig.querySelectorAll('.signal-strength + span, .signal-strength + .ml-2');
-        strengthSpans.forEach(span => {
-            if (!span.querySelector('i')) {
-                span.textContent = strengthText;
-            }
-        });
+        // Update the label text next to the bars
+        const label = wifiConfig.querySelector('.signal-label');
+        if (label) {
+            label.textContent = getSignalStrengthText(strength);
+        }
     };
 
     // Notification System
@@ -208,68 +203,54 @@
         }, 5000);
     };
 
-    // Collect Form Data for API (single JSON) - FIXED VERSION
+    // Collect Form Data for API (single JSON)
     const collectFormData = function() {
-        const configData = {
+        return {
             gateway_identity: {
-                name: getInputValue('[name="gateway-name"]'),
+                name:            getInputValue('[name="gateway-name"]'),
                 deployment_site: getInputValue('[name="deployment-site"]'),
-                location_mode: getRadioValue('[name="location-mode"]'),
-                latitude: parseFloat(getInputValue('[name="latitude"]')) || 0,
-                longitude: parseFloat(getInputValue('[name="longitude"]')) || 0,
-                asset_id: getInputValue('[name="asset-id"]')
+                location_mode:   getRadioValue('[name="location-mode"]'),
+                latitude:        parseFloat(getInputValue('[name="latitude"]'))  || 0,
+                longitude:       parseFloat(getInputValue('[name="longitude"]')) || 0,
+                asset_id:        getInputValue('[name="asset-id"]')
             },
             date_time: {
-                timezone: getSelectValue('[name="timezone"]'),
-                ntp_server: getSelectValue('[name="ntp-server"]'),
+                timezone:    getSelectValue('[name="timezone"]'),
+                ntp_server:  getSelectValue('[name="ntp-server"]'),
                 date_format: getSelectValue('[name="date-format"]'),
                 time_format: getSelectValue('[name="time-format"]'),
-                language: getSelectValue('[name="language"]')
+                language:    getSelectValue('[name="language"]')
             },
+            // Always send ALL sub-sections so the DB persists them
+            // regardless of which mode is currently active
             network: {
-                mode: getRadioValue('[name="network-mode"]')
+                mode: getRadioValue('[name="network-mode"]'),
+                wifi: {
+                    ssid:     getInputValue('[name="wifi-ssid"]'),
+                    password: getInputValue('[name="wifi-password"]')
+                },
+                ethernet: {
+                    ip_assignment: getRadioValue('[name="ip-assignment"]') || 'dhcp',
+                    static_ip:     getInputValue('[name="static-ip"]'),
+                    subnet_mask:   getInputValue('[name="subnet-mask"]'),
+                    gateway:       getInputValue('[name="gateway"]'),
+                    dns1:          getInputValue('[name="dns1"]'),
+                    dns2:          getInputValue('[name="dns2"]')
+                },
+                cellular: {
+                    apn:      getInputValue('[name="apn"]') || 'internet',
+                    username: getInputValue('[name="cellular-username"]'),
+                    password: getInputValue('[name="cellular-password"]')
+                }
             },
             heartbeat: {
-                interval: parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
-                offline_threshold: parseInt(getInputValue('[name="offline-threshold"]')) || 120
+                interval:          parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
+                offline_threshold: parseInt(getInputValue('[name="offline-threshold"]'))  || 120
             },
-            mac_address: document.querySelector('[data-mac-address]') ? document.querySelector('[data-mac-address]').textContent : '00:1A:2B:3C:4D:5E'
+            mac_address: (document.querySelector('[data-mac-address]')
+                ? document.querySelector('[data-mac-address]').textContent.trim()
+                : '00:1A:2B:3C:4D:5E')
         };
-        
-        const networkMode = configData.network.mode;
-        
-        if (networkMode === 'ethernet') {
-            configData.network.ethernet = {
-                ip_assignment: getRadioValue('[name="ip-assignment"]')
-            };
-            
-            if (configData.network.ethernet.ip_assignment === 'static') {
-                configData.network.ethernet.static_ip = getInputValue('[name="static-ip"]');
-                configData.network.ethernet.subnet_mask = getInputValue('[name="subnet-mask"]');
-                configData.network.ethernet.gateway = getInputValue('[name="gateway"]');
-                configData.network.ethernet.dns1 = getInputValue('[name="dns1"]');
-                configData.network.ethernet.dns2 = getInputValue('[name="dns2"]');
-            }
-        } else if (networkMode === 'wifi') {
-            const ssid = getInputValue('[name="wifi-ssid"]');
-            const password = getInputValue('[name="wifi-password"]');
-            
-            configData.network.wifi = {};
-            if (ssid) configData.network.wifi.ssid = ssid;
-            if (password) configData.network.wifi.password = password;
-        } else if (networkMode === 'lte') {
-            configData.network.cellular = {
-                apn: getInputValue('[name="apn"]') || 'internet'
-            };
-            
-            const username = getInputValue('[name="cellular-username"]');
-            const password = getInputValue('[name="cellular-password"]');
-            
-            if (username) configData.network.cellular.username = username;
-            if (password) configData.network.cellular.password = password;
-        }
-        
-        return configData;
     };
 
     // Save Configuration Handler
@@ -345,13 +326,16 @@
         // Clean up any existing connections first
         cleanupGeneralConfig();
 
+        // CRITICAL ORDER: attach buttons + network toggles BEFORE loadConfiguration
+        // so that when populateFormWithConfig sets the radio values the handlers exist
+        initializeButtons();
+        initializeNetworkToggles();
+
         loadConfiguration().then(() => {
-            initializeGeneralConfig();
             initializeWebSocket();
             window._generalConfigInitializing = false;
         }).catch(error => {
             console.error('Load error:', error);
-            initializeGeneralConfig();
             initializeWebSocket();
             showNotification('Load failed', 'error');
             window._generalConfigInitializing = false;
@@ -359,8 +343,7 @@
     };
 
     const initializeGeneralConfig = function() {
-        initializeButtons();
-        initializeNetworkToggles();
+        // Kept as no-op — setup now done before loadConfiguration above
         console.log('Configuration setup complete');
     };
 
@@ -393,11 +376,12 @@
 
         wsConnection.onopen = function() {
             console.log('WebSocket connected');
-            // Clear any pending reconnect on successful connect
             if (reconnectTimeout) {
                 clearTimeout(reconnectTimeout);
                 reconnectTimeout = null;
             }
+            // Start polling wifi signal every 10 s when wifi panel visible
+            _startSignalPolling();
         };
 
         wsConnection.onmessage = function(event) {
@@ -431,6 +415,27 @@
         wsConnection.onerror = function(error) {
             console.error('WebSocket error:', error);
         };
+    };
+
+    // Signal strength polling
+    let _signalPollInterval = null;
+
+    const _startSignalPolling = function() {
+        _stopSignalPolling();
+        _signalPollInterval = setInterval(function() {
+            const wifiPanel = document.getElementById('wifi-config');
+            if (!wifiPanel || wifiPanel.style.display === 'none') return;
+            if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+                wsConnection.send(JSON.stringify({ type: 'get_wifi_signal' }));
+            }
+        }, 10000);
+    };
+
+    const _stopSignalPolling = function() {
+        if (_signalPollInterval) {
+            clearInterval(_signalPollInterval);
+            _signalPollInterval = null;
+        }
     };
 
     const handleWebSocketMessage = function(data) {
@@ -509,32 +514,39 @@
             setSelectValue('[name="language"]', dt.language);
         }
         
-        // Network
+        // Network — populate ALL sub-sections first (they're hidden, values don't matter yet)
+        // Then switch which panel is visible based on the saved mode
         if (config.network) {
             const net = config.network;
-            setRadioValue('[name="network-mode"]', net.mode);
-            
-            if (net.ethernet) {
-                setRadioValue('[name="ip-assignment"]', net.ethernet.ip_assignment || 'dhcp');
-                setInputValue('[name="static-ip"]', net.ethernet.static_ip || '192.168.1.50');
-                setInputValue('[name="subnet-mask"]', net.ethernet.subnet_mask || '255.255.255.0');
-                setInputValue('[name="gateway"]', net.ethernet.gateway || '192.168.1.1');
-                setInputValue('[name="dns1"]', net.ethernet.dns1 || '8.8.8.8');
-                setInputValue('[name="dns2"]', net.ethernet.dns2 || '8.8.4.4');
+
+            // Always populate wifi regardless of active mode
+            const wifi = net.wifi || {};
+            setInputValue('[name="wifi-ssid"]',     wifi.ssid     || '');
+            setInputValue('[name="wifi-password"]', wifi.password || '');
+
+            // Always populate ethernet
+            const eth = net.ethernet || {};
+            setRadioValue('[name="ip-assignment"]', eth.ip_assignment || 'dhcp');
+            setInputValue('[name="static-ip"]',   eth.static_ip   || '');
+            setInputValue('[name="subnet-mask"]',  eth.subnet_mask  || '');
+            setInputValue('[name="gateway"]',      eth.gateway      || '');
+            setInputValue('[name="dns1"]',         eth.dns1         || '');
+            setInputValue('[name="dns2"]',         eth.dns2         || '');
+
+            // Always populate cellular
+            const cell = net.cellular || {};
+            setInputValue('[name="apn"]',               cell.apn      || 'internet');
+            setInputValue('[name="cellular-username"]', cell.username || '');
+            setInputValue('[name="cellular-password"]', cell.password || '');
+
+            // Set the correct mode radio — directly set .checked, no event dispatch
+            // Then call toggleNetworkConfig() once to show the right panel
+            if (net.mode) {
+                document.querySelectorAll('[name="network-mode"]').forEach(function(r) {
+                    r.checked = (r.value === net.mode);
+                });
             }
-            
-            if (net.wifi) {
-                setInputValue('[name="wifi-ssid"]', net.wifi.ssid || '');
-                setInputValue('[name="wifi-password"]', net.wifi.password || '');
-            }
-            
-            if (net.cellular) {
-                setInputValue('[name="apn"]', net.cellular.apn || 'internet');
-                setInputValue('[name="cellular-username"]', net.cellular.username || '');
-                setInputValue('[name="cellular-password"]', net.cellular.password || '');
-            }
-            
-            setTimeout(() => toggleNetworkConfig(), 100);
+            toggleNetworkConfig();  // immediate — no setTimeout race
         }
         
         // Heartbeat
@@ -598,6 +610,9 @@
 
     // Cleanup function
     const cleanupGeneralConfig = function() {
+        // Stop wifi signal polling
+        _stopSignalPolling();
+
         // Close WebSocket
         if (wsConnection) {
             try {

@@ -1,55 +1,68 @@
 // mqtt-form-logic.js  — UI-only logic for mqtt-form.html
-// Save functions are overridden by mqtt-cloud.js after form injection.
+// Schema-aligned to ilx_iot_gateway config with simplified connection settings
 'use strict';
-let mqttTopics = [];
 
 window.initializeMqttForm = function () {
-    mqttTopics = [];
     // Auto-generate client ID if empty
     const cid = document.getElementById('field-clientId');
     if (cid && !cid.value) {
         cid.value = 'univa-gateway-' + Math.random().toString(36).substring(2, 8);
     }
+    
+    // Auto-generate device token if empty
+    const dt = document.getElementById('field-deviceToken');
+    if (dt && !dt.value) {
+        dt.value = 'dev_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 4);
+    }
+    
+    // Set default host if empty
+    const host = document.getElementById('field-host');
+    if (host && !host.value) {
+        host.value = '127.0.0.1';
+    }
+    
+    // Set default port if empty
+    const port = document.getElementById('field-port');
+    if (port && !port.value) {
+        port.value = '1883';
+    }
+    
+    // Set default keep alive if empty
+    const keepAlive = document.getElementById('field-keepAlive');
+    if (keepAlive && !keepAlive.value) {
+        keepAlive.value = '60';
+    }
+    
     // LWT toggle
     const lwtToggle = document.getElementById('field-advanced-enable-lwt');
     const lwtOpts   = document.getElementById('advanced-lwt-options');
     if (lwtToggle && lwtOpts) {
-        lwtToggle.addEventListener('change', function () { lwtOpts.style.display = this.checked ? 'block' : 'none'; });
+        lwtToggle.addEventListener('change', function () { 
+            lwtOpts.style.display = this.checked ? 'block' : 'none'; 
+        });
         lwtOpts.style.display = lwtToggle.checked ? 'block' : 'none';
     }
+    
     // Compression toggle
     const compToggle = document.getElementById('field-advanced-enable-compression');
     const compOpts   = document.getElementById('compression-options');
     if (compToggle && compOpts) {
-        compToggle.addEventListener('change', function () { compOpts.style.display = this.checked ? 'block' : 'none'; });
+        compToggle.addEventListener('change', function () { 
+            compOpts.style.display = this.checked ? 'block' : 'none'; 
+        });
         compOpts.style.display = compToggle.checked ? 'block' : 'none';
     }
-    _initTopics();
+    
     _setupTagCheckboxListeners();
 };
 
-function _initTopics() {
-    _updateTopicList();
-    _updateTopicDropdowns();
-}
-
-function _updateTopicList() {
-    const base = document.getElementById('field-baseTopic')?.value || '';
-    mqttTopics = base ? [{ fullTopic: base }] : [];
-    document.querySelectorAll('#custom-topics-container input[type="text"]').forEach(inp => {
-        if (inp.value) mqttTopics.push({ fullTopic: base ? `${base}/${inp.value}` : inp.value });
-    });
-    _updateTopicDropdowns();
-}
-
-function _updateTopicDropdowns() {
-    const opts = mqttTopics.map(t => `<option value="${t.fullTopic}">${t.fullTopic}</option>`).join('') ||
-        '<option value="">No topics defined</option>';
-    document.querySelectorAll('#mqtt-tags-table select.topic-select').forEach(s => s.innerHTML = opts);
-}
-
 function _setupTagCheckboxListeners() {
     document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('tag-select')) _updateCount();
+    });
+    
+    // Also listen for change events on checkboxes
+    document.addEventListener('change', function (e) {
         if (e.target.classList.contains('tag-select')) _updateCount();
     });
 }
@@ -62,53 +75,71 @@ function _updateCount() {
 
 // Tab switching
 function switchMqttTab(name) {
+    // Hide all tab contents
     document.querySelectorAll('.mqtt-tab-content').forEach(t => t.style.display = 'none');
+    
+    // Remove active class from all tab buttons
     document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+    
+    // Show selected tab content
     const content = document.getElementById(`mqtt-${name}-content`);
     if (content) content.style.display = 'block';
-    // Activate matching button
+    
+    // Update active tab button
     document.querySelectorAll('.tab-button').forEach(b => {
-        if (b.textContent.trim().toLowerCase().startsWith(name.charAt(0).toUpperCase() + name.slice(1).toLowerCase().charAt(0))) {
+        const tabText = b.textContent.trim().toLowerCase();
+        if (name === 'connection' && tabText.startsWith('connection')) {
+            b.classList.add('active');
+        } else if (name === 'topics' && (tabText.startsWith('channels') || tabText.startsWith('topics'))) {
+            b.classList.add('active');
+        } else if (name === 'publishing' && tabText.startsWith('tag')) {
+            b.classList.add('active');
+        } else if (name === 'advanced' && tabText.startsWith('advanced')) {
             b.classList.add('active');
         }
     });
-    if (name === 'topics') _updateTopicList();
 }
 
 // Tag table helpers
 function toggleAllTags() {
     const all = document.getElementById('select-all-tags');
-    document.querySelectorAll('.tag-select').forEach(cb => cb.checked = all?.checked);
+    const isChecked = all?.checked || false;
+    document.querySelectorAll('.tag-select').forEach(cb => {
+        cb.checked = isChecked;
+    });
     _updateCount();
 }
 
 function removeSelectedMqttTags() {
     const sel = document.querySelectorAll('.tag-select:checked');
-    if (!sel.length) { alert('Select tags to remove.'); return; }
+    if (!sel.length) { 
+        alert('Select tags to remove.'); 
+        return; 
+    }
     if (confirm(`Remove ${sel.length} tag(s)?`)) {
-        sel.forEach(cb => cb.closest('tr')?.remove());
+        sel.forEach(cb => {
+            const row = cb.closest('tr');
+            if (row) row.remove();
+        });
         _updateCount();
     }
 }
 
-function addNewCustomTopic() {
-    const container = document.getElementById('custom-topics-container');
-    if (!container) return;
-    const div = document.createElement('div');
-    div.className = 'custom-topic-item';
-    div.innerHTML = `<div class="flex items-center gap-2">
-      <input type="text" class="w-full compact-input" placeholder="topic-name" onchange="window.mqttFormLogic.updateAllTopicOptions()">
-      <button type="button" class="compact-button border border-red-300 text-red-700 hover:bg-red-50" onclick="window.mqttFormLogic.removeCustomTopic(this)">
-        <i class="fa-solid fa-trash"></i>
-      </button>
-    </div>`;
-    container.appendChild(div);
-    _updateTopicList();
+// Channel management
+function addPublishChannel() { 
+    if (typeof window._addPublishChannel === 'function') {
+        window._addPublishChannel(); 
+    } else {
+        console.warn('_addPublishChannel not available');
+    }
 }
 
-function removeCustomTopic(btn) {
-    btn.closest('.custom-topic-item')?.remove();
-    _updateTopicList();
+function addSubscribeChannel() { 
+    if (typeof window._addSubscribeChannel === 'function') {
+        window._addSubscribeChannel(); 
+    } else {
+        console.warn('_addSubscribeChannel not available');
+    }
 }
 
 function handleCertificateUpload(input, spanId) {
@@ -118,32 +149,93 @@ function handleCertificateUpload(input, spanId) {
 
 function generatePassword(fieldId) {
     const el = document.getElementById(fieldId);
-    if (el) el.value = [...crypto.getRandomValues(new Uint8Array(12))].map(b =>
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b % 72]).join('');
+    if (el) {
+        el.value = [...crypto.getRandomValues(new Uint8Array(12))].map(b =>
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b % 72]).join('');
+    }
+}
+
+// Generate client ID manually (can be called from UI if needed)
+function generateClientId() {
+    const el = document.getElementById('field-clientId');
+    if (el) {
+        el.value = 'univa-gateway-' + Math.random().toString(36).substring(2, 10);
+    }
+}
+
+// Generate device token manually (can be called from UI if needed)
+function generateDeviceToken() {
+    const el = document.getElementById('field-deviceToken');
+    if (el) {
+        el.value = 'dev_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6);
+    }
 }
 
 // showAddTagModal is overridden by mqtt-cloud.js after form injection
-function showAddTagModal() { console.warn('showAddTagModal not yet wired'); }
+function showAddTagModal() { 
+    if (typeof window._openTagsModal === 'function') {
+        window._openTagsModal();
+    } else {
+        console.warn('showAddTagModal not yet wired');
+    }
+}
 
 // Save stubs — overridden by mqtt-cloud.js _wireFormSaves()
-function saveMqttConnectionSettings() { console.log('save connection: not wired yet'); }
-function saveMqttTopicSettings()      { console.log('save topics: not wired yet'); }
-function saveMqttPublishingSettings() { console.log('save publishing: not wired yet'); }
-function saveMqttAdvancedSettings()   { console.log('save advanced: not wired yet'); }
+function saveMqttConnectionSettings() { 
+    if (typeof window.mqttFormLogic?.saveMqttConnectionSettings === 'function') {
+        window.mqttFormLogic.saveMqttConnectionSettings();
+    } else {
+        console.log('save connection: not wired yet');
+    }
+}
 
+function saveMqttTopicSettings() { 
+    if (typeof window.mqttFormLogic?.saveMqttTopicSettings === 'function') {
+        window.mqttFormLogic.saveMqttTopicSettings();
+    } else {
+        console.log('save channels: not wired yet'); 
+    }
+}
+
+function saveMqttPublishingSettings() { 
+    if (typeof window.mqttFormLogic?.saveMqttPublishingSettings === 'function') {
+        window.mqttFormLogic.saveMqttPublishingSettings();
+    } else {
+        console.log('save mappings: not wired yet'); 
+    }
+}
+
+function saveMqttAdvancedSettings() { 
+    if (typeof window.mqttFormLogic?.saveMqttAdvancedSettings === 'function') {
+        window.mqttFormLogic.saveMqttAdvancedSettings();
+    } else {
+        console.log('save advanced: not wired yet'); 
+    }
+}
+
+// Export all functions to window.mqttFormLogic
 window.mqttFormLogic = {
     initializeMqttForm,
     switchMqttTab,
     toggleAllTags,
     removeSelectedMqttTags,
-    addNewCustomTopic,
-    removeCustomTopic,
-    updateAllTopicOptions: _updateTopicList,
+    addPublishChannel,
+    addSubscribeChannel,
     handleCertificateUpload,
     generatePassword,
+    generateClientId,
+    generateDeviceToken,
     showAddTagModal,
     saveMqttConnectionSettings,
     saveMqttTopicSettings,
     saveMqttPublishingSettings,
     saveMqttAdvancedSettings,
 };
+
+// Auto-initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we're on a page with MQTT form
+    if (document.getElementById('field-clientId')) {
+        window.initializeMqttForm();
+    }
+});
