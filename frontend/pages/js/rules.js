@@ -98,7 +98,14 @@ if (typeof window.rulesLoaded === 'undefined') {
             
             // Special styling for group rules
             var isGroupRule = rule.ruleType === 'group';
-            var groupBadge = isGroupRule ? '<span class="ml-2 text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">GROUP</span>' : '';
+            var isEmergencyRule = rule.ruleType === 'emergency';
+            var ruleTypeBadge = '';
+            
+            if (isGroupRule) {
+                ruleTypeBadge = '<span class="ml-2 text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">GROUP</span>';
+            } else if (isEmergencyRule) {
+                ruleTypeBadge = '<span class="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">EMERGENCY</span>';
+            }
             
             return `<div class="p-4 rounded-lg border cursor-pointer transition-all ${isSelected ? 'border-primary bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50'}" onclick="window.selectRule('${rule.id}')">
                 <div class="flex items-start justify-between gap-2">
@@ -106,7 +113,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                         <div class="flex items-center gap-2 mb-2">
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${priorityColors[rule.priority] || priorityColors.low}">${rule.priority}</span>
                             <span class="w-2 h-2 rounded-full ${rule.enabled ? 'bg-green-500' : 'bg-slate-300'} flex-shrink-0"></span>
-                            ${groupBadge}
+                            ${ruleTypeBadge}
                         </div>
                         <div class="font-medium text-sm text-slate-900 truncate">${rule.name}</div>
                         <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
@@ -150,8 +157,11 @@ if (typeof window.rulesLoaded === 'undefined') {
                 lt: { enabled: true, datapoints: [] }
             };
             
-            // Show rule type selector first
-            content.innerHTML = renderRuleTypeSelector();
+            // Show empty state with message to select rule type
+            content.innerHTML = `<div class="text-center py-12 text-slate-400">
+                <i class="fa-solid fa-arrow-left text-3xl mb-3 block"></i>
+                <p>Select a rule type from the dropdown above to get started</p>
+            </div>`;
             return;
         }
 
@@ -177,137 +187,94 @@ if (typeof window.rulesLoaded === 'undefined') {
             };
         }
 
-        // Check if it's a group rule
+        // Check rule type
         if (rule.ruleType === 'group') {
             content.innerHTML = renderGroupRuleEditor(rule);
-        } else {
-            content.innerHTML = renderStandardRuleEditor(rule);
+        } else if (rule.ruleType === 'emergency') {
+            content.innerHTML = renderEmergencyRuleEditor(rule);
         }
     }
 
-    // New function to render rule type selector
-    function renderRuleTypeSelector() {
-        return `<div class="space-y-6">
-            <div class="text-center mb-6">
-                <h3 class="text-lg font-medium text-slate-900">Select Rule Type</h3>
-                <p class="text-sm text-slate-500 mt-1">Choose the type of rule you want to create</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Standard Rule Card -->
-                <div class="border border-slate-200 rounded-xl p-6 cursor-pointer hover:border-primary hover:shadow-md transition-all" onclick="window.selectRuleType('standard')">
-                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                        <i class="fa-solid fa-bolt text-blue-600 text-xl"></i>
-                    </div>
-                    <h4 class="font-semibold text-slate-900 mb-2">Standard Rule</h4>
-                    <p class="text-sm text-slate-500">Create a rule based on a single device parameter with threshold conditions.</p>
-                    <div class="mt-4 text-xs text-slate-400">
-                        <i class="fa-regular fa-circle-check text-primary mr-1"></i> Single device trigger
-                    </div>
-                </div>
-                
-                <!-- Group Rule Card -->
-                <div class="border border-slate-200 rounded-xl p-6 cursor-pointer hover:border-primary hover:shadow-md transition-all" onclick="window.selectRuleType('group')">
-                    <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
-                        <i class="fa-solid fa-layer-group text-purple-600 text-xl"></i>
-                    </div>
-                    <h4 class="font-semibold text-slate-900 mb-2">Group Rule</h4>
-                    <p class="text-sm text-slate-500">Combine multiple datapoints from HOIST, CT, and LT groups into one rule.</p>
-                    <div class="mt-4 text-xs text-slate-400">
-                        <i class="fa-regular fa-circle-check text-primary mr-1"></i> Multiple groups supported
-                    </div>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    // Standard rule editor
-    function renderStandardRuleEditor(rule) {
-        var t = rule ? rule.trigger : {};
+    // Emergency rule editor
+    function renderEmergencyRuleEditor(rule) {
         return `<div class="space-y-6">
             <!-- Rule name -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Rule Name <span class="text-red-500">*</span></label>
-                <input type="text" id="rule-name-input" value="${rule ? rule.name : ''}" placeholder="e.g., High Temperature Alert" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                <input type="text" id="rule-name-input" value="${rule ? rule.name : ''}" placeholder="e.g., Overload Emergency Stop" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
             </div>
             
             <!-- Description -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
-                <textarea id="rule-desc-input" rows="2" placeholder="Describe what this rule does..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">${rule ? rule.description : ''}</textarea>
+                <textarea id="rule-desc-input" rows="2" placeholder="Describe what this rule does..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${rule ? rule.description : ''}</textarea>
+                <p class="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    Emergency rules are for critical overload situations that require immediate action
+                </p>
             </div>
             
-            <!-- Priority -->
+            <!-- Priority (fixed to critical) -->
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1.5">Priority</label>
                 <div class="grid grid-cols-4 gap-2">
-                    ${['critical','high','medium','low'].map(function(p) {
-                        var active = rule && rule.priority === p;
-                        return `<button type="button" class="py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${active ? 'border-primary bg-primary text-white' : 'border-slate-200 text-slate-600 hover:border-primary hover:text-primary'}" onclick="window.setPriority('${rule ? rule.id : 'new'}', '${p}')">${p.charAt(0).toUpperCase() + p.slice(1)}</button>`;
-                    }).join('')}
+                    <button type="button" class="py-2 px-3 rounded-lg border text-xs font-semibold border-primary bg-primary text-white">Critical</button>
+                    <button type="button" disabled class="py-2 px-3 rounded-lg border text-xs font-semibold border-slate-200 text-slate-400 bg-slate-50">High</button>
+                    <button type="button" disabled class="py-2 px-3 rounded-lg border text-xs font-semibold border-slate-200 text-slate-400 bg-slate-50">Medium</button>
+                    <button type="button" disabled class="py-2 px-3 rounded-lg border text-xs font-semibold border-slate-200 text-slate-400 bg-slate-50">Low</button>
                 </div>
+                <p class="text-xs text-slate-500 mt-1">Emergency rules are always critical priority</p>
             </div>
             
-            <!-- Trigger section -->
-            <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
-                <div class="flex items-center gap-2 mb-1">
-                    <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-bolt text-blue-600 text-xs"></i></div>
-                    <span class="font-semibold text-sm text-slate-800">Trigger Condition</span>
+            <!-- HOIST Group - Emergency overload monitoring -->
+            <div class="border border-red-200 rounded-xl p-4 bg-red-50/20">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+                            <i class="fa-solid fa-crane text-red-600 text-xs"></i>
+                        </div>
+                        <span class="font-semibold text-sm text-red-800">HOIST Overload Monitoring</span>
+                    </div>
+                    <label class="toggle-switch scale-75">
+                        <input type="checkbox" id="hoist-enabled" ${currentGroupData.hoist.enabled ? 'checked' : ''} onchange="window.toggleGroup('hoist', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Device</label>
-                        <input type="text" id="trigger-device" value="${t.device || ''}" placeholder="e.g., Load Cell LC-001" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Parameter</label>
-                        <input type="text" id="trigger-parameter" value="${t.parameter || ''}" placeholder="e.g., current_load" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-3 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Operator</label>
-                        <select id="trigger-operator" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                            ${['>', '<', '>=', '<=', '==', '!='].map(function(op){ 
-                                return `<option ${t.operator === op ? 'selected' : ''}>${op}</option>`; 
-                            }).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Value</label>
-                        <input type="text" id="trigger-value" value="${t.value || ''}" placeholder="e.g., 22500" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Unit</label>
-                        <input type="text" id="trigger-unit" value="${t.unit || ''}" placeholder="e.g., kg, °C" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Alert assignment -->
-            <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
-                <div class="flex items-center gap-2 mb-1">
-                    <div class="w-6 h-6 bg-amber-100 rounded-full flex items-center justify-center"><i class="fa-solid fa-bell text-amber-600 text-xs"></i></div>
-                    <span class="font-semibold text-sm text-slate-800">Alert Action</span>
-                </div>
-                
-                <div>
-                    <label class="block text-xs font-medium text-slate-600 mb-1">Alert Message</label>
-                    <select id="alert-message" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                        ${['Critical Temperature','Device Offline','High Vibration','Low Battery','System Startup'].map(function(name) {
-                            var sel = rule && rule.alertMessage === name ? 'selected' : '';
-                            return `<option ${sel}>${name}</option>`;
-                        }).join('')}
+                <!-- Datapoint dropdown and Add button -->
+                <div class="flex gap-2 mb-3">
+                    <select id="hoist-datapoint-select" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                        <option value="">Select Datapoint...</option>
+                        <option value="hoist_up_current_load">hoist_up - current_load (Overload)</option>
+                        <option value="hoist_up_temperature">hoist_up - temperature</option>
+                        <option value="hoist_down_current_load">hoist_down - current_load (Overload)</option>
+                        <option value="hoist_down_temperature">hoist_down - temperature</option>
                     </select>
+                    <button type="button" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors" onclick="window.addDatapoint('hoist')">
+                        <i class="fa-solid fa-plus mr-1"></i> Add
+                    </button>
+                </div>
+                
+                <!-- List of added datapoints -->
+                <div id="hoist-datapoints-list" class="space-y-2 mt-3">
+                    ${renderDatapointsList(currentGroupData.hoist.datapoints, 'hoist')}
+                </div>
+                
+                <!-- Overload threshold -->
+                <div class="mt-4 pt-3 border-t border-red-100">
+                    <label class="block text-xs font-medium text-slate-600 mb-2">Overload Threshold</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="overload-threshold" value="${rule?.overloadThreshold || 90}" class="w-24 border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                        <span class="text-sm text-slate-600">% of rated capacity</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Alert triggers when load exceeds this percentage</p>
                 </div>
             </div>
             
-            <!-- Change Rule Type Button -->
+            <!-- Change Rule Type Button (now just returns to empty state) -->
             <div class="flex justify-center pt-2">
-                <button type="button" class="text-sm text-primary hover:text-primaryHover" onclick="window.changeRuleType()">
-                    <i class="fa-solid fa-arrow-left mr-1"></i> Change Rule Type
+                <button type="button" class="text-sm text-primary hover:text-primaryHover" onclick="window.clearRuleEditor()">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Back to Rule Selection
                 </button>
             </div>
         </div>`;
@@ -333,7 +300,7 @@ if (typeof window.rulesLoaded === 'undefined') {
         }).join('');
     }
 
-    // Group rule editor with all three groups - WITH DATAPOINT DROPDOWN AND ADD BUTTON
+    // Group rule editor with all three groups
     function renderGroupRuleEditor(rule) {
         return `<div class="space-y-6">
             <!-- Rule name -->
@@ -476,44 +443,87 @@ if (typeof window.rulesLoaded === 'undefined') {
                 </div>
             </div>
             
-            <!-- Change Rule Type Button -->
+            <!-- Back button -->
             <div class="flex justify-center pt-2">
-                <button type="button" class="text-sm text-primary hover:text-primaryHover" onclick="window.changeRuleType()">
-                    <i class="fa-solid fa-arrow-left mr-1"></i> Change Rule Type
+                <button type="button" class="text-sm text-primary hover:text-primaryHover" onclick="window.clearRuleEditor()">
+                    <i class="fa-solid fa-arrow-left mr-1"></i> Back to Rule Selection
                 </button>
             </div>
         </div>`;
     }
 
-    // New function to select rule type
-    window.selectRuleType = function(type) {
-        if (type === 'group') {
-            // Reset group data for new group rule
+    // New function to create a group rule
+    window.createGroupRule = function() {
+        // Reset group data for new group rule
+        currentGroupData = {
+            hoist: { enabled: true, datapoints: [] },
+            ct: { enabled: true, datapoints: [] },
+            lt: { enabled: true, datapoints: [] }
+        };
+        
+        // Create a temporary rule object for the editor
+        var tempRule = {
+            id: 'temp',
+            name: '',
+            description: '',
+            priority: 'medium',
+            ruleType: 'group',
+            groups: {
+                hoist: { enabled: true, datapoints: [] },
+                ct: { enabled: true, datapoints: [] },
+                lt: { enabled: true, datapoints: [] }
+            }
+        };
+        
+        document.getElementById('wizard-content').innerHTML = renderGroupRuleEditor(tempRule);
+        document.getElementById('rule-editor-title').textContent = 'Create New Group Rule';
+    };
+
+    // New function to create an emergency rule
+    window.createEmergencyRule = function() {
+        // Reset group data for emergency rule
+        currentGroupData = {
+            hoist: { enabled: true, datapoints: [] },
+            ct: { enabled: false, datapoints: [] },
+            lt: { enabled: false, datapoints: [] }
+        };
+        
+        // Create a temporary rule object for the editor
+        var tempRule = {
+            id: 'temp',
+            name: '',
+            description: '',
+            priority: 'critical',
+            ruleType: 'emergency',
+            overloadThreshold: 90
+        };
+        
+        document.getElementById('wizard-content').innerHTML = renderEmergencyRuleEditor(tempRule);
+        document.getElementById('rule-editor-title').textContent = 'Create New Emergency Rule';
+    };
+
+    // New function to clear editor (go back to empty state)
+    window.clearRuleEditor = function() {
+        if (confirm('Discard unsaved changes?')) {
+            selectedRuleId = null;
+            renderRulesList();
+            
+            // Reset current group data
             currentGroupData = {
                 hoist: { enabled: true, datapoints: [] },
                 ct: { enabled: true, datapoints: [] },
                 lt: { enabled: true, datapoints: [] }
             };
             
-            // Show group rule editor
-            var defaultGroupRule = {
-                id: 'temp',
-                name: '',
-                description: '',
-                priority: 'medium',
-                ruleType: 'group'
-            };
-            document.getElementById('wizard-content').innerHTML = renderGroupRuleEditor(defaultGroupRule);
-        } else {
-            // Show standard rule editor
-            document.getElementById('wizard-content').innerHTML = renderStandardRuleEditor(null);
-        }
-    };
-
-    // New function to change rule type (go back to selector)
-    window.changeRuleType = function() {
-        if (confirm('Changing rule type will discard unsaved changes. Continue?')) {
-            document.getElementById('wizard-content').innerHTML = renderRuleTypeSelector();
+            document.getElementById('rule-editor-title').textContent = 'Create New Rule';
+            document.getElementById('rule-id-display').textContent = 'RULE-NEW';
+            document.getElementById('rule-status-toggle').checked = true;
+            
+            // Show empty state
+            document.getElementById('wizard-content').innerHTML = `<div class="text-center py-12 text-slate-400">
+                <i class="fa-solid fa-arrow-left text-3xl mb-3 block"></i>
+                <p>Select a rule type from the dropdown above to get started</p>
+            </div>`;
         }
     };
 
@@ -621,17 +631,59 @@ if (typeof window.rulesLoaded === 'undefined') {
 
     window.saveRule = function() {
         // Check what type of editor we're in
-        const hasRuleTypeSelector = document.querySelector('#wizard-content .grid-cols-1.md\\:grid-cols-2');
+        const isGroupRule = document.getElementById('hoist-datapoint-select') !== null;
+        const isEmergencyRule = document.getElementById('overload-threshold') !== null;
         
-        if (hasRuleTypeSelector) {
-            showNotification('Please select a rule type first', 'warning');
+        if (!isGroupRule && !isEmergencyRule) {
+            showNotification('Please create a rule first', 'warning');
             return;
         }
         
-        // Check if it's a group rule editor (look for group-specific elements)
-        const isGroupRule = document.getElementById('hoist-datapoint-select') !== null;
-        
-        if (isGroupRule) {
+        if (isEmergencyRule) {
+            // Get current enabled states
+            const hoistEnabled = document.getElementById('hoist-enabled');
+            
+            currentGroupData.hoist.enabled = hoistEnabled ? hoistEnabled.checked : false;
+            
+            // Validate at least one datapoint
+            if (currentGroupData.hoist.datapoints.length === 0) {
+                showNotification('At least one HOIST datapoint is required', 'warning');
+                return;
+            }
+            
+            // Get overload threshold
+            const overloadThreshold = document.getElementById('overload-threshold')?.value || 90;
+            
+            // Save emergency rule
+            var emergencyRuleData = {
+                id: selectedRuleId || 'emergency_' + Date.now(),
+                name: document.getElementById('rule-name-input')?.value || 'New Emergency Rule',
+                enabled: document.getElementById('rule-status-toggle')?.checked || true,
+                ruleType: 'emergency',
+                priority: 'critical',
+                description: document.getElementById('rule-desc-input')?.value || 'Emergency overload protection rule',
+                overloadThreshold: parseInt(overloadThreshold),
+                groups: {
+                    hoist: {
+                        enabled: currentGroupData.hoist.enabled,
+                        datapoints: currentGroupData.hoist.datapoints || []
+                    }
+                },
+                triggerCount: 0,
+                lastTriggered: null,
+                created: new Date().toISOString()
+            };
+            
+            if (selectedRuleId) {
+                const index = rules.findIndex(r => r.id === selectedRuleId);
+                if (index !== -1) {
+                    rules[index] = { ...rules[index], ...emergencyRuleData };
+                }
+            } else {
+                rules.push(emergencyRuleData);
+                selectedRuleId = emergencyRuleData.id;
+            }
+        } else if (isGroupRule) {
             // Get current enabled states
             const hoistEnabled = document.getElementById('hoist-enabled');
             const ctEnabled = document.getElementById('ct-enabled');
@@ -653,11 +705,11 @@ if (typeof window.rulesLoaded === 'undefined') {
             
             // Save group rule
             var groupRuleData = {
-                id: selectedRuleId || 'rule_' + Date.now(),
+                id: selectedRuleId || 'group_' + Date.now(),
                 name: document.getElementById('rule-name-input')?.value || 'New Group Rule',
                 enabled: document.getElementById('rule-status-toggle')?.checked || true,
                 ruleType: 'group',
-                priority: 'medium', // Default, can be updated
+                priority: 'medium',
                 description: document.getElementById('rule-desc-input')?.value || '',
                 groups: {
                     hoist: {
@@ -686,44 +738,6 @@ if (typeof window.rulesLoaded === 'undefined') {
             } else {
                 rules.push(groupRuleData);
                 selectedRuleId = groupRuleData.id;
-            }
-        } else {
-            // Save standard rule
-            // Validate required fields
-            const ruleName = document.getElementById('rule-name-input')?.value;
-            if (!ruleName) {
-                showNotification('Rule name is required', 'warning');
-                return;
-            }
-            
-            const ruleData = {
-                id: selectedRuleId || 'rule_' + Date.now(),
-                name: ruleName,
-                enabled: document.getElementById('rule-status-toggle')?.checked || true,
-                priority: 'medium',
-                description: document.getElementById('rule-desc-input')?.value || '',
-                trigger: {
-                    device: document.getElementById('trigger-device')?.value || '',
-                    parameter: document.getElementById('trigger-parameter')?.value || '',
-                    operator: document.getElementById('trigger-operator')?.value || '>',
-                    value: document.getElementById('trigger-value')?.value || '',
-                    unit: document.getElementById('trigger-unit')?.value || ''
-                },
-                alertMessage: document.getElementById('alert-message')?.value || '',
-                alertClass: 'Warning',
-                triggerCount: 0,
-                lastTriggered: null,
-                created: new Date().toISOString()
-            };
-            
-            if (selectedRuleId) {
-                const index = rules.findIndex(r => r.id === selectedRuleId);
-                if (index !== -1) {
-                    rules[index] = { ...rules[index], ...ruleData };
-                }
-            } else {
-                rules.push(ruleData);
-                selectedRuleId = ruleData.id;
             }
         }
         

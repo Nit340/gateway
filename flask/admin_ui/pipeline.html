@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Crane Monitor – Pipeline</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
+  .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; font-size:13px; font-weight:600; color:#78716c; text-decoration:none; transition:all .15s; cursor:pointer; }
+  .sidebar-link:hover { background:#fff7ed; color:#ea580c; }
+  .sidebar-link.active { background:#ea580c; color:white; }
+  .sidebar-link.active .mat { color:white; }
+  .sidebar-link:hover .mat { color:#ea580c; }
+  input.field { padding:8px 12px; border:1.5px solid #e7e5e4; border-radius:8px; font-size:13px; outline:none; transition:border-color .15s; }
+  input.field:focus { border-color:#f97316; }
+  ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
+  .toggle { position:relative; display:inline-block; width:36px; height:20px; flex-shrink:0; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider { position:absolute; cursor:pointer; inset:0; background:#d4d4d4; border-radius:20px; transition:.2s; }
+  .toggle-slider:before { content:""; position:absolute; width:14px; height:14px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
+  .toggle input:checked + .toggle-slider { background:#f97316; }
+  .toggle input:checked + .toggle-slider:before { transform:translateX(16px); }
+  .ver-badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; font-family:monospace; }
+  .ver-never { background:#f5f5f4; color:#a8a29e; }
+  .ver-ok    { background:#dcfce7; color:#15803d; }
+  .ver-fail  { background:#fee2e2; color:#dc2626; }
+  .ver-queue { background:#fef3c7; color:#d97706; }
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(249,115,22,0.5); }
+    70%  { box-shadow: 0 0 0 10px rgba(249,115,22,0); }
+    100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
+  }
+  .pulse-btn { animation: pulse-ring 2.2s infinite; }
+</style>
+</head>
+<body class="bg-stone-50 min-h-screen flex">
+
+<!-- Sidebar -->
+<aside class="w-60 min-h-screen flex flex-col flex-shrink-0" style="background:#fffaf7;border-right:1.5px solid #fed7aa;">
+  <div class="px-5 py-6 flex items-center gap-3 border-b" style="border-color:#fed7aa;">
+    <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background:#f97316;">
+      <span class="mat text-white" style="font-size:22px;">precision_manufacturing</span>
+    </div>
+    <div>
+      <div class="text-sm font-extrabold text-stone-800">Crane Monitor</div>
+      <div class="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Admin Panel</div>
+    </div>
+  </div>
+  <nav class="flex-1 px-3 py-5 space-y-1">
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mb-3">Main</div>
+    <a href="/admin"          class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
+    <a href="/admin/pipeline" class="sidebar-link active"><span class="mat">device_hub</span> Pipeline</a>
+    <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
+    <a href="/admin/users"    class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
+  </nav>
+  <div class="px-3 py-4 border-t" style="border-color:#fed7aa;">
+    <button onclick="logout()" class="sidebar-link w-full text-left" style="color:#a8a29e;">
+      <span class="mat">logout</span> Logout
+    </button>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="flex-1 flex flex-col min-w-0">
+  <header class="h-14 bg-white border-b border-stone-100 flex items-center px-6 gap-4 flex-shrink-0">
+    <h1 class="text-base font-bold text-stone-800 flex-1">Pipeline Controller</h1>
+    <div id="pipelineStatus" class="flex items-center gap-2 text-xs font-semibold text-stone-400">
+      <span class="relative flex h-2 w-2">
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-stone-300"></span>
+      </span>
+      Checking…
+    </div>
+    <button onclick="loadAll()" class="flex items-center gap-1 text-xs font-semibold text-orange-500 hover:underline">
+      <span class="mat" style="font-size:15px;">refresh</span> Refresh
+    </button>
+  </header>
+
+  <main class="flex-1 p-6 overflow-auto space-y-5">
+
+    <!-- AUTO-SEND CARD -->
+    <div class="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5">
+      <div class="flex items-start gap-5">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="mat" style="color:#f97316;font-size:22px;">bolt</span>
+            <span class="text-sm font-extrabold text-stone-800">Auto-Send</span>
+            <span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-full">Fires Immediately</span>
+          </div>
+          <p class="text-xs text-stone-400 mb-4">
+            Sends configs for all <strong>enabled</strong> targets at once.
+            If a service is not yet connected the config is queued as pending — no wait, no timeout.
+          </p>
+
+          <!-- Per-target enable toggles (compact header view) -->
+          <div id="autoSendToggles" class="flex flex-wrap gap-4 mb-4">
+            <span class="text-xs text-stone-300">Loading…</span>
+          </div>
+
+          <!-- Result area -->
+          <div id="autoSendResult" class="hidden rounded-xl p-3 space-y-1.5 text-xs font-mono" style="background:#fafaf9;border:1px solid #e7e5e4;"></div>
+        </div>
+
+        <!-- Big orange button -->
+        <button id="autoSendBtn" onclick="doAutoSend()"
+          class="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-2xl text-white font-extrabold transition-all active:scale-95 pulse-btn"
+          style="width:108px;height:84px;background:#f97316;box-shadow:0 8px 24px rgba(249,115,22,0.35);font-size:12px;letter-spacing:.05em;">
+          <span class="mat" style="font-size:30px;color:white;">send</span>
+          AUTO SEND
+        </button>
+      </div>
+    </div>
+
+    <!-- CONNECTION STATUS -->
+    <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+      <div class="text-sm font-bold text-stone-700 mb-3">Connection Status</div>
+      <div id="statusBody" class="text-sm text-stone-500">Loading…</div>
+      <div id="servicesList" class="mt-3"></div>
+    </div>
+
+    <!-- SERVICE NAMES + ENABLED TOGGLES -->
+    <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+      <div class="text-sm font-bold text-stone-700 mb-1">Pipeline Service Names</div>
+      <p class="text-xs text-stone-400 mb-5">
+        Set the exact service name from <code class="bg-stone-100 px-1 rounded">SERVICE_ADDED</code> events.
+        <strong>Toggle to enable</strong> for Auto-Send. All names are stored in the database — nothing is hardcoded.
+      </p>
+      <div id="targetsForm" class="space-y-4">Loading…</div>
+      <button onclick="saveTargets()"
+        class="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white active:scale-95"
+        style="background:#ea580c;box-shadow:0 4px 14px rgba(234,88,12,0.2);">
+        <span class="mat" style="font-size:17px;">save</span> Save Service Names
+      </button>
+    </div>
+
+    <!-- MANUAL PUSH -->
+    <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+      <div class="text-sm font-bold text-stone-700 mb-1">Manual Push</div>
+      <p class="text-xs text-stone-400 mb-4">Push one config type immediately, ignoring the enabled toggle.</p>
+      <div class="flex flex-wrap gap-3">
+        <button onclick="pushConfig('modbus')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+          <span class="mat" style="font-size:17px;">memory</span> Modbus
+        </button>
+        <button onclick="pushConfig('loadcell')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+          <span class="mat" style="font-size:17px;">scale</span> Loadcell
+        </button>
+        <button onclick="pushConfig('iot')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+          <span class="mat" style="font-size:17px;">cloud_upload</span> IoT Gateway
+        </button>
+      </div>
+      <div id="pushResult" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+    </div>
+
+    <!-- VERSION LOG TABLE -->
+    <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="text-sm font-bold text-stone-700">Send Version Log</div>
+        <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-50 px-2 py-0.5 rounded-full">
+          Version only increments on confirmed send
+        </span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr style="border-bottom:1.5px solid #fed7aa;">
+              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Config</th>
+              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Version</th>
+              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Status</th>
+              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Service</th>
+              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Last Sent</th>
+              <th class="text-left pb-2 font-bold uppercase tracking-wide text-stone-400">Message</th>
+            </tr>
+          </thead>
+          <tbody id="sendLogRows">
+            <tr><td colspan="6" class="py-6 text-center text-stone-300">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-bold text-white z-50"></div>
+
+<script>
+  async function logout() { await fetch('/admin/logout'); window.location.href = '/admin/login'; }
+
+  function toast(msg, ok = true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-bold text-white z-50 ' + (ok ? 'bg-green-500' : 'bg-red-500');
+    t.classList.remove('hidden');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.add('hidden'), 3500);
+  }
+
+  // ── Pipeline status ────────────────────────────────────────────────────
+  async function loadStatus() {
+    try {
+      const d = await fetch('/api/pipeline/status').then(r => r.json());
+      const ok = d.connected;
+      document.getElementById('pipelineStatus').innerHTML = ok
+        ? '<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>&nbsp;Connected'
+        : '<span class="relative flex h-2 w-2"><span class="relative inline-flex rounded-full h-2 w-2 bg-red-400"></span></span>&nbsp;Disconnected';
+
+      document.getElementById('statusBody').innerHTML = `
+        <div class="grid grid-cols-3 gap-3 text-xs">
+          <div><span class="font-semibold text-stone-600">Connected:</span>
+            <span class="${ok ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}">${ok ? 'Yes' : 'No'}</span></div>
+          <div><span class="font-semibold text-stone-600">Pending modbus:</span>
+            ${d.has_pending_modbus ? '<span class="text-orange-500 font-bold">Queued</span>' : 'None'}</div>
+          <div><span class="font-semibold text-stone-600">Pending loadcell:</span>
+            ${d.has_pending_loadcell ? '<span class="text-orange-500 font-bold">Queued</span>' : 'None'}</div>
+        </div>`;
+
+      const svcs = d.services || [];
+      document.getElementById('servicesList').innerHTML = svcs.length
+        ? '<div class="text-xs font-semibold text-stone-400 mb-1.5">Connected services:</div>' +
+          svcs.map(s => `<span class="inline-block bg-orange-50 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-lg mr-2 mb-1">${s}</span>`).join('')
+        : '<span class="text-xs text-stone-300">No services currently connected</span>';
+    } catch (e) {
+      document.getElementById('statusBody').textContent = 'Error loading status.';
+    }
+  }
+
+  // ── Service targets ────────────────────────────────────────────────────
+  let targetsData = [];
+
+  async function loadTargets() {
+    try {
+      const d = await fetch('/api/admin/pipeline-targets').then(r => r.json());
+      targetsData = d.targets || [];
+
+      // Auto-send compact toggles
+      document.getElementById('autoSendToggles').innerHTML = targetsData.map(t => `
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <span class="toggle">
+            <input type="checkbox" id="auto-en-${t.config_type}" ${t.enabled ? 'checked' : ''}
+              onchange="saveTargetEnabled('${t.config_type}', this.checked)"/>
+            <span class="toggle-slider"></span>
+          </span>
+          <span class="text-xs font-bold text-stone-600 capitalize">${t.config_type}</span>
+          <span class="text-xs text-stone-300 font-mono">${t.service_name || '—'}</span>
+        </label>`).join('');
+
+      // Full form
+      document.getElementById('targetsForm').innerHTML = targetsData.map(t => `
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 w-40 cursor-pointer select-none flex-shrink-0">
+            <span class="toggle">
+              <input type="checkbox" id="tgt-en-${t.config_type}" ${t.enabled ? 'checked' : ''}
+                onchange="syncAutoToggle('${t.config_type}', this.checked)"/>
+              <span class="toggle-slider"></span>
+            </span>
+            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">${t.config_type}</span>
+          </label>
+          <input class="field flex-1" id="target-${t.config_type}" type="text"
+            value="${t.service_name || ''}" placeholder="service_name (from SERVICE_ADDED)"/>
+          <div class="text-xs text-stone-400 w-48 flex-shrink-0">${t.description || ''}</div>
+        </div>`).join('');
+    } catch (e) {
+      document.getElementById('targetsForm').textContent = 'Error loading service targets.';
+    }
+  }
+
+  function syncAutoToggle(cfgType, val) {
+    const el = document.getElementById('auto-en-' + cfgType);
+    if (el) el.checked = val;
+    const t = targetsData.find(x => x.config_type === cfgType);
+    if (t) t.enabled = val;
+  }
+
+  async function saveTargetEnabled(cfgType, enabled) {
+    const t = targetsData.find(x => x.config_type === cfgType);
+    const svcName = t ? (document.getElementById('target-' + cfgType)?.value.trim() || t.service_name || '') : '';
+    await fetch('/api/admin/pipeline-targets', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config_type: cfgType, service_name: svcName, enabled })
+    });
+    const fullEl = document.getElementById('tgt-en-' + cfgType);
+    if (fullEl) fullEl.checked = enabled;
+    if (t) t.enabled = enabled;
+  }
+
+  async function saveTargets() {
+    try {
+      for (const t of targetsData) {
+        const svc = document.getElementById('target-' + t.config_type)?.value.trim() || '';
+        const en  = document.getElementById('tgt-en-' + t.config_type)?.checked ?? !!t.enabled;
+        await fetch('/api/admin/pipeline-targets', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config_type: t.config_type, service_name: svc, enabled: en })
+        });
+        t.service_name = svc;
+        t.enabled = en;
+      }
+      toast('Service names saved!');
+      await loadTargets();
+    } catch (e) {
+      toast('Save failed: ' + e.message, false);
+    }
+  }
+
+  // ── Auto-Send ─────────────────────────────────────────────────────────
+  async function doAutoSend() {
+    const btn = document.getElementById('autoSendBtn');
+    const res = document.getElementById('autoSendResult');
+    btn.disabled = true;
+    btn.style.opacity = '0.65';
+    btn.classList.remove('pulse-btn');
+    res.classList.remove('hidden');
+    res.innerHTML = '<span class="text-stone-400">⏳ Sending all enabled targets…</span>';
+
+    try {
+      const d = await fetch('/api/pipeline/auto-send', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+      }).then(r => r.json());
+
+      const results = d.results || [];
+      if (!results.length) {
+        res.innerHTML = '<span style="color:#d97706;">⚠ No enabled targets. Toggle at least one service above.</span>';
+      } else {
+        res.innerHTML = results.map(r => {
+          const icon  = r.pipeline_sent ? '✓' : (r.success ? '⏳' : '✗');
+          const color = r.pipeline_sent ? '#15803d' : (r.success ? '#d97706' : '#dc2626');
+          const ver   = r.version ? ` v${r.version}` : '';
+          return `<div style="color:${color};">${icon} <strong>${r.config_type.toUpperCase()}</strong>` +
+                 ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${ver}` +
+                 ` — ${r.message || ''}</div>`;
+        }).join('');
+        toast(d.auto_sent ? 'Auto-Send sent!' : 'Auto-Send queued (service not connected yet)');
+      }
+    } catch (e) {
+      res.innerHTML = `<span style="color:#dc2626;">✗ Error: ${e.message}</span>`;
+      toast('Auto-Send failed', false);
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.classList.add('pulse-btn');
+      loadStatus();
+      loadSendLog();
+    }
+  }
+
+  // ── Manual push ────────────────────────────────────────────────────────
+  async function pushConfig(type) {
+    const el = document.getElementById('pushResult');
+    el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
+    el.classList.remove('hidden');
+    el.textContent = 'Sending…';
+    const ep = {
+      modbus:   '/api/pipeline/modbus-config/save',
+      loadcell: '/api/pipeline/filters',
+      iot:      '/api/pipeline/iot-gateway-config/send'
+    };
+    try {
+      const d = await fetch(ep[type], {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+      }).then(r => r.json());
+      const ok = d.success;
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' + (ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
+      el.textContent = (ok ? '✓ ' : '✗ ') + (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
+      loadStatus();
+      loadSendLog();
+    } catch (e) {
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
+      el.textContent = '✗ Network error: ' + e.message;
+    }
+  }
+
+  // ── Version log ────────────────────────────────────────────────────────
+  async function loadSendLog() {
+    try {
+      const d = await fetch('/api/admin/pipeline-send-log').then(r => r.json());
+      const logs = d.logs || [];
+      const tbody = document.getElementById('sendLogRows');
+      if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-stone-300">No log entries yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logs.map(l => {
+        const sc  = l.last_status === 'success' ? 'ver-ok' : l.last_status === 'never' ? 'ver-never' : l.last_status === 'failed' ? 'ver-fail' : 'ver-queue';
+        const ver = l.last_version > 0 ? `<span class="ver-badge ver-ok">v${l.last_version}</span>` : '<span class="ver-badge ver-never">—</span>';
+        const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : '—';
+        const msg = (l.last_message || '').slice(0, 65) + ((l.last_message || '').length > 65 ? '…' : '');
+        return `<tr class="border-b border-stone-50 hover:bg-stone-50">
+          <td class="py-2.5 pr-5 font-bold text-stone-700 capitalize">${l.config_type}</td>
+          <td class="py-2.5 pr-5">${ver}</td>
+          <td class="py-2.5 pr-5"><span class="ver-badge ${sc}">${l.last_status}</span></td>
+          <td class="py-2.5 pr-5 font-mono text-stone-500">${l.last_service || '—'}</td>
+          <td class="py-2.5 pr-5 text-stone-400 whitespace-nowrap">${ts}</td>
+          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message || '').replace(/"/g, '&quot;')}">${msg || '—'}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) {
+      document.getElementById('sendLogRows').innerHTML = '<tr><td colspan="6" class="py-4 text-center text-red-400">Error loading log</td></tr>';
+    }
+  }
+
+  async function loadAll() {
+    await Promise.all([loadStatus(), loadTargets(), loadSendLog()]);
+  }
+
+  loadAll();
+  setInterval(() => { loadStatus(); loadSendLog(); }, 8000);
+</script>
+</body>
+</html>

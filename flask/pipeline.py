@@ -149,7 +149,14 @@ except ImportError:
     PIPELINE_AVAILABLE = False
     print("[PIPELINE] WARNING: ilx_pipeline not available!")
 
-from database import DB_FILE
+from database import (
+    DB_FILE,
+    get_pipeline_service_name,
+    get_next_pipeline_version,
+    record_pipeline_send_success,
+    record_pipeline_send_failure,
+    get_enabled_pipeline_targets,
+)
 from auth import ws_auth
 
 # ============================================================================
@@ -208,51 +215,33 @@ async def _broadcast_pipeline_msg(msg):
 
 
 def _find_modbus_service():
-    """Return the first connected service whose name contains 'modbus'."""
+    """Return the configured modbus service name if it is currently connected, else None."""
+    configured = get_pipeline_service_name("modbus")
+    if not configured:
+        return None
     with pipeline_state["lock"]:
-        services = list(pipeline_state["connected_services"])
-    for svc in services:
-        if 'modbus' in svc.lower():
-            return svc
-    return None
+        services = pipeline_state["connected_services"]
+    return configured if configured in services else None
 
 
 def _find_loadcell_service():
-    """Return the load cell pipeline service name.
-
-    Checks for exact canonical name 'load_cell_service' first,
-    then any service containing 'load_cell' or 'loadcell'.
-    """
+    """Return the configured loadcell service name if it is currently connected, else None."""
+    configured = get_pipeline_service_name("loadcell")
+    if not configured:
+        return None
     with pipeline_state["lock"]:
-        services = list(pipeline_state["connected_services"])
-
-    print("[DEBUG] Looking for load cell service in: {}".format(services))
-
-    if "load_cell_service" in services:
-        print("[DEBUG] Exact match: load_cell_service")
-        return "load_cell_service"
-
-    for svc in services:
-        sl = svc.lower()
-        if 'load_cell' in sl or 'loadcell' in sl:
-            print("[DEBUG] Partial match: {}".format(svc))
-            return svc
-
-    print("[DEBUG] No load cell service found")
-    return None
+        services = pipeline_state["connected_services"]
+    return configured if configured in services else None
 
 
 def _find_iot_gateway_service():
-    """Return the iot_gateway pipeline service name."""
+    """Return the configured iot_gateway service name if it is currently connected, else None."""
+    configured = get_pipeline_service_name("iot_gateway")
+    if not configured:
+        return None
     with pipeline_state["lock"]:
-        services = list(pipeline_state["connected_services"])
-    if "iot_gateway_service" in services:
-        return "iot_gateway_service"
-    for svc in services:
-        sl = svc.lower()
-        if 'iot_gateway' in sl or 'iotgateway' in sl:
-            return svc
-    return None
+        services = pipeline_state["connected_services"]
+    return configured if configured in services else None
 
 # ============================================================================
 # BACKGROUND PIPELINE THREAD
@@ -314,8 +303,13 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     with pipeline_state["lock"]:
                         pipeline_state["connected_services"].add(svc)
 
-                    if 'modbus' in svc.lower():
-                        print("[PIPELINE] Modbus service detected")
+                    # Use DB-configured service names (no pattern matching)
+                    modbus_svc   = get_pipeline_service_name("modbus")
+                    loadcell_svc = get_pipeline_service_name("loadcell")
+                    iot_svc      = get_pipeline_service_name("iot_gateway")
+
+                    if svc == modbus_svc:
+                        print("[PIPELINE] Modbus service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
                             pending = pipeline_state.get("modbus_config_pending")
                         if pending:
@@ -330,9 +324,8 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             except Exception as e:
                                 print("[PIPELINE] Pending modbus send error: {}".format(e))
 
-                    sl = svc.lower()
-                    if svc == "load_cell_service" or 'load_cell' in sl or 'loadcell' in sl:
-                        print("[PIPELINE] Load cell service detected")
+                    if svc == loadcell_svc:
+                        print("[PIPELINE] Loadcell service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
                             pending = pipeline_state.get("loadcell_config_pending")
                         if pending:
@@ -348,8 +341,8 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             except Exception as e:
                                 print("[PIPELINE] Pending loadcell send error: {}".format(e))
 
-                    if svc == "iot_gateway_service" or 'iot_gateway' in sl or 'iotgateway' in sl:
-                        print("[PIPELINE] IoT gateway service detected")
+                    if svc == iot_svc:
+                        print("[PIPELINE] IoT gateway service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
                             pending = pipeline_state.get("iot_gateway_config_pending")
                         if pending:
@@ -911,9 +904,8 @@ async def pipeline_filters_post_handler(request):
         active_levels = [{"name": lv["name"], "ratio": lv["ratio"]}
                          for lv in levels if lv.get("enabled", True)]
 
-        with pipeline_state["lock"]:
-            new_version = pipeline_state.get("loadcell_config_version", 1) + 1
-            pipeline_state["loadcell_config_version"] = new_version
+        # Get next version from DB (only written back on success)
+        new_version = get_next_pipeline_version("loadcell")
 
         config = {
             "version":       new_version,
@@ -932,7 +924,7 @@ async def pipeline_filters_post_handler(request):
                 "parameters": {
                     "server":       r.get("pipeline_server") or "127.0.0.1",
                     "port":         r.get("pipeline_port") or 7000,
-                    "service_name": "load_cell_service",
+                    "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
                     "datapoints": [{
                         "name": r["name"],
                         "map": {
@@ -1037,25 +1029,31 @@ async def pipeline_filters_post_handler(request):
                     if rid > 0:
                         pipeline_sent    = True
                         pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                        record_pipeline_send_success("loadcell", new_version, target_service, pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["loadcell_config"]         = config_json
                             pipeline_state["loadcell_config_pending"] = None
                         print("[LC-CFG] " + pipeline_message)
                     else:
                         pipeline_message = "Send failed (rid=0) -- queued as pending"
+                        record_pipeline_send_failure("loadcell", pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["loadcell_config_pending"] = config_json
                 except Exception as exc:
                     pipeline_message = "Error: {} -- queued as pending".format(exc)
+                    record_pipeline_send_failure("loadcell", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["loadcell_config_pending"] = config_json
             else:
-                pipeline_message = "load_cell_service not found -- queued as pending"
+                pipeline_message = "Service '{}' not connected -- queued as pending".format(
+                    get_pipeline_service_name("loadcell") or "load_cell_service")
+                record_pipeline_send_failure("loadcell", pipeline_message)
                 with pipeline_state["lock"]:
                     pipeline_state["loadcell_config_pending"] = config_json
                 print("[LC-CFG] " + pipeline_message)
         else:
             pipeline_message = "Queued as pending (not connected)"
+            record_pipeline_send_failure("loadcell", pipeline_message)
             with pipeline_state["lock"]:
                 pipeline_state["loadcell_config_pending"] = config_json
             print("[LC-CFG] " + pipeline_message)
@@ -1179,10 +1177,9 @@ async def pipeline_save_modbus_config(request):
                 asset['group'] = r['tag_group']
             assets.append(asset)
 
-        # -- STEP 3: Bump version ------------------------------------------
+        # -- STEP 3: Get next version from DB (only written back on success) --
+        new_version = get_next_pipeline_version("modbus")
         with pipeline_state["lock"]:
-            new_version = pipeline_state.get("config_version", 1) + 1
-            pipeline_state["config_version"]   = new_version
             pipeline_state["last_config_time"] = time.time()
 
         config = {
@@ -1228,31 +1225,30 @@ async def pipeline_save_modbus_config(request):
                         pipeline_sent    = True
                         pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
                         print("[MODBUS-CFG] " + pipeline_message)
+                        record_pipeline_send_success("modbus", new_version, target_service, pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["modbus_config_pending"] = None
                     else:
                         pipeline_message = "Send failed (rid=0) -- queued as pending"
+                        record_pipeline_send_failure("modbus", pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["modbus_config_pending"] = config_json
                 except Exception as exc:
                     pipeline_message = "Error: {} -- queued as pending".format(exc)
+                    record_pipeline_send_failure("modbus", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["modbus_config_pending"] = config_json
             else:
-                # No modbus service -- try broadcast then queue
-                try:
-                    client.datapoint_set("modbus_config", config_json)
-                    pipeline_sent    = True
-                    pipeline_message = "Broadcast sent (v{})".format(new_version)
-                    print("[MODBUS-CFG] " + pipeline_message)
-                except Exception:
-                    pass
+                pipeline_message = "Service '{}' not connected -- queued as pending".format(
+                    get_pipeline_service_name("modbus") or "modbus_service")
+                record_pipeline_send_failure("modbus", pipeline_message)
                 with pipeline_state["lock"]:
                     pipeline_state["modbus_config_pending"] = config_json
         else:
             with pipeline_state["lock"]:
                 pipeline_state["modbus_config_pending"] = config_json
             pipeline_message = "Queued as pending (not connected)"
+            record_pipeline_send_failure("modbus", pipeline_message)
             print("[MODBUS-CFG] " + pipeline_message)
 
         return web.json_response({
@@ -1321,9 +1317,8 @@ async def send_iot_gateway_config_now():
         return {"success": False, "error": "build failed: {}".format(e)}
 
     # Bump version
-    with pipeline_state["lock"]:
-        new_version = pipeline_state.get("iot_gateway_config_version", 1) + 1
-        pipeline_state["iot_gateway_config_version"] = new_version
+    # Get next version from DB (only written back on success)
+    new_version = get_next_pipeline_version("iot_gateway")
 
     config["version"] = new_version
     config_json = json.dumps(config, indent=2)
@@ -1358,25 +1353,31 @@ async def send_iot_gateway_config_now():
                 if rid > 0:
                     pipeline_sent    = True
                     pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                    record_pipeline_send_success("iot_gateway", new_version, target_service, pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["iot_gateway_config"]         = config_json
                         pipeline_state["iot_gateway_config_pending"] = None
                     print("[IOT-CFG] " + pipeline_message)
                 else:
                     pipeline_message = "Send failed (rid=0) -- queued as pending"
+                    record_pipeline_send_failure("iot_gateway", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["iot_gateway_config_pending"] = config_json
             except Exception as exc:
                 pipeline_message = "Error: {} -- queued as pending".format(exc)
+                record_pipeline_send_failure("iot_gateway", pipeline_message)
                 with pipeline_state["lock"]:
                     pipeline_state["iot_gateway_config_pending"] = config_json
         else:
-            pipeline_message = "iot_gateway_service not found -- queued as pending"
+            pipeline_message = "Service '{}' not connected -- queued as pending".format(
+                get_pipeline_service_name("iot_gateway") or "iot_gateway_service")
+            record_pipeline_send_failure("iot_gateway", pipeline_message)
             with pipeline_state["lock"]:
                 pipeline_state["iot_gateway_config_pending"] = config_json
             print("[IOT-CFG] " + pipeline_message)
     else:
         pipeline_message = "Queued as pending (not connected)"
+        record_pipeline_send_failure("iot_gateway", pipeline_message)
         with pipeline_state["lock"]:
             pipeline_state["iot_gateway_config_pending"] = config_json
         print("[IOT-CFG] " + pipeline_message)
@@ -1413,6 +1414,81 @@ async def pipeline_iot_gateway_config_view_handler(request):
 # ROUTE REGISTRATION
 # ============================================================================
 
+# ============================================================================
+# AUTO-SEND  — fire immediately for all enabled targets
+# ============================================================================
+
+async def pipeline_auto_send_handler(request):
+    """POST /api/pipeline/auto-send
+    
+    Reads all enabled pipeline service targets from DB and immediately
+    sends each config to its service.  Does NOT wait for connection —
+    if a service is not yet connected the config is queued as pending
+    exactly the same as a manual push.
+    """
+    from database import get_enabled_pipeline_targets
+
+    targets  = get_enabled_pipeline_targets()
+    results  = []
+
+    for tgt in targets:
+        cfg_type = tgt["config_type"]
+        svc_name = tgt["service_name"]
+        print("[AUTO-SEND] Sending {} -> {}".format(cfg_type, svc_name or "(no service configured)"))
+
+        try:
+            if cfg_type == "modbus":
+                class _FakeReq: pass
+                resp = await pipeline_save_modbus_config(_FakeReq())
+                import json as _j
+                d = _j.loads(resp.body)
+            elif cfg_type == "loadcell":
+                class _FakeReq: pass
+                resp = await pipeline_filters_post_handler(_FakeReq())
+                import json as _j
+                try:
+                    d = _j.loads(resp.body)
+                except Exception:
+                    d = {"success": False, "error": "no loadcell device configured"}
+            elif cfg_type == "iot_gateway":
+                d = await send_iot_gateway_config_now()
+            else:
+                d = {"success": False, "error": "unknown config_type"}
+
+            results.append({
+                "config_type":    cfg_type,
+                "service_name":   svc_name,
+                "success":        d.get("success", False),
+                "pipeline_sent":  d.get("pipeline_sent", False),
+                "version":        d.get("version"),
+                "message":        d.get("pipeline_message") or d.get("error") or "",
+            })
+        except Exception as e:
+            results.append({
+                "config_type":  cfg_type,
+                "service_name": svc_name,
+                "success":      False,
+                "pipeline_sent": False,
+                "message":      str(e),
+            })
+
+    any_sent = any(r.get("pipeline_sent") for r in results)
+    return web.json_response({
+        "success": True,
+        "auto_sent": any_sent,
+        "results": results,
+        "targets_attempted": len(results),
+    })
+
+
+async def pipeline_send_log_handler(request):
+    """GET /api/pipeline/send-log — return per-type send history from DB"""
+    from database import get_all_pipeline_send_logs
+    logs = get_all_pipeline_send_logs()
+    return web.json_response({"logs": logs})
+
+
+
 def register_pipeline_routes(app):
     """Register all pipeline API routes."""
 
@@ -1444,6 +1520,8 @@ def register_pipeline_routes(app):
     app.router.add_get ('/api/pipeline/iot-gateway-config',      pipeline_iot_gateway_config_view_handler)
     app.router.add_post('/api/pipeline/iot-gateway-config/send', pipeline_send_iot_gateway_config_handler)
 
-    print("[PIPELINE] Routes registered OK")
+    # -- Auto-send + send log
+    app.router.add_post('/api/pipeline/auto-send',  pipeline_auto_send_handler)
+    app.router.add_get ('/api/pipeline/send-log',   pipeline_send_log_handler)
 
     print("[PIPELINE] Routes registered OK")

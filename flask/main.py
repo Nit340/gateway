@@ -1,485 +1,655 @@
 # -*- coding: utf-8 -*-
-# main.py - FIXED for Python 3.5
-from aiohttp import web
+# main.py
 import asyncio
-import sqlite3
 import json
 import logging
+import os
+import sqlite3
 
-# Import modules
-from database import init_database, DB_FILE, get_database_stats
+from aiohttp import web
+
+from database import (
+    init_database, DB_FILE, get_database_stats, get_db_connection,
+    verify_admin_user, verify_webui_user,
+    get_all_admin_users, create_admin_user, update_admin_user, delete_admin_user,
+    get_all_webui_users, create_webui_user, update_webui_user, delete_webui_user,
+    get_all_pipeline_service_targets, set_pipeline_service_name,
+    get_all_pipeline_send_logs, get_enabled_pipeline_targets,
+)
 from general_config import get_config_handler, put_config_handler
-
 from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
     delete_device, test_device, disable_device, duplicate_device,
-    export_devices_csv, import_devices_csv, download_csv_template, get_device_datapoints,
-    update_device_status_api
+    export_devices_csv, import_devices_csv, download_csv_template,
+    get_device_datapoints, update_device_status_api,
 )
-
 from tag_mapping import (
     get_all_datapoints, add_modbus_datapoint, update_modbus_datapoint,
     delete_datapoint, get_available_devices, get_protocol_form,
     update_loadcell_datapoint,
     get_all_tag_groups, add_tag_group, update_tag_group,
-    delete_tag_group, assign_tags_to_group
+    delete_tag_group, assign_tags_to_group,
 )
 from websocket_handler import websocket_handler, device_websocket_handler
 from utils import periodic_updates, device_status_updater
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
-from pipeline import register_pipeline_routes, start_pipeline_background, PIPELINE_AVAILABLE, send_modbus_config_now
+from pipeline import (
+    register_pipeline_routes, start_pipeline_background,
+    PIPELINE_AVAILABLE, send_modbus_config_now,
+)
 
+# ---------------------------------------------------------------------------
+# Session helpers (simple cookie-based)
+# ---------------------------------------------------------------------------
+
+ADMIN_SESSIONS = {}   # token -> username
+_SESSION_COOKIE = 'gw_admin_session'
+
+
+def _get_admin_session(request):
+    token = request.cookies.get(_SESSION_COOKIE)
+    return ADMIN_SESSIONS.get(token) if token else None
+
+
+def _require_admin(request):
+    """Return username or raise appropriate error.
+    API routes (/api/...) get a JSON 401.
+    Page routes get an HTTP redirect to login.
+    """
+    user = _get_admin_session(request)
+    if not user:
+        path = request.path
+        if path.startswith('/api/'):
+            raise web.HTTPUnauthorized(
+                text='{"error":"Unauthorized"}',
+                content_type='application/json'
+            )
+        raise web.HTTPFound('/admin/login')
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Serve static HTML files from ./admin_ui/
+# ---------------------------------------------------------------------------
+
+ADMIN_UI_DIR = os.path.join(os.path.dirname(__file__), 'admin_ui')
+
+
+def _html(filename):
+    path = os.path.join(ADMIN_UI_DIR, filename)
+    with open(path, 'r', encoding='utf-8') as f:
+        return web.Response(text=f.read(), content_type='text/html')
+
+
+# ---------------------------------------------------------------------------
+# Admin auth handlers
+# ---------------------------------------------------------------------------
+
+async def admin_login_page(request):
+    return _html('login.html')
+
+
+async def admin_login_post(request):
+    import secrets
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    user = verify_admin_user(username, password)
+    if not user:
+        return web.json_response({'success': False, 'error': 'Invalid credentials'}, status=401)
+
+    token = secrets.token_hex(32)
+    ADMIN_SESSIONS[token] = user['username']
+    resp = web.json_response({'success': True, 'username': user['username'], 'role': user['role']})
+    resp.set_cookie(_SESSION_COOKIE, token, httponly=True, samesite='Strict', path='/')
+    return resp
+
+
+async def admin_logout(request):
+    token = request.cookies.get(_SESSION_COOKIE)
+    if token:
+        ADMIN_SESSIONS.pop(token, None)
+    resp = web.HTTPFound('/admin/login')
+    resp.del_cookie(_SESSION_COOKIE, path='/')
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# Admin page handlers (all protected)
+# ---------------------------------------------------------------------------
+
+async def admin_root(request):
+    _require_admin(request)
+    return _html('dashboard.html')
+
+
+async def admin_pipeline_page(request):
+    _require_admin(request)
+    return _html('pipeline.html')
+
+
+async def admin_database_page(request):
+    _require_admin(request)
+    return _html('database.html')
+
+
+async def admin_users_page(request):
+    _require_admin(request)
+    return _html('users.html')
+
+
+# ---------------------------------------------------------------------------
+# Admin API — pipeline service targets
+# ---------------------------------------------------------------------------
+
+async def api_pipeline_send_log(request):
+    _require_admin(request)
+    return web.json_response({'logs': get_all_pipeline_send_logs()})
+
+
+async def api_pipeline_targets_get(request):
+    _require_admin(request)
+    return web.json_response({'targets': get_all_pipeline_service_targets()})
+
+
+async def api_pipeline_targets_put(request):
+    _require_admin(request)
+    try:
+        body = await request.json()
+        config_type  = body.get('config_type')
+        service_name = body.get('service_name', '').strip()
+        enabled      = body.get('enabled')
+        if not config_type:
+            return web.json_response({'success': False, 'error': 'config_type required'}, status=400)
+        ok = set_pipeline_service_name(config_type, service_name)
+        # Update enabled flag if provided
+        if enabled is not None and ok:
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE pipeline_service_targets SET enabled=? WHERE config_type=?',
+                    (1 if enabled else 0, config_type)
+                )
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+        return web.json_response({'success': ok})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Admin API — database viewer  (tables + CRUD)
+# ---------------------------------------------------------------------------
+
+async def api_db_tables(request):
+    _require_admin(request)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        tables = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        return web.json_response({'tables': tables})
+    except Exception as e:
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_db_table_data(request):
+    _require_admin(request)
+    table = request.match_info['table']
+    # Whitelist: only alphanumeric + underscore
+    if not table.replace('_', '').isalnum():
+        return web.json_response({'error': 'Invalid table name'}, status=400)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info({})".format(table))
+        columns = [r[1] for r in cursor.fetchall()]
+        cursor.execute("SELECT * FROM {}".format(table))
+        rows = [dict(zip(columns, r)) for r in cursor.fetchall()]
+        conn.close()
+        return web.json_response({'table': table, 'columns': columns, 'rows': rows})
+    except Exception as e:
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_db_insert(request):
+    _require_admin(request)
+    table = request.match_info['table']
+    if not table.replace('_', '').isalnum():
+        return web.json_response({'error': 'Invalid table name'}, status=400)
+    try:
+        body = await request.json()
+        # Remove id so DB auto-assigns
+        body.pop('id', None)
+        keys   = list(body.keys())
+        values = [body[k] for k in keys]
+        sql = "INSERT INTO {} ({}) VALUES ({})".format(
+            table,
+            ', '.join('"{}"'.format(k) for k in keys),
+            ', '.join('?' for _ in keys)
+        )
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, values)
+        conn.commit()
+        new_id = cursor.lastrowid
+        conn.close()
+        return web.json_response({'success': True, 'id': new_id})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_db_update(request):
+    _require_admin(request)
+    table  = request.match_info['table']
+    row_id = request.match_info['id']
+    if not table.replace('_', '').isalnum():
+        return web.json_response({'error': 'Invalid table name'}, status=400)
+    try:
+        body = await request.json()
+        body.pop('id', None)
+        keys   = list(body.keys())
+        values = [body[k] for k in keys]
+        sets   = ', '.join('{} = ?'.format(k) for k in keys)
+        values.append(row_id)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE {} SET {} WHERE id = ?".format(table, sets), values)
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        return web.json_response({'success': True, 'affected': affected})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_db_delete(request):
+    _require_admin(request)
+    table  = request.match_info['table']
+    row_id = request.match_info['id']
+    if not table.replace('_', '').isalnum():
+        return web.json_response({'error': 'Invalid table name'}, status=400)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM {} WHERE id = ?".format(table), (row_id,))
+        conn.commit()
+        affected = cursor.rowcount
+        conn.close()
+        return web.json_response({'success': True, 'affected': affected})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Admin API — admin users management
+# ---------------------------------------------------------------------------
+
+async def api_admin_users_get(request):
+    _require_admin(request)
+    return web.json_response({'users': get_all_admin_users()})
+
+
+async def api_admin_users_post(request):
+    _require_admin(request)
+    try:
+        body = await request.json()
+        uid = create_admin_user(body['username'], body['password'], body.get('role', 'operator'))
+        if uid:
+            return web.json_response({'success': True, 'id': uid})
+        return web.json_response({'success': False, 'error': 'Could not create user (duplicate?)'}, status=400)
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_admin_user_put(request):
+    _require_admin(request)
+    user_id = request.match_info['id']
+    try:
+        body = await request.json()
+        ok = update_admin_user(user_id, body)
+        return web.json_response({'success': ok})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_admin_user_delete(request):
+    _require_admin(request)
+    user_id = request.match_info['id']
+    ok = delete_admin_user(user_id)
+    return web.json_response({'success': ok})
+
+
+# ---------------------------------------------------------------------------
+# Admin API — webui users management
+# ---------------------------------------------------------------------------
+
+async def api_webui_users_get(request):
+    _require_admin(request)
+    return web.json_response({'users': get_all_webui_users()})
+
+
+async def api_webui_users_post(request):
+    _require_admin(request)
+    try:
+        body = await request.json()
+        uid = create_webui_user(body['username'], body['password'], body.get('display_name', ''))
+        if uid:
+            return web.json_response({'success': True, 'id': uid})
+        return web.json_response({'success': False, 'error': 'Could not create user (duplicate?)'}, status=400)
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_webui_user_put(request):
+    _require_admin(request)
+    user_id = request.match_info['id']
+    try:
+        body = await request.json()
+        ok = update_webui_user(user_id, body)
+        return web.json_response({'success': ok})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_webui_user_delete(request):
+    _require_admin(request)
+    user_id = request.match_info['id']
+    ok = delete_webui_user(user_id)
+    return web.json_response({'success': ok})
+
+
+# ---------------------------------------------------------------------------
+# WebUI auth (operator-facing login)
+# ---------------------------------------------------------------------------
+
+async def webui_login_api(request):
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    user = verify_webui_user(username, password)
+    if not user:
+        return web.json_response({'success': False, 'error': 'Invalid username or password.'}, status=401)
+    return web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name']})
+
+
+# ---------------------------------------------------------------------------
+# Legacy database viewer (keep for compatibility)
+# ---------------------------------------------------------------------------
 
 async def database_viewer_handler(request):
-    """GET handler - simple database viewer showing all tables and data"""
     try:
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
         cursor = conn.cursor()
-        
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = cursor.fetchall()
-        
-        html_content = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Database Viewer</title>
-            <style>
-                body { font-family: monospace; margin: 20px; background: #f5f5f5; }
-                h1 { color: #333; }
-                h2 { color: #555; margin-top: 30px; background: #fff; padding: 10px; border-left: 4px solid #4CAF50; }
-                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #4CAF50; color: white; font-weight: bold; }
-                tr:nth-child(even) { background-color: #f9f9f9; }
-                tr:hover { background-color: #f0f0f0; }
-                .count { background-color: #4CAF50; color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.9em; }
-                .empty { color: #999; font-style: italic; padding: 20px; }
-                pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
-                .stats { background: white; padding: 20px; margin-bottom: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                .stats h3 { margin-top: 0; color: #4CAF50; }
-                .stat-item { display: inline-block; margin-right: 30px; }
-                .stat-value { font-size: 24px; font-weight: bold; color: #4CAF50; }
-                .stat-label { color: #666; font-size: 14px; }
-                .json-cell { max-width: 500px; overflow-x: auto; }
-                .json-cell pre { margin: 0; background: #f8f8f8; }
-            </style>
-        </head>
-        <body>
-            <h1> Database Viewer: /mnt/data/gateway_config.db</h1>
-        """
-        
-        stats = get_database_stats()
-        html_content += '<div class="stats"><h3>Database Statistics</h3>'
-        
-        for key, value in stats.items():
-            label = key.replace('_', ' ').title()
-            html_content += """
-                <div class="stat-item">
-                    <div class="stat-value">{value}</div>
-                    <div class="stat-label">{label}</div>
-                </div>
-            """.format(value=value, label=label)
-        
-        html_content += "</div>"
-        
-        for table in tables:
-            table_name = table[0]
-            
-            cursor.execute("PRAGMA table_info({table_name})".format(table_name=table_name))
-            columns = cursor.fetchall()
-            column_names = [col[1] for col in columns]
-            
-            try:
-                cursor.execute("SELECT * FROM {table_name}".format(table_name=table_name))
-                rows = cursor.fetchall()
-            except Exception as tbl_err:
-                rows = []
-                print("DB viewer: could not query {}: {}".format(table_name, tbl_err))
-            
-            html_content += """
-            <h2>{table_name}
-                <span class="count">{row_count} rows</span>
-            </h2>
-            """.format(table_name=table_name, row_count=len(rows))
-            
+        html = '<html><head><title>DB Viewer</title></head><body>'
+        html += '<h1>Database: {}</h1>'.format(DB_FILE)
+        for (tname,) in tables:
+            cursor.execute("PRAGMA table_info({})".format(tname))
+            cols = [r[1] for r in cursor.fetchall()]
+            cursor.execute("SELECT * FROM {}".format(tname))
+            rows = cursor.fetchall()
+            html += '<h2>{} ({} rows)</h2>'.format(tname, len(rows))
             if rows:
-                html_content += "<table><tr>{}</tr>".format(
-                    ''.join(['<th>{}</th>'.format(col) for col in column_names])
-                )
+                html += '<table border=1><tr>' + ''.join('<th>{}</th>'.format(c) for c in cols) + '</tr>'
                 for row in rows:
-                    html_content += "<tr>"
-                    for i, cell in enumerate(row):
-                        cell_str = str(cell)
-                        if len(cell_str) > 100:
-                            cell_str = cell_str[:100] + "..."
-                        html_content += "<td>{}</td>".format(cell_str)
-                    html_content += "</tr>"
-                html_content += "</table>"
-            else:
-                html_content += "<p class='empty'>Table is empty</p>"
-        
-        html_content += "</body></html>"
+                    html += '<tr>' + ''.join('<td>{}</td>'.format(str(v)[:200]) for v in row) + '</tr>'
+                html += '</table>'
+        html += '</body></html>'
         conn.close()
-        return web.Response(text=html_content, content_type='text/html')
-        
+        return web.Response(text=html, content_type='text/html')
     except Exception as e:
-        return web.Response(
-            text="<h1>Database Error</h1><p>{}</p>".format(str(e)),
-            content_type='text/html'
-        )
+        return web.Response(text='<h1>Error</h1><p>{}</p>'.format(e), content_type='text/html')
 
 
-async def api_docs_handler(request):
-    """API Documentation"""
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Gateway Configuration API Documentation</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-            h1 { color: #333; }
-            h2 { color: #4CAF50; margin-top: 30px; }
-            h3 { color: #666; }
-            .endpoint { background: white; padding: 20px; margin: 10px 0; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-            .method { display: inline-block; padding: 4px 8px; border-radius: 3px; font-weight: bold; color: white; margin-right: 10px; }
-            .get { background: #2196F3; }
-            .post { background: #4CAF50; }
-            .put { background: #FF9800; }
-            .delete { background: #f44336; }
-            .path { font-family: monospace; background: #f4f4f4; padding: 4px 8px; border-radius: 3px; }
-            pre { background: #f4f4f4; padding: 15px; border-radius: 4px; overflow-x: auto; }
-        </style>
-    </head>
-    <body>
-        <h1> Gateway Configuration API</h1>
-
-        <h2> General Configuration</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span>
-            <span class="path">/api/general-configuration</span>
-            <p>Get general gateway configuration</p>
-        </div>
-        <div class="endpoint">
-            <span class="method put">PUT</span>
-            <span class="path">/api/general-configuration</span>
-            <p>Update general gateway configuration</p>
-        </div>
-
-        <h2> Device Management</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/devices</span>
-            <p>Get all devices</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/devices</span>
-            <p>Add a new device</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/devices/{device_id}/details</span>
-            <p>Get device details</p>
-        </div>
-        <div class="endpoint">
-            <span class="method put">PUT</span><span class="path">/api/devices/{device_id}</span>
-            <p>Update device</p>
-        </div>
-        <div class="endpoint">
-            <span class="method delete">DELETE</span><span class="path">/api/devices/{device_id}</span>
-            <p>Delete device</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/devices/{device_id}/test</span>
-            <p>Test device connection</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/devices/{device_id}/disable</span>
-            <p>Enable/Disable device</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/devices/{device_id}/duplicate</span>
-            <p>Duplicate device with all datapoints</p>
-        </div>
-
-        <h2> Device Import/Export</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/devices/export/csv</span>
-            <p>Export all devices to CSV</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/devices/import/csv</span>
-            <p>Import devices from CSV</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/devices/template/csv</span>
-            <p>Download CSV import template</p>
-        </div>
-
-        <h2> Datapoints (Tag Mapping)</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/datapoints</span>
-            <p>Get all datapoints</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/datapoints/modbus</span>
-            <p>Add Modbus datapoint</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/datapoints/devices</span>
-            <p>Get available devices for datapoint creation</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/devices/{device_id}/datapoints</span>
-            <p>Get datapoints for specific device</p>
-        </div>
-
-        <h2> Tag Groups</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/tag-groups</span>
-            <p>Get all tag groups</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/tag-groups</span>
-            <p>Create tag group</p>
-        </div>
-
-        <h2> Pipeline / Load Cell</h2>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/pipeline/connect</span>
-            <p>Connect to pipeline server. Body: {"host": "127.0.0.1", "port": 7000}</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/pipeline/disconnect</span>
-            <p>Disconnect from pipeline server</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/api/pipeline/status</span>
-            <p>Get connection status and latest load_raw value</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/ws/pipeline/load_raw</span>
-            <p>WebSocket - live load_raw stream</p>
-        </div>
-        <div class="endpoint">
-            <span class="method post">POST</span><span class="path">/api/pipeline/modbus-config/save</span>
-            <p>Save and send Modbus configuration to pipeline</p>
-        </div>
-
-        <h2> WebSocket</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/ws/general</span>
-            <p>Real-time time/date updates</p>
-        </div>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/ws/devices</span>
-            <p>Device status updates</p>
-        </div>
-
-        <h2> Database Viewer</h2>
-        <div class="endpoint">
-            <span class="method get">GET</span><span class="path">/db</span>
-            <p>View all database tables and data</p>
-        </div>
-    </body>
-    </html>
-    """
-    return web.Response(text=html, content_type='text/html')
-
+# ---------------------------------------------------------------------------
+# Background tasks
+# ---------------------------------------------------------------------------
 
 async def start_background_tasks(app):
-    """Start all background tasks"""
     print("[MAIN] Starting background tasks...")
-    
-    # Start periodic updates
-    app['periodic_updates'] = asyncio.ensure_future(periodic_updates())
-    
-    # Start device status updater
+    app['periodic_updates']     = asyncio.ensure_future(periodic_updates())
     app['device_status_updater'] = asyncio.ensure_future(device_status_updater())
-    
-    # Start pipeline background thread automatically (non-blocking)
+
     if PIPELINE_AVAILABLE:
         print("[MAIN] Starting pipeline background thread...")
         start_pipeline_background(app)
-        print("[MAIN] Pipeline background thread started")
 
-        # Auto-send modbus config once the pipeline connects on startup.
-        # Runs in background so it does not block server startup.
         async def _auto_send_modbus_on_startup():
-            """Wait for pipeline to connect, then push the current modbus config.
-
-            Waits up to 30 s.  If the pipeline is not yet connected by then the
-            config is still stored as pending inside pipeline_state and will be
-            dispatched automatically the moment the modbus service appears
-            (SERVICE_ADDED handler in pipeline.py).
-            """
             from pipeline import pipeline_state
             print("[MAIN] Auto-send: waiting for pipeline connection (max 30 s)...")
             for _ in range(30):
                 await asyncio.sleep(1)
                 with pipeline_state["lock"]:
-                    connected = pipeline_state["connected"]
-                if connected:
-                    break
-
+                    if pipeline_state["connected"]:
+                        break
             with pipeline_state["lock"]:
                 connected = pipeline_state["connected"]
-
             if connected:
                 print("[MAIN] Auto-send: pipeline connected — sending modbus config")
                 try:
                     result = await send_modbus_config_now()
                     if result.get("success"):
-                        print("[MAIN] Auto-send: OK — {}".format(
-                            result.get("pipeline_message", "sent")))
+                        print("[MAIN] Auto-send OK")
                     else:
-                        print("[MAIN] Auto-send: build/send failed — {}".format(
-                            result.get("error", "unknown")))
+                        print("[MAIN] Auto-send failed: {}".format(result.get("error")))
                 except Exception as e:
-                    print("[MAIN] Auto-send: exception: {}".format(e))
+                    print("[MAIN] Auto-send exception: {}".format(e))
             else:
-                print("[MAIN] Auto-send: pipeline not connected after 30 s — "                      "config queued as pending, will send on first pipeline connection")
+                print("[MAIN] Auto-send: not connected after 30 s — config queued")
 
         app["auto_send_modbus"] = asyncio.ensure_future(_auto_send_modbus_on_startup())
     else:
-        print("[MAIN] Pipeline not available - skipping")
+        print("[MAIN] Pipeline not available — skipping")
 
 
 async def cleanup_background_tasks(app):
-    """Cleanup all background tasks"""
     print("[MAIN] Cleaning up background tasks...")
-    
-    # Cancel periodic updates
-    if 'periodic_updates' in app:
-        app['periodic_updates'].cancel()
-        try:
-            await app['periodic_updates']
-        except asyncio.CancelledError:
-            pass
-    
-    # Cancel device status updater
-    if 'device_status_updater' in app:
-        app['device_status_updater'].cancel()
-        try:
-            await app['device_status_updater']
-        except asyncio.CancelledError:
-            pass
-    
-    # Cancel auto-send task if still running
-    if "auto_send_modbus" in app:
-        app["auto_send_modbus"].cancel()
-        try:
-            await app["auto_send_modbus"]
-        except (asyncio.CancelledError, Exception):
-            pass
-
-    # Stop pipeline
+    for key in ('periodic_updates', 'device_status_updater', 'auto_send_modbus'):
+        if key in app:
+            app[key].cancel()
+            try:
+                await app[key]
+            except (asyncio.CancelledError, Exception):
+                pass
     if PIPELINE_AVAILABLE:
         try:
             from pipeline import pipeline_state
             with pipeline_state["lock"]:
                 pipeline_state["should_run"] = False
-            print("[MAIN] Pipeline shutdown signal sent")
         except Exception as e:
             print("[MAIN] Error stopping pipeline: {}".format(e))
-    
     print("[MAIN] Cleanup complete")
 
 
+# ---------------------------------------------------------------------------
+# App factory
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Admin API — DB path get/set
+# ---------------------------------------------------------------------------
+
+_DB_PATH_FILE = os.path.join(os.path.dirname(__file__), '.db_path_override')
+
+
+def _read_db_path_override():
+    """Read the DB path override file, or return empty string if not set."""
+    try:
+        return open(_DB_PATH_FILE).read().strip()
+    except FileNotFoundError:
+        return ''
+
+
+async def api_db_path_get(request):
+    """GET /api/admin/db-path — return current DB path and default"""
+    _require_admin(request)
+    import database as _db
+    override = _read_db_path_override()
+    return web.json_response({
+        'current':  _db.DB_FILE,
+        'default':  '/mnt/data/gateway_config.db',
+        'override': override,
+        'env_var':  os.environ.get('GATEWAY_DB_FILE', ''),
+    })
+
+
+async def api_db_path_put(request):
+    """PUT /api/admin/db-path — update the DB file path (persisted + applied on next restart)"""
+    _require_admin(request)
+    try:
+        body = await request.json()
+        new_path = (body.get('path') or '').strip()
+        if not new_path:
+            return web.json_response({'success': False, 'error': 'path is required'}, status=400)
+        if not new_path.endswith('.db'):
+            return web.json_response({'success': False, 'error': 'Path must end in .db'}, status=400)
+        # Persist the override
+        os.makedirs(os.path.dirname(new_path) if os.path.dirname(new_path) else '.', exist_ok=True)
+        open(_DB_PATH_FILE, 'w').write(new_path)
+        # Update the live env variable so it takes effect if re-imported
+        os.environ['GATEWAY_DB_FILE'] = new_path
+        return web.json_response({
+            'success': True,
+            'path':    new_path,
+            'note':    'Path saved. Restart the server for the new DB file to take effect.'
+        })
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
 def create_app():
-    """Create and configure the aiohttp application"""
     app = web.Application()
-    
-    app.router.add_get('/',     api_docs_handler)
-    app.router.add_get('/docs', api_docs_handler)
-    
+
+    # -- Admin UI ----------------------------------------------------------
+    # Root redirects to admin login
+    app.router.add_get ('/admin/login',    admin_login_page)
+    app.router.add_post('/admin/login',    admin_login_post)
+    app.router.add_get ('/admin/logout',   admin_logout)
+    app.router.add_get ('/admin',          admin_root)
+    app.router.add_get ('/admin/',         admin_root)
+    app.router.add_get ('/admin/pipeline', admin_pipeline_page)
+    app.router.add_get ('/admin/database', admin_database_page)
+    app.router.add_get ('/admin/users',    admin_users_page)
+
+    # Root / serves the WebUI operator login (login.html from the project root)
+    WEBUI_LOGIN_FILE = os.path.join(os.path.dirname(__file__), 'login.html')
+    async def webui_login_page(request):
+        try:
+            with open(WEBUI_LOGIN_FILE, 'r', encoding='utf-8') as f:
+                return web.Response(text=f.read(), content_type='text/html')
+        except FileNotFoundError:
+            raise web.HTTPNotFound(text='login.html not found beside main.py')
+    app.router.add_get('/', webui_login_page)
+
+    # -- Admin API ---------------------------------------------------------
+    # Pipeline service targets
+    app.router.add_get('/api/admin/pipeline-targets',     api_pipeline_targets_get)
+    app.router.add_put('/api/admin/pipeline-targets',     api_pipeline_targets_put)
+    app.router.add_get('/api/admin/pipeline-send-log',    api_pipeline_send_log)
+
+    # Database CRUD
+    app.router.add_get   ('/api/admin/db/tables',              api_db_tables)
+    app.router.add_get   ('/api/admin/db/table/{table}',       api_db_table_data)
+    app.router.add_post  ('/api/admin/db/table/{table}',       api_db_insert)
+    app.router.add_put   ('/api/admin/db/table/{table}/{id}',  api_db_update)
+    app.router.add_delete('/api/admin/db/table/{table}/{id}',  api_db_delete)
+
+    # Admin users
+    app.router.add_get   ('/api/admin/users/admin',      api_admin_users_get)
+    app.router.add_post  ('/api/admin/users/admin',      api_admin_users_post)
+    app.router.add_put   ('/api/admin/users/admin/{id}', api_admin_user_put)
+    app.router.add_delete('/api/admin/users/admin/{id}', api_admin_user_delete)
+
+    # WebUI users
+    app.router.add_get   ('/api/admin/users/webui',      api_webui_users_get)
+    app.router.add_post  ('/api/admin/users/webui',      api_webui_users_post)
+    app.router.add_put   ('/api/admin/users/webui/{id}', api_webui_user_put)
+    app.router.add_delete('/api/admin/users/webui/{id}', api_webui_user_delete)
+
+    # WebUI operator login (for the crane operator web UI)
+    app.router.add_post('/api/auth/login', webui_login_api)
+
+    # -- DB path API (admin only) -----------------------------------------
+    app.router.add_get('/api/admin/db-path', api_db_path_get)
+    app.router.add_put('/api/admin/db-path', api_db_path_put)
+
+
+    # -- General Config API -----------------------------------------------
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
-    
+
     register_auth_routes(app)
     register_cloud_routes(app)
 
-    # Device Management Routes
-    app.router.add_get   ('/api/devices',                    get_all_devices)
-    app.router.add_post  ('/api/devices',                    add_device)
-    app.router.add_get   ('/api/devices/{device_id}/details',get_device_details)
-    app.router.add_put   ('/api/devices/{device_id}',        update_device)
-    app.router.add_delete('/api/devices/{device_id}',        delete_device)
-    app.router.add_post  ('/api/devices/{device_id}/test',   test_device)
-    app.router.add_post  ('/api/devices/{device_id}/disable',disable_device)
-    app.router.add_post  ('/api/devices/{device_id}/duplicate', duplicate_device)
-    
-    # Device Import/Export Routes
-    app.router.add_get ('/api/devices/export/csv',   export_devices_csv)
-    app.router.add_post('/api/devices/import/csv',   import_devices_csv)
-    app.router.add_get ('/api/devices/template/csv', download_csv_template)
-    
-    # Device Status Update (for testing)
-    app.router.add_post('/api/devices/{device_id}/status', update_device_status_api)
-    
-    # Tag group routes
-    app.router.add_get   ('/api/tag-groups',                        get_all_tag_groups)
-    app.router.add_post  ('/api/tag-groups',                        add_tag_group)
-    app.router.add_put   ('/api/tag-groups/{group_id}',             update_tag_group)
-    app.router.add_delete('/api/tag-groups/{group_id}',             delete_tag_group)
-    app.router.add_post  ('/api/tag-groups/{group_id}/assign-tags', assign_tags_to_group)
-    
-    # Datapoint routes
-    app.router.add_get   ('/api/datapoints',                      get_all_datapoints)
-    app.router.add_post  ('/api/datapoints/modbus',               add_modbus_datapoint)
-    app.router.add_put   ('/api/datapoints/modbus/{id}',          update_modbus_datapoint)
-    app.router.add_put   ('/api/datapoints/loadcell/{id}',        update_loadcell_datapoint)
-    app.router.add_delete('/api/datapoints/{id}',                 delete_datapoint)
-    app.router.add_get   ('/api/datapoints/devices',              get_available_devices)
-    app.router.add_get   ('/api/datapoints/protocol-form/{protocol}', get_protocol_form)
-    app.router.add_get   ('/api/devices/{device_id}/datapoints',  get_device_datapoints)
+    # -- Device Management ------------------------------------------------
+    app.router.add_get   ('/api/devices',                          get_all_devices)
+    app.router.add_post  ('/api/devices',                          add_device)
+    app.router.add_get   ('/api/devices/{device_id}/details',      get_device_details)
+    app.router.add_put   ('/api/devices/{device_id}',              update_device)
+    app.router.add_delete('/api/devices/{device_id}',              delete_device)
+    app.router.add_post  ('/api/devices/{device_id}/test',         test_device)
+    app.router.add_post  ('/api/devices/{device_id}/disable',      disable_device)
+    app.router.add_post  ('/api/devices/{device_id}/duplicate',    duplicate_device)
+    app.router.add_get   ('/api/devices/export/csv',               export_devices_csv)
+    app.router.add_post  ('/api/devices/import/csv',               import_devices_csv)
+    app.router.add_get   ('/api/devices/template/csv',             download_csv_template)
+    app.router.add_post  ('/api/devices/{device_id}/status',       update_device_status_api)
 
-    # Database viewer
-    app.router.add_get('/db', database_viewer_handler)
-    
-    # WebSocket routes
+    # -- Tag groups -------------------------------------------------------
+    app.router.add_get   ('/api/tag-groups',                       get_all_tag_groups)
+    app.router.add_post  ('/api/tag-groups',                       add_tag_group)
+    app.router.add_put   ('/api/tag-groups/{group_id}',            update_tag_group)
+    app.router.add_delete('/api/tag-groups/{group_id}',            delete_tag_group)
+    app.router.add_post  ('/api/tag-groups/{group_id}/assign-tags', assign_tags_to_group)
+
+    # -- Datapoints -------------------------------------------------------
+    app.router.add_get   ('/api/datapoints',                       get_all_datapoints)
+    app.router.add_post  ('/api/datapoints/modbus',                add_modbus_datapoint)
+    app.router.add_put   ('/api/datapoints/modbus/{id}',           update_modbus_datapoint)
+    app.router.add_put   ('/api/datapoints/loadcell/{id}',         update_loadcell_datapoint)
+    app.router.add_delete('/api/datapoints/{id}',                  delete_datapoint)
+    app.router.add_get   ('/api/datapoints/devices',               get_available_devices)
+    app.router.add_get   ('/api/datapoints/protocol-form/{protocol}', get_protocol_form)
+    app.router.add_get   ('/api/devices/{device_id}/datapoints',   get_device_datapoints)
+
+    # -- WebSocket --------------------------------------------------------
     app.router.add_get('/ws/general', websocket_handler)
     app.router.add_get('/ws/devices', device_websocket_handler)
 
-    # Pipeline routes
+    # -- Pipeline ---------------------------------------------------------
     register_pipeline_routes(app)
-    
+
+    # /db redirects to the proper admin database manager
+    async def db_redirect(request):
+        raise web.HTTPFound('/admin/database')
+    app.router.add_get('/db', db_redirect)
+
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
-    
     return app
 
 
 if __name__ == '__main__':
-    print("="*70)
-    print(" Gateway Configuration Server Starting")
-    print("="*70)
-    
+    print("=" * 60)
+    print("  Gateway Admin Server Starting")
+    print("=" * 60)
     print("\nInitializing database...")
     init_database()
-    
-    print("\nServer: http://0.0.0.0:8082")
-    print("\nDevice Management API:")
-    print("  GET  /api/devices                   - List all devices")
-    print("  POST /api/devices                    - Add new device")
-    print("  GET  /api/devices/export/csv         - Export to CSV")
-    print("  POST /api/devices/import/csv         - Import from CSV")
-    
-    print("\nWebSocket:")
-    print("  GET  /ws/devices                     - Real-time device status")
-    print("  GET  /ws/general                      - Time updates")
-    print("  GET  /ws/pipeline/load_raw            - Live load cell data")
-    
-    if PIPELINE_AVAILABLE:
-        print("\nPIPELINE: WILL RUN AUTOMATICALLY IN BACKGROUND")
-        print("  POST /api/pipeline/modbus-config/save - Send Modbus config")
-        print("  GET  /api/pipeline/status            - Check pipeline status")
-    else:
-        print("\nPIPELINE: NOT AVAILABLE (ilx_pipeline not installed)")
-    
-    print("\nDatabase Viewer:")
-    print("  GET  /db                              - View all tables")
-    print("="*70 + "\n")
-    
+    print("\nAdmin Panel : http://0.0.0.0:8082/admin")
+    print("Default login: admin / admin123")
+    print("=" * 60 + "\n")
     web.run_app(create_app(), host='0.0.0.0', port=8082)

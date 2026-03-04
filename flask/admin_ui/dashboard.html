@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Crane Monitor – Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
+  .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; font-size:13px; font-weight:600; color:#78716c; text-decoration:none; transition:all .15s; cursor:pointer; }
+  .sidebar-link:hover { background:#fff7ed; color:#ea580c; }
+  .sidebar-link.active { background:#ea580c; color:white; }
+  .sidebar-link.active .mat { color:white; }
+  .sidebar-link:hover .mat { color:#ea580c; }
+  .sidebar-link.active:hover { background:#c2410c; }
+  ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
+</style>
+</head>
+<body class="bg-stone-50 min-h-screen flex">
+
+<!-- Sidebar -->
+<aside class="w-60 min-h-screen flex flex-col" style="background:#fffaf7;border-right:1.5px solid #fed7aa;">
+  <!-- Logo -->
+  <div class="px-5 py-6 flex items-center gap-3 border-b" style="border-color:#fed7aa;">
+    <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background:#f97316;">
+      <span class="mat text-white" style="font-size:22px;">precision_manufacturing</span>
+    </div>
+    <div>
+      <div class="text-sm font-extrabold text-stone-800 leading-tight">Crane Monitor</div>
+      <div class="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Admin Panel</div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="flex-1 px-3 py-5 space-y-1">
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mb-3">Main</div>
+    <a href="/admin" class="sidebar-link active" id="nav-dashboard">
+      <span class="mat">dashboard</span> Dashboard
+    </a>
+    <a href="/admin/pipeline" class="sidebar-link" id="nav-pipeline">
+      <span class="mat">device_hub</span> Pipeline
+    </a>
+    <a href="/admin/database" class="sidebar-link" id="nav-database">
+      <span class="mat">table_chart</span> Database
+    </a>
+
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
+    <a href="/admin/users" class="sidebar-link" id="nav-users">
+      <span class="mat">manage_accounts</span> Users
+    </a>
+  </nav>
+
+  <!-- User / logout -->
+  <div class="px-3 py-4 border-t" style="border-color:#fed7aa;">
+    <button onclick="logout()" class="sidebar-link w-full text-left hover:bg-red-50 hover:text-red-500 hover:!text-red-500" style="color:#a8a29e;">
+      <span class="mat">logout</span> Logout
+    </button>
+  </div>
+</aside>
+
+<!-- Main content -->
+<div class="flex-1 flex flex-col min-h-screen">
+  <!-- Top bar -->
+  <header class="h-14 bg-white border-b border-stone-100 flex items-center px-6 gap-4 flex-shrink-0">
+    <h1 class="text-base font-bold text-stone-800 flex-1">Dashboard</h1>
+    <div class="flex items-center gap-2 text-xs font-semibold text-stone-400">
+      <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
+      Server Online
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="flex-1 p-6 overflow-auto">
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-4 mb-6" id="statsGrid">
+      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
+        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Modbus Devices</div>
+        <div class="text-3xl font-extrabold text-stone-800" id="stat-modbus">–</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
+        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Loadcell Devices</div>
+        <div class="text-3xl font-extrabold text-stone-800" id="stat-loadcell">–</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
+        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Datapoints</div>
+        <div class="text-3xl font-extrabold text-stone-800" id="stat-datapoints">–</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
+        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Admin Users</div>
+        <div class="text-3xl font-extrabold text-stone-800" id="stat-users">–</div>
+      </div>
+    </div>
+
+    <!-- Quick nav cards -->
+    <div class="grid grid-cols-3 gap-4">
+      <a href="/admin/pipeline" class="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer no-underline">
+        <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-4" style="background:#fff7ed;">
+          <span class="mat" style="font-size:26px;color:#f97316;">device_hub</span>
+        </div>
+        <div class="text-sm font-bold text-stone-800 mb-1 group-hover:text-orange-600">Pipeline Controller</div>
+        <div class="text-xs text-stone-400">Manage service targets, send modbus & loadcell configs to pipeline services.</div>
+      </a>
+
+      <a href="/admin/database" class="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer no-underline">
+        <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-4" style="background:#fff7ed;">
+          <span class="mat" style="font-size:26px;color:#f97316;">table_chart</span>
+        </div>
+        <div class="text-sm font-bold text-stone-800 mb-1 group-hover:text-orange-600">Database Manager</div>
+        <div class="text-xs text-stone-400">Browse, insert, edit and delete records in all database tables.</div>
+      </a>
+
+      <a href="/admin/users" class="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer no-underline">
+        <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-4" style="background:#fff7ed;">
+          <span class="mat" style="font-size:26px;color:#f97316;">manage_accounts</span>
+        </div>
+        <div class="text-sm font-bold text-stone-800 mb-1 group-hover:text-orange-600">User Management</div>
+        <div class="text-xs text-stone-400">Manage admin panel users and WebUI operator accounts.</div>
+      </a>
+    </div>
+
+    <!-- DB path info -->
+    <div class="mt-6 bg-white rounded-2xl border border-stone-100 p-5 shadow-sm">
+      <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-2">Database Location</div>
+      <div id="dbPath" class="font-mono text-sm text-stone-700 bg-stone-50 rounded-lg px-3 py-2">Loading…</div>
+      <p class="text-xs text-stone-400 mt-2">Change via <code class="bg-stone-100 px-1 rounded">GATEWAY_DB_FILE</code> environment variable on server startup.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Set active nav
+  const path = window.location.pathname;
+  document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
+  if (path === '/admin' || path === '/admin/') document.getElementById('nav-dashboard').classList.add('active');
+  else if (path.includes('/admin/pipeline')) document.getElementById('nav-pipeline').classList.add('active');
+  else if (path.includes('/admin/database')) document.getElementById('nav-database').classList.add('active');
+  else if (path.includes('/admin/users'))    document.getElementById('nav-users').classList.add('active');
+
+  async function logout() {
+    await fetch('/admin/logout');
+    window.location.href = '/admin/login';
+  }
+
+  async function loadStats() {
+    try {
+      // Load admin users
+      const [u, t] = await Promise.all([
+        fetch('/api/admin/users/admin').then(r=>r.json()),
+        fetch('/api/admin/db/tables').then(r=>r.json())
+      ]);
+      document.getElementById('stat-users').textContent = (u.users||[]).length;
+      // Load device stats via device API
+      const devs = await fetch('/api/devices').then(r=>r.json()).catch(()=>({devices:[]}));
+      const devices = devs.devices || [];
+      document.getElementById('stat-modbus').textContent    = devices.filter(d=>d.type==='modbus'||d.device_type==='tcp'||d.device_type==='rtu').length;
+      document.getElementById('stat-loadcell').textContent  = devices.filter(d=>d.type==='loadcell').length;
+      const dps = await fetch('/api/datapoints').then(r=>r.json()).catch(()=>({datapoints:[]}));
+      document.getElementById('stat-datapoints').textContent = (dps.datapoints||[]).length;
+    } catch(e) {}
+    // Show DB path
+    document.getElementById('dbPath').textContent = 'Configured on server (see GATEWAY_DB_FILE env var)';
+  }
+  loadStats();
+</script>
+</body>
+</html>

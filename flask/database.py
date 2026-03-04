@@ -2,76 +2,45 @@
 # database.py - Database initialization and operations
 import sqlite3
 import json
+import hashlib
+import os
 from datetime import datetime
 
-import os
+# Database path - configurable via environment variable
+_DB_DIR = os.environ.get('GATEWAY_DB_DIR', '/mnt/data')
+DB_FILE = os.environ.get('GATEWAY_DB_FILE', os.path.join(_DB_DIR, 'gateway_config.db'))
 
-# Database stored at /mnt/data/ so it survives across working-directory changes
-# and is kept outside the application source tree.
-_DB_DIR  = '/mnt/data'
-DB_FILE  = os.path.join(_DB_DIR, 'gateway_config.db')
+# Create the directory if it does not exist
+os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
 
-# Create the directory if it does not exist (runs once at import time)
-os.makedirs(_DB_DIR, exist_ok=True)
 
 def get_db_connection():
-    """Get a database connection with proper timeout and WAL mode for concurrency"""
+    """Get a database connection with WAL mode for concurrency"""
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
+
 def init_database():
-    """Initialize SQLite database with new schema"""
+    """Initialize SQLite database with full schema"""
     conn = get_db_connection()
     cursor = conn.cursor()
-
     create_tables(cursor)
     insert_default_data(cursor)
-    _migrate_general_config_columns(cursor)   # safe additive migration for existing DBs
-
+    _migrate_existing_db(cursor)
     conn.commit()
     conn.close()
-    print("Database initialized with new schema")
-    print("[OK] General configuration table")
-    print("[OK] Services table (modbus, loadcell)")
-    print("[OK] Modbus_device table (tcp/rtu with connection details)")
-    print("[OK] Loadcell_device table (with calibration)")
-    print("[OK] Modbus_datapoints table")
-    print("[OK] Loadcell_datapoints table")
-    print("[OK] Device groups table")
-    print("[OK] Cloud Integration tables")
+    print("[DB] Database initialized: {}".format(DB_FILE))
+    print("[DB] All tables created/verified OK")
 
-
-def _migrate_general_config_columns(cursor):
-    """Add any new columns to general_configuration on an existing live DB.
-    Uses ALTER TABLE ADD COLUMN which is safe and additive — never drops data."""
-    cursor.execute("PRAGMA table_info(general_configuration)")
-    existing = {row[1] for row in cursor.fetchall()}
-    new_cols = [
-        ("network_mode",      "TEXT    DEFAULT 'wifi'"),
-        ("wifi_ssid",         "TEXT    DEFAULT ''"),
-        ("wifi_password",     "TEXT    DEFAULT ''"),
-        ("eth_ip_assignment", "TEXT    DEFAULT 'dhcp'"),
-        ("eth_static_ip",     "TEXT    DEFAULT ''"),
-        ("eth_subnet_mask",   "TEXT    DEFAULT ''"),
-        ("eth_gateway",       "TEXT    DEFAULT ''"),
-        ("eth_dns1",          "TEXT    DEFAULT ''"),
-        ("eth_dns2",          "TEXT    DEFAULT ''"),
-        ("cell_apn",          "TEXT    DEFAULT 'internet'"),
-        ("cell_username",     "TEXT    DEFAULT ''"),
-        ("cell_password",     "TEXT    DEFAULT ''"),
-    ]
-    for col, defn in new_cols:
-        if col not in existing:
-            cursor.execute(
-                "ALTER TABLE general_configuration ADD COLUMN {} {}".format(col, defn))
-            print("[DB] Migration: added general_configuration.{}".format(col))
 
 def create_tables(cursor):
-    """Create all tables with proper schema"""
-    
-    # General configuration table — single-row store (id always = 1)
+    """Create all tables — schema is complete at creation, no ALTER TABLE migrations needed"""
+
+    # -----------------------------------------------------------------------
+    # General configuration (single-row store, id always = 1)
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS general_configuration (
             id INTEGER PRIMARY KEY,
@@ -100,11 +69,11 @@ def create_tables(cursor):
             -- Network: active mode selector
             network_mode        TEXT    DEFAULT 'wifi',
 
-            -- WiFi (network_mode = 'wifi')
+            -- WiFi
             wifi_ssid           TEXT    DEFAULT '',
             wifi_password       TEXT    DEFAULT '',
 
-            -- Ethernet (network_mode = 'ethernet')
+            -- Ethernet
             eth_ip_assignment   TEXT    DEFAULT 'dhcp',
             eth_static_ip       TEXT    DEFAULT '',
             eth_subnet_mask     TEXT    DEFAULT '',
@@ -112,7 +81,7 @@ def create_tables(cursor):
             eth_dns1            TEXT    DEFAULT '',
             eth_dns2            TEXT    DEFAULT '',
 
-            -- Cellular / LTE (network_mode = 'lte')
+            -- Cellular / LTE
             cell_apn            TEXT    DEFAULT 'internet',
             cell_username       TEXT    DEFAULT '',
             cell_password       TEXT    DEFAULT '',
@@ -121,154 +90,155 @@ def create_tables(cursor):
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # Services table
+
+    # -----------------------------------------------------------------------
+    # Services
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS services (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL UNIQUE,
             description TEXT,
-            enabled BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            enabled     BOOLEAN DEFAULT 1,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # Device groups table
+
+    # -----------------------------------------------------------------------
+    # Device groups
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS device_groups (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            color TEXT DEFAULT 'blue',
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL UNIQUE,
+            color       TEXT    DEFAULT 'blue',
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
-    # Modbus device table - MATCHING YOUR SPECIFIED FORMAT
+
+    # -----------------------------------------------------------------------
+    # Modbus device
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS modbus_device (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            device_type TEXT NOT NULL CHECK(device_type IN ('tcp', 'rtu')),
-            group_id INTEGER,
-            service_id INTEGER,
-            
-            -- Common parameters matching your format
+            id                  TEXT    PRIMARY KEY,
+            name                TEXT    NOT NULL,
+            device_type         TEXT    NOT NULL CHECK(device_type IN ('tcp', 'rtu')),
+            group_id            INTEGER,
+            service_id          INTEGER,
+
             response_timeout_ms INTEGER DEFAULT 100,
-            byte_timeout_ms INTEGER DEFAULT 100,
-            max_retries INTEGER DEFAULT 2,
+            byte_timeout_ms     INTEGER DEFAULT 100,
+            max_retries         INTEGER DEFAULT 2,
             polling_interval_ms INTEGER DEFAULT 300,
-            
-            -- TCP specific
-            ip_address TEXT,
-            port INTEGER DEFAULT 502,
-            
-            -- RTU specific
-            serial_port TEXT DEFAULT '/dev/ttymxc5',
-            baud_rate INTEGER DEFAULT 9600,
-            parity TEXT DEFAULT 'N',
-            data_bits INTEGER DEFAULT 8,
-            stop_bits INTEGER DEFAULT 1,
-            
-            enabled BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            -- TCP
+            ip_address          TEXT,
+            port                INTEGER DEFAULT 502,
+
+            -- RTU
+            serial_port         TEXT    DEFAULT '/dev/ttymxc5',
+            baud_rate           INTEGER DEFAULT 9600,
+            parity              TEXT    DEFAULT 'N',
+            data_bits           INTEGER DEFAULT 8,
+            stop_bits           INTEGER DEFAULT 1,
+
+            enabled             BOOLEAN DEFAULT 1,
+            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (service_id) REFERENCES services(id)
         )
     ''')
-    
-    # Loadcell device table -- sysfs_hx711 hardware-aligned schema
+
+    # -----------------------------------------------------------------------
+    # Loadcell device
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_device (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            service_id INTEGER,
+            id               TEXT    PRIMARY KEY,
+            name             TEXT    NOT NULL,
+            service_id       INTEGER,
 
-            -- SysFS / IIO device path  (sysfs_hx711 driver)
-            device_path TEXT NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+            device_path      TEXT    NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
 
-            -- Auto-generated names (not entered by user)
-            load_name TEXT DEFAULT 'load',
-            capacity_name TEXT DEFAULT 'capacity',
+            load_name        TEXT    DEFAULT 'load',
+            capacity_name    TEXT    DEFAULT 'capacity',
 
-            -- Pipeline connection
-            pipeline_server TEXT DEFAULT '127.0.0.1',
-            pipeline_port INTEGER DEFAULT 7000,
-            log_level TEXT DEFAULT 'info',
+            pipeline_server  TEXT    DEFAULT '127.0.0.1',
+            pipeline_port    INTEGER DEFAULT 7000,
+            log_level        TEXT    DEFAULT 'info',
 
-            -- ADC hardware parameters (sysfs_hx711 device block)
-            poll_ms INTEGER DEFAULT 10,
-            resolution_bits INTEGER DEFAULT 24,
-            effective_bits INTEGER DEFAULT 14,
-            signed BOOLEAN DEFAULT 0,
-            gain REAL DEFAULT 1,
-            vref REAL DEFAULT 5,
-            raw_min REAL DEFAULT 0,
-            raw_max REAL DEFAULT 16383,
+            poll_ms          INTEGER DEFAULT 10,
+            resolution_bits  INTEGER DEFAULT 24,
+            effective_bits   INTEGER DEFAULT 14,
+            signed           BOOLEAN DEFAULT 0,
+            gain             REAL    DEFAULT 1,
+            vref             REAL    DEFAULT 5,
+            raw_min          REAL    DEFAULT 0,
+            raw_max          REAL    DEFAULT 16383,
 
-            -- Capacity specification
-            capacity_min REAL DEFAULT 0,
-            capacity_max REAL DEFAULT 1000,
-            unit TEXT DEFAULT 'kg',
+            capacity_min     REAL    DEFAULT 0,
+            capacity_max     REAL    DEFAULT 1000,
+            unit             TEXT    DEFAULT 'kg',
 
-            -- Calibration (single_point method)
-            tare_offset REAL DEFAULT 0.0,
-            known_weight REAL DEFAULT 0.0,
-            known_weight_raw REAL DEFAULT 0.0,
+            tare_offset      REAL    DEFAULT 0.0,
+            known_weight     REAL    DEFAULT 0.0,
+            known_weight_raw REAL    DEFAULT 0.0,
 
-            -- Filter and level arrays stored as JSON strings
-            -- raw_filters:    [{type, parameters, enabled}, ...]
-            -- weight_filters: [{type, parameters, enabled}, ...]
-            -- levels:         [{name, ratio, enabled}, ...]
-            raw_filters TEXT DEFAULT '[]',
-            weight_filters TEXT DEFAULT '[]',
-            levels TEXT DEFAULT '[]',
+            raw_filters      TEXT    DEFAULT '[]',
+            weight_filters   TEXT    DEFAULT '[]',
+            levels           TEXT    DEFAULT '[]',
 
-            enabled BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            enabled          BOOLEAN DEFAULT 1,
+            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (service_id) REFERENCES services(id)
         )
     ''')
-    
-    # Modbus datapoints table - UPDATED with group field (quoted) and writable flag
+
+    # -----------------------------------------------------------------------
+    # Modbus datapoints
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS modbus_datapoints (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            slave_id INTEGER DEFAULT 1,
-            group_id INTEGER,
-            "group" TEXT,
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id        TEXT    NOT NULL,
+            name             TEXT    NOT NULL,
+            slave_id         INTEGER DEFAULT 1,
+            group_id         INTEGER,
+            "group"          TEXT,
             register_address INTEGER NOT NULL,
-            register_type TEXT NOT NULL CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
-            data_type TEXT NOT NULL CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
-            byte_order TEXT DEFAULT 'big',
-            word_order TEXT DEFAULT 'big',
-            scale_factor REAL DEFAULT 1.0,
-            offset REAL DEFAULT 0.0,
-            unit TEXT,
-            description TEXT,
-            enabled BOOLEAN DEFAULT 1,
-            writable BOOLEAN DEFAULT 0,
-            retry_count INTEGER DEFAULT 1,
-            timeout_ms INTEGER DEFAULT 100,
-            register_count INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            register_type    TEXT    NOT NULL CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
+            data_type        TEXT    NOT NULL CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
+            byte_order       TEXT    DEFAULT 'big',
+            word_order       TEXT    DEFAULT 'big',
+            scale_factor     REAL    DEFAULT 1.0,
+            offset           REAL    DEFAULT 0.0,
+            unit             TEXT,
+            description      TEXT,
+            enabled          BOOLEAN DEFAULT 1,
+            writable         BOOLEAN DEFAULT 0,
+            retry_count      INTEGER DEFAULT 1,
+            timeout_ms       INTEGER DEFAULT 100,
+            register_count   INTEGER DEFAULT 1,
+            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, slave_id, name),
             FOREIGN KEY (device_id) REFERENCES modbus_device(id) ON DELETE CASCADE,
             FOREIGN KEY (group_id) REFERENCES device_groups(id) ON DELETE SET NULL
         )
     ''')
-    
-    # Loadcell datapoints table
+
+    # -----------------------------------------------------------------------
+    # Loadcell datapoints
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_datapoints (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            unit TEXT DEFAULT '',
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id  TEXT    NOT NULL,
+            name       TEXT    NOT NULL,
+            unit       TEXT    DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, name),
@@ -276,14 +246,16 @@ def create_tables(cursor):
         )
     ''')
 
-    # Cloud Integration tables
+    # -----------------------------------------------------------------------
+    # Cloud integration
+    # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connections (
-            id         TEXT PRIMARY KEY,
-            type       TEXT NOT NULL CHECK(type IN ('mqtt','ftp')),
-            name       TEXT NOT NULL,
+            id         TEXT    PRIMARY KEY,
+            type       TEXT    NOT NULL CHECK(type IN ('mqtt','ftp')),
+            name       TEXT    NOT NULL,
             enabled    INTEGER DEFAULT 1,
-            config     TEXT NOT NULL DEFAULT '{}',
+            config     TEXT    NOT NULL DEFAULT '{}',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -292,11 +264,11 @@ def create_tables(cursor):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS mqtt_datapoints (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            connection_id    TEXT NOT NULL,
-            tag_name         TEXT NOT NULL,
-            topic            TEXT NOT NULL DEFAULT '',
-            publish_mode     TEXT NOT NULL DEFAULT 'onChange',
-            change_threshold REAL DEFAULT 0.0,
+            connection_id    TEXT    NOT NULL,
+            tag_name         TEXT    NOT NULL,
+            topic            TEXT    NOT NULL DEFAULT '',
+            publish_mode     TEXT    NOT NULL DEFAULT 'onChange',
+            change_threshold REAL    DEFAULT 0.0,
             enabled          INTEGER DEFAULT 1,
             created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(connection_id, tag_name),
@@ -306,14 +278,14 @@ def create_tables(cursor):
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ftp_datapoints (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            connection_id    TEXT NOT NULL,
-            tag_name         TEXT NOT NULL,
-            column_name      TEXT NOT NULL DEFAULT '',
-            include_unit     INTEGER DEFAULT 1,
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id     TEXT    NOT NULL,
+            tag_name          TEXT    NOT NULL,
+            column_name       TEXT    NOT NULL DEFAULT '',
+            include_unit      INTEGER DEFAULT 1,
             include_timestamp INTEGER DEFAULT 1,
-            enabled          INTEGER DEFAULT 1,
-            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            enabled           INTEGER DEFAULT 1,
+            created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(connection_id, tag_name),
             FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
         )
@@ -321,7 +293,7 @@ def create_tables(cursor):
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connection_stats (
-            connection_id   TEXT PRIMARY KEY,
+            connection_id   TEXT    PRIMARY KEY,
             messages_total  INTEGER DEFAULT 0,
             messages_ok     INTEGER DEFAULT 0,
             messages_failed INTEGER DEFAULT 0,
@@ -330,62 +302,411 @@ def create_tables(cursor):
             FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
         )
     ''')
-    
-    # Migration for new columns (with proper quoting)
-    try:
-        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN "group" TEXT')
-    except Exception:
-        pass
-    try:
-        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN writable BOOLEAN DEFAULT 0')
-    except Exception:
-        pass
-    try:
-        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN retry_count INTEGER DEFAULT 1')
-    except Exception:
-        pass
-    try:
-        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN timeout_ms INTEGER DEFAULT 100')
-    except Exception:
-        pass
-    try:
-        cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN register_count INTEGER DEFAULT 1')
-    except Exception:
-        pass
+
+    # -----------------------------------------------------------------------
+    # Admin users  (for the /admin panel)
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS admin_users (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT    NOT NULL UNIQUE,
+            password   TEXT    NOT NULL,          -- SHA-256 hex digest
+            role       TEXT    NOT NULL DEFAULT 'admin' CHECK(role IN ('admin', 'operator')),
+            enabled    BOOLEAN DEFAULT 1,
+            last_login TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # -----------------------------------------------------------------------
+    # WebUI users  (for the operator-facing Web UI login)
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS webui_users (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT    NOT NULL UNIQUE,
+            password   TEXT    NOT NULL,          -- SHA-256 hex digest
+            display_name TEXT  DEFAULT '',
+            enabled    BOOLEAN DEFAULT 1,
+            last_login TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # -----------------------------------------------------------------------
+    # Pipeline service targets (replaces hard-coded service names)
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pipeline_service_targets (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            config_type  TEXT    NOT NULL UNIQUE
+                             CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway')),
+            service_name TEXT    NOT NULL DEFAULT '',
+            enabled      BOOLEAN DEFAULT 1,
+            description  TEXT    DEFAULT '',
+            updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # -----------------------------------------------------------------------
+    # Pipeline send log — one row per config_type, tracks last sent version
+    # Version is read from here, incremented, written back ONLY on success
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pipeline_send_log (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            config_type     TEXT    NOT NULL UNIQUE
+                                CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway')),
+            last_version    INTEGER NOT NULL DEFAULT 0,
+            last_sent_at    TIMESTAMP,
+            last_service    TEXT    DEFAULT '',
+            last_status     TEXT    DEFAULT 'never',
+            last_message    TEXT    DEFAULT ''
+        )
+    ''')
+
+
+def _migrate_existing_db(cursor):
+    """Safe additive migrations for DBs created before schema updates.
+    Only adds missing columns — never drops or modifies existing data.
+    """
+    # pipeline_service_targets: add enabled column if missing
+    cursor.execute("PRAGMA table_info(pipeline_service_targets)")
+    cols = {r[1] for r in cursor.fetchall()}
+    if 'enabled' not in cols:
+        cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN enabled BOOLEAN DEFAULT 1")
+        print("[DB] Migration: added pipeline_service_targets.enabled")
+
+    # pipeline_send_log: ensure table exists (added in later version)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pipeline_send_log'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE pipeline_send_log (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_type     TEXT    NOT NULL UNIQUE
+                                    CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway')),
+                last_version    INTEGER NOT NULL DEFAULT 0,
+                last_sent_at    TIMESTAMP,
+                last_service    TEXT    DEFAULT '',
+                last_status     TEXT    DEFAULT 'never',
+                last_message    TEXT    DEFAULT ''
+            )
+        ''')
+        for cfg_type in ('modbus', 'loadcell', 'iot_gateway'):
+            cursor.execute(
+                'INSERT OR IGNORE INTO pipeline_send_log (config_type) VALUES (?)', (cfg_type,)
+            )
+        print("[DB] Migration: created pipeline_send_log table")
+
+    # webui_users: ensure table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='webui_users'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE webui_users (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                username     TEXT    NOT NULL UNIQUE,
+                password     TEXT    NOT NULL,
+                display_name TEXT    DEFAULT '',
+                enabled      BOOLEAN DEFAULT 1,
+                last_login   TIMESTAMP,
+                created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("[DB] Migration: created webui_users table")
+
+    # admin_users: ensure table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_users'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE admin_users (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                username   TEXT    NOT NULL UNIQUE,
+                password   TEXT    NOT NULL,
+                role       TEXT    NOT NULL DEFAULT 'admin' CHECK(role IN ('admin', 'operator')),
+                enabled    BOOLEAN DEFAULT 1,
+                last_login TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("[DB] Migration: created admin_users table")
+
+
+def _hash_password(plain):
+    return hashlib.sha256(plain.encode()).hexdigest()
+
 
 def insert_default_data(cursor):
-    """Insert default data"""
-    
-    # Insert general configuration
+    """Insert default seed data (idempotent — uses INSERT OR IGNORE)"""
+
+    # General configuration row
     cursor.execute('SELECT COUNT(*) FROM general_configuration')
     if cursor.fetchone()[0] == 0:
         cursor.execute('INSERT INTO general_configuration (id) VALUES (1)')
-    
-    # Insert default services
-    for service in [
-        ('modbus', 'Modbus Protocol Service'),
-        ('loadcell', 'Loadcell Service')
+
+    # Default services
+    for name, desc in [('modbus', 'Modbus Protocol Service'),
+                        ('loadcell', 'Loadcell Service')]:
+        cursor.execute('INSERT OR IGNORE INTO services (name, description) VALUES (?, ?)', (name, desc))
+
+    # Default admin user  (admin / admin123)
+    cursor.execute(
+        'INSERT OR IGNORE INTO admin_users (username, password, role) VALUES (?, ?, ?)',
+        ('admin', _hash_password('admin123'), 'admin')
+    )
+
+    # Default WebUI user  (operator / operator123)
+    cursor.execute(
+        'INSERT OR IGNORE INTO webui_users (username, password, display_name) VALUES (?, ?, ?)',
+        ('operator', _hash_password('operator123'), 'Crane Operator')
+    )
+
+    # Default pipeline service targets
+    for cfg_type, svc_name, desc in [
+        ('modbus',      'modbus_service',      'Modbus pipeline service name'),
+        ('loadcell',    'load_cell_service',   'Load-cell pipeline service name'),
+        ('iot_gateway', 'iot_gateway_service', 'IoT gateway pipeline service name'),
     ]:
-        cursor.execute('''
-            INSERT OR IGNORE INTO services (name, description)
-            VALUES (?, ?)
-        ''', service)
+        cursor.execute(
+            'INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, description, enabled) VALUES (?, ?, ?, 1)',
+            (cfg_type, svc_name, desc)
+        )
 
-def get_general_configuration():
-    """Get general configuration.
+    # Default pipeline send log rows
+    for cfg_type in ('modbus', 'loadcell', 'iot_gateway'):
+        cursor.execute(
+            'INSERT OR IGNORE INTO pipeline_send_log (config_type, last_version, last_status) VALUES (?, 0, "never")',
+            (cfg_type,)
+        )
 
-    The returned dict shape matches exactly what both the JS (populateFormWithConfig)
-    and build_iot_gateway_config expect:
 
-        network.mode
-        network.wifi     = { ssid, password }
-        network.ethernet = { ip_assignment, static_ip, subnet_mask, gateway, dns1, dns2 }
-        network.cellular = { apn, username, password }
-    """
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def verify_admin_user(username, password):
+    """Return user dict if credentials are valid, else None."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, username, role FROM admin_users WHERE username=? AND password=? AND enabled=1',
+            (username, _hash_password(password))
+        )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute('UPDATE admin_users SET last_login=CURRENT_TIMESTAMP WHERE id=?', (row[0],))
+            conn.commit()
+        conn.close()
+        return {'id': row[0], 'username': row[1], 'role': row[2]} if row else None
+    except Exception as e:
+        print("[DB] verify_admin_user error: {}".format(e))
+        return None
 
+
+def verify_webui_user(username, password):
+    """Return user dict if credentials are valid, else None."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, username, display_name FROM webui_users WHERE username=? AND password=? AND enabled=1',
+            (username, _hash_password(password))
+        )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute('UPDATE webui_users SET last_login=CURRENT_TIMESTAMP WHERE id=?', (row[0],))
+            conn.commit()
+        conn.close()
+        return {'id': row[0], 'username': row[1], 'display_name': row[2]} if row else None
+    except Exception as e:
+        print("[DB] verify_webui_user error: {}".format(e))
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Pipeline service target helpers
+# ---------------------------------------------------------------------------
+
+def get_pipeline_service_name(config_type):
+    """Return the configured pipeline service name for a config type."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT service_name FROM pipeline_service_targets WHERE config_type=?', (config_type,))
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else ''
+    except Exception as e:
+        print("[DB] get_pipeline_service_name error: {}".format(e))
+        return ''
+
+
+def set_pipeline_service_name(config_type, service_name):
+    """Update the pipeline service name for a config type."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE pipeline_service_targets SET service_name=?, updated_at=CURRENT_TIMESTAMP WHERE config_type=?',
+            (service_name, config_type)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("[DB] set_pipeline_service_name error: {}".format(e))
+        return False
+
+
+def get_all_pipeline_service_targets():
+    """Return all pipeline service target rows."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT config_type, service_name, enabled, description, updated_at '
+            'FROM pipeline_service_targets ORDER BY config_type'
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {
+                'config_type':  r[0],
+                'service_name': r[1],
+                'enabled':      bool(r[2]),
+                'description':  r[3],
+                'updated_at':   r[4],
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print("[DB] get_all_pipeline_service_targets error: {}".format(e))
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Pipeline send log helpers
+# ---------------------------------------------------------------------------
+
+def get_pipeline_send_log(config_type):
+    """Return the send-log row for a config_type, or default dict."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT last_version, last_sent_at, last_service, last_status, last_message '
+            'FROM pipeline_send_log WHERE config_type=?', (config_type,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {
+                'config_type':  config_type,
+                'last_version': row[0],
+                'last_sent_at': row[1],
+                'last_service': row[2],
+                'last_status':  row[3],
+                'last_message': row[4],
+            }
+        return {'config_type': config_type, 'last_version': 0, 'last_sent_at': None,
+                'last_service': '', 'last_status': 'never', 'last_message': ''}
+    except Exception as e:
+        print("[DB] get_pipeline_send_log error: {}".format(e))
+        return {'config_type': config_type, 'last_version': 0}
+
+
+def get_next_pipeline_version(config_type):
+    """Read last_version from DB and return last_version + 1 (does NOT write)."""
+    row = get_pipeline_send_log(config_type)
+    return (row.get('last_version') or 0) + 1
+
+
+def record_pipeline_send_success(config_type, version, service_name, message=''):
+    """Called ONLY when pipeline send succeeds — persists the new version."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE pipeline_send_log
+               SET last_version=?, last_sent_at=CURRENT_TIMESTAMP,
+                   last_service=?, last_status='success', last_message=?
+               WHERE config_type=?""",
+            (version, service_name, message, config_type)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("[DB] record_pipeline_send_success error: {}".format(e))
+        return False
+
+
+def record_pipeline_send_failure(config_type, message=''):
+    """Record a failed send attempt (version NOT incremented)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE pipeline_send_log
+               SET last_sent_at=CURRENT_TIMESTAMP, last_status='failed', last_message=?
+               WHERE config_type=?""",
+            (message, config_type)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("[DB] record_pipeline_send_failure error: {}".format(e))
+        return False
+
+
+def get_all_pipeline_send_logs():
+    """Return all send log rows."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT config_type, last_version, last_sent_at, last_service, last_status, last_message '
+            'FROM pipeline_send_log ORDER BY config_type'
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'config_type': r[0], 'last_version': r[1], 'last_sent_at': r[2],
+                 'last_service': r[3], 'last_status': r[4], 'last_message': r[5]} for r in rows]
+    except Exception as e:
+        print("[DB] get_all_pipeline_send_logs error: {}".format(e))
+        return []
+
+
+def get_enabled_pipeline_targets():
+    """Return only enabled service targets (for Auto-Send)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT config_type, service_name FROM pipeline_service_targets WHERE enabled=1 ORDER BY config_type'
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'config_type': r[0], 'service_name': r[1]} for r in rows]
+    except Exception as e:
+        print("[DB] get_enabled_pipeline_targets error: {}".format(e))
+        return []
+
+
+
+# ---------------------------------------------------------------------------
+# General configuration helpers
+# ---------------------------------------------------------------------------
+
+def get_general_configuration():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute('''
             SELECT
                 gateway_name, serial_number, deployment_site, location_mode,
@@ -406,83 +727,49 @@ def get_general_configuration():
                 COALESCE(cell_password,     '')         AS cell_password
             FROM general_configuration WHERE id = 1
         ''')
-
         row = cursor.fetchone()
         conn.close()
-
         if not row:
             return {}
-
         return {
             'gateway_identity': {
-                'name':            row[0],
-                'serial_number':   row[1],
-                'deployment_site': row[2],
-                'location_mode':   row[3],
-                'latitude':        row[4],
-                'longitude':       row[5],
+                'name':            row[0], 'serial_number': row[1],
+                'deployment_site': row[2], 'location_mode': row[3],
+                'latitude':        row[4], 'longitude':     row[5],
                 'asset_id':        row[6],
             },
             'date_time': {
-                'timezone':    row[8],
-                'ntp_server':  row[9],
-                'date_format': row[10],
-                'time_format': row[11],
-                'language':    row[12],
+                'timezone': row[8], 'ntp_server': row[9],
+                'date_format': row[10], 'time_format': row[11], 'language': row[12],
             },
-            'heartbeat': {
-                'interval':          row[13],
-                'offline_threshold': row[14],
-            },
+            'heartbeat': {'interval': row[13], 'offline_threshold': row[14]},
             'mac_address': row[7],
-            # network shape matches JS populateFormWithConfig exactly
             'network': {
                 'mode': row[15],
-                'wifi': {
-                    'ssid':     row[16],
-                    'password': row[17],
-                },
+                'wifi':     {'ssid': row[16], 'password': row[17]},
                 'ethernet': {
-                    'ip_assignment': row[18],
-                    'static_ip':     row[19],
-                    'subnet_mask':   row[20],
-                    'gateway':       row[21],
-                    'dns1':          row[22],
-                    'dns2':          row[23],
+                    'ip_assignment': row[18], 'static_ip':  row[19],
+                    'subnet_mask':   row[20], 'gateway':    row[21],
+                    'dns1':          row[22], 'dns2':       row[23],
                 },
-                'cellular': {
-                    'apn':      row[24],
-                    'username': row[25],
-                    'password': row[26],
-                },
+                'cellular': {'apn': row[24], 'username': row[25], 'password': row[26]},
             },
         }
     except Exception as e:
         print("Error getting general config: {}".format(e))
         return {}
 
-def update_general_configuration(config_data):
-    """Update general configuration.
 
-    Accepts the nested shape the JS sends:
-        gateway_identity, date_time, heartbeat, mac_address
-        network.mode
-        network.wifi.ssid / .password
-        network.ethernet.ip_assignment / .static_ip / .subnet_mask / .gateway / .dns1 / .dns2
-        network.cellular.apn / .username / .password
-    """
+def update_general_configuration(config_data):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        sets   = []
-        values = []
+        sets, values = [], []
 
         def _add(col, val):
             sets.append('{} = ?'.format(col))
             values.append(val)
 
-        # Gateway Identity
         gi = config_data.get('gateway_identity', {})
         if 'name'            in gi: _add('gateway_name',    gi['name'])
         if 'serial_number'   in gi: _add('serial_number',   gi['serial_number'])
@@ -492,7 +779,6 @@ def update_general_configuration(config_data):
         if 'longitude'       in gi: _add('longitude',       gi['longitude'])
         if 'asset_id'        in gi: _add('asset_id',        gi['asset_id'])
 
-        # Date & Time
         dt = config_data.get('date_time', {})
         if 'timezone'    in dt: _add('timezone',    dt['timezone'])
         if 'ntp_server'  in dt: _add('ntp_server',  dt['ntp_server'])
@@ -500,25 +786,20 @@ def update_general_configuration(config_data):
         if 'time_format' in dt: _add('time_format', dt['time_format'])
         if 'language'    in dt: _add('language',    dt['language'])
 
-        # Heartbeat
         hb = config_data.get('heartbeat', {})
         if 'interval'          in hb: _add('heartbeat_interval', hb['interval'])
         if 'offline_threshold' in hb: _add('offline_threshold',  hb['offline_threshold'])
 
-        # MAC Address
         if 'mac_address' in config_data:
             _add('mac_address', config_data['mac_address'])
 
-        # Network
         net = config_data.get('network', {})
         if 'mode' in net: _add('network_mode', net['mode'])
 
-        # WiFi — JS sends network.wifi.ssid / .password
         wifi = net.get('wifi', {})
-        if 'ssid'     in wifi: _add('wifi_ssid',      wifi['ssid'])
-        if 'password' in wifi: _add('wifi_password',  wifi['password'])
+        if 'ssid'     in wifi: _add('wifi_ssid',     wifi['ssid'])
+        if 'password' in wifi: _add('wifi_password', wifi['password'])
 
-        # Ethernet — JS sends network.ethernet.*
         eth = net.get('ethernet', {})
         if 'ip_assignment' in eth: _add('eth_ip_assignment', eth['ip_assignment'])
         if 'static_ip'     in eth: _add('eth_static_ip',     eth['static_ip'])
@@ -527,7 +808,6 @@ def update_general_configuration(config_data):
         if 'dns1'          in eth: _add('eth_dns1',          eth['dns1'])
         if 'dns2'          in eth: _add('eth_dns2',          eth['dns2'])
 
-        # Cellular — JS sends network.cellular.*
         cell = net.get('cellular', {})
         if 'apn'      in cell: _add('cell_apn',      cell['apn'])
         if 'username' in cell: _add('cell_username',  cell['username'])
@@ -537,72 +817,53 @@ def update_general_configuration(config_data):
             cursor.execute(
                 'UPDATE general_configuration SET {}, updated_at = CURRENT_TIMESTAMP WHERE id = 1'
                 .format(', '.join(sets)),
-                values)
+                values
+            )
             conn.commit()
-
         conn.close()
         return True
     except Exception as e:
         print("Error updating general config: {}".format(e))
         return False
 
-# Device Groups operations
+
+# ---------------------------------------------------------------------------
+# Device groups
+# ---------------------------------------------------------------------------
+
 def get_all_device_groups():
-    """Get all device groups"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, name, color, description, created_at
-            FROM device_groups
-            ORDER BY name
-        ''')
-        
-        groups = []
-        for row in cursor.fetchall():
-            groups.append({
-                'id': row[0],
-                'name': row[1],
-                'color': row[2],
-                'description': row[3],
-                'created_at': row[4]
-            })
-        
+        cursor.execute('SELECT id, name, color, description, created_at FROM device_groups ORDER BY name')
+        rows = cursor.fetchall()
         conn.close()
-        return groups
+        return [{'id': r[0], 'name': r[1], 'color': r[2], 'description': r[3], 'created_at': r[4]} for r in rows]
     except Exception as e:
         print("Error getting device groups: {}".format(e))
         return []
 
+
 def add_device_group(name, color='blue', description=''):
-    """Add a new device group"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO device_groups (name, color, description)
-            VALUES (?, ?, ?)
-        ''', (name, color, description))
-        
-        group_id = cursor.lastrowid
+        cursor.execute('INSERT INTO device_groups (name, color, description) VALUES (?, ?, ?)', (name, color, description))
+        gid = cursor.lastrowid
         conn.commit()
         conn.close()
-        return group_id
+        return gid
     except Exception as e:
         print("Error adding device group: {}".format(e))
         return None
 
+
 def delete_device_group(group_id):
-    """Delete a device group and unassign devices"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute('UPDATE modbus_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
         cursor.execute('DELETE FROM device_groups WHERE id = ?', (group_id,))
-        
         conn.commit()
         conn.close()
         return True
@@ -610,93 +871,221 @@ def delete_device_group(group_id):
         print("Error deleting device group: {}".format(e))
         return False
 
-# Services operations
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+
 def get_all_services():
-    """Get all services"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, name, description, enabled
-            FROM services
-            ORDER BY name
-        ''')
-        
-        services = []
-        for row in cursor.fetchall():
-            services.append({
-                'id': row[0],
-                'name': row[1],
-                'description': row[2],
-                'enabled': row[3]
-            })
-        
+        cursor.execute('SELECT id, name, description, enabled FROM services ORDER BY name')
+        rows = cursor.fetchall()
         conn.close()
-        return services
+        return [{'id': r[0], 'name': r[1], 'description': r[2], 'enabled': r[3]} for r in rows]
     except Exception as e:
         print("Error getting services: {}".format(e))
         return []
 
+
 def get_service_by_name(name):
-    """Get service ID by name"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute('SELECT id FROM services WHERE name = ?', (name,))
         row = cursor.fetchone()
-        
         conn.close()
         return row[0] if row else None
     except Exception as e:
         print("Error getting service by name: {}".format(e))
         return None
 
+
+# ---------------------------------------------------------------------------
+# Database stats
+# ---------------------------------------------------------------------------
+
 def get_database_stats():
-    """Get database statistics"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute('SELECT COUNT(*) FROM modbus_device')
-        modbus_count = cursor.fetchone()[0]
-        
-        cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-        loadcell_count = cursor.fetchone()[0]
-        
-        cursor.execute('SELECT COUNT(*) FROM modbus_datapoints')
-        modbus_datapoint_count = cursor.fetchone()[0]
-        
-        cursor.execute('SELECT COUNT(*) FROM loadcell_datapoints')
-        loadcell_datapoint_count = cursor.fetchone()[0]
-        
-        cursor.execute('SELECT COUNT(*) FROM device_groups')
-        group_count = cursor.fetchone()[0]
-
+        stats = {}
+        for label, table in [
+            ('modbus_devices',      'modbus_device'),
+            ('loadcell_devices',    'loadcell_device'),
+            ('modbus_datapoints',   'modbus_datapoints'),
+            ('loadcell_datapoints', 'loadcell_datapoints'),
+            ('groups',              'device_groups'),
+            ('admin_users',         'admin_users'),
+            ('webui_users',         'webui_users'),
+        ]:
+            cursor.execute('SELECT COUNT(*) FROM {}'.format(table))
+            stats[label] = cursor.fetchone()[0]
         conn.close()
-
-        return {
-            'modbus_devices': modbus_count,
-            'loadcell_devices': loadcell_count,
-            'total_devices': modbus_count + loadcell_count,
-            'modbus_datapoints': modbus_datapoint_count,
-            'loadcell_datapoints': loadcell_datapoint_count,
-            'total_datapoints': modbus_datapoint_count + loadcell_datapoint_count,
-            'groups': group_count
-        }
+        stats['total_devices']    = stats['modbus_devices'] + stats['loadcell_devices']
+        stats['total_datapoints'] = stats['modbus_datapoints'] + stats['loadcell_datapoints']
+        return stats
     except Exception as e:
         print("Error getting stats: {}".format(e))
         return {}
 
-# Initialize database when module is imported
+
+# ---------------------------------------------------------------------------
+# Admin users CRUD
+# ---------------------------------------------------------------------------
+
+def get_all_admin_users():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, role, enabled, last_login, created_at FROM admin_users ORDER BY username')
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'id': r[0], 'username': r[1], 'role': r[2], 'enabled': r[3],
+                 'last_login': r[4], 'created_at': r[5]} for r in rows]
+    except Exception as e:
+        print("Error getting admin users: {}".format(e))
+        return []
+
+
+def create_admin_user(username, password, role='operator'):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO admin_users (username, password, role) VALUES (?, ?, ?)',
+            (username, _hash_password(password), role)
+        )
+        uid = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return uid
+    except Exception as e:
+        print("Error creating admin user: {}".format(e))
+        return None
+
+
+def update_admin_user(user_id, data):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        sets, values = [], []
+        if 'username' in data:
+            sets.append('username=?'); values.append(data['username'])
+        if 'password' in data:
+            sets.append('password=?'); values.append(_hash_password(data['password']))
+        if 'role' in data:
+            sets.append('role=?'); values.append(data['role'])
+        if 'enabled' in data:
+            sets.append('enabled=?'); values.append(1 if data['enabled'] else 0)
+        if sets:
+            values.append(user_id)
+            cursor.execute(
+                'UPDATE admin_users SET {}, updated_at=CURRENT_TIMESTAMP WHERE id=?'.format(', '.join(sets)),
+                values
+            )
+            conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Error updating admin user: {}".format(e))
+        return False
+
+
+def delete_admin_user(user_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM admin_users WHERE id=?', (user_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Error deleting admin user: {}".format(e))
+        return False
+
+
+# ---------------------------------------------------------------------------
+# WebUI users CRUD
+# ---------------------------------------------------------------------------
+
+def get_all_webui_users():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, display_name, enabled, last_login, created_at FROM webui_users ORDER BY username')
+        rows = cursor.fetchall()
+        conn.close()
+        return [{'id': r[0], 'username': r[1], 'display_name': r[2], 'enabled': r[3],
+                 'last_login': r[4], 'created_at': r[5]} for r in rows]
+    except Exception as e:
+        print("Error getting webui users: {}".format(e))
+        return []
+
+
+def create_webui_user(username, password, display_name=''):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO webui_users (username, password, display_name) VALUES (?, ?, ?)',
+            (username, _hash_password(password), display_name)
+        )
+        uid = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return uid
+    except Exception as e:
+        print("Error creating webui user: {}".format(e))
+        return None
+
+
+def update_webui_user(user_id, data):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        sets, values = [], []
+        if 'username'     in data: sets.append('username=?');     values.append(data['username'])
+        if 'password'     in data: sets.append('password=?');     values.append(_hash_password(data['password']))
+        if 'display_name' in data: sets.append('display_name=?'); values.append(data['display_name'])
+        if 'enabled'      in data: sets.append('enabled=?');      values.append(1 if data['enabled'] else 0)
+        if sets:
+            values.append(user_id)
+            cursor.execute(
+                'UPDATE webui_users SET {}, updated_at=CURRENT_TIMESTAMP WHERE id=?'.format(', '.join(sets)),
+                values
+            )
+            conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Error updating webui user: {}".format(e))
+        return False
+
+
+def delete_webui_user(user_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM webui_users WHERE id=?', (user_id,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print("Error deleting webui user: {}".format(e))
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 if __name__ == '__main__':
     print("Initializing database...")
     init_database()
-    
     print("\n=== Database Statistics ===")
-    stats = get_database_stats()
-    for key, value in stats.items():
-        print("{}: {}".format(key, value))
+    for k, v in get_database_stats().items():
+        print("{}: {}".format(k, v))
 else:
     init_database()
