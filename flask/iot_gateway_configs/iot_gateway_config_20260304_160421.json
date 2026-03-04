@@ -1,8 +1,8 @@
 {
-  "version": 3,
+  "version": 2,
   "system": {
-    "wifi_ssid": "admin",
-    "wifi_password": "admin"
+    "wifi_ssid": "",
+    "wifi_password": ""
   },
   "heartbeat": {
     "interval_sec": 30,
