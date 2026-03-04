@@ -102,7 +102,8 @@ async def get_all_datapoints(request):
                 ld.name, 
                 ld.unit,
                 l.name as device_name, 
-                l.capacity, 
+                l.capacity_max as capacity,
+                l.unit as device_unit,
                 l.load_name, 
                 l.capacity_name
             FROM loadcell_datapoints ld
@@ -121,7 +122,7 @@ async def get_all_datapoints(request):
                 'device_type': 'Loadcell',
                 'tag_name': r['name'],
                 'name': r['name'],
-                'unit': r['unit'] or '',
+                'unit': r['unit'] or r.get('device_unit') or '',
                 'capacity': r['capacity'],
                 'load_name': r['load_name'] or 'load',
                 'capacity_name': r['capacity_name'] or 'capacity',

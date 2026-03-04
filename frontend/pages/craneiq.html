@@ -128,173 +128,183 @@
                 </div>
             </div>
 
-            <!-- ── Filters (always visible, user-entered, no pipeline needed) ── -->
+
+            <!-- ── Filters & Levels (always visible, saved independently) ── -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                <!-- Left column: Signal filters -->
+                <!-- LEFT COLUMN: Raw signal filters -->
                 <div class="space-y-4">
-                    <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-2">Signal Filters</h4>
+                    <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-2">Raw Signal Filters</h4>
 
-                    <!-- Low-pass filter -->
+                    <!-- Median Filter -->
                     <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
                         <div class="flex items-center justify-between mb-3">
-                            <span class="text-sm font-medium text-slate-700">Low-Pass Filter</span>
+                            <div>
+                                <span class="text-sm font-medium text-slate-700">Median Filter</span>
+                                <span class="ml-2 px-1.5 py-0.5 text-xs bg-slate-200 text-slate-500 rounded font-mono">raw[0]</span>
+                            </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="lc-lowpass-enabled" class="sr-only peer">
+                                <input type="checkbox" id="lc-median-enabled" class="sr-only peer" checked>
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
+                            <input type="number" min="1" max="99" value="3" id="lc-median-window"
+                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Moving Average Raw -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <span class="text-sm font-medium text-slate-700">Moving Average (Raw)</span>
+                                <span class="ml-2 px-1.5 py-0.5 text-xs bg-slate-200 text-slate-500 rounded font-mono">raw[1,2]</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-mavg-raw-enabled" class="sr-only peer" checked>
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
+                            <input type="number" min="1" max="100" value="5" id="lc-mavg-raw-window"
+                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+
+                    <!-- Kalman Filter -->
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <span class="text-sm font-medium text-slate-700">Kalman Filter</span>
+                                <span class="ml-2 px-1.5 py-0.5 text-xs bg-slate-200 text-slate-500 rounded font-mono">raw[3]</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-kalman-enabled" class="sr-only peer" checked>
                                 <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                             </label>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs text-slate-500 mb-1">Cutoff Frequency (Hz)</label>
-                                <input type="number" step="0.1" id="lc-cutoff-freq" placeholder="8.0"
+                                <label class="block text-xs text-slate-500 mb-1">Process Noise</label>
+                                <input type="number" step="0.001" value="0.01" id="lc-kalman-process-noise"
                                     class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label class="block text-xs text-slate-500 mb-1">Activation Delta Min</label>
-                                <input type="number" step="1" id="lc-filter-delta" placeholder="20000"
+                                <label class="block text-xs text-slate-500 mb-1">Measurement Noise</label>
+                                <input type="number" step="0.01" value="0.1" id="lc-kalman-meas-noise"
                                     class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
                     </div>
-
-                    <!-- Moving Average filter -->
-                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-sm font-medium text-slate-700">Moving Average Filter</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="lc-mavg-enabled" class="sr-only peer">
-                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
-                            <input type="number" min="1" max="100" id="lc-mavg-window" placeholder="4"
-                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                    </div>
-
-                    <!-- Median filter -->
-                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-sm font-medium text-slate-700">Median Filter</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="lc-median-enabled" class="sr-only peer">
-                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
-                            <input type="number" min="1" max="99" id="lc-median-window" placeholder="3"
-                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                    </div>
-
-                    <!-- Auto-tare -->
-                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-sm font-medium text-slate-700">Auto-Tare</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="lc-autotare-enabled" class="sr-only peer">
-                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-500 mb-1">Trigger Delta (grams)</label>
-                            <input type="number" step="0.1" id="lc-autotare-delta" placeholder="-5.0"
-                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right column: Deadband, Publish, Overload -->
-                <div class="space-y-4">
-                    <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-2">Output & Overload</h4>
 
                     <!-- Adaptive Deadband -->
                     <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
                         <div class="flex items-center justify-between mb-3">
-                            <span class="text-sm font-medium text-slate-700">Adaptive Deadband</span>
+                            <div>
+                                <span class="text-sm font-medium text-slate-700">Adaptive Deadband</span>
+                                <span class="ml-2 px-1.5 py-0.5 text-xs bg-slate-200 text-slate-500 rounded font-mono">raw[4]</span>
+                            </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="lc-deadband-enabled" class="sr-only peer">
+                                <input type="checkbox" id="lc-deadband-enabled" class="sr-only peer" checked>
                                 <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                             </label>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs text-slate-500 mb-1">Min</label>
-                                <input type="number" step="0.1" id="lc-deadband-min" placeholder="1.0"
-                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-slate-500 mb-1">Max</label>
-                                <input type="number" step="0.1" id="lc-deadband-max" placeholder="20.0"
-                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
                                 <label class="block text-xs text-slate-500 mb-1">Grow Rate</label>
-                                <input type="number" step="0.1" id="lc-deadband-grow" placeholder="0.5"
+                                <input type="number" step="0.1" value="0.8" id="lc-deadband-grow"
                                     class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
                                 <label class="block text-xs text-slate-500 mb-1">Shrink Rate</label>
-                                <input type="number" step="0.1" id="lc-deadband-shrink" placeholder="1.5"
+                                <input type="number" step="0.1" value="0.1" id="lc-deadband-shrink"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Min Deadband</label>
+                                <input type="number" step="0.1" value="1.0" id="lc-deadband-min"
+                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-500 mb-1">Max Deadband</label>
+                                <input type="number" step="0.1" value="20.0" id="lc-deadband-max"
                                     class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Publish step -->
+                <!-- RIGHT COLUMN: Weight filter + Levels -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-2">Weight Filter &amp; Levels</h4>
+
+                    <!-- Moving Average Weight -->
                     <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Publish Step (grams)</label>
-                        <input type="number" step="0.1" id="lc-publish-step" placeholder="5.0"
-                            class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <span class="text-sm font-medium text-slate-700">Moving Average (Weight)</span>
+                                <span class="ml-2 px-1.5 py-0.5 text-xs bg-slate-200 text-slate-500 rounded font-mono">weight[0]</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="lc-mavg-weight-enabled" class="sr-only peer" checked>
+                                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-500 mb-1">Window Size</label>
+                            <input type="number" min="1" max="100" value="5" id="lc-mavg-weight-window"
+                                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
                     </div>
 
-                    <!-- Overload settings -->
+                    <!-- Load Levels -->
                     <div class="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                        <h5 class="text-sm font-medium text-slate-700 mb-3">Overload Settings</h5>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="col-span-2">
-                                <label class="block text-xs text-slate-500 mb-1">Threshold</label>
-                                <input type="number" step="0.1" id="lc-overload-threshold" placeholder="5000.0"
-                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-sm font-medium text-slate-700">Load Levels</span>
+                            <span class="text-xs text-slate-400">ratio of capacity max</span>
+                        </div>
+                        <div class="space-y-3">
+                            <!-- Low -->
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input type="checkbox" id="lc-level-low-enabled" class="sr-only peer" checked>
+                                    <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide w-14 flex-shrink-0">Low</span>
+                                <input type="number" step="0.01" min="0" max="1" value="0.2" id="lc-level-low-ratio"
+                                    class="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0.0 – 1.0">
                             </div>
-                            <div>
-                                <label class="block text-xs text-slate-500 mb-1">Relay</label>
-                                <select id="lc-overload-relay" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="relay1">Relay 1</option>
-                                    <option value="relay2" selected>Relay 2</option>
-                                    <option value="relay3">Relay 3</option>
-                                    <option value="relay4">Relay 4</option>
-                                </select>
+                            <!-- Normal -->
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input type="checkbox" id="lc-level-normal-enabled" class="sr-only peer" checked>
+                                    <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide w-14 flex-shrink-0">Normal</span>
+                                <input type="number" step="0.01" min="0" max="1" value="0.6" id="lc-level-normal-ratio"
+                                    class="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0.0 – 1.0">
                             </div>
-                            <div>
-                                <label class="block text-xs text-slate-500 mb-1">Action</label>
-                                <select id="lc-overload-action" class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="0">None</option>
-                                    <option value="1">Alarm</option>
-                                    <option value="2">Stop</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs text-slate-500 mb-1">Cooldown (ms)</label>
-                                <input type="number" step="100" id="lc-overload-cooldown" placeholder="2000"
-                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs text-slate-500 mb-1">Confirm Count</label>
-                                <input type="number" min="1" id="lc-confirm-count" placeholder="3"
-                                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <!-- High -->
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                                    <input type="checkbox" id="lc-level-high-enabled" class="sr-only peer" checked>
+                                    <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide w-14 flex-shrink-0">High</span>
+                                <input type="number" step="0.01" min="0" max="1" value="0.8" id="lc-level-high-ratio"
+                                    class="flex-1 text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="0.0 – 1.0">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Save filters button -->
-                    <div class="flex items-center gap-3">
+                    <!-- Save button -->
+                    <div class="flex items-center gap-3 pt-2">
                         <button onclick="saveLoadcellFilters()"
                             class="px-5 py-2 text-sm font-semibold rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">
-                            Save Filters
+                            Save Filters &amp; Levels
                         </button>
                         <span id="lc-filter-status" class="text-xs text-slate-400"></span>
                     </div>

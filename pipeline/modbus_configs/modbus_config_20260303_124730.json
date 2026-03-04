@@ -1,0 +1,56 @@
+{
+  "_saved_at": 1772542050.978302,
+  "assets": [
+    {
+      "writable": false,
+      "scale": 1.0,
+      "wordOrder": "big",
+      "address": 3848,
+      "slaveId": 1,
+      "retryCount": 1,
+      "dataType": "uint16",
+      "registerType": "holding",
+      "group": "hoist_group",
+      "byteOrder": "big",
+      "name": "Hoist_current",
+      "connection_id": "PLC Controller - Main",
+      "timeoutMs": 100,
+      "registerCount": 1,
+      "offset": 0.0
+    },
+    {
+      "writable": false,
+      "scale": 0.10000000000000001,
+      "wordOrder": "big",
+      "address": 3846,
+      "slaveId": 1,
+      "retryCount": 1,
+      "dataType": "uint16",
+      "registerType": "holding",
+      "group": "hoist_group",
+      "byteOrder": "big",
+      "name": "Hoist_power",
+      "connection_id": "PLC Controller - Main",
+      "timeoutMs": 100,
+      "registerCount": 1,
+      "offset": 0.0
+    }
+  ],
+  "_saved_at_str": "2026-03-03 12:47:30",
+  "connections": [
+    {
+      "pollingIntervalMs": 300,
+      "dataBits": 8,
+      "maxRetries": 2,
+      "responseTimeoutMs": 100,
+      "byteTimeoutMs": 100,
+      "type": "rtu",
+      "baud": 9600,
+      "parity": "N",
+      "device": "/dev/ttymxc5",
+      "stopBits": 1,
+      "id": "PLC Controller - Main"
+    }
+  ],
+  "_tag_count": 2
+}

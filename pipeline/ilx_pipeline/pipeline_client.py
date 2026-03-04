@@ -284,7 +284,19 @@ class PipelineClient:
         # service/datapoint pairs trigger RECEIVE_DONE events. Empty string "" as service key acts as wildcard.
         self.whitelist = {}  # type: Dict[str, List[str]]
         self.whitelist_mutex = threading.Lock()
-        
+
+        # Config whitelist: list of config key names to accept (empty = accept all)
+        self.config_whitelist = []  # type: List[str]
+        self.config_whitelist_mutex = threading.Lock()
+
+        # Notification whitelist: dicts of allowed type/priority/category values (empty list = accept all)
+        self.notification_whitelist = {
+            'types': [],      # type: List[int]  (NotificationType values)
+            'priorities': [], # type: List[int]  (NotificationPriority values)
+            'categories': [], # type: List[int]  (NotificationCategory values)
+        }
+        self.notification_whitelist_mutex = threading.Lock()
+
         # Thread lifecycle flags
         self.running = False  # Master flag indicating client is active
         self.sender_thread = None  # Thread for sending dirty datapoints
@@ -430,111 +442,67 @@ class PipelineClient:
             self.sender_thread.join()
     
     def callback_thread_func(self):
-        """Thread function to handle callback execution - OPTIMIZED."""
+        """Deliver queued pipeline events to the user callback."""
         logger.debug("Callback thread started")
-        # Only use callback_thread_running to control the outer loop.
-        # self.running is set False early in stop() (before the socket is stopped),
-        # so we must NOT use it as the outer loop guard — doing so would cause the
-        # thread to exit before PIPELINE_OFFLINE (fired by socket shutdown) can be
-        # delivered to the user callback.
+        # Guard with callback_thread_running, not self.running — the latter is
+        # cleared before the socket stops, so using it would drop PIPELINE_OFFLINE.
         while self.callback_thread_running:
             events_batch = []
-            
-            logger.debug("Callback thread: Waiting for events...")
-            # Wait for notification that events are available (callback_cv shares lock with event_queue_mutex)
+
             with self.callback_cv:
-                while not self.event_queue and self.callback_thread_running and self.running:
-                    logger.debug("Callback thread: About to wait on condition variable")
-                    self.callback_cv.wait()  # Block indefinitely until notified
-                    logger.debug("Callback thread: Woke up from wait, queue size: {}".format(len(self.event_queue)))
-                
-                # Drain remaining events even when stopping (e.g. PIPELINE_OFFLINE fired just before stop)
+                while not self.event_queue and self.callback_thread_running:
+                    self.callback_cv.wait()
+
                 if self.event_queue:
                     events_batch = self.event_queue[:]
                     self.event_queue = []
-                    logger.debug("Callback thread: Copied {} events from queue".format(len(events_batch)))
                 elif not self.callback_thread_running:
                     break
-            
-            # Process events outside the lock
+
             if events_batch:
-                logger.debug("Callback thread processing {} events".format(len(events_batch)))
                 for event_data in events_batch:
                     should_process = True
-                    
-                    # Whitelist filtering: Only RECEIVE_DONE events are filtered
-                    # Other events (CONNECTED, SERVICE_ADDED, etc.) always pass through
+
+                    # Whitelist filtering applies to RECEIVE_DONE only; all other
+                    # event types always reach the callback.
                     if event_data.event_type == EventType.RECEIVE_DONE:
                         with self.whitelist_mutex:
                             if self.whitelist:
-                                logger.debug("Whitelist filtering: whitelist={}, service={}, datapoint={}".format(
-                                    self.whitelist, event_data.service_name, event_data.datapoint_name))
                                 should_process = False
-                                # Check for service-specific datapoint match
                                 if event_data.service_name in self.whitelist:
-                                    datapoints = self.whitelist[event_data.service_name]
-                                    if event_data.datapoint_name in datapoints:
+                                    if event_data.datapoint_name in self.whitelist[event_data.service_name]:
                                         should_process = True
-                                
-                                # Check for wildcard service match ("" key accepts from all services)
                                 if not should_process and "" in self.whitelist:
-                                    datapoints = self.whitelist[""]
-                                    if event_data.datapoint_name in datapoints:
+                                    if event_data.datapoint_name in self.whitelist[""]:
                                         should_process = True
-                            else:
-                                logger.debug("No whitelist configured, processing all events")
-                    
-                    logger.debug("Event should_process={}, has_callback={}".format(should_process, self.global_callback is not None))
+
+                    # Config whitelist filtering: accept only listed config names
+                    if should_process and event_data.event_type == EventType.CONFIG_RECEIVED:
+                        with self.config_whitelist_mutex:
+                            if self.config_whitelist and event_data.config is not None:
+                                should_process = event_data.config.name in self.config_whitelist
+
+                    # Notification whitelist filtering
+                    if should_process and event_data.event_type == EventType.NOTIFICATION_RECEIVED:
+                        with self.notification_whitelist_mutex:
+                            wl = self.notification_whitelist
+                            if (wl['types'] or wl['priorities'] or wl['categories']) and event_data.notification is not None:
+                                nd = event_data.notification
+                                type_ok  = (not wl['types'])      or (int(nd.type)     in [int(t) for t in wl['types']])
+                                prio_ok  = (not wl['priorities']) or (int(nd.priority) in [int(p) for p in wl['priorities']])
+                                cat_ok   = (not wl['categories']) or (int(nd.category) in [int(c) for c in wl['categories']])
+                                should_process = type_ok and prio_ok and cat_ok
+
                     if should_process:
                         try:
                             if self.global_callback:
-                                logger.debug("Calling global_callback for event type {}".format(event_data.event_type))
                                 self.global_callback(event_data)
                         except Exception as e:
                             logger.error("Exception in global event callback: {}".format(e))
-            
-            # After draining, check if we should exit the outer loop
+
             if not self.callback_thread_running and not self.event_queue:
                 break
-                logger.debug("Callback thread processing {} events".format(len(events_batch)))
-                for event_data in events_batch:
-                    should_process = True
-                    
-                    # Whitelist filtering: Only RECEIVE_DONE events are filtered
-                    # Other events (CONNECTED, SERVICE_ADDED, etc.) always pass through
-                    if event_data.event_type == EventType.RECEIVE_DONE:
-                        with self.whitelist_mutex:
-                            if self.whitelist:
-                                logger.debug("Whitelist filtering: whitelist={}, service={}, datapoint={}".format(
-                                    self.whitelist, event_data.service_name, event_data.datapoint_name))
-                                should_process = False
-                                # Check for service-specific datapoint match
-                                if event_data.service_name in self.whitelist:
-                                    datapoints = self.whitelist[event_data.service_name]
-                                    if event_data.datapoint_name in datapoints:
-                                        should_process = True
-                                
-                                # Check for wildcard service match ("" key accepts from all services)
-                                if not should_process and "" in self.whitelist:
-                                    datapoints = self.whitelist[""]
-                                    if event_data.datapoint_name in datapoints:
-                                        should_process = True
-                            else:
-                                logger.debug("No whitelist configured, processing all events")
-                    
-                    logger.debug("Event should_process={}, has_callback={}".format(should_process, self.global_callback is not None))
-                    if should_process:
-                        try:
-                            if self.global_callback:
-                                logger.debug("Calling global_callback for event type {}".format(event_data.event_type))
-                                self.global_callback(event_data)
-                        except Exception as e:
-                            logger.error("Exception in global event callback: {}".format(e))
-            
-            # After draining, check if we should exit the outer loop
-            if not self.callback_thread_running and not self.event_queue:
-                break
-        
+
     def process_received_data(self, byte_data: bytearray):
         """
         Process incoming data from the server.
@@ -624,7 +592,7 @@ class PipelineClient:
                     # Extract request ID and result from payloads
                     request_id = 0
                     if len(frame.payloads[0].data) >= 2:
-                        request_id = struct.unpack('=H', frame.payloads[0].data[:2])[0]
+                        request_id = struct.unpack('>H', frame.payloads[0].data[:2])[0]
                     result = frame.payloads[1].data.decode('utf-8')
                     
                     logger.debug("Received response for request ID {}: {}".format(request_id, result))
@@ -1615,7 +1583,58 @@ class PipelineClient:
         """
         with self.whitelist_mutex:
             return self.whitelist.copy()
-    
+
+    def set_config_whitelist(self, config_names):
+        """
+        Set the config name whitelist.  Only CONFIG_RECEIVED events whose
+        config.name is in config_names will be delivered to the callback.
+        Pass an empty list to accept all configs.
+
+        Args:
+            config_names: List of config key names to accept
+        """
+        with self.config_whitelist_mutex:
+            self.config_whitelist = [n for n in config_names if n]
+
+    def get_config_whitelist(self):
+        """
+        Get the current config name whitelist.
+
+        Returns:
+            List of accepted config names (empty = accept all)
+        """
+        with self.config_whitelist_mutex:
+            return list(self.config_whitelist)
+
+    def set_notification_whitelist(self, types=None, priorities=None, categories=None):
+        """
+        Set the notification whitelist filter.
+
+        A NOTIFICATION_RECEIVED event is delivered only when it matches every
+        non-empty dimension (all empty = accept all).
+
+        Args:
+            types:      List of NotificationType values to accept (None/[] = all)
+            priorities: List of NotificationPriority values to accept (None/[] = all)
+            categories: List of NotificationCategory values to accept (None/[] = all)
+        """
+        with self.notification_whitelist_mutex:
+            self.notification_whitelist = {
+                'types':      list(types)      if types      else [],
+                'priorities': list(priorities) if priorities else [],
+                'categories': list(categories) if categories else [],
+            }
+
+    def get_notification_whitelist(self):
+        """
+        Get the current notification whitelist filter.
+
+        Returns:
+            Dict with keys 'types', 'priorities', 'categories' (each a list; empty = all)
+        """
+        with self.notification_whitelist_mutex:
+            return {k: list(v) for k, v in self.notification_whitelist.items()}
+
     def send_dirty_datapoints(self):
         """Send all datapoints that have been marked as dirty (changed)."""
         # Only send if we're connected
@@ -1758,13 +1777,6 @@ class PipelineClient:
                 reg_data = BinaryFrameHandler.serialize_frame(reg_frame)
                 self.socket_manager.send_data(reg_data)
                 logger.debug("Sent CONNECT_SERVICE registration frame for service: {}".format(self.service_name))
-                
-                # Automatically request data refresh to get all existing services and datapoints
-                refresh_frame = BinaryFrameHandler.create_frame(CommandCode.REFRESH_DATA)
-                BinaryFrameHandler.add_string_payload(refresh_frame, DataTypeCode.STRING, self.service_name)
-                refresh_data = BinaryFrameHandler.serialize_frame(refresh_frame)
-                self.socket_manager.send_data(refresh_data)
-                logger.debug("Sent automatic REFRESH_DATA request after connection")
             
             self.trigger_event(EventType.PIPELINE_CONNECTED, self.service_name, "", EventStatus.CONNECTION_ESTABLISHED)
         

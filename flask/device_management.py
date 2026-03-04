@@ -185,18 +185,11 @@ async def get_device_details(request):
         
         # Try Loadcell
         cursor.execute('''
-            SELECT l.id, l.name, l.device_path, l.channel,
-                   l.tare_offset, l.known_weight, l.known_weight_raw, l.shift_bits,
-                   l.unit, l.capacity, l.load_name, l.capacity_name,
-                   l.pipeline_server, l.pipeline_port, l.log_level, l.polling_interval_ms,
-                   l.lowpass_filter_enabled, l.filter_cutoff_frequency, l.filter_activation_delta_min,
-                   l.moving_avg_enabled, l.moving_avg_window,
-                   l.median_filter_enabled, l.median_filter_window,
-                   l.autotare_enabled, l.autotare_trigger_delta_grams,
-                   l.adaptive_deadband_enabled, l.adaptive_deadband_min, l.adaptive_deadband_max,
-                   l.adaptive_deadband_grow_rate, l.adaptive_deadband_shrink_rate,
-                   l.publish_step_grams, l.overload_threshold, l.overload_relay,
-                   l.overload_action, l.overload_cooldown_ms, l.confirm_count,
+            SELECT l.id, l.name, l.device_path, l.poll_ms,
+                   l.resolution_bits, l.effective_bits, l.signed, l.gain, l.vref, l.raw_min, l.raw_max,
+                   l.capacity_min, l.capacity_max, l.unit, l.load_name, l.capacity_name,
+                   l.tare_offset, l.known_weight, l.known_weight_raw,
+                   l.pipeline_server, l.pipeline_port, l.log_level,
                    l.enabled, s.name as service_name
             FROM loadcell_device l
             LEFT JOIN services s ON l.service_id = s.id
@@ -212,18 +205,11 @@ async def get_device_details(request):
             
             status = device_status_tracker[device_id]
             
-            (dev_id, name, device_path, channel,
-             tare_offset, known_weight, known_weight_raw, shift_bits,
-             unit, capacity, load_name, capacity_name,
-             pipeline_server, pipeline_port, log_level, polling_interval_ms,
-             lowpass_filter_enabled, filter_cutoff_frequency, filter_activation_delta_min,
-             moving_avg_enabled, moving_avg_window,
-             median_filter_enabled, median_filter_window,
-             autotare_enabled, autotare_trigger_delta_grams,
-             adaptive_deadband_enabled, adaptive_deadband_min, adaptive_deadband_max,
-             adaptive_deadband_grow_rate, adaptive_deadband_shrink_rate,
-             publish_step_grams, overload_threshold, overload_relay,
-             overload_action, overload_cooldown_ms, confirm_count,
+            (dev_id, name, device_path, poll_ms,
+             resolution_bits, effective_bits, signed_val, gain, vref, raw_min, raw_max,
+             capacity_min, capacity_max, unit, load_name, capacity_name,
+             tare_offset, known_weight, known_weight_raw,
+             pipeline_server, pipeline_port, log_level,
              enabled, service_name) = row
             
             details = {
@@ -237,52 +223,29 @@ async def get_device_details(request):
                 'lastPoll': status['last_poll'],
                 'config': {
                     'device_path': device_path,
-                    'channel': channel,
-                    'capacity': capacity,
+                    'poll_ms': poll_ms,
+                    'resolution_bits': resolution_bits,
+                    'effective_bits': effective_bits,
+                    'signed': bool(signed_val),
+                    'gain': gain,
+                    'vref': vref,
+                    'raw_min': raw_min,
+                    'raw_max': raw_max,
+                    'capacity_min': capacity_min,
+                    'capacity_max': capacity_max,
+                    'unit': unit or 'kg',
                     'load_name': load_name or 'load',
-                    'capacity_name': capacity_name,
-                    'unit': unit,
-                    'shift_bits': shift_bits,
-                    'polling_interval_ms': polling_interval_ms,
+                    'capacity_name': capacity_name or 'capacity',
                     'calibration': {
                         'tare_offset': tare_offset,
                         'known_weight': known_weight,
-                        'known_weight_raw': known_weight_raw,
-                        'shift_bits': shift_bits
-                    },
-                    'filters': {
-                        'lowpass_filter_enabled': bool(lowpass_filter_enabled),
-                        'filter_cutoff_frequency': filter_cutoff_frequency,
-                        'filter_activation_delta_min': filter_activation_delta_min,
-                        'moving_avg_enabled': bool(moving_avg_enabled),
-                        'moving_avg_window': moving_avg_window,
-                        'median_filter_enabled': bool(median_filter_enabled),
-                        'median_filter_window': median_filter_window
-                    },
-                    'autotare': {
-                        'enabled': bool(autotare_enabled),
-                        'trigger_delta_grams': autotare_trigger_delta_grams
-                    },
-                    'adaptive_deadband': {
-                        'enabled': bool(adaptive_deadband_enabled),
-                        'min': adaptive_deadband_min,
-                        'max': adaptive_deadband_max,
-                        'grow_rate': adaptive_deadband_grow_rate,
-                        'shrink_rate': adaptive_deadband_shrink_rate
-                    },
-                    'overload': {
-                        'threshold': overload_threshold,
-                        'relay': overload_relay,
-                        'action': overload_action,
-                        'cooldown_ms': overload_cooldown_ms
+                        'known_weight_raw': known_weight_raw
                     },
                     'pipeline': {
                         'server': pipeline_server,
                         'port': pipeline_port,
                         'log_level': log_level
-                    },
-                    'publish_step_grams': publish_step_grams,
-                    'confirm_count': confirm_count
+                    }
                 }
             }
             
@@ -349,21 +312,29 @@ async def add_device(request):
             
             cursor.execute('''
                 INSERT INTO loadcell_device (
-                    id, name, service_id, device_path, channel,
-                    capacity, unit, shift_bits, load_name, capacity_name
+                    id, name, service_id, device_path, poll_ms,
+                    resolution_bits, effective_bits, signed, gain, vref, raw_min, raw_max,
+                    capacity_min, capacity_max, unit, load_name, capacity_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 data.get('name', 'Loadcell Device'),
                 service_id,
-                config.get('device_path', '/dev/spidev0.0'),
-                config.get('channel', 0),
-                config.get('capacity', 40000.0),
-                config.get('unit', 'g'),
-                config.get('shift_bits', 10),
+                config.get('device_path', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+                config.get('poll_ms', 10),
+                config.get('resolution_bits', 24),
+                config.get('effective_bits', 14),
+                1 if config.get('signed', False) else 0,
+                config.get('gain', 1),
+                config.get('vref', 5),
+                config.get('raw_min', 0),
+                config.get('raw_max', 16383),
+                config.get('capacity_min', 0),
+                config.get('capacity_max', 1000),
+                config.get('unit', 'kg'),
                 'load',
-                config.get('capacity_name', 'capacity')
+                'capacity'
             ))
             
             # Automatically create 'load' and 'capacity' datapoints
@@ -524,47 +495,36 @@ async def update_device(request):
             update_fields = ['name = ?']
             values = [data.get('name')]
             
-            # Device connection
-            if 'device_path' in config:
-                update_fields.append('device_path = ?')
-                values.append(config['device_path'])
-            if 'channel' in config:
-                update_fields.append('channel = ?')
-                values.append(config['channel'])
-            if 'unit' in config:
-                update_fields.append('unit = ?')
-                values.append(config['unit'])
-            if 'capacity' in config:
-                update_fields.append('capacity = ?')
-                values.append(float(config['capacity']))
-            if 'shift_bits' in config:
-                update_fields.append('shift_bits = ?')
-                values.append(int(config['shift_bits']))
+            # Device connection & ADC hardware
+            field_map = {
+                'device_path': 'device_path',
+                'poll_ms': 'poll_ms',
+                'resolution_bits': 'resolution_bits',
+                'effective_bits': 'effective_bits',
+                'gain': 'gain',
+                'vref': 'vref',
+                'raw_min': 'raw_min',
+                'raw_max': 'raw_max',
+                'capacity_min': 'capacity_min',
+                'capacity_max': 'capacity_max',
+                'unit': 'unit',
+            }
+            for key, col in field_map.items():
+                if key in config:
+                    update_fields.append('{} = ?'.format(col))
+                    values.append(config[key])
+            
+            if 'signed' in config:
+                update_fields.append('signed = ?')
+                values.append(1 if config['signed'] else 0)
             
             # Calibration
             if 'calibration' in config:
                 cal = config['calibration']
-                if 'capacity' in cal:
-                    update_fields.append('capacity = ?')
-                    values.append(cal['capacity'])
-                if 'capacity_name' in cal:
-                    update_fields.append('capacity_name = ?')
-                    values.append(cal['capacity_name'])
-                if 'tare_offset' in cal:
-                    update_fields.append('tare_offset = ?')
-                    values.append(cal['tare_offset'])
-                if 'known_weight' in cal:
-                    update_fields.append('known_weight = ?')
-                    values.append(cal['known_weight'])
-                if 'known_weight_raw' in cal:
-                    update_fields.append('known_weight_raw = ?')
-                    values.append(cal['known_weight_raw'])
-                if 'shift_bits' in cal:
-                    update_fields.append('shift_bits = ?')
-                    values.append(cal['shift_bits'])
-                if 'unit' in cal:
-                    update_fields.append('unit = ?')
-                    values.append(cal['unit'])
+                for key, col in [('tare_offset', 'tare_offset'), ('known_weight', 'known_weight'), ('known_weight_raw', 'known_weight_raw')]:
+                    if key in cal:
+                        update_fields.append('{} = ?'.format(col))
+                        values.append(cal[key])
             
             values.append(device_id)
             

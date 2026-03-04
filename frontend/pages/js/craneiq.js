@@ -37,86 +37,178 @@
     }
 
     // ---- Populate filter inputs from device object ----
+    // Filters are now arrays: raw_filters, weight_filters, levels
+    // Each item: { type, parameters, enabled }
+    function findFilter(arr, type) {
+        if (!Array.isArray(arr)) return null;
+        return arr.find(function(f) { return f.type === type; }) || null;
+    }
+
     function populateFilters(dev) {
-        var f = dev.filters || dev;   // device_management returns nested filters obj OR flat
-        function setVal(id, v) { var e = el(id); if (e && v !== undefined && v !== null) e.value = v; }
-        function setChk(id, v) { var e = el(id); if (e) e.checked = !!v; }
+        var rawFilters    = dev.raw_filters    || [];
+        var weightFilters = dev.weight_filters || [];
+        var levels        = dev.levels         || [];
 
-        setChk('lc-lowpass-enabled',   f.lowpass_filter_enabled  !== undefined ? f.lowpass_filter_enabled  : dev.lowpass_filter_enabled);
-        setVal('lc-cutoff-freq',        f.filter_cutoff_frequency !== undefined ? f.filter_cutoff_frequency : dev.filter_cutoff_frequency);
-        setVal('lc-filter-delta',       f.filter_activation_delta_min !== undefined ? f.filter_activation_delta_min : dev.filter_activation_delta_min);
+        function setVal(id, v) { var e = document.getElementById(id); if (e && v !== undefined && v !== null) e.value = v; }
+        function setChk(id, v) { var e = document.getElementById(id); if (e) e.checked = !!v; }
 
-        setChk('lc-mavg-enabled',      f.moving_avg_enabled  !== undefined ? f.moving_avg_enabled  : dev.moving_avg_enabled);
-        setVal('lc-mavg-window',        f.moving_avg_window   !== undefined ? f.moving_avg_window   : dev.moving_avg_window);
+        // --- Raw filters ---
+        var median = findFilter(rawFilters, 'Median');
+        setChk('lc-median-enabled',  median ? median.enabled !== false : true);
+        setVal('lc-median-window',   median ? median.parameters.window_size : 3);
 
-        setChk('lc-median-enabled',    f.median_filter_enabled !== undefined ? f.median_filter_enabled : dev.median_filter_enabled);
-        setVal('lc-median-window',      f.median_filter_window  !== undefined ? f.median_filter_window  : dev.median_filter_window);
+        // Two MovingAverage filters in raw — use first for raw, second ignored in UI (shown as one control)
+        var mavgRaw = findFilter(rawFilters, 'MovingAverage');
+        setChk('lc-mavg-raw-enabled', mavgRaw ? mavgRaw.enabled !== false : true);
+        setVal('lc-mavg-raw-window',  mavgRaw ? mavgRaw.parameters.window_size : 5);
 
-        setChk('lc-autotare-enabled',  f.autotare_enabled !== undefined ? f.autotare_enabled : dev.autotare_enabled);
-        setVal('lc-autotare-delta',     f.autotare_trigger_delta_grams !== undefined ? f.autotare_trigger_delta_grams : dev.autotare_trigger_delta_grams);
+        var kalman = findFilter(rawFilters, 'Kalman');
+        setChk('lc-kalman-enabled',       kalman ? kalman.enabled !== false : true);
+        setVal('lc-kalman-process-noise',  kalman ? kalman.parameters.process_noise  : 0.01);
+        setVal('lc-kalman-meas-noise',     kalman ? kalman.parameters.measurement_noise : 0.1);
 
-        setChk('lc-deadband-enabled',  f.adaptive_deadband_enabled !== undefined ? f.adaptive_deadband_enabled : dev.adaptive_deadband_enabled);
-        setVal('lc-deadband-min',       f.adaptive_deadband_min !== undefined ? f.adaptive_deadband_min : dev.adaptive_deadband_min);
-        setVal('lc-deadband-max',       f.adaptive_deadband_max !== undefined ? f.adaptive_deadband_max : dev.adaptive_deadband_max);
-        setVal('lc-deadband-grow',      f.adaptive_deadband_grow_rate !== undefined ? f.adaptive_deadband_grow_rate : dev.adaptive_deadband_grow_rate);
-        setVal('lc-deadband-shrink',    f.adaptive_deadband_shrink_rate !== undefined ? f.adaptive_deadband_shrink_rate : dev.adaptive_deadband_shrink_rate);
+        var deadband = findFilter(rawFilters, 'AdaptiveDeadband');
+        setChk('lc-deadband-enabled',   deadband ? deadband.enabled !== false : true);
+        setVal('lc-deadband-grow',       deadband ? deadband.parameters.grow_rate    : 0.8);
+        setVal('lc-deadband-shrink',     deadband ? deadband.parameters.shrink_rate  : 0.1);
+        setVal('lc-deadband-min',        deadband ? deadband.parameters.min_deadband : 1.0);
+        setVal('lc-deadband-max',        deadband ? deadband.parameters.max_deadband : 20.0);
 
-        setVal('lc-publish-step',       f.publish_step_grams !== undefined ? f.publish_step_grams : dev.publish_step_grams);
-        setVal('lc-overload-threshold', f.overload_threshold !== undefined ? f.overload_threshold : dev.overload_threshold);
+        // --- Weight filters ---
+        var mavgWeight = findFilter(weightFilters, 'MovingAverage');
+        setChk('lc-mavg-weight-enabled', mavgWeight ? mavgWeight.enabled !== false : true);
+        setVal('lc-mavg-weight-window',  mavgWeight ? mavgWeight.parameters.window_size : 5);
 
-        var relayEl = el('lc-overload-relay');
-        if (relayEl) relayEl.value = f.overload_relay || dev.overload_relay || 'relay2';
-        var actionEl = el('lc-overload-action');
-        if (actionEl) actionEl.value = String(f.overload_action !== undefined ? f.overload_action : (dev.overload_action !== undefined ? dev.overload_action : 0));
+        // --- Levels ---
+        ['low', 'normal', 'high'].forEach(function(name) {
+            var lvl = (levels || []).find(function(l) { return l.name === name; });
+            setChk('lc-level-' + name + '-enabled', lvl ? lvl.enabled !== false : true);
+            setVal('lc-level-' + name + '-ratio',   lvl ? lvl.ratio : (name === 'normal' ? 0.6 : 0.2));
+        });
+    }
 
-        setVal('lc-overload-cooldown',  f.overload_cooldown_ms !== undefined ? f.overload_cooldown_ms : dev.overload_cooldown_ms);
-        setVal('lc-confirm-count',      f.confirm_count !== undefined ? f.confirm_count : dev.confirm_count);
+    // ---- Build filter arrays from UI inputs ----
+    function buildFiltersFromUI() {
+        function getVal(id, fallback) {
+            var e = document.getElementById(id);
+            return e ? parseFloat(e.value) : fallback;
+        }
+        function getInt(id, fallback) {
+            var e = document.getElementById(id);
+            return e ? parseInt(e.value) : fallback;
+        }
+        function isChk(id, fallback) {
+            var e = document.getElementById(id);
+            return e ? e.checked : !!fallback;
+        }
+
+        var rawFilters = [
+            {
+                type: 'Median',
+                enabled: isChk('lc-median-enabled', true),
+                parameters: { window_size: getInt('lc-median-window', 3) }
+            },
+            {
+                type: 'MovingAverage',
+                enabled: isChk('lc-mavg-raw-enabled', true),
+                parameters: { window_size: getInt('lc-mavg-raw-window', 5) }
+            },
+            {
+                type: 'MovingAverage',
+                enabled: isChk('lc-mavg-raw-enabled', true),
+                parameters: { window_size: getInt('lc-mavg-raw-window', 5) }
+            },
+            {
+                type: 'Kalman',
+                enabled: isChk('lc-kalman-enabled', true),
+                parameters: {
+                    process_noise:     getVal('lc-kalman-process-noise', 0.01),
+                    measurement_noise: getVal('lc-kalman-meas-noise', 0.1)
+                }
+            },
+            {
+                type: 'AdaptiveDeadband',
+                enabled: isChk('lc-deadband-enabled', true),
+                parameters: {
+                    grow_rate:    getVal('lc-deadband-grow', 0.8),
+                    shrink_rate:  getVal('lc-deadband-shrink', 0.1),
+                    min_deadband: getVal('lc-deadband-min', 1.0),
+                    max_deadband: getVal('lc-deadband-max', 20.0)
+                }
+            }
+        ];
+
+        var weightFilters = [
+            {
+                type: 'MovingAverage',
+                enabled: isChk('lc-mavg-weight-enabled', true),
+                parameters: { window_size: getInt('lc-mavg-weight-window', 5) }
+            }
+        ];
+
+        var levels = ['low', 'normal', 'high'].map(function(name) {
+            return {
+                name: name,
+                enabled: isChk('lc-level-' + name + '-enabled', true),
+                ratio: getVal('lc-level-' + name + '-ratio', name === 'normal' ? 0.6 : 0.2)
+            };
+        });
+
+        return { rawFilters: rawFilters, weightFilters: weightFilters, levels: levels };
     }
 
     // ---- Save filters (no pipeline needed) ----
     window.saveLoadcellFilters = function() {
         if (!selectedDevice) {
-            var s = el('lc-filter-status');
+            var s = document.getElementById('lc-filter-status');
             if (s) s.textContent = 'No device loaded.';
             return;
         }
-        var s = el('lc-filter-status');
+        var s = document.getElementById('lc-filter-status');
         if (s) s.textContent = 'Saving...';
 
-        var payload = {
-            lowpass_filter_enabled:        el('lc-lowpass-enabled') ? el('lc-lowpass-enabled').checked : false,
-            filter_cutoff_frequency:       parseFloat(el('lc-cutoff-freq') ? el('lc-cutoff-freq').value : 8),
-            filter_activation_delta_min:   parseFloat(el('lc-filter-delta') ? el('lc-filter-delta').value : 20000),
-            moving_avg_enabled:            el('lc-mavg-enabled') ? el('lc-mavg-enabled').checked : true,
-            moving_avg_window:             parseInt(el('lc-mavg-window') ? el('lc-mavg-window').value : 4),
-            median_filter_enabled:         el('lc-median-enabled') ? el('lc-median-enabled').checked : true,
-            median_filter_window:          parseInt(el('lc-median-window') ? el('lc-median-window').value : 3),
-            autotare_enabled:              el('lc-autotare-enabled') ? el('lc-autotare-enabled').checked : true,
-            autotare_trigger_delta_grams:  parseFloat(el('lc-autotare-delta') ? el('lc-autotare-delta').value : -5),
-            adaptive_deadband_enabled:     el('lc-deadband-enabled') ? el('lc-deadband-enabled').checked : true,
-            adaptive_deadband_min:         parseFloat(el('lc-deadband-min') ? el('lc-deadband-min').value : 1),
-            adaptive_deadband_max:         parseFloat(el('lc-deadband-max') ? el('lc-deadband-max').value : 20),
-            adaptive_deadband_grow_rate:   parseFloat(el('lc-deadband-grow') ? el('lc-deadband-grow').value : 0.5),
-            adaptive_deadband_shrink_rate: parseFloat(el('lc-deadband-shrink') ? el('lc-deadband-shrink').value : 1.5),
-            publish_step_grams:            parseFloat(el('lc-publish-step') ? el('lc-publish-step').value : 5),
-            overload_threshold:            parseFloat(el('lc-overload-threshold') ? el('lc-overload-threshold').value : 5000),
-            overload_relay:                el('lc-overload-relay') ? el('lc-overload-relay').value : 'relay2',
-            overload_action:               parseInt(el('lc-overload-action') ? el('lc-overload-action').value : 0),
-            overload_cooldown_ms:          parseInt(el('lc-overload-cooldown') ? el('lc-overload-cooldown').value : 2000),
-            confirm_count:                 parseInt(el('lc-confirm-count') ? el('lc-confirm-count').value : 3)
-        };
+        var built = buildFiltersFromUI();
 
         fetch('/api/pipeline/filters', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: selectedDevice.id, filters: payload })
+            body: JSON.stringify({
+                device_id:      selectedDevice.id,
+                raw_filters:    built.rawFilters,
+                weight_filters: built.weightFilters,
+                levels:         built.levels
+            })
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (s) s.textContent = data.success ? 'Saved ?' : 'Error: ' + (data.error || 'unknown');
-            setTimeout(function() { if (s) s.textContent = ''; }, 3000);
+            if (data.success) {
+                selectedDevice.raw_filters    = built.rawFilters;
+                selectedDevice.weight_filters = built.weightFilters;
+                selectedDevice.levels         = built.levels;
+
+                if (data.pipeline_sent) {
+                    if (s) {
+                        s.textContent = '✓ Saved & sent to pipeline (' + (data.target_service || 'service') + ')';
+                        s.style.color = '#16a34a';
+                    }
+                } else {
+                    // Saved to DB but pipeline not connected — config is queued as pending
+                    var msg = '✓ Saved';
+                    if (data.pipeline_message && data.pipeline_message.indexOf('pending') !== -1) {
+                        msg += ' · queued for pipeline (connect to send)';
+                    } else if (data.pipeline_message) {
+                        msg += ' · pipeline: ' + data.pipeline_message;
+                    }
+                    if (s) { s.textContent = msg; s.style.color = '#d97706'; }
+                }
+            } else {
+                if (s) { s.textContent = '✗ Error: ' + (data.error || 'unknown'); s.style.color = '#dc2626'; }
+            }
+            setTimeout(function() { if (s) { s.textContent = ''; s.style.color = ''; } }, 5000);
         })
-        .catch(function(e) { if (s) s.textContent = 'Error: ' + e.message; });
+        .catch(function(e) {
+            if (s) { s.textContent = '✗ ' + e.message; s.style.color = '#dc2626'; }
+        });
     };
 
     // ---- Connect / Disconnect ----

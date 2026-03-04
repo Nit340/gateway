@@ -779,28 +779,48 @@
         } else if (protocol === 'loadcell') {
             detailsHtml += `
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Device Path</div>
-                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.device_path || device.address || '/dev/spidev0.0')}</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">SysFS Path</div>
+                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.device_path || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw')}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Channel</div>
-                                    <div class="text-sm text-slate-700">${config.channel || 0}</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Poll Interval (ms)</div>
+                                    <div class="text-sm text-slate-700">${config.poll_ms || 10}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Capacity</div>
-                                    <div class="text-sm text-slate-700">${config.capacity || 40000} g</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Resolution Bits</div>
+                                    <div class="text-sm text-slate-700">${config.resolution_bits || 24}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Effective Bits</div>
+                                    <div class="text-sm text-slate-700">${config.effective_bits || 14}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Signed</div>
+                                    <div class="text-sm text-slate-700">${config.signed ? 'Yes' : 'No'}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Gain</div>
+                                    <div class="text-sm text-slate-700">${config.gain ?? 1}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Vref (V)</div>
+                                    <div class="text-sm text-slate-700">${config.vref ?? 5}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Raw Range</div>
+                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} – ${config.raw_max ?? 16383}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Capacity Min</div>
+                                    <div class="text-sm text-slate-700">${config.capacity_min ?? 0} ${config.unit || 'kg'}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Capacity Max</div>
+                                    <div class="text-sm text-slate-700">${config.capacity_max ?? 1000} ${config.unit || 'kg'}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Unit</div>
-                                    <div class="text-sm text-slate-700">${config.unit || 'g'}</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Shift Bits</div>
-                                    <div class="text-sm text-slate-700">${config.shift_bits || 10}</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Polling Interval (ms)</div>
-                                    <div class="text-sm text-slate-700">${config.polling_interval_ms || 15}</div>
+                                    <div class="text-sm text-slate-700">${config.unit || 'kg'}</div>
                                 </div>
             `;
         }
@@ -948,12 +968,22 @@
                 requestData.type = 'loadcell';
                 requestData.protocol = 'loadcell';
                 requestData.config = {
-                    device_path: document.getElementById('devicePath')?.value || '/dev/spidev0.0',
-                    channel: parseInt(document.getElementById('lcChannel')?.value) || 0,
-                    capacity: parseFloat(document.getElementById('capacity')?.value) || 40000.0,
-                    unit: document.getElementById('lcUnit')?.value?.trim() || 'g',
-                    shift_bits: parseInt(document.getElementById('lcShiftBits')?.value) || 10,
-                    polling_interval_ms: parseInt(document.getElementById('lcPollingInterval')?.value) || 15,
+                    // Device connection
+                    device_path: document.getElementById('devicePath')?.value || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+                    poll_ms: parseInt(document.getElementById('lcPollMs')?.value) || 10,
+                    // ADC hardware parameters
+                    resolution_bits: parseInt(document.getElementById('lcResolutionBits')?.value) || 24,
+                    effective_bits: parseInt(document.getElementById('lcEffectiveBits')?.value) || 14,
+                    signed: document.getElementById('lcSigned')?.value === 'true',
+                    gain: parseFloat(document.getElementById('lcGain')?.value) || 1,
+                    vref: parseFloat(document.getElementById('lcVref')?.value) || 5,
+                    raw_min: parseFloat(document.getElementById('lcRawMin')?.value) || 0,
+                    raw_max: parseFloat(document.getElementById('lcRawMax')?.value) || 16383,
+                    // Capacity specification
+                    capacity_min: parseFloat(document.getElementById('lcCapacityMin')?.value) || 0,
+                    capacity_max: parseFloat(document.getElementById('lcCapacityMax')?.value) || 1000,
+                    unit: document.getElementById('lcUnit')?.value?.trim() || 'kg',
+                    // Auto-generated names (not user input)
                     load_name: 'load',
                     capacity_name: 'capacity'
                 };
@@ -1116,18 +1146,30 @@
                         if (document.getElementById('tcpPollingInterval')) 
                             document.getElementById('tcpPollingInterval').value = config.polling_interval_ms || 300;
                     } else if (deviceTypeValue === 'loadcell') {
-                        if (document.getElementById('devicePath')) 
-                            document.getElementById('devicePath').value = config.device_path || '/dev/spidev0.0';
-                        if (document.getElementById('lcChannel'))
-                            document.getElementById('lcChannel').value = config.channel ?? 0;
-                        if (document.getElementById('capacity')) 
-                            document.getElementById('capacity').value = config.capacity || 40000;
+                        if (document.getElementById('devicePath'))
+                            document.getElementById('devicePath').value = config.device_path || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                        if (document.getElementById('lcPollMs'))
+                            document.getElementById('lcPollMs').value = config.poll_ms || 10;
+                        if (document.getElementById('lcResolutionBits'))
+                            document.getElementById('lcResolutionBits').value = config.resolution_bits || 24;
+                        if (document.getElementById('lcEffectiveBits'))
+                            document.getElementById('lcEffectiveBits').value = config.effective_bits || 14;
+                        if (document.getElementById('lcSigned'))
+                            document.getElementById('lcSigned').value = config.signed ? 'true' : 'false';
+                        if (document.getElementById('lcGain'))
+                            document.getElementById('lcGain').value = config.gain ?? 1;
+                        if (document.getElementById('lcVref'))
+                            document.getElementById('lcVref').value = config.vref ?? 5;
+                        if (document.getElementById('lcRawMin'))
+                            document.getElementById('lcRawMin').value = config.raw_min ?? 0;
+                        if (document.getElementById('lcRawMax'))
+                            document.getElementById('lcRawMax').value = config.raw_max ?? 16383;
+                        if (document.getElementById('lcCapacityMin'))
+                            document.getElementById('lcCapacityMin').value = config.capacity_min ?? 0;
+                        if (document.getElementById('lcCapacityMax'))
+                            document.getElementById('lcCapacityMax').value = config.capacity_max ?? 1000;
                         if (document.getElementById('lcUnit'))
-                            document.getElementById('lcUnit').value = config.unit || 'g';
-                        if (document.getElementById('lcShiftBits'))
-                            document.getElementById('lcShiftBits').value = config.shift_bits ?? 10;
-                        if (document.getElementById('lcPollingInterval'))
-                            document.getElementById('lcPollingInterval').value = config.polling_interval_ms || 15;
+                            document.getElementById('lcUnit').value = config.unit || 'kg';
                     }
                 }, 100);
                 

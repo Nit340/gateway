@@ -27,7 +27,7 @@ def init_database():
     print("[OK] General configuration table")
     print("[OK] Services table (modbus, loadcell)")
     print("[OK] Modbus_device table (tcp/rtu with connection details)")
-    print("[OK] Loadcell_device table (with calibration)")
+    print("[OK] Loadcell_device table (sysfs_hx711 hardware params + JSON filters/levels)")
     print("[OK] Modbus_datapoints table")
     print("[OK] Loadcell_datapoints table")
     print("[OK] Device groups table")
@@ -122,46 +122,50 @@ def create_tables(cursor):
         )
     ''')
     
-    # Loadcell device table
+    # Loadcell device table — hardware-aligned schema (sysfs_hx711)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS loadcell_device (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             service_id INTEGER,
-            device_path TEXT NOT NULL,
-            channel INTEGER DEFAULT 0,
+
+            -- sysfs_hx711 device parameters
+            device_path TEXT NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+            poll_ms INTEGER DEFAULT 10,
+            resolution_bits INTEGER DEFAULT 24,
+            effective_bits INTEGER DEFAULT 14,
+            signed BOOLEAN DEFAULT 0,
+            gain REAL DEFAULT 1,
+            vref REAL DEFAULT 5,
+            raw_min REAL DEFAULT 0,
+            raw_max REAL DEFAULT 16383,
+
+            -- Capacity specification
+            capacity_min REAL DEFAULT 0,
+            capacity_max REAL DEFAULT 1000,
+            unit TEXT DEFAULT 'kg',
+
+            -- Auto-generated datapoint names
             load_name TEXT DEFAULT 'load',
             capacity_name TEXT DEFAULT 'capacity',
-            shift_bits INTEGER DEFAULT 10,
-            unit TEXT DEFAULT 'g',
-            capacity REAL DEFAULT 40000.0,
+
+            -- Pipeline connection
             pipeline_server TEXT DEFAULT '127.0.0.1',
             pipeline_port INTEGER DEFAULT 7000,
             log_level TEXT DEFAULT 'info',
-            polling_interval_ms INTEGER DEFAULT 15,
+
+            -- Calibration — set via CraneIQ page
             tare_offset REAL DEFAULT 0.0,
             known_weight REAL DEFAULT 1000.0,
             known_weight_raw REAL DEFAULT 0.0,
-            lowpass_filter_enabled BOOLEAN DEFAULT 0,
-            filter_cutoff_frequency REAL DEFAULT 8.0,
-            filter_activation_delta_min REAL DEFAULT 20000.0,
-            moving_avg_enabled BOOLEAN DEFAULT 1,
-            moving_avg_window INTEGER DEFAULT 4,
-            median_filter_enabled BOOLEAN DEFAULT 1,
-            median_filter_window INTEGER DEFAULT 3,
-            autotare_enabled BOOLEAN DEFAULT 1,
-            autotare_trigger_delta_grams REAL DEFAULT -5.0,
-            adaptive_deadband_enabled BOOLEAN DEFAULT 1,
-            adaptive_deadband_min REAL DEFAULT 1.0,
-            adaptive_deadband_max REAL DEFAULT 20.0,
-            adaptive_deadband_grow_rate REAL DEFAULT 0.5,
-            adaptive_deadband_shrink_rate REAL DEFAULT 1.5,
-            publish_step_grams REAL DEFAULT 5.0,
-            overload_threshold REAL DEFAULT 5000.0,
-            overload_relay TEXT DEFAULT 'relay2',
-            overload_action INTEGER DEFAULT 0,
-            overload_cooldown_ms INTEGER DEFAULT 2000,
-            confirm_count INTEGER DEFAULT 3,
+
+            -- Filters stored as JSON arrays — set via CraneIQ page
+            raw_filters TEXT DEFAULT '[]',
+            weight_filters TEXT DEFAULT '[]',
+
+            -- Levels stored as JSON array — set via CraneIQ page
+            levels TEXT DEFAULT '[]',
+
             enabled BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -269,7 +273,6 @@ def create_tables(cursor):
         )
     ''')
     
-    # Migration for new columns (with proper quoting)
     try:
         cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN "group" TEXT')
     except Exception:
@@ -290,6 +293,28 @@ def create_tables(cursor):
         cursor.execute('ALTER TABLE modbus_datapoints ADD COLUMN register_count INTEGER DEFAULT 1')
     except Exception:
         pass
+
+    # Loadcell device schema migration — add new hardware columns, drop old ones gracefully
+    lc_new_columns = [
+        ("poll_ms",          "INTEGER DEFAULT 10"),
+        ("resolution_bits",  "INTEGER DEFAULT 24"),
+        ("effective_bits",   "INTEGER DEFAULT 14"),
+        ("signed",           "BOOLEAN DEFAULT 0"),
+        ("gain",             "REAL DEFAULT 1"),
+        ("vref",             "REAL DEFAULT 5"),
+        ("raw_min",          "REAL DEFAULT 0"),
+        ("raw_max",          "REAL DEFAULT 16383"),
+        ("capacity_min",     "REAL DEFAULT 0"),
+        ("capacity_max",     "REAL DEFAULT 1000"),
+        ("raw_filters",      "TEXT DEFAULT '[]'"),
+        ("weight_filters",   "TEXT DEFAULT '[]'"),
+        ("levels",           "TEXT DEFAULT '[]'"),
+    ]
+    for col, definition in lc_new_columns:
+        try:
+            cursor.execute('ALTER TABLE loadcell_device ADD COLUMN {} {}'.format(col, definition))
+        except Exception:
+            pass  # Column already exists
 
 def insert_default_data(cursor):
     """Insert default data"""

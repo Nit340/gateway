@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# pipeline.py - COMPLETE FIXED VERSION with enhanced config format
+# pipeline.py - COMPLETE FIXED VERSION with enhanced config format and loadcell_config support
 
 import asyncio
 import json
@@ -32,6 +32,7 @@ pipeline_state = {
     "connected": False,
     "load_raw": None,
     "modbus_config": None,
+    "loadcell_config": None,  # Added for load cell service config
     "ws_clients": set(),
     "lock": threading.RLock(),
     "main_loop": None,
@@ -43,7 +44,8 @@ pipeline_state = {
     "connection_attempts": 0,
     "last_connection_attempt": 0,
     "subscribed_datapoints": set(),
-    "modbus_config_pending": None
+    "modbus_config_pending": None,
+    "loadcell_config_pending": None  # Added for pending load cell config
 }
 
 # ---------------------------------------------------------------------------
@@ -67,7 +69,7 @@ async def _broadcast_pipeline_msg(msg):
         pipeline_state["ws_clients"].discard(ws)
 
 # ---------------------------------------------------------------------------
-# Helper function to find modbus service
+# Helper function to find services
 # ---------------------------------------------------------------------------
 def _find_modbus_service():
     """Find any connected service that contains 'modbus' in its name"""
@@ -76,6 +78,16 @@ def _find_modbus_service():
     
     for service in services:
         if 'modbus' in service.lower():
+            return service
+    return None
+
+def _find_loadcell_service():
+    """Find any connected service that contains 'load_cell' in its name"""
+    with pipeline_state["lock"]:
+        services = list(pipeline_state["connected_services"])
+    
+    for service in services:
+        if 'load_cell' in service.lower() or 'loadcell' in service.lower():
             return service
     return None
 
@@ -118,11 +130,14 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         if hasattr(client, 'subscribe'):
                             client.subscribe("modbus_config")
                             print("[PIPELINE] Subscribed to 'modbus_config' via subscribe()")
+                            client.subscribe("loadcell_config")  # Added subscription
+                            print("[PIPELINE] Subscribed to 'loadcell_config' via subscribe()")
                             client.subscribe("load_raw")
                             print("[PIPELINE] Subscribed to 'load_raw' via subscribe()")
                             
                             with pipeline_state["lock"]:
                                 pipeline_state["subscribed_datapoints"].add("modbus_config")
+                                pipeline_state["subscribed_datapoints"].add("loadcell_config")  # Added
                                 pipeline_state["subscribed_datapoints"].add("load_raw")
                         else:
                             print("[PIPELINE] No subscribe method found, using refresh")
@@ -153,16 +168,34 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         with pipeline_state["lock"]:
                             if pipeline_state.get("modbus_config_pending"):
                                 pending_config = pipeline_state["modbus_config_pending"]
-                                print("[PIPELINE] Found pending config for modbus service")
+                                print("[PIPELINE] Found pending modbus config for service")
                                 try:
                                     request_id = client.datapoint_update(service_name, "modbus_config", pending_config)
                                     if request_id > 0:
-                                        print("[PIPELINE] Sent pending config to {} (request_id={})".format(service_name, request_id))
+                                        print("[PIPELINE] Sent pending modbus config to {} (request_id={})".format(service_name, request_id))
                                         pipeline_state["modbus_config_pending"] = None
                                     else:
-                                        print("[PIPELINE] Failed to send pending config")
+                                        print("[PIPELINE] Failed to send pending modbus config")
                                 except Exception as e:
-                                    print("[PIPELINE] Failed to send pending config: {}".format(e))
+                                    print("[PIPELINE] Failed to send pending modbus config: {}".format(e))
+                    
+                    elif 'load_cell' in service_name.lower() or 'loadcell' in service_name.lower():
+                        print("[PIPELINE] FOUND LOAD CELL SERVICE: '{}'".format(service_name))
+                        
+                        # When load cell service appears, try to send any pending config
+                        with pipeline_state["lock"]:
+                            if pipeline_state.get("loadcell_config_pending"):
+                                pending_config = pipeline_state["loadcell_config_pending"]
+                                print("[PIPELINE] Found pending load cell config for service")
+                                try:
+                                    request_id = client.datapoint_update(service_name, "loadcell_config", pending_config)
+                                    if request_id > 0:
+                                        print("[PIPELINE] Sent pending load cell config to {} (request_id={})".format(service_name, request_id))
+                                        pipeline_state["loadcell_config_pending"] = None
+                                    else:
+                                        print("[PIPELINE] Failed to send pending load cell config")
+                                except Exception as e:
+                                    print("[PIPELINE] Failed to send pending load cell config: {}".format(e))
                 
                 elif etype == EventType.SERVICE_REMOVED:
                     service_name = event.service_name
@@ -197,13 +230,27 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         if dp == "modbus_config" and isinstance(val, str):
                             try:
                                 parsed = json.loads(val)
-                                print("[PIPELINE]   Config structure: {}".format(list(parsed.keys())))
+                                print("[PIPELINE]   Modbus Config structure: {}".format(list(parsed.keys())))
                                 if "version" in parsed:
                                     print("[PIPELINE]   Config version: {}".format(parsed["version"]))
                                 if "connections" in parsed:
                                     print("[PIPELINE]   Connections: {}".format(len(parsed["connections"])))
                                 if "assets" in parsed:
                                     print("[PIPELINE]   Assets: {}".format(len(parsed["assets"])))
+                                if "timestamp_str" in parsed:
+                                    print("[PIPELINE]   Timestamp: {}".format(parsed["timestamp_str"]))
+                            except Exception as e:
+                                print("[PIPELINE]   Config is not valid JSON: {}".format(e))
+                        
+                        # For loadcell_config, try to parse JSON to show structure
+                        if dp == "loadcell_config" and isinstance(val, str):
+                            try:
+                                parsed = json.loads(val)
+                                print("[PIPELINE]   Load Cell Config structure: {}".format(list(parsed.keys())))
+                                if "version" in parsed:
+                                    print("[PIPELINE]   Config version: {}".format(parsed["version"]))
+                                if "devices" in parsed:
+                                    print("[PIPELINE]   Devices: {}".format(len(parsed["devices"])))
                                 if "timestamp_str" in parsed:
                                     print("[PIPELINE]   Timestamp: {}".format(parsed["timestamp_str"]))
                             except Exception as e:
@@ -220,6 +267,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             elif dp == "modbus_config":
                                 pipeline_state["modbus_config"] = val
                                 print("[PIPELINE] Stored modbus_config value")
+                            elif dp == "loadcell_config":  # Added
+                                pipeline_state["loadcell_config"] = val
+                                print("[PIPELINE] Stored loadcell_config value")
                         
                         # Broadcast to websocket clients
                         main_loop = pipeline_state.get("main_loop")
@@ -316,6 +366,7 @@ def start_pipeline_background(app=None):
         
         pipeline_state["should_run"] = True
         pipeline_state["modbus_config_pending"] = None
+        pipeline_state["loadcell_config_pending"] = None  # Added
     
     # Store the main loop for broadcasts
     try:
@@ -396,12 +447,14 @@ async def pipeline_connect_handler(request):
         connected = pipeline_state["connected"]
         services = list(pipeline_state["connected_services"])
         modbus_service = _find_modbus_service()
+        loadcell_service = _find_loadcell_service()  # Added
     
     return web.json_response({
         "success": connected,
         "message": "Connected to pipeline" if connected else "Connecting in background",
         "services": services,
-        "modbus_service": modbus_service
+        "modbus_service": modbus_service,
+        "loadcell_service": loadcell_service  # Added
     })
 
 async def pipeline_disconnect_handler(request):
@@ -418,9 +471,11 @@ async def pipeline_disconnect_handler(request):
         pipeline_state["connected"] = False
         pipeline_state["load_raw"] = None
         pipeline_state["modbus_config"] = None
+        pipeline_state["loadcell_config"] = None  # Added
         pipeline_state["connected_services"].clear()
         pipeline_state["subscribed_datapoints"].clear()
         pipeline_state["modbus_config_pending"] = None
+        pipeline_state["loadcell_config_pending"] = None  # Added
     
     print("[PIPELINE] Disconnected")
     return web.json_response({"success": True, "message": "Disconnected"})
@@ -429,27 +484,45 @@ async def pipeline_status_handler(request):
     """GET /api/pipeline/status"""
     with pipeline_state["lock"]:
         modbus_service = _find_modbus_service()
-        config_preview = None
+        loadcell_service = _find_loadcell_service()  # Added
+        
+        modbus_config_preview = None
         if pipeline_state["modbus_config"]:
             try:
                 # Show preview of config structure
                 parsed = json.loads(pipeline_state["modbus_config"])
-                config_preview = {
+                modbus_config_preview = {
                     "version": parsed.get("version"),
                     "connections": len(parsed.get("connections", [])),
                     "assets": len(parsed.get("assets", [])),
                     "timestamp": parsed.get("timestamp_str")
                 }
             except:
-                config_preview = {"note": "config is not JSON"}
+                modbus_config_preview = {"note": "config is not JSON"}
+        
+        loadcell_config_preview = None  # Added
+        if pipeline_state["loadcell_config"]:
+            try:
+                # Show preview of config structure
+                parsed = json.loads(pipeline_state["loadcell_config"])
+                loadcell_config_preview = {
+                    "version": parsed.get("version"),
+                    "devices": len(parsed.get("devices", [])),
+                    "timestamp": parsed.get("timestamp_str")
+                }
+            except:
+                loadcell_config_preview = {"note": "config is not JSON"}
         
         return web.json_response({
             "connected": pipeline_state["connected"],
             "load_raw": pipeline_state["load_raw"],
-            "modbus_config_preview": config_preview,
+            "modbus_config_preview": modbus_config_preview,
+            "loadcell_config_preview": loadcell_config_preview,  # Added
             "modbus_config_length": len(pipeline_state["modbus_config"]) if pipeline_state["modbus_config"] else 0,
+            "loadcell_config_length": len(pipeline_state["loadcell_config"]) if pipeline_state["loadcell_config"] else 0,  # Added
             "services": list(pipeline_state["connected_services"]),
             "modbus_service": modbus_service,
+            "loadcell_service": loadcell_service,  # Added
             "config_version": pipeline_state["config_version"],
             "last_config_time": pipeline_state["last_config_time"],
             "connection_attempts": pipeline_state["connection_attempts"],
@@ -480,17 +553,46 @@ async def pipeline_config_view_handler(request):
         else:
             return web.json_response({
                 "success": False,
-                "message": "No config stored"
+                "message": "No modbus config stored"
+            })
+
+async def pipeline_loadcell_config_view_handler(request):  # Added
+    """GET /api/pipeline/loadcell-config - View the full current loadcell_config"""
+    with pipeline_state["lock"]:
+        config = pipeline_state.get("loadcell_config")
+        if config:
+            try:
+                # Try to parse as JSON for display
+                parsed = json.loads(config)
+                return web.json_response({
+                    "success": True,
+                    "config": parsed,
+                    "raw_length": len(config)
+                })
+            except Exception as e:
+                return web.json_response({
+                    "success": True,
+                    "config": config,
+                    "raw_length": len(config),
+                    "note": "Raw string (not valid JSON)",
+                    "error": str(e)
+                })
+        else:
+            return web.json_response({
+                "success": False,
+                "message": "No loadcell config stored"
             })
 
 async def pipeline_services_handler(request):
     """GET /api/pipeline/services"""
     with pipeline_state["lock"]:
         modbus_service = _find_modbus_service()
+        loadcell_service = _find_loadcell_service()  # Added
         return web.json_response({
             "services": list(pipeline_state["connected_services"]),
             "count": len(pipeline_state["connected_services"]),
-            "modbus_service": modbus_service
+            "modbus_service": modbus_service,
+            "loadcell_service": loadcell_service  # Added
         })
 
 async def pipeline_debug_handler(request):
@@ -516,6 +618,17 @@ async def pipeline_debug_handler(request):
                         }
                     except:
                         state_copy[k + "_preview"] = "not JSON"
+                elif k == "loadcell_config" and v:  # Added
+                    state_copy[k + "_length"] = len(v)
+                    try:
+                        parsed = json.loads(v)
+                        state_copy[k + "_preview"] = {
+                            "keys": list(parsed.keys()),
+                            "version": parsed.get("version"),
+                            "devices": len(parsed.get("devices", []))
+                        }
+                    except:
+                        state_copy[k + "_preview"] = "not JSON"
                 else:
                     state_copy[k] = v
         
@@ -536,6 +649,7 @@ async def pipeline_loadraw_ws_handler(request):
     with pipeline_state["lock"]:
         current_raw = pipeline_state["load_raw"]
         current_config = pipeline_state["modbus_config"]
+        current_loadcell_config = pipeline_state["loadcell_config"]  # Added
     
     if current_raw is not None:
         try:
@@ -559,6 +673,22 @@ async def pipeline_loadraw_ws_handler(request):
                 await ws.send_str(json.dumps({"datapoint": "modbus_config", "value": current_config}))
         except Exception as e:
             print("[PIPELINE] Could not send buffered config: {}".format(e))
+    
+    if current_loadcell_config is not None:  # Added
+        try:
+            # Try to parse config for better display
+            try:
+                parsed = json.loads(current_loadcell_config)
+                display_config = {
+                    "version": parsed.get("version"),
+                    "timestamp": parsed.get("timestamp_str"),
+                    "devices": len(parsed.get("devices", []))
+                }
+                await ws.send_str(json.dumps({"datapoint": "loadcell_config", "value": display_config, "full": parsed}))
+            except:
+                await ws.send_str(json.dumps({"datapoint": "loadcell_config", "value": current_loadcell_config}))
+        except Exception as e:
+            print("[PIPELINE] Could not send buffered loadcell config: {}".format(e))
     
     try:
         while True:
@@ -734,6 +864,293 @@ async def pipeline_filters_post_handler(request):
     except Exception as e:
         logging.error("filters save error: %s", e)
         return web.json_response({"success": False, "error": str(e)})
+
+# ---------------------------------------------------------------------------
+# LOAD CELL CONFIG SAVE HANDLER - NEW (Fixed without f-strings)
+# ---------------------------------------------------------------------------
+
+async def pipeline_save_loadcell_config(request):
+    """POST /api/pipeline/loadcell-config/save
+       Backend handles: 
+       1. Fetch load cell devices from database
+       2. Build load cell configuration
+       3. Save to JSON file
+       4. Send to load_cell_service via loadcell_config datapoint
+    """
+    print("\n" + "="*80)
+    print("[LOADCELL-CFG] BACKEND: Saving Load Cell Configuration")
+    print("="*80)
+    
+    if not PIPELINE_AVAILABLE:
+        return web.json_response({
+            "success": False, 
+            "error": "ilx_pipeline not available"
+        })
+    
+    try:
+        # 1. Connect to database
+        print("[LOADCELL-CFG] Connecting to database: {}".format(DB_FILE))
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get all enabled load cell devices
+        cursor.execute('''
+            SELECT 
+                id, name, device_path, channel, unit, capacity,
+                tare_offset, known_weight, known_weight_raw,
+                pipeline_server, pipeline_port,
+                lowpass_filter_enabled, filter_cutoff_frequency, filter_activation_delta_min,
+                moving_avg_enabled, moving_avg_window,
+                median_filter_enabled, median_filter_window,
+                autotare_enabled, autotare_trigger_delta_grams,
+                adaptive_deadband_enabled, adaptive_deadband_min, adaptive_deadband_max,
+                adaptive_deadband_grow_rate, adaptive_deadband_shrink_rate,
+                publish_step_grams, overload_threshold, overload_relay,
+                overload_action, overload_cooldown_ms, confirm_count
+            FROM loadcell_device 
+            WHERE enabled = 1
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        print("[LOADCELL-CFG] Fetched {} load cell devices from database".format(len(rows)))
+        
+        if not rows:
+            return web.json_response({
+                "success": False,
+                "error": "No enabled load cell devices found in database"
+            })
+        
+        # 2. Build devices configuration
+        devices = []
+        for row in rows:
+            r = dict(row)
+            
+            # Build device config with all parameters (FIXED: no f-strings)
+            device_config = {
+                "id": r['id'],
+                "name": r['name'] or ("LoadCell_" + str(r['id'])),  # Fixed: string concatenation instead of f-string
+                "device_path": r.get('device_path', '/dev/ttyUSB0'),
+                "channel": r.get('channel', 1),
+                "unit": r.get('unit', 'g'),
+                "capacity": r.get('capacity', 1000.0),
+                
+                # Calibration data
+                "calibration": {
+                    "tare_offset": r.get('tare_offset', 0.0),
+                    "known_weight": r.get('known_weight', 1000.0),
+                    "known_weight_raw": r.get('known_weight_raw', 1000.0)
+                },
+                
+                # Pipeline connection info (if device connects directly)
+                "pipeline": {
+                    "server": r.get('pipeline_server', '127.0.0.1'),
+                    "port": r.get('pipeline_port', 7000)
+                } if r.get('pipeline_server') else None,
+                
+                # Filter configurations
+                "filters": {
+                    "lowpass": {
+                        "enabled": bool(r.get('lowpass_filter_enabled', 0)),
+                        "cutoff_frequency": r.get('filter_cutoff_frequency', 8.0),
+                        "activation_delta_min": r.get('filter_activation_delta_min', 20000.0)
+                    },
+                    "moving_average": {
+                        "enabled": bool(r.get('moving_avg_enabled', 0)),
+                        "window": r.get('moving_avg_window', 4)
+                    },
+                    "median": {
+                        "enabled": bool(r.get('median_filter_enabled', 0)),
+                        "window": r.get('median_filter_window', 3)
+                    }
+                },
+                
+                # Auto-tare settings
+                "autotare": {
+                    "enabled": bool(r.get('autotare_enabled', 0)),
+                    "trigger_delta_grams": r.get('autotare_trigger_delta_grams', -5.0)
+                },
+                
+                # Adaptive deadband
+                "adaptive_deadband": {
+                    "enabled": bool(r.get('adaptive_deadband_enabled', 0)),
+                    "min": r.get('adaptive_deadband_min', 1.0),
+                    "max": r.get('adaptive_deadband_max', 20.0),
+                    "grow_rate": r.get('adaptive_deadband_grow_rate', 0.5),
+                    "shrink_rate": r.get('adaptive_deadband_shrink_rate', 1.5)
+                },
+                
+                # Publishing settings
+                "publish_step_grams": r.get('publish_step_grams', 5.0),
+                
+                # Overload protection
+                "overload": {
+                    "threshold": r.get('overload_threshold', 5000.0),
+                    "relay": r.get('overload_relay', 'relay2'),
+                    "action": r.get('overload_action', 0),
+                    "cooldown_ms": r.get('overload_cooldown_ms', 2000)
+                },
+                
+                # Stability confirmation
+                "confirm_count": r.get('confirm_count', 3)
+            }
+            
+            devices.append(device_config)
+        
+        config_payload = {
+            "devices": devices
+        }
+        
+        print("[LOADCELL-CFG] Built configuration for {} devices".format(len(devices)))
+        
+        # 3. SAVE TO JSON FILE FIRST
+        config_dir = "loadcell_configs"
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir)
+            print("[LOADCELL-CFG] Created directory: {}".format(config_dir))
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = "{}/loadcell_config_{}.json".format(config_dir, timestamp)
+        
+        # Add metadata before saving
+        save_payload = config_payload.copy()
+        save_payload['_saved_at'] = time.time()
+        save_payload['_saved_at_str'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        save_payload['_device_count'] = len(devices)
+        
+        # Save to file
+        with open(filename, 'w') as f:
+            json.dump(save_payload, f, indent=2)
+        
+        print("[LOADCELL-CFG] Saved configuration to: {}".format(filename))
+        
+        # Also save a latest copy (overwrite)
+        latest_file = "{}/loadcell_config_latest.json".format(config_dir)
+        with open(latest_file, 'w') as f:
+            json.dump(save_payload, f, indent=2)
+        
+        print("[LOADCELL-CFG] Updated latest file: {}".format(latest_file))
+        
+        # 4. Check pipeline connection
+        with pipeline_state["lock"]:
+            client = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+            services = list(pipeline_state.get("connected_services", set()))
+        
+        print("[LOADCELL-CFG] Pipeline connected: {}, Services: {}".format(connected, services))
+        
+        # 5. If pipeline is connected, send the config with ENHANCED FORMAT
+        pipeline_sent = False
+        pipeline_message = "Not sent - pipeline not connected"
+        target_service = None
+        new_version = None
+        
+        if connected and client:
+            # Find load cell service
+            target_service = _find_loadcell_service()
+            
+            # Create ENHANCED payload with version and metadata
+            with pipeline_state["lock"]:
+                current_version = pipeline_state.get("config_version", 1)
+                new_version = current_version + 1
+                pipeline_state["config_version"] = new_version
+                pipeline_state["last_config_time"] = time.time()
+            
+            enhanced_payload = {
+                "devices": config_payload["devices"],
+                "version": new_version,
+                "timestamp": time.time(),
+                "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "source": "web_ui",
+                "device_count": len(devices)
+            }
+            
+            enhanced_json = json.dumps(enhanced_payload)
+            print("[LOADCELL-CFG] Enhanced payload structure: {}".format(list(enhanced_payload.keys())))
+            
+            if target_service:
+                # Send to specific service using datapoint_update
+                try:
+                    request_id = client.datapoint_update(target_service, "loadcell_config", enhanced_json)
+                    if request_id > 0:
+                        print("[LOADCELL-CFG] Sent ENHANCED config to pipeline (v{}) targeting '{}', request_id={}".format(
+                            new_version, target_service, request_id))
+                        pipeline_sent = True
+                        pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                    else:
+                        print("[LOADCELL-CFG] Failed to send - request_id=0")
+                        pipeline_message = "Send failed (request_id=0)"
+                        # Store as pending
+                        with pipeline_state["lock"]:
+                            pipeline_state["loadcell_config_pending"] = enhanced_json
+                except Exception as e:
+                    print("[LOADCELL-CFG] Error sending to {}: {}".format(target_service, e))
+                    pipeline_message = "Error: {}".format(e)
+                    # Store as pending
+                    with pipeline_state["lock"]:
+                        pipeline_state["loadcell_config_pending"] = enhanced_json
+            else:
+                # No load cell service found, try broadcast or store pending
+                print("[LOADCELL-CFG] No load cell service found, trying broadcast")
+                try:
+                    # Try broadcast via datapoint_set
+                    client.datapoint_set("loadcell_config", enhanced_json)
+                    print("[LOADCELL-CFG] Broadcast sent via datapoint_set")
+                    pipeline_sent = True
+                    pipeline_message = "Broadcast sent (v{})".format(new_version)
+                    
+                    # Also store as pending
+                    with pipeline_state["lock"]:
+                        pipeline_state["loadcell_config_pending"] = enhanced_json
+                except Exception as e:
+                    print("[LOADCELL-CFG] Broadcast failed: {}".format(e))
+                    pipeline_message = "Broadcast failed"
+                    # Store as pending
+                    with pipeline_state["lock"]:
+                        pipeline_state["loadcell_config_pending"] = enhanced_json
+        else:
+            # Not connected, store as pending
+            enhanced_payload = {
+                "devices": config_payload["devices"],
+                "version": pipeline_state.get("config_version", 1) + 1,
+                "timestamp": time.time(),
+                "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "source": "web_ui",
+                "device_count": len(devices)
+            }
+            enhanced_json = json.dumps(enhanced_payload)
+            with pipeline_state["lock"]:
+                pipeline_state["loadcell_config_pending"] = enhanced_json
+                print("[LOADCELL-CFG] Stored as pending config (not connected)")
+        
+        # 6. Return response
+        return web.json_response({
+            "success": True,
+            "message": "Load cell configuration saved to file{}".format(
+                " and " + pipeline_message if pipeline_sent else ""),
+            "file_saved": filename,
+            "file_latest": latest_file,
+            "pipeline_sent": pipeline_sent,
+            "pipeline_message": pipeline_message,
+            "devices": len(devices),
+            "target_service": target_service,
+            "version": new_version if new_version else pipeline_state.get("config_version", 1),
+            "enhanced_format": {
+                "keys": ["devices", "version", "timestamp", "timestamp_str", "source", "device_count"]
+            }
+        })
+        
+    except Exception as e:
+        print("[LOADCELL-CFG] Error: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return web.json_response({
+            "success": False,
+            "error": str(e)
+        })
 
 # ---------------------------------------------------------------------------
 # MODBUS CONFIG SAVE HANDLER - ENHANCED VERSION
@@ -928,10 +1345,7 @@ async def pipeline_save_modbus_config(request):
         
         if connected and client:
             # Find modbus service
-            for service in services:
-                if 'modbus' in service.lower():
-                    target_service = service
-                    break
+            target_service = _find_modbus_service()
             
             # Create ENHANCED payload with version and metadata
             with pipeline_state["lock"]:
@@ -1050,6 +1464,7 @@ def register_pipeline_routes(app):
     app.router.add_post('/api/pipeline/disconnect', pipeline_disconnect_handler)
     app.router.add_get('/api/pipeline/status', pipeline_status_handler)
     app.router.add_get('/api/pipeline/config', pipeline_config_view_handler)
+    app.router.add_get('/api/pipeline/loadcell-config', pipeline_loadcell_config_view_handler)  # Added
     app.router.add_get('/api/pipeline/services', pipeline_services_handler)
     app.router.add_get('/api/pipeline/debug', pipeline_debug_handler)
     app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
@@ -1059,4 +1474,5 @@ def register_pipeline_routes(app):
     app.router.add_post('/api/pipeline/filters', pipeline_filters_post_handler)
     app.router.add_post('/api/pipeline/modbus-config', pipeline_modbus_config_handler)
     app.router.add_post('/api/pipeline/modbus-config/save', pipeline_save_modbus_config)
+    app.router.add_post('/api/pipeline/loadcell-config/save', pipeline_save_loadcell_config)  # Added
     print("[PIPELINE] Routes registered OK")
