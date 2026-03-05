@@ -10,9 +10,9 @@ import re
 from datetime import datetime
 from aiohttp import web
 
-from models import device_status_tracker
+from general import device_status_tracker
 from database import DB_FILE, get_service_by_name
-from utils import initialize_device_status, remove_device_status, update_device_status
+from general import initialize_device_status, remove_device_status, update_device_status
 
 # ============================================================================
 # DATABASE CONNECTION HELPER

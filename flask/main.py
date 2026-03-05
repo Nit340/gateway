@@ -17,7 +17,7 @@ from database import (
     get_all_pipeline_service_targets, set_pipeline_service_name,
     get_all_pipeline_send_logs, get_enabled_pipeline_targets,
 )
-from general_config import register_general_config_routes
+from general import register_general_config_routes
 from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
     delete_device, test_device, disable_device, duplicate_device,

@@ -329,7 +329,7 @@ def create_tables(cursor):
         CREATE TABLE IF NOT EXISTS pipeline_service_targets (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             config_type  TEXT    NOT NULL UNIQUE
-                             CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway')),
+                             CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway', 'core')),
             service_name TEXT    NOT NULL DEFAULT '',
             enabled      BOOLEAN DEFAULT 1,
             description  TEXT    DEFAULT '',
@@ -345,7 +345,7 @@ def create_tables(cursor):
         CREATE TABLE IF NOT EXISTS pipeline_send_log (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             config_type     TEXT    NOT NULL UNIQUE
-                                CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway')),
+                                CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway', 'core')),
             last_version    INTEGER NOT NULL DEFAULT 0,
             last_sent_at    TIMESTAMP,
             last_service    TEXT    DEFAULT '',
@@ -373,7 +373,7 @@ def _migrate_existing_db(cursor):
             CREATE TABLE pipeline_send_log (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 config_type     TEXT    NOT NULL UNIQUE
-                                    CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway')),
+                                    CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway', 'core')),
                 last_version    INTEGER NOT NULL DEFAULT 0,
                 last_sent_at    TIMESTAMP,
                 last_service    TEXT    DEFAULT '',
@@ -381,7 +381,7 @@ def _migrate_existing_db(cursor):
                 last_message    TEXT    DEFAULT ''
             )
         ''')
-        for cfg_type in ('modbus', 'loadcell', 'iot_gateway'):
+        for cfg_type in ('modbus', 'loadcell', 'iot_gateway', 'core'):
             cursor.execute(
                 'INSERT OR IGNORE INTO pipeline_send_log (config_type) VALUES (?)', (cfg_type,)
             )
@@ -477,6 +477,7 @@ def insert_default_data(cursor):
         ('modbus',      'modbus_service',      'Modbus pipeline service name'),
         ('loadcell',    'load_cell_service',   'Load-cell pipeline service name'),
         ('iot_gateway', 'iot_gateway_service', 'IoT gateway pipeline service name'),
+        ('core',        'core_service',        'Core config pipeline service name'),
     ]:
         cursor.execute(
             'INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, description, enabled) VALUES (?, ?, ?, 1)',
@@ -484,7 +485,7 @@ def insert_default_data(cursor):
         )
 
     # Default pipeline send log rows
-    for cfg_type in ('modbus', 'loadcell', 'iot_gateway'):
+    for cfg_type in ('modbus', 'loadcell', 'iot_gateway', 'core'):
         cursor.execute(
             'INSERT OR IGNORE INTO pipeline_send_log (config_type, last_version, last_status) VALUES (?, 0, "never")',
             (cfg_type,)

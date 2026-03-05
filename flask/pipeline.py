@@ -949,6 +949,229 @@ async def pipeline_loadcell_devices_handler(request):
         return web.json_response({"devices": [], "error": str(e)})
 
 # ============================================================================
+# LOADCELL -- JSON IMPORT  (POST /api/pipeline/loadcell-config/import)
+# ============================================================================
+
+async def pipeline_loadcell_import_handler(request):
+    """POST /api/pipeline/loadcell-config/import
+
+    Accepts an inno_load-style JSON body, upserts each entry in
+    load_cells[] into the loadcell_device table, then returns a
+    summary of created / updated rows.
+
+    JSON structure expected (mirrors simulator / inno_load schema):
+      {
+        "load_cells": [
+          {
+            "name": "crane_loadcell",
+            "device": {
+              "type": "sysfs_hx711",
+              "parameters": {
+                "poll_ms": 10,
+                "channels": [{"path": "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"}],
+                "resolution_bits": 24, "effective_bits": 14,
+                "signed": false, "gain": 1, "vref": 5,
+                "raw_min": 0, "raw_max": 16383
+              }
+            },
+            "specifications": {
+              "capacity": {
+                "min": {"value": 0,    "unit": "kg"},
+                "max": {"value": 5000, "unit": "kg"}
+              }
+            },
+            "tare":        {"type": "manual",       "parameters": {"offset_raw": 0.0}},
+            "calibration": {"type": "single_point", "parameters": {"ref_weight": {...}, "ref_raw": 4096.0}},
+            "filter": {
+              "raw":    [...],
+              "weight": [...]
+            },
+            "levels": {"type": "ratio", "parameters": {"ratios": [...]}}
+          }
+        ]
+      }
+    """
+    print("\n" + "="*70)
+    print("[LC-IMPORT] Loadcell JSON import handler called")
+    print("="*70)
+
+    try:
+        body = await request.json()
+    except Exception as e:
+        return web.json_response({"success": False, "error": "Invalid JSON: {}".format(e)}, status=400)
+
+    load_cells = body.get("load_cells", [])
+    if not load_cells:
+        return web.json_response({"success": False, "error": "No load_cells[] array found in JSON"}, status=400)
+
+    created      = 0
+    updated      = 0
+    device_names = []
+    errors       = []
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        for lc in load_cells:
+            name = lc.get("name", "").strip()
+            if not name:
+                errors.append("Skipped entry with no name")
+                continue
+
+            device_names.append(name)
+
+            # ── device / hardware params ──────────────────────────────
+            dev_params   = (lc.get("device") or {}).get("parameters") or {}
+            channels     = dev_params.get("channels") or []
+            device_path  = channels[0].get("path", "") if channels else dev_params.get("path", "")
+
+            poll_ms         = dev_params.get("poll_ms",         10)
+            resolution_bits = dev_params.get("resolution_bits", 24)
+            effective_bits  = dev_params.get("effective_bits",  14)
+            signed          = int(bool(dev_params.get("signed", False)))
+            gain            = dev_params.get("gain",  1)
+            vref            = dev_params.get("vref",  5)
+            raw_min         = dev_params.get("raw_min", 0)
+            raw_max         = dev_params.get("raw_max", 16383)
+
+            # ── capacity / unit ───────────────────────────────────────
+            specs     = lc.get("specifications") or {}
+            cap       = specs.get("capacity") or {}
+            cap_min_d = cap.get("min") or {}
+            cap_max_d = cap.get("max") or {}
+            capacity_min = cap_min_d.get("value", 0)
+            capacity_max = cap_max_d.get("value", 1000)
+            unit         = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
+
+            # ── tare ──────────────────────────────────────────────────
+            tare_params  = (lc.get("tare") or {}).get("parameters") or {}
+            tare_offset  = tare_params.get("offset_raw", tare_params.get("offset", 0.0))
+
+            # ── calibration ───────────────────────────────────────────
+            cal_params       = (lc.get("calibration") or {}).get("parameters") or {}
+            ref_weight_d     = cal_params.get("ref_weight") or {}
+            known_weight     = ref_weight_d.get("value", 0.0) if isinstance(ref_weight_d, dict) else float(ref_weight_d or 0)
+            known_weight_raw = cal_params.get("ref_raw", 0.0)
+
+            # ── filters ───────────────────────────────────────────────
+            filters_d      = lc.get("filter") or {}
+            raw_filters    = json.dumps(filters_d.get("raw",    []))
+            weight_filters = json.dumps(filters_d.get("weight", []))
+
+            # ── levels ────────────────────────────────────────────────
+            levels_cfg = lc.get("levels") or {}
+            if isinstance(levels_cfg, dict):
+                lvl_params = levels_cfg.get("parameters") or {}
+                levels_list = lvl_params.get("ratios", lvl_params.get("levels", []))
+            elif isinstance(levels_cfg, list):
+                levels_list = levels_cfg
+            else:
+                levels_list = []
+            levels = json.dumps(levels_list)
+
+            # ── pipeline IPC params (optional) ────────────────────────
+            pipeline_server = "127.0.0.1"
+            pipeline_port   = 7000
+            for ipc in body.get("ipc", []):
+                p = (ipc.get("parameters") or {})
+                if p.get("server"):   pipeline_server = p["server"]
+                if p.get("port"):     pipeline_port   = int(p["port"])
+
+            # ── upsert ────────────────────────────────────────────────
+            cursor.execute("SELECT id FROM loadcell_device WHERE name = ?", (name,))
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute('''
+                    UPDATE loadcell_device SET
+                        device_path      = ?,
+                        poll_ms          = ?,
+                        resolution_bits  = ?,
+                        effective_bits   = ?,
+                        signed           = ?,
+                        gain             = ?,
+                        vref             = ?,
+                        raw_min          = ?,
+                        raw_max          = ?,
+                        capacity_min     = ?,
+                        capacity_max     = ?,
+                        unit             = ?,
+                        tare_offset      = ?,
+                        known_weight     = ?,
+                        known_weight_raw = ?,
+                        raw_filters      = ?,
+                        weight_filters   = ?,
+                        levels           = ?,
+                        pipeline_server  = ?,
+                        pipeline_port    = ?,
+                        updated_at       = CURRENT_TIMESTAMP
+                    WHERE name = ?
+                ''', (
+                    device_path, poll_ms, resolution_bits, effective_bits,
+                    signed, gain, vref, raw_min, raw_max,
+                    capacity_min, capacity_max, unit,
+                    tare_offset, known_weight, known_weight_raw,
+                    raw_filters, weight_filters, levels,
+                    pipeline_server, pipeline_port,
+                    name
+                ))
+                updated += 1
+                print("[LC-IMPORT] Updated device '{}'".format(name))
+            else:
+                import uuid
+                new_id = str(uuid.uuid4())
+                cursor.execute('''
+                    INSERT INTO loadcell_device (
+                        id, name,
+                        device_path, poll_ms, resolution_bits, effective_bits,
+                        signed, gain, vref, raw_min, raw_max,
+                        capacity_min, capacity_max, unit,
+                        tare_offset, known_weight, known_weight_raw,
+                        raw_filters, weight_filters, levels,
+                        pipeline_server, pipeline_port,
+                        enabled
+                    ) VALUES (
+                        ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?,
+                        1
+                    )
+                ''', (
+                    new_id, name,
+                    device_path, poll_ms, resolution_bits, effective_bits,
+                    signed, gain, vref, raw_min, raw_max,
+                    capacity_min, capacity_max, unit,
+                    tare_offset, known_weight, known_weight_raw,
+                    raw_filters, weight_filters, levels,
+                    pipeline_server, pipeline_port
+                ))
+                created += 1
+                print("[LC-IMPORT] Created device '{}' id={}".format(name, new_id))
+
+        conn.commit()
+        conn.close()
+
+    except Exception as db_err:
+        logging.error("[LC-IMPORT] DB error: %s", db_err)
+        return web.json_response({"success": False, "error": "DB error: {}".format(db_err)}, status=500)
+
+    print("[LC-IMPORT] Done — created={} updated={} devices={}".format(created, updated, device_names))
+    return web.json_response({
+        "success":      True,
+        "device_names": device_names,
+        "created":      created,
+        "updated":      updated,
+        "errors":       errors,
+    })
+
+
+# ============================================================================
 # LOADCELL -- CALIBRATION
 # ============================================================================
 
@@ -1722,9 +1945,10 @@ def register_pipeline_routes(app):
     app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
 
     # -- Loadcell (send config + receive live data) ------------------------
-    app.router.add_get('/api/pipeline/loadcell-devices', pipeline_loadcell_devices_handler)
-    app.router.add_get('/api/pipeline/calibration',      pipeline_calibration_get_handler)
-    app.router.add_post('/api/pipeline/calibration',     pipeline_calibration_post_handler)
+    app.router.add_get ('/api/pipeline/loadcell-devices',        pipeline_loadcell_devices_handler)
+    app.router.add_post('/api/pipeline/loadcell-config/import',  pipeline_loadcell_import_handler)
+    app.router.add_get ('/api/pipeline/calibration',             pipeline_calibration_get_handler)
+    app.router.add_post('/api/pipeline/calibration',             pipeline_calibration_post_handler)
     app.router.add_post('/api/pipeline/filters',         pipeline_filters_post_handler)
 
     # -- Modbus (send only) ------------------------------------------------

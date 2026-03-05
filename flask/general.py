@@ -36,7 +36,7 @@ connected_websockets = set()
 # Keys match the pipeline datapoint names exactly, e.g.:
 #   "net.lan.eth0.ip", "net.lan.eth0.state", "net.lan.eth0.mac",
 #   "net.wlan.ssid",   "net.wlan.ip",        "net.wlan.state",
-#   "net.lte.iccid",   "net.lte.imei",       "net.lte.imsi", …
+#   "net.lte.iccid",   "net.lte.imei",       "net.lte.imsi", 
 network_status_state = {}
 
 # WebSocket clients subscribed to live network-status updates
@@ -151,7 +151,7 @@ async def _safe_send(ws, payload):
 
 
 # ============================================================================
-# NETWORK STATUS  –  helpers called by pipeline.py on RECEIVE_DONE
+# NETWORK STATUS    helpers called by pipeline.py on RECEIVE_DONE
 # ============================================================================
 
 def update_network_status_field(datapoint_name: str, value) -> None:
@@ -585,3 +585,59 @@ def register_general_config_routes(app):
     app.on_cleanup.append(cleanup_background_tasks)
     
     print("[GENERAL-CONFIG] Routes registered")
+
+# ============================================================================
+# DEVICE STATUS TRACKING (from models.py + utils.py)
+# ============================================================================
+
+import datetime as _dt
+
+# Device status tracking (not in database)
+device_status_tracker = {}
+
+
+def initialize_device_status(device_id, initial_status='Offline'):
+    """Initialize device status when device is created"""
+    if device_id not in device_status_tracker:
+        device_status_tracker[device_id] = {
+            'status': initial_status,
+            'last_poll': 'Never' if initial_status == 'Offline' else 'Just now',
+            'previous_status': initial_status,
+            'previous_poll': 'Never' if initial_status == 'Offline' else 'Just now'
+        }
+        if initial_status == 'Offline':
+            device_status_tracker[device_id]['last_offline_time'] = _dt.datetime.now()
+    return device_status_tracker[device_id]
+
+
+def update_device_status(device_id, status, last_poll=None):
+    """Manually update device status"""
+    if device_id not in device_status_tracker:
+        initialize_device_status(device_id, status)
+    else:
+        device_status_tracker[device_id]['previous_status'] = device_status_tracker[device_id]['status']
+        device_status_tracker[device_id]['previous_poll'] = device_status_tracker[device_id]['last_poll']
+        device_status_tracker[device_id]['status'] = status
+
+        if last_poll:
+            device_status_tracker[device_id]['last_poll'] = last_poll
+        elif status == 'Online':
+            device_status_tracker[device_id]['last_poll'] = 'Just now'
+        else:
+            device_status_tracker[device_id]['last_poll'] = 'Connection lost'
+            device_status_tracker[device_id]['last_offline_time'] = _dt.datetime.now()
+
+    return device_status_tracker[device_id]
+
+
+def get_device_status(device_id):
+    """Get current device status"""
+    if device_id not in device_status_tracker:
+        return initialize_device_status(device_id)
+    return device_status_tracker[device_id]
+
+
+def remove_device_status(device_id):
+    """Remove device from status tracking"""
+    if device_id in device_status_tracker:
+        del device_status_tracker[device_id]
