@@ -15,26 +15,32 @@
           "datapoint": "hoist",
           "name": "hoist",
           "datapoints": [
-            "ct",
-            "hoist"
+            "Hoist_current",
+            "Hoist_power"
           ]
         },
         {
           "datapoint": "ct",
           "name": "ct",
-          "datapoints": []
+          "datapoints": [
+            "Hoist_voltage",
+            "Hoist_current"
+          ]
         },
         {
           "datapoint": "lt",
           "name": "lt",
-          "datapoints": []
+          "datapoints": [
+            "Hoist_current",
+            "Hoist_power"
+          ]
         }
       ]
     },
     "loadcell": {
       "service_name": "load_cell_service",
-      "datapoint_name": "load_weight",
-      "unit_datapoint_name": "load_unit"
+      "datapoint_name": "load",
+      "unit_datapoint_name": "capacity"
     }
   },
   "logging": {

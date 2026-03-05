@@ -29,7 +29,7 @@
         
         /* Sidebar Styles */
         .sidebar {
-            width: 260px;
+            width: 240px;
             background: white;
             border-right: 1px solid #E2E8F0;
             height: 100vh;
@@ -78,19 +78,19 @@
             border-bottom: 1px solid #F1F5F9;
         }
         
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 8px 20px;
-            color: #475569;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
-            cursor: pointer;
-        }
-        
+      .nav-link {
+    display: flex;
+    align-items: center;
+    padding: 8px 20px;
+    color: #475569;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    gap: 12px; /* Add this line - creates consistent space between icon and text */
+}
         .nav-link:hover {
             background: #F8FAFC;
             color: #2563EB;
@@ -104,12 +104,12 @@
         }
         
         .nav-link i {
-            width: 20px;
-            margin-right: 12px;
-            font-size: 14px;
-            text-align: center;
-        }
-        
+    width: 20px;
+    margin-right: 0; /* Change from 12px to 0 since we're using gap */
+    font-size: 14px;
+    text-align: center;
+    flex-shrink: 0; /* Prevents icon from shrinking */
+}
         .nav-link-count {
             margin-left: auto;
             background: #E2E8F0;
@@ -348,10 +348,10 @@
                 <div class="nav-section">
                     <div class="section-title">CraneIQ Suite</div>
                     <a href="#" data-page="craneiq" class="nav-link">
-                        <i class="fa-solid fa-weight-hanging"></i>
-                        <span>CraneIQ � Full Configuration</span>
-                        <span class="nav-link-count">4</span>
-                    </a>
+    <i class="fa-solid fa-weight-hanging"></i>
+    <span>CraneIQ </span>  <!-- Fixed: replaced � with - -->
+    <span class="nav-link-count">4</span>
+</a>
                 </div>
                 
                 <!-- Section: Data -->
@@ -367,7 +367,7 @@
                     </a>
                     <a href="#" data-page="diagnostics" class="nav-link">
                         <i class="fa-solid fa-bug"></i>
-                        <span>Diagnostics & Live Terminal</span>
+                        <span>Diagnostics </span>
                     </a>
                 </div>
                 
@@ -376,7 +376,7 @@
                     <div class="section-title">Security & Access</div>
                     <a href="#" data-page="security" class="nav-link">
                         <i class="fa-solid fa-lock"></i>
-                        <span>Security & Access Control</span>
+                        <span>Security </span>
                     </a>
                     <a href="#" data-page="license" class="nav-link">
                         <i class="fa-solid fa-key"></i>
@@ -389,11 +389,11 @@
                     <div class="section-title">Automation</div>
                     <a href="#" data-page="automation" class="nav-link">
                         <i class="fa-solid fa-clock"></i>
-                        <span>Scheduler / Automation Jobs</span>
+                        <span>Scheduler</span>
                     </a>
                     <a href="#" data-page="alerts" class="nav-link">
                         <i class="fa-solid fa-bell"></i>
-                        <span>Alerts & Event Classes</span>
+                        <span>Alerts & Event </span>
                     </a>
                     <a href="#" data-page="rules" class="nav-link">
                         <i class="fa-solid fa-diagram-project"></i>
@@ -406,11 +406,11 @@
                     <div class="section-title">System</div>
                     <a href="#" data-page="backup" class="nav-link">
                         <i class="fa-solid fa-floppy-disk"></i>
-                        <span>Backup, Restore & Snapshots</span>
+                        <span>Backup</span>
                     </a>
                     <a href="#" data-page="notification" class="nav-link">
                         <i class="fa-solid fa-message"></i>
-                        <span>Notification & Multi-Channel Alerts</span>
+                        <span>Notification </span>
                     </a>
                 </div>
             </nav>

@@ -15,8 +15,8 @@
   .sidebar-link.active { background:#ea580c; color:white; }
   .sidebar-link.active .mat { color:white; }
   .sidebar-link:hover .mat { color:#ea580c; }
-  input.field { padding:8px 12px; border:1.5px solid #e7e5e4; border-radius:8px; font-size:13px; outline:none; transition:border-color .15s; }
-  input.field:focus { border-color:#f97316; }
+  input.field, select.field, textarea.field { padding:8px 12px; border:1.5px solid #e7e5e4; border-radius:8px; font-size:13px; outline:none; transition:border-color .15s; }
+  input.field:focus, select.field:focus, textarea.field:focus { border-color:#f97316; }
   ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
   .toggle { position:relative; display:inline-block; width:36px; height:20px; flex-shrink:0; }
   .toggle input { opacity:0; width:0; height:0; }
@@ -35,6 +35,16 @@
     100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
   }
   .pulse-btn { animation: pulse-ring 2.2s infinite; }
+  .cfg-tab { padding:8px 18px; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer; border:1.5px solid #e7e5e4; color:#78716c; transition:all .15s; background:white; white-space:nowrap; }
+  .cfg-tab:hover { border-color:#f97316; color:#f97316; }
+  .cfg-tab.active { background:#f97316; border-color:#f97316; color:white; }
+  .cfg-panel { display:none; }
+  .cfg-panel.active { display:block; }
+  .drop-zone { border:2px dashed #fed7aa; border-radius:14px; padding:36px 20px; text-align:center; cursor:pointer; transition:all .2s; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color:#f97316; background:#fff7ed; }
+  .lc-card { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; border:2px solid #f5f5f4; cursor:pointer; transition:all .15s; }
+  .lc-card:hover { border-color:#fed7aa; }
+  .lc-card.selected { border-color:#f97316; background:#fff7ed; }
 </style>
 </head>
 <body class="bg-stone-50 min-h-screen flex">
@@ -95,17 +105,11 @@
             Sends configs for all <strong>enabled</strong> targets at once.
             If a service is not yet connected the config is queued as pending — no wait, no timeout.
           </p>
-
-          <!-- Per-target enable toggles (compact header view) -->
           <div id="autoSendToggles" class="flex flex-wrap gap-4 mb-4">
             <span class="text-xs text-stone-300">Loading…</span>
           </div>
-
-          <!-- Result area -->
           <div id="autoSendResult" class="hidden rounded-xl p-3 space-y-1.5 text-xs font-mono" style="background:#fafaf9;border:1px solid #e7e5e4;"></div>
         </div>
-
-        <!-- Big orange button -->
         <button id="autoSendBtn" onclick="doAutoSend()"
           class="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-2xl text-white font-extrabold transition-all active:scale-95 pulse-btn"
           style="width:108px;height:84px;background:#f97316;box-shadow:0 8px 24px rgba(249,115,22,0.35);font-size:12px;letter-spacing:.05em;">
@@ -137,33 +141,174 @@
       </button>
     </div>
 
-    <!-- MANUAL PUSH -->
+    <!-- CONFIG MANAGER — dynamic tabs -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
-      <div class="text-sm font-bold text-stone-700 mb-1">Manual Push</div>
-      <p class="text-xs text-stone-400 mb-4">Push one config type immediately, ignoring the enabled toggle.</p>
-      <div class="flex flex-wrap gap-3">
-        <button onclick="pushConfig('modbus')"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
-          <span class="mat" style="font-size:17px;">memory</span> Modbus
-        </button>
-        <button onclick="pushConfig('loadcell')"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
-          <span class="mat" style="font-size:17px;">scale</span> Loadcell
-        </button>
-        <button onclick="pushConfig('iot')"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
-          <span class="mat" style="font-size:17px;">cloud_upload</span> IoT Gateway
-        </button>
-      </div>
-      <div id="pushResult" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
-    </div>
+      <div class="text-sm font-bold text-stone-700 mb-1">Config Manager</div>
+      <p class="text-xs text-stone-400 mb-4">Push or upload configuration per service type. Tabs are generated from your pipeline service targets.</p>
 
-    <!-- VERSION LOG TABLE -->
+      <!-- Tab bar (built dynamically) -->
+      <div id="cfgTabBar" class="flex flex-wrap gap-2 mb-5 pb-4 border-b border-stone-100">
+        <span class="text-xs text-stone-300">Loading…</span>
+      </div>
+
+      <!-- MODBUS panel -->
+      <div class="cfg-panel" id="panel-modbus">
+        <p class="text-xs text-stone-400 mb-4">Push the current Modbus tag configuration (built from DB) to the pipeline service.</p>
+        <button onclick="pushGeneric('modbus')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+          <span class="mat" style="font-size:17px;">memory</span> Push Modbus Config
+        </button>
+        <div id="pushResult-modbus" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+      </div>
+
+      <!-- LOADCELL panel — send config + live receive -->
+      <div class="cfg-panel" id="panel-loadcell">
+
+        <!-- ── SEND SECTION ──────────────────────────────────────────── -->
+        <div class="mb-6 pb-6 border-b border-stone-100">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="mat" style="color:#f97316;font-size:18px;">upload</span>
+            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Send Config</span>
+          </div>
+          <p class="text-xs text-stone-400 mb-4">
+            Select a device and push its filter &amp; calibration config to the loadcell pipeline service.
+            Supports multiple devices — push each individually.
+          </p>
+          <div id="loadcellDeviceList" class="space-y-2 mb-4">
+            <span class="text-xs text-stone-300">Loading devices…</span>
+          </div>
+          <button onclick="pushLoadcellConfig()"
+            class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+            <span class="mat" style="font-size:17px;">scale</span> Push Selected Loadcell Config
+          </button>
+          <div id="pushResult-loadcell" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+        </div>
+
+        <!-- ── RECEIVE SECTION ──────────────────────────────────────── -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <span class="mat" style="color:#f97316;font-size:18px;">download</span>
+            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Live Data — Received from Service</span>
+            <span id="lcWsStatus" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400">WS Disconnected</span>
+          </div>
+          <p class="text-xs text-stone-400 mb-4">
+            Real-time values pushed back from the loadcell service via WebSocket.
+            Datapoints are mapped per device from the config's <code class="bg-stone-100 px-1 rounded">ipc.datapoints</code>.
+          </p>
+
+          <!-- Live weight cards — populated dynamically -->
+          <div id="lcLiveCards" class="grid grid-cols-2 gap-3 mb-4">
+            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
+              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Weight</div>
+              <div id="lc-weight" class="text-2xl font-extrabold text-stone-700">—</div>
+              <div id="lc-unit" class="text-xs text-stone-400 mt-0.5">—</div>
+            </div>
+            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
+              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw ADC</div>
+              <div id="lc-raw" class="text-2xl font-extrabold text-stone-700">—</div>
+              <div class="text-xs text-stone-400 mt-0.5">raw counts</div>
+            </div>
+            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
+              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Status</div>
+              <div class="flex gap-2 mt-1 flex-wrap">
+                <span id="lc-tared" class="ver-badge ver-never">Tare: —</span>
+                <span id="lc-calibrated" class="ver-badge ver-never">Cal: —</span>
+              </div>
+            </div>
+            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
+              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Level</div>
+              <div id="lc-level" class="text-sm font-bold text-stone-500">—</div>
+              <div id="lc-level-bar" class="mt-2 h-2 rounded-full bg-stone-200 overflow-hidden">
+                <div id="lc-level-fill" class="h-full rounded-full transition-all" style="width:0%;background:#f97316;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Raw datapoint stream log -->
+          <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw Datapoint Stream</div>
+          <div id="lcStreamLog" class="rounded-xl p-3 font-mono text-xs text-stone-500 space-y-0.5 overflow-y-auto"
+            style="background:#fafaf9;border:1px solid #e7e5e4;max-height:160px;">
+            <div class="text-stone-300">Waiting for data…</div>
+          </div>
+
+          <button onclick="connectLcWs()" id="lcWsConnectBtn"
+            class="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border border-stone-200 text-stone-500 hover:border-orange-300 hover:text-orange-500 transition-all">
+            <span class="mat" style="font-size:15px;">sync</span> Connect Live Feed
+          </button>
+        </div>
+
+      </div>
+
+      <!-- IOT GATEWAY panel -->
+      <div class="cfg-panel" id="panel-iot_gateway">
+        <p class="text-xs text-stone-400 mb-4">Push the current IoT Gateway configuration to the pipeline service.</p>
+        <button onclick="pushGeneric('iot')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+          <span class="mat" style="font-size:17px;">cloud_upload</span> Push IoT Gateway Config
+        </button>
+        <div id="pushResult-iot_gateway" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+      </div>
+
+      <!-- CORE panel — JSON upload -->
+      <div class="cfg-panel" id="panel-core">
+        <p class="text-xs text-stone-400 mb-5">
+          Upload an <code class="bg-stone-100 px-1 rounded text-stone-600">inno_load</code>-style JSON config.
+          Device names are auto-extracted from <code class="bg-stone-100 px-1 rounded text-stone-600">load_cells[]</code>,
+          the config is stored in the database, then forwarded to the core pipeline service.
+        </p>
+
+        <!-- History table -->
+        <div class="mb-6">
+          <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Upload History</div>
+          <div id="coreConfigList" class="text-xs text-stone-300">Loading…</div>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Upload New Config</div>
+        <div id="coreDropZone" class="drop-zone mb-4"
+          onclick="document.getElementById('coreFileInput').click()"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleCoreDrop(event)">
+          <span class="mat" style="font-size:38px;color:#fcd9b0;">upload_file</span>
+          <p class="text-sm font-semibold text-stone-500 mt-2">Drop JSON file here or click to browse</p>
+          <p class="text-xs text-stone-300 mt-1">inno_load-config style JSON</p>
+        </div>
+        <input type="file" id="coreFileInput" accept=".json,application/json" class="hidden"
+          onchange="handleCoreFileSelect(event)"/>
+
+        <!-- Editor / preview -->
+        <div id="coreEditorWrap" class="hidden mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-xs font-bold text-stone-500 uppercase tracking-wide">Config Preview / Editor</div>
+            <div id="coreDeviceNames" class="text-xs text-green-600 font-semibold"></div>
+          </div>
+          <textarea id="coreJsonEditor" class="field w-full font-mono text-xs" rows="14"
+            style="resize:vertical;" oninput="refreshCoreDeviceNames()"></textarea>
+        </div>
+
+        <div class="flex gap-3 flex-wrap">
+          <button onclick="uploadCoreConfig()"
+            class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white active:scale-95 transition-all"
+            style="background:#f97316;box-shadow:0 4px 14px rgba(249,115,22,0.25);">
+            <span class="mat" style="font-size:17px;">send</span> Upload &amp; Send
+          </button>
+          <button onclick="resendCoreConfig()"
+            class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+            <span class="mat" style="font-size:17px;">replay</span> Resend Latest
+          </button>
+        </div>
+        <div id="pushResult-core" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+      </div><!-- /panel-core -->
+
+    </div><!-- /Config Manager -->
+
+    <!-- VERSION LOG -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
       <div class="flex items-center gap-3 mb-4">
         <div class="text-sm font-bold text-stone-700">Send Version Log</div>
         <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-50 px-2 py-0.5 rounded-full">
-          Version only increments on confirmed send
+          Version increments on confirmed send only
         </span>
       </div>
       <div class="overflow-x-auto">
@@ -197,11 +342,25 @@
   function toast(msg, ok = true) {
     const t = document.getElementById('toast');
     t.textContent = msg;
-    t.className = 'fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-bold text-white z-50 ' + (ok ? 'bg-green-500' : 'bg-red-500');
+    t.className = 'fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-bold text-white z-50 ' +
+      (ok ? 'bg-green-500' : 'bg-red-500');
     t.classList.remove('hidden');
     clearTimeout(t._t);
     t._t = setTimeout(() => t.classList.add('hidden'), 3500);
   }
+
+  // Human-readable labels & icons per config_type
+  const TAB_META = {
+    modbus:      { label: 'Modbus',      icon: 'memory',                desc: 'Push Modbus tag config to pipeline service.' },
+    loadcell:    { label: 'Loadcell',    icon: 'scale',                 desc: 'Push loadcell filter/calibration config.' },
+    iot_gateway: { label: 'IoT Gateway', icon: 'cloud_upload',          desc: 'Push IoT Gateway config to pipeline service.' },
+    core:        { label: 'Core',        icon: 'settings_applications', desc: 'Upload inno_load JSON config for the core service.' },
+  };
+  // Canonical order — always show these 4 tabs
+  const ALL_TYPES = ['modbus', 'loadcell', 'iot_gateway', 'core'];
+
+  function tabLabel(ct) { return (TAB_META[ct] || {label: ct}).label; }
+  function tabIcon(ct)  { return (TAB_META[ct] || {icon: 'settings'}).icon; }
 
   // ── Pipeline status ────────────────────────────────────────────────────
   async function loadStatus() {
@@ -211,17 +370,17 @@
       document.getElementById('pipelineStatus').innerHTML = ok
         ? '<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>&nbsp;Connected'
         : '<span class="relative flex h-2 w-2"><span class="relative inline-flex rounded-full h-2 w-2 bg-red-400"></span></span>&nbsp;Disconnected';
-
       document.getElementById('statusBody').innerHTML = `
-        <div class="grid grid-cols-3 gap-3 text-xs">
+        <div class="grid grid-cols-4 gap-3 text-xs">
           <div><span class="font-semibold text-stone-600">Connected:</span>
             <span class="${ok ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}">${ok ? 'Yes' : 'No'}</span></div>
           <div><span class="font-semibold text-stone-600">Pending modbus:</span>
             ${d.has_pending_modbus ? '<span class="text-orange-500 font-bold">Queued</span>' : 'None'}</div>
           <div><span class="font-semibold text-stone-600">Pending loadcell:</span>
             ${d.has_pending_loadcell ? '<span class="text-orange-500 font-bold">Queued</span>' : 'None'}</div>
+          <div><span class="font-semibold text-stone-600">Load raw:</span>
+            <span class="font-mono">${d.load_raw !== null && d.load_raw !== undefined ? d.load_raw : '—'}</span></div>
         </div>`;
-
       const svcs = d.services || [];
       document.getElementById('servicesList').innerHTML = svcs.length
         ? '<div class="text-xs font-semibold text-stone-400 mb-1.5">Connected services:</div>' +
@@ -232,44 +391,78 @@
     }
   }
 
-  // ── Service targets ────────────────────────────────────────────────────
+  // ── Targets + dynamic tabs ─────────────────────────────────────────────
   let targetsData = [];
+  let activeTab   = null;
 
   async function loadTargets() {
     try {
       const d = await fetch('/api/admin/pipeline-targets').then(r => r.json());
       targetsData = d.targets || [];
 
-      // Auto-send compact toggles
-      document.getElementById('autoSendToggles').innerHTML = targetsData.map(t => `
-        <label class="flex items-center gap-2 cursor-pointer select-none">
+      // Build a lookup map from DB rows
+      const byType = {};
+      targetsData.forEach(t => { byType[t.config_type] = t; });
+
+      // Auto-send toggles — show all known types
+      document.getElementById('autoSendToggles').innerHTML = ALL_TYPES.map(ct => {
+        const t = byType[ct] || {};
+        return `<label class="flex items-center gap-2 cursor-pointer select-none">
           <span class="toggle">
-            <input type="checkbox" id="auto-en-${t.config_type}" ${t.enabled ? 'checked' : ''}
-              onchange="saveTargetEnabled('${t.config_type}', this.checked)"/>
+            <input type="checkbox" id="auto-en-${ct}" ${t.enabled ? 'checked' : ''}
+              onchange="saveTargetEnabled('${ct}', this.checked)"/>
             <span class="toggle-slider"></span>
           </span>
-          <span class="text-xs font-bold text-stone-600 capitalize">${t.config_type}</span>
+          <span class="text-xs font-bold text-stone-600">${tabLabel(ct)}</span>
           <span class="text-xs text-stone-300 font-mono">${t.service_name || '—'}</span>
-        </label>`).join('');
+        </label>`;
+      }).join('');
 
-      // Full form
-      document.getElementById('targetsForm').innerHTML = targetsData.map(t => `
-        <div class="flex items-center gap-4">
-          <label class="flex items-center gap-2 w-40 cursor-pointer select-none flex-shrink-0">
+      // Service names form — all known types
+      document.getElementById('targetsForm').innerHTML = ALL_TYPES.map(ct => {
+        const t = byType[ct] || {};
+        return `<div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 w-44 cursor-pointer select-none flex-shrink-0">
             <span class="toggle">
-              <input type="checkbox" id="tgt-en-${t.config_type}" ${t.enabled ? 'checked' : ''}
-                onchange="syncAutoToggle('${t.config_type}', this.checked)"/>
+              <input type="checkbox" id="tgt-en-${ct}" ${t.enabled ? 'checked' : ''}
+                onchange="syncAutoToggle('${ct}', this.checked)"/>
               <span class="toggle-slider"></span>
             </span>
-            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">${t.config_type}</span>
+            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">${tabLabel(ct)}</span>
           </label>
-          <input class="field flex-1" id="target-${t.config_type}" type="text"
+          <input class="field flex-1" id="target-${ct}" type="text"
             value="${t.service_name || ''}" placeholder="service_name (from SERVICE_ADDED)"/>
-          <div class="text-xs text-stone-400 w-48 flex-shrink-0">${t.description || ''}</div>
-        </div>`).join('');
+          <div class="text-xs text-stone-400 w-48 flex-shrink-0">${TAB_META[ct]?.desc || ''}</div>
+        </div>`;
+      }).join('');
+
+      // Always build all 4 tabs regardless of what's in DB
+      const tabBar = document.getElementById('cfgTabBar');
+      tabBar.innerHTML = ALL_TYPES.map(ct => `
+        <button class="cfg-tab" id="tab-${ct}" onclick="switchTab('${ct}')">
+          <span class="mat" style="font-size:15px;vertical-align:middle;margin-right:4px;">${tabIcon(ct)}</span>${tabLabel(ct)}
+        </button>`).join('');
+
+      // Activate first tab or previously active
+      const toActivate = ALL_TYPES.includes(activeTab) ? activeTab : ALL_TYPES[0];
+      switchTab(toActivate);
+
     } catch (e) {
       document.getElementById('targetsForm').textContent = 'Error loading service targets.';
     }
+  }
+
+  function switchTab(type) {
+    activeTab = type;
+    document.querySelectorAll('.cfg-tab').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('tab-' + type);
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('.cfg-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById('panel-' + type);
+    if (panel) panel.classList.add('active');
+    // Lazy load
+    if (type === 'loadcell') { loadLoadcellDevices(); connectLcWs(); }
+    if (type === 'core')     loadCoreConfigs();
   }
 
   function syncAutoToggle(cfgType, val) {
@@ -293,15 +486,13 @@
 
   async function saveTargets() {
     try {
-      for (const t of targetsData) {
-        const svc = document.getElementById('target-' + t.config_type)?.value.trim() || '';
-        const en  = document.getElementById('tgt-en-' + t.config_type)?.checked ?? !!t.enabled;
+      for (const ct of ALL_TYPES) {
+        const svc = document.getElementById('target-' + ct)?.value.trim() || '';
+        const en  = document.getElementById('tgt-en-' + ct)?.checked ?? false;
         await fetch('/api/admin/pipeline-targets', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config_type: t.config_type, service_name: svc, enabled: en })
+          body: JSON.stringify({ config_type: ct, service_name: svc, enabled: en })
         });
-        t.service_name = svc;
-        t.enabled = en;
       }
       toast('Service names saved!');
       await loadTargets();
@@ -314,27 +505,23 @@
   async function doAutoSend() {
     const btn = document.getElementById('autoSendBtn');
     const res = document.getElementById('autoSendResult');
-    btn.disabled = true;
-    btn.style.opacity = '0.65';
+    btn.disabled = true; btn.style.opacity = '0.65';
     btn.classList.remove('pulse-btn');
     res.classList.remove('hidden');
     res.innerHTML = '<span class="text-stone-400">⏳ Sending all enabled targets…</span>';
-
     try {
       const d = await fetch('/api/pipeline/auto-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
-
       const results = d.results || [];
       if (!results.length) {
-        res.innerHTML = '<span style="color:#d97706;">⚠ No enabled targets. Toggle at least one service above.</span>';
+        res.innerHTML = '<span style="color:#d97706;">⚠ No enabled targets. Toggle at least one above.</span>';
       } else {
         res.innerHTML = results.map(r => {
           const icon  = r.pipeline_sent ? '✓' : (r.success ? '⏳' : '✗');
           const color = r.pipeline_sent ? '#15803d' : (r.success ? '#d97706' : '#dc2626');
-          const ver   = r.version ? ` v${r.version}` : '';
-          return `<div style="color:${color};">${icon} <strong>${r.config_type.toUpperCase()}</strong>` +
-                 ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${ver}` +
+          return `<div style="color:${color};">${icon} <strong>${tabLabel(r.config_type).toUpperCase()}</strong>` +
+                 ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v'+r.version : ''}` +
                  ` — ${r.message || ''}</div>`;
         }).join('');
         toast(d.auto_sent ? 'Auto-Send sent!' : 'Auto-Send queued (service not connected yet)');
@@ -343,34 +530,330 @@
       res.innerHTML = `<span style="color:#dc2626;">✗ Error: ${e.message}</span>`;
       toast('Auto-Send failed', false);
     } finally {
-      btn.disabled = false;
-      btn.style.opacity = '1';
+      btn.disabled = false; btn.style.opacity = '1';
       btn.classList.add('pulse-btn');
-      loadStatus();
-      loadSendLog();
+      loadStatus(); loadSendLog();
     }
   }
 
-  // ── Manual push ────────────────────────────────────────────────────────
-  async function pushConfig(type) {
-    const el = document.getElementById('pushResult');
+  // ── Generic push (modbus / iot_gateway) ───────────────────────────────
+  const PUSH_EP = {
+    modbus: '/api/pipeline/modbus-config/save',
+    iot:    '/api/pipeline/iot-gateway-config/send',
+  };
+
+  async function pushGeneric(type) {
+    const panelKey = type === 'iot' ? 'iot_gateway' : type;
+    const el = document.getElementById('pushResult-' + panelKey);
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
     el.textContent = 'Sending…';
-    const ep = {
-      modbus:   '/api/pipeline/modbus-config/save',
-      loadcell: '/api/pipeline/filters',
-      iot:      '/api/pipeline/iot-gateway-config/send'
-    };
     try {
-      const d = await fetch(ep[type], {
+      const d = await fetch(PUSH_EP[type], {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
-      const ok = d.success;
-      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' + (ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (ok ? '✓ ' : '✗ ') + (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
-      loadStatus();
-      loadSendLog();
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
+        (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
+      el.textContent = (d.success ? '✓ ' : '✗ ') +
+        (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
+      loadStatus(); loadSendLog();
+    } catch (e) {
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
+      el.textContent = '✗ Network error: ' + e.message;
+    }
+  }
+
+  // ── Loadcell — multi-device selector ──────────────────────────────────
+  let loadcellDevices = [];
+  let selectedLoadcellId = null;
+  let lcDevicesLoaded = false;
+
+  async function loadLoadcellDevices() {
+    if (lcDevicesLoaded) return;
+    const container = document.getElementById('loadcellDeviceList');
+    try {
+      const d = await fetch('/api/pipeline/loadcell-devices').then(r => r.json());
+      loadcellDevices = d.devices || [];
+      lcDevicesLoaded = true;
+      if (!loadcellDevices.length) {
+        container.innerHTML = '<p class="text-xs text-stone-300">No enabled loadcell devices found in DB.</p>';
+        return;
+      }
+      // Auto-select first
+      if (!selectedLoadcellId && loadcellDevices.length) {
+        selectedLoadcellId = loadcellDevices[0].id;
+      }
+      renderLoadcellList();
+    } catch (e) {
+      container.innerHTML = '<p class="text-xs text-red-400">Error: ' + e.message + '</p>';
+    }
+  }
+
+  function renderLoadcellList() {
+    document.getElementById('loadcellDeviceList').innerHTML = loadcellDevices.map(dev => `
+      <div class="lc-card ${dev.id === selectedLoadcellId ? 'selected' : ''}"
+        id="lc-card-${dev.id}" onclick="selectLoadcell(${dev.id})">
+        <input type="radio" name="lcDevice" value="${dev.id}"
+          ${dev.id === selectedLoadcellId ? 'checked' : ''} class="accent-orange-500 flex-shrink-0"/>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-bold text-stone-800">${dev.name}</div>
+          <div class="text-xs text-stone-400 mt-0.5">
+            Path: <span class="font-mono">${dev.device_path || '—'}</span> &nbsp;·&nbsp;
+            Capacity: ${dev.capacity_min ?? 0}–${dev.capacity_max ?? '?'} ${dev.unit || 'kg'} &nbsp;·&nbsp;
+            Tare: ${dev.tare_offset ?? '—'} &nbsp;·&nbsp;
+            Poll: ${dev.poll_ms ?? '—'} ms
+          </div>
+        </div>
+        <span class="text-[10px] font-mono text-stone-300 flex-shrink-0">id:${dev.id}</span>
+      </div>`).join('');
+  }
+
+  function selectLoadcell(id) {
+    selectedLoadcellId = id;
+    renderLoadcellList();
+  }
+
+  async function pushLoadcellConfig() {
+    if (!selectedLoadcellId) { toast('Select a loadcell device first', false); return; }
+    const el = document.getElementById('pushResult-loadcell');
+    el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
+    el.classList.remove('hidden');
+    el.textContent = 'Building & sending…';
+    try {
+      const dev = loadcellDevices.find(d => d.id === selectedLoadcellId);
+      const d = await fetch('/api/pipeline/filters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_id:      selectedLoadcellId,
+          raw_filters:    dev?.raw_filters    || [],
+          weight_filters: dev?.weight_filters || [],
+          levels:         dev?.levels         || [],
+        })
+      }).then(r => r.json());
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
+        (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
+      el.textContent = (d.success ? '✓ ' : '✗ ') +
+        (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
+      loadStatus(); loadSendLog();
+    } catch (e) {
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
+      el.textContent = '✗ Network error: ' + e.message;
+    }
+  }
+
+  // ── Loadcell WebSocket — live receive ─────────────────────────────────
+  let lcWs = null;
+  let lcStreamEntries = [];
+
+  function connectLcWs() {
+    if (lcWs && lcWs.readyState <= 1) { lcWs.close(); }
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    lcWs = new WebSocket(`${proto}://${location.host}/ws/pipeline/load_raw`);
+
+    const statusEl = document.getElementById('lcWsStatus');
+    const btn      = document.getElementById('lcWsConnectBtn');
+
+    lcWs.onopen = () => {
+      statusEl.textContent = 'WS Connected';
+      statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-600';
+      btn.innerHTML = '<span class="mat" style="font-size:15px;">stop_circle</span> Disconnect';
+      btn.onclick = () => { lcWs.close(); };
+    };
+
+    lcWs.onclose = () => {
+      statusEl.textContent = 'WS Disconnected';
+      statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400';
+      btn.innerHTML = '<span class="mat" style="font-size:15px;">sync</span> Connect Live Feed';
+      btn.onclick = connectLcWs;
+    };
+
+    lcWs.onerror = () => {
+      statusEl.textContent = 'WS Error';
+      statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-500';
+    };
+
+    lcWs.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        handleLcDatapoint(msg.datapoint, msg.value);
+        appendLcStream(msg.datapoint, msg.value);
+      } catch (_) {}
+    };
+  }
+
+  function handleLcDatapoint(dp, val) {
+    if (!dp) return;
+    // load_raw — raw ADC value
+    if (dp === 'load_raw') {
+      document.getElementById('lc-raw').textContent = val !== null && val !== undefined ? val : '—';
+      return;
+    }
+    // Mapped datapoints from ipc: e.g. "loadcell_1.weight_kg", "loadcell_1.tared", etc.
+    if (dp.endsWith('.weight_kg') || dp.endsWith('.weight')) {
+      const v = parseFloat(val);
+      document.getElementById('lc-weight').textContent = isNaN(v) ? val : v.toFixed(3);
+    } else if (dp.endsWith('.unit')) {
+      document.getElementById('lc-unit').textContent = val || '—';
+    } else if (dp.endsWith('.tared')) {
+      const el = document.getElementById('lc-tared');
+      el.textContent = 'Tare: ' + (val ? 'Yes' : 'No');
+      el.className = 'ver-badge ' + (val ? 'ver-ok' : 'ver-never');
+    } else if (dp.endsWith('.calibrated')) {
+      const el = document.getElementById('lc-calibrated');
+      el.textContent = 'Cal: ' + (val ? 'Yes' : 'No');
+      el.className = 'ver-badge ' + (val ? 'ver-ok' : 'ver-never');
+    } else if (dp.endsWith('.raw')) {
+      document.getElementById('lc-raw').textContent = val !== null ? val : '—';
+    } else if (dp.endsWith('.capacity')) {
+      // capacity value → use for level bar denominator
+      window._lcCapacity = parseFloat(val) || null;
+    }
+    // Level percentage: derive from weight / capacity if available
+    const weightEl = document.getElementById('lc-weight');
+    const wNum = parseFloat(weightEl.textContent);
+    if (!isNaN(wNum) && window._lcCapacity) {
+      const pct = Math.min(100, Math.max(0, (wNum / window._lcCapacity) * 100));
+      document.getElementById('lc-level-fill').style.width = pct.toFixed(1) + '%';
+      document.getElementById('lc-level-fill').style.background =
+        pct > 80 ? '#ef4444' : pct > 50 ? '#f97316' : '#22c55e';
+      document.getElementById('lc-level').textContent = pct.toFixed(1) + '%';
+    }
+  }
+
+  function appendLcStream(dp, val) {
+    const log = document.getElementById('lcStreamLog');
+    const ts  = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.className = 'text-stone-400';
+    const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '—');
+    line.innerHTML = `<span class="text-stone-300">${ts}</span> <span class="text-orange-400">${dp}</span> = <span class="text-stone-600">${displayVal}</span>`;
+    if (log.firstChild?.classList?.contains('text-stone-300') && log.firstChild.textContent === 'Waiting for data…') {
+      log.innerHTML = '';
+    }
+    log.insertBefore(line, log.firstChild);
+    // Keep max 60 entries
+    while (log.children.length > 60) log.removeChild(log.lastChild);
+  }
+  async function loadCoreConfigs() {
+    const container = document.getElementById('coreConfigList');
+    try {
+      const d = await fetch('/api/pipeline/core-configs').then(r => r.json());
+      const configs = d.configs || [];
+      if (!configs.length) {
+        container.innerHTML = '<p class="text-stone-300 text-xs">No configs uploaded yet.</p>';
+        return;
+      }
+      container.innerHTML = `<div class="overflow-x-auto rounded-xl border border-stone-100">
+        <table class="w-full text-xs">
+          <thead><tr style="border-bottom:1px solid #fed7aa;background:#fffaf7;">
+            <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Version</th>
+            <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Devices</th>
+            <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Service Name in Config</th>
+            <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Uploaded At</th>
+          </tr></thead>
+          <tbody>
+            ${configs.map((c, i) => `
+              <tr class="border-b border-stone-50 hover:bg-stone-50">
+                <td class="py-2 px-3">
+                  <span class="ver-badge ver-ok">v${c.version}</span>
+                  ${i === 0 ? '<span class="ver-badge ver-queue ml-1">latest</span>' : ''}
+                </td>
+                <td class="py-2 px-3 font-mono">${(c.device_names || []).join(', ') || '—'}</td>
+                <td class="py-2 px-3 text-stone-400">${c.service_name || '—'}</td>
+                <td class="py-2 px-3 text-stone-400">${c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    } catch (e) {
+      container.innerHTML = '<p class="text-red-400 text-xs">Error: ' + e.message + '</p>';
+    }
+  }
+
+  function handleCoreDrop(e) {
+    e.preventDefault();
+    document.getElementById('coreDropZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) readCoreFile(file);
+  }
+  function handleCoreFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) readCoreFile(file);
+  }
+  function readCoreFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        document.getElementById('coreJsonEditor').value = JSON.stringify(parsed, null, 2);
+        document.getElementById('coreEditorWrap').classList.remove('hidden');
+        refreshCoreDeviceNames();
+        toast('JSON loaded — ' + (file.name || 'config'));
+      } catch (err) {
+        toast('Invalid JSON: ' + err.message, false);
+      }
+    };
+    reader.readAsText(file);
+  }
+  function refreshCoreDeviceNames() {
+    try {
+      const parsed = JSON.parse(document.getElementById('coreJsonEditor').value);
+      const names = (parsed.load_cells || []).map(lc => lc.name).filter(Boolean);
+      document.getElementById('coreDeviceNames').textContent =
+        names.length ? '📍 Devices: ' + names.join(', ') : '';
+    } catch (_) {
+      document.getElementById('coreDeviceNames').textContent = '';
+    }
+  }
+
+  async function uploadCoreConfig() {
+    const editorVal = document.getElementById('coreJsonEditor').value.trim();
+    if (!editorVal) { toast('Load a JSON file first', false); return; }
+    let payload;
+    try { payload = JSON.parse(editorVal); }
+    catch (e) { toast('JSON parse error: ' + e.message, false); return; }
+    const el = document.getElementById('pushResult-core');
+    el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
+    el.classList.remove('hidden');
+    el.textContent = 'Uploading & sending to pipeline…';
+    try {
+      const d = await fetch('/api/pipeline/core-config/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(r => r.json());
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
+        (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
+      if (d.success) {
+        const devs = (d.device_names || []).join(', ') || '—';
+        el.innerHTML = `✓ Saved to DB (v${d.version}) · Devices: <strong>${devs}</strong><br>
+          <span class="text-xs opacity-75">${d.pipeline_message || ''}</span>`;
+        loadCoreConfigs();
+      } else {
+        el.textContent = '✗ ' + (d.error || 'Upload failed');
+      }
+      loadStatus(); loadSendLog();
+    } catch (e) {
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
+      el.textContent = '✗ Network error: ' + e.message;
+    }
+  }
+
+  async function resendCoreConfig() {
+    const el = document.getElementById('pushResult-core');
+    el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
+    el.classList.remove('hidden');
+    el.textContent = 'Resending latest config…';
+    try {
+      const d = await fetch('/api/pipeline/core-config/resend', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+      }).then(r => r.json());
+      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
+        (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
+      el.textContent = (d.success ? '✓ ' : '✗ ') +
+        (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
+      loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
       el.textContent = '✗ Network error: ' + e.message;
@@ -388,21 +871,25 @@
         return;
       }
       tbody.innerHTML = logs.map(l => {
-        const sc  = l.last_status === 'success' ? 'ver-ok' : l.last_status === 'never' ? 'ver-never' : l.last_status === 'failed' ? 'ver-fail' : 'ver-queue';
-        const ver = l.last_version > 0 ? `<span class="ver-badge ver-ok">v${l.last_version}</span>` : '<span class="ver-badge ver-never">—</span>';
+        const sc  = l.last_status === 'success' ? 'ver-ok' : l.last_status === 'never' ? 'ver-never' :
+                    l.last_status === 'failed'  ? 'ver-fail' : 'ver-queue';
+        const ver = l.last_version > 0
+          ? `<span class="ver-badge ver-ok">v${l.last_version}</span>`
+          : '<span class="ver-badge ver-never">—</span>';
         const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : '—';
-        const msg = (l.last_message || '').slice(0, 65) + ((l.last_message || '').length > 65 ? '…' : '');
+        const msg = (l.last_message || '').slice(0, 65) + ((l.last_message||'').length > 65 ? '…' : '');
         return `<tr class="border-b border-stone-50 hover:bg-stone-50">
-          <td class="py-2.5 pr-5 font-bold text-stone-700 capitalize">${l.config_type}</td>
+          <td class="py-2.5 pr-5 font-bold text-stone-700">${tabLabel(l.config_type)}</td>
           <td class="py-2.5 pr-5">${ver}</td>
           <td class="py-2.5 pr-5"><span class="ver-badge ${sc}">${l.last_status}</span></td>
           <td class="py-2.5 pr-5 font-mono text-stone-500">${l.last_service || '—'}</td>
           <td class="py-2.5 pr-5 text-stone-400 whitespace-nowrap">${ts}</td>
-          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message || '').replace(/"/g, '&quot;')}">${msg || '—'}</td>
+          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message||'').replace(/"/g,'&quot;')}">${msg||'—'}</td>
         </tr>`;
       }).join('');
     } catch (e) {
-      document.getElementById('sendLogRows').innerHTML = '<tr><td colspan="6" class="py-4 text-center text-red-400">Error loading log</td></tr>';
+      document.getElementById('sendLogRows').innerHTML =
+        '<tr><td colspan="6" class="py-4 text-center text-red-400">Error loading log</td></tr>';
     }
   }
 

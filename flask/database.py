@@ -108,7 +108,7 @@ def create_tables(cursor):
     # Device groups
     # -----------------------------------------------------------------------
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS device_groups (
+        CREATE TABLE IF NOT EXISTS tag_groups (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             name        TEXT    NOT NULL UNIQUE,
             color       TEXT    DEFAULT 'blue',
@@ -226,7 +226,7 @@ def create_tables(cursor):
             updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, slave_id, name),
             FOREIGN KEY (device_id) REFERENCES modbus_device(id) ON DELETE CASCADE,
-            FOREIGN KEY (group_id) REFERENCES device_groups(id) ON DELETE SET NULL
+            FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE SET NULL
         )
     ''')
 
@@ -276,20 +276,7 @@ def create_tables(cursor):
         )
     ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS ftp_datapoints (
-            id                INTEGER PRIMARY KEY AUTOINCREMENT,
-            connection_id     TEXT    NOT NULL,
-            tag_name          TEXT    NOT NULL,
-            column_name       TEXT    NOT NULL DEFAULT '',
-            include_unit      INTEGER DEFAULT 1,
-            include_timestamp INTEGER DEFAULT 1,
-            enabled           INTEGER DEFAULT 1,
-            created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(connection_id, tag_name),
-            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
-        )
-    ''')
+
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connection_stats (
@@ -852,11 +839,11 @@ def update_general_configuration(config_data):
 # Device groups
 # ---------------------------------------------------------------------------
 
-def get_all_device_groups():
+def get_all_tag_groups():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT id, name, color, description, created_at FROM device_groups ORDER BY name')
+        cursor.execute('SELECT id, name, color, description, created_at FROM tag_groups ORDER BY name')
         rows = cursor.fetchall()
         conn.close()
         return [{'id': r[0], 'name': r[1], 'color': r[2], 'description': r[3], 'created_at': r[4]} for r in rows]
@@ -865,11 +852,11 @@ def get_all_device_groups():
         return []
 
 
-def add_device_group(name, color='blue', description=''):
+def add_tag_group(name, color='blue', description=''):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO device_groups (name, color, description) VALUES (?, ?, ?)', (name, color, description))
+        cursor.execute('INSERT INTO tag_groups (name, color, description) VALUES (?, ?, ?)', (name, color, description))
         gid = cursor.lastrowid
         conn.commit()
         conn.close()
@@ -879,12 +866,12 @@ def add_device_group(name, color='blue', description=''):
         return None
 
 
-def delete_device_group(group_id):
+def delete_tag_group(group_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('UPDATE modbus_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
-        cursor.execute('DELETE FROM device_groups WHERE id = ?', (group_id,))
+        cursor.execute('DELETE FROM tag_groups WHERE id = ?', (group_id,))
         conn.commit()
         conn.close()
         return True
@@ -937,7 +924,7 @@ def get_database_stats():
             ('loadcell_devices',    'loadcell_device'),
             ('modbus_datapoints',   'modbus_datapoints'),
             ('loadcell_datapoints', 'loadcell_datapoints'),
-            ('groups',              'device_groups'),
+            ('groups',              'tag_groups'),
             ('admin_users',         'admin_users'),
             ('webui_users',         'webui_users'),
         ]:

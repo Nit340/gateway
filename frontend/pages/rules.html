@@ -6,16 +6,8 @@
             <h1 class="text-2xl font-bold text-slate-900">Rules Engine</h1>
             <p class="text-slate-500 text-sm mt-1">Define conditions that trigger alerts when met.</p>
         </div>
-        <div class="flex gap-3">
-            <button class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.createGroupRule()">
-                <i class="fa-solid fa-layer-group"></i>
-                Group Rule
-            </button>
-            <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.createEmergencyRule()">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                Emergency Rule
-            </button>
-        </div>
+        <!-- Empty div to maintain spacing -->
+        <div></div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -55,10 +47,10 @@
 
         <!-- Right Column: Rule Editor Wizard -->
         <div id="rule-editor-section" class="lg:col-span-8">
-            <section class="bg-white rounded-xl shadow-sm border border-border h-full flex flex-col" id="rule-editor-card">
+            <section class="bg-white rounded-xl shadow-sm border border-border h-[800px] flex flex-col" id="rule-editor-card">
                 
-                <!-- Wizard Header -->
-                <div class="p-6 border-b border-border" id="rule-editor-header">
+                <!-- Wizard Header - Only show when rule is selected/creating -->
+                <div class="p-6 border-b border-border" id="rule-editor-header" style="display: none;">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-xl font-bold text-slate-900" id="rule-editor-title">Create New Rule</h2>
                         <div class="flex items-center gap-3">
@@ -69,50 +61,50 @@
                             </label>
                         </div>
                     </div>
-                    
-                    <!-- Progress Steps -->
-                    <div class="flex items-center justify-between relative">
-                        <div class="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-1 bg-slate-100 -z-10"></div>
-                        
-                        <button class="flex items-center gap-2 bg-white pr-4 z-10" onclick="window.goToStep(1)">
-                            <div id="step-1-indicator" class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold shadow-sm ring-4 ring-white">1</div>
-                            <span class="text-sm font-semibold text-slate-900">Trigger</span>
-                        </button>
-                        
-                        <button class="flex items-center gap-2 bg-white px-4 z-10" onclick="window.goToStep(2)">
-                            <div id="step-2-indicator" class="w-8 h-8 rounded-full bg-white border-2 border-border text-slate-500 flex items-center justify-center text-sm font-semibold shadow-sm ring-4 ring-white">2</div>
-                            <span class="text-sm font-medium text-slate-500">Conditions</span>
-                        </button>
-                        
-                        <button class="flex items-center gap-2 bg-white pl-4 z-10" onclick="window.goToStep(3)">
-                            <div id="step-3-indicator" class="w-8 h-8 rounded-full bg-white border-2 border-border text-slate-500 flex items-center justify-center text-sm font-semibold shadow-sm ring-4 ring-white">3</div>
-                            <span class="text-sm font-medium text-slate-500">Alerts</span>
-                        </button>
-                    </div>
                 </div>
 
                 <!-- Wizard Content -->
                 <div class="flex-1 overflow-y-auto p-6" id="wizard-content-container">
-                    <div id="wizard-content" class="space-y-6">
-                        <!-- Content will be loaded dynamically -->
+                    <!-- Empty State - Shown when no rule is selected -->
+                    <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center">
+                        <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-ruler-combined text-3xl text-slate-400"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-slate-800 mb-2">No Rule Selected</h3>
+                        <p class="text-sm text-slate-500 max-w-sm mb-6">Choose a rule from the list or create a new one to get started</p>
+                        
+                        <!-- Buttons in center right area of empty state -->
+                        <div class="flex gap-3">
+                            <button class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.createGroupRule()">
+                                <i class="fa-solid fa-layer-group"></i>
+                                Group Rule
+                            </button>
+                            <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.createEmergencyRule()">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                Emergency Rule
+                            </button>
+                        </div>
                     </div>
+                    
+                    <!-- Dynamic Content -->
+                    <div id="wizard-content" class="space-y-6" style="display: none;"></div>
                 </div>
 
-                <!-- Wizard Footer -->
+                <!-- Wizard Footer - ALWAYS VISIBLE - Triggers JSON pipeline -->
                 <div class="p-6 border-t border-border bg-slate-50 rounded-b-xl" id="wizard-footer">
                     <div class="flex justify-between items-center">
                         <div class="text-sm text-slate-500">
-                            <span class="font-medium text-slate-700">Rule ID:</span> 
-                            <span id="rule-id-display" class="font-mono bg-white px-2 py-1 rounded border border-slate-200">RULE-NEW</span>
+                            <span class="font-medium text-slate-700">Pipeline Status:</span> 
+                            <span id="pipeline-status" class="font-mono bg-white px-2 py-1 rounded border border-slate-200">Ready</span>
                         </div>
                         <div class="flex gap-3">
-                            <button type="button" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors" onclick="window.testRule()">
-                                <i class="fa-solid fa-flask mr-2"></i> Test Rule
-                            </button>
-                            <button type="button" class="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg transition-colors shadow-sm" onclick="window.saveRule()">
-                                <i class="fa-solid fa-floppy-disk mr-2"></i> Save Rule
+                            <button type="button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm" onclick="window.triggerJsonPipeline()" id="pipeline-trigger-button">
+                                <i class="fa-solid fa-gears mr-2"></i> Trigger JSON Pipeline
                             </button>
                         </div>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-400 text-right">
+                        This button triggers the JSON configuration pipeline for all rules
                     </div>
                 </div>
             </section>
@@ -234,5 +226,131 @@
     .overflow-y-auto::-webkit-scrollbar-thumb {
         background: #94a3b8;
         border-radius: 10px;
+    }
+
+    /* Group section styles - FIXED */
+    .group-section {
+        transition: all 0.2s ease;
+        border-width: 1px;
+        margin-bottom: 1rem;
+    }
+    
+    /* Make add buttons always visible */
+    .group-section .add-tag-btn {
+        opacity: 1 !important;
+        transition: all 0.2s ease;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .group-section .add-tag-btn:hover {
+        opacity: 1 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    /* Ensure the add section is always visible */
+    .group-section .flex.gap-2.mb-3 {
+        display: flex !important;
+        visibility: visible !important;
+        margin-bottom: 0.75rem;
+    }
+    
+    /* Style for select dropdowns */
+    .group-section select {
+        background-color: white !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #1e293b !important;
+        padding: 0.5rem 0.75rem !important;
+        border-radius: 0.5rem !important;
+    }
+    
+    .group-section select:focus {
+        outline: none;
+        ring: 2px solid #3b82f6;
+        border-color: #3b82f6;
+    }
+    
+    /* Group-specific button colors - ensure visibility */
+    .group-section .bg-purple-600 {
+        background-color: #9333ea !important;
+    }
+    
+    .group-section .bg-cyan-600 {
+        background-color: #0891b2 !important;
+    }
+    
+    .group-section .bg-emerald-600 {
+        background-color: #059669 !important;
+    }
+    
+    .group-section .bg-purple-600:hover {
+        background-color: #7e22ce !important;
+    }
+    
+    .group-section .bg-cyan-600:hover {
+        background-color: #0e7490 !important;
+    }
+    
+    .group-section .bg-emerald-600:hover {
+        background-color: #047857 !important;
+    }
+    
+    /* Tag list item styles */
+    .tag-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: white;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .tag-item:hover {
+        border-color: #94a3b8;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .tag-item .tag-name {
+        font-family: monospace;
+        font-size: 0.875rem;
+        color: #334155;
+    }
+    
+    .tag-item .remove-tag {
+        color: #94a3b8;
+        transition: color 0.2s ease;
+    }
+    
+    .tag-item .remove-tag:hover {
+        color: #ef4444;
+    }
+
+    /* Emergency rule styles */
+    .border-red-200 .flex.gap-2 {
+        display: flex !important;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .border-red-200 .bg-red-600 {
+        background-color: #dc2626 !important;
+    }
+
+    .border-red-200 .bg-red-600:hover {
+        background-color: #b91c1c !important;
+    }
+
+    /* Save button styles */
+    .save-rule-btn {
+        transition: all 0.2s ease;
+    }
+    
+    .save-rule-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
 </style>

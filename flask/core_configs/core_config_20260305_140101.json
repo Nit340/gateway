@@ -12,25 +12,25 @@
       "service_name": "modbus_service",
       "groups": [
         {
-          "datapoint": "hoist_group",
-          "name": "hoist_group",
-          "members": [
+          "datapoint": "hoist",
+          "name": "hoist",
+          "datapoints": [
             "Hoist_current",
             "Hoist_power"
           ]
         },
         {
-          "datapoint": "ct_group",
-          "name": "ct_group",
-          "members": [
+          "datapoint": "ct",
+          "name": "ct",
+          "datapoints": [
             "Hoist_voltage",
             "Hoist_current"
           ]
         },
         {
-          "datapoint": "lt_group",
-          "name": "lt_group",
-          "members": [
+          "datapoint": "lt",
+          "name": "lt",
+          "datapoints": [
             "Hoist_current",
             "Hoist_power"
           ]
@@ -39,12 +39,8 @@
     },
     "loadcell": {
       "service_name": "load_cell_service",
-      "datapoint_name": "LOADCELL",
-      "unit_datapoint_name": "load_unit"
-    },
-    "emergency_output": {
-      "service_name": "gpio_service",
-      "datapoint_name": "Hoist_power"
+      "datapoint_name": "load",
+      "unit_datapoint_name": "capacity"
     }
   },
   "logging": {

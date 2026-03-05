@@ -7,6 +7,7 @@ if (typeof window.rulesLoaded === 'undefined') {
     let rules          = [];
     let availableTags  = [];   // flat list of all modbus tag names
     let selectedRuleId = null;
+    let currentRelayTag = '';  // Store the current relay tag
 
     let currentGroupData = {
         hoist: { enabled: true, datapoints: [] },
@@ -29,6 +30,23 @@ if (typeof window.rulesLoaded === 'undefined') {
 
     function genId(prefix) {
         return prefix + '_' + Date.now();
+    }
+
+    // ========== UI CONTROLS ==========
+    function showEditor(show) {
+        var header = document.getElementById('rule-editor-header');
+        var wizardContent = document.getElementById('wizard-content');
+        var emptyState = document.getElementById('empty-state');
+        
+        if (show) {
+            if (header) header.style.display = 'block';
+            if (wizardContent) wizardContent.style.display = 'block';
+            if (emptyState) emptyState.style.display = 'none';
+        } else {
+            if (header) header.style.display = 'none';
+            if (wizardContent) wizardContent.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'flex';
+        }
     }
 
     // ========== NOTIFICATIONS ==========
@@ -84,7 +102,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                         description:    r.description,
                         enabled:        !!r.enabled,
                         groups:         r.groups || {},
-                        relayDatapoint: r.relay_datapoint || 'relay2',
+                        relayDatapoint: r.relay_datapoint || '',
                         triggerCount:   r.trigger_count || 0,
                         lastTriggered:  r.last_triggered || null
                     };
@@ -112,7 +130,8 @@ if (typeof window.rulesLoaded === 'undefined') {
         if (!rules.length) {
             container.innerHTML = '<div class="text-center py-12 text-slate-400">' +
                 '<i class="fa-solid fa-inbox text-3xl mb-3 block"></i>' +
-                '<p class="text-sm">No rules yet.</p></div>';
+                '<p class="text-sm">No rules yet.</p>' +
+                '<p class="text-xs mt-2">Click the buttons above to create your first rule</p></div>';
             updateStatistics();
             return;
         }
@@ -152,11 +171,11 @@ if (typeof window.rulesLoaded === 'undefined') {
         if (!datapoints || !datapoints.length)
             return '<div class="text-xs text-slate-400 italic px-1">No tags added yet</div>';
         return datapoints.map(function(tag, i) {
-            return '<div class="flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-slate-200">' +
-                '<span class="text-sm font-mono text-slate-700">' + tag + '</span>' +
-                '<button type="button" class="text-red-400 hover:text-red-600 ml-2" ' +
+            return '<div class="tag-item">' +
+                '<span class="tag-name"><i class="fa-solid fa-tag text-xs text-slate-400 mr-2"></i>' + tag + '</span>' +
+                '<button type="button" class="remove-tag" ' +
                   'onclick="window.removeDatapoint(\'' + alias + '\',' + i + ')">' +
-                  '<i class="fa-solid fa-xmark text-xs"></i>' +
+                  '<i class="fa-solid fa-xmark"></i>' +
                 '</button>' +
               '</div>';
         }).join('');
@@ -172,7 +191,17 @@ if (typeof window.rulesLoaded === 'undefined') {
             }[alias];
             var gdata = currentGroupData[alias];
 
-            return '<div class="border ' + colors.border + ' rounded-xl p-4 ' + colors.bg + '">' +
+            // Show add button and selector for ALL groups (hoist, ct, lt) with inline styles to ensure visibility
+            var addSection = '<div class="flex gap-2 mb-3" style="display: flex !important; visibility: visible !important;">' +
+                  '<select id="' + alias + '-select" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" style="background-color: white; color: #1e293b; border: 1px solid #cbd5e1;">' +
+                    buildTagOptions() +
+                  '</select>' +
+                  '<button type="button" class="add-tag-btn px-3 py-2 text-white rounded-lg text-sm transition-colors shadow-sm" style="opacity: 1; background-color: ' + 
+                    (alias === 'hoist' ? '#9333ea' : alias === 'ct' ? '#0891b2' : '#059669') + ';" onclick="window.addDatapoint(\'' + alias + '\')">' +
+                    '<i class="fa-solid fa-plus mr-1"></i> Add Tag</button>' +
+                  '</div>';
+
+            return '<div class="group-section border ' + colors.border + ' rounded-xl p-4 ' + colors.bg + '" style="margin-bottom: 1rem;">' +
                 '<div class="flex items-center justify-between mb-3">' +
                   '<div class="flex items-center gap-2">' +
                     '<div class="w-6 h-6 ' + colors.iconBg + ' rounded-full flex items-center justify-center">' +
@@ -186,15 +215,11 @@ if (typeof window.rulesLoaded === 'undefined') {
                     '<span class="toggle-slider"></span>' +
                   '</label>' +
                 '</div>' +
-                '<div class="flex gap-2 mb-3">' +
-                  '<select id="' + alias + '-select" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">' +
-                    buildTagOptions() +
-                  '</select>' +
-                  '<button type="button" class="px-3 py-2 ' + colors.btn + ' text-white rounded-lg text-sm transition-colors" ' +
-                    'onclick="window.addDatapoint(\'' + alias + '\')">' +
-                    '<i class="fa-solid fa-plus"></i>' +
-                  '</button>' +
-                '</div>' +
+                
+                // Add section for ALL groups
+                addSection +
+                
+                // Datapoints list
                 '<div id="' + alias + '-datapoints-list" class="space-y-1.5">' +
                   renderDatapointsList(gdata.datapoints, alias) +
                 '</div>' +
@@ -213,11 +238,11 @@ if (typeof window.rulesLoaded === 'undefined') {
         return '<div class="space-y-5">' +
             '<div><label class="block text-sm font-medium text-slate-700 mb-1.5">Rule Name <span class="text-red-500">*</span></label>' +
             '<input type="text" id="rule-name-input" value="' + (rule ? rule.name : '') + '" ' +
-              'placeholder="e.g., Crane Group Monitoring" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></div>' +
+              'placeholder="e.g., Crane Group Monitoring" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"></div>' +
 
             '<div><label class="block text-sm font-medium text-slate-700 mb-1.5">Description</label>' +
             '<textarea id="rule-desc-input" rows="2" placeholder="Describe what this rule does..." ' +
-              'class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">' + (rule ? rule.description : '') + '</textarea></div>' +
+              'class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary">' + (rule ? rule.description : '') + '</textarea></div>' +
 
             '<div><label class="block text-sm font-medium text-slate-700 mb-1.5">Priority</label>' +
             '<div class="grid grid-cols-4 gap-2">' + priorityBtns + '</div></div>' +
@@ -226,34 +251,39 @@ if (typeof window.rulesLoaded === 'undefined') {
             groupSection('ct',    'CT Group') +
             groupSection('lt',    'LT Group') +
 
+            // Individual Save button for Group Rule
             '<div class="flex items-center justify-between pt-3 border-t border-slate-100">' +
               '<button type="button" class="text-sm text-slate-500 hover:text-slate-700" onclick="window.clearRuleEditor()">' +
-                '<i class="fa-solid fa-arrow-left mr-1"></i> Back</button>' +
-              '<button type="button" class="px-5 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primaryHover transition-colors shadow-sm flex items-center gap-2" onclick="window.saveRule()">' +
-                '<i class="fa-solid fa-floppy-disk"></i> Save Rule</button>' +
+                '<i class="fa-solid fa-arrow-left mr-1"></i> Back to list</button>' +
+              '<button type="button" class="save-rule-btn px-5 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.saveGroupRule()">' +
+                '<i class="fa-solid fa-floppy-disk"></i> Save Group Rule</button>' +
             '</div>' +
           '</div>';
     }
 
     // ========== EMERGENCY RULE EDITOR ==========
-    // Emergency rule = relay tag dropdown only. No HOIST section.
     function renderEmergencyRuleEditor(rule) {
-        var relayVal = (rule && rule.relayDatapoint) ? rule.relayDatapoint : '';
+        var relayVal = (rule && rule.relayDatapoint) ? rule.relayDatapoint : currentRelayTag;
+        
+        // Update currentRelayTag if rule has a value
+        if (rule && rule.relayDatapoint) {
+            currentRelayTag = rule.relayDatapoint;
+        }
 
         return '<div class="space-y-5">' +
             '<div><label class="block text-sm font-medium text-slate-700 mb-1.5">Rule Name <span class="text-red-500">*</span></label>' +
             '<input type="text" id="rule-name-input" value="' + (rule ? rule.name : '') + '" ' +
-              'placeholder="e.g., Overload Emergency Stop" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"></div>' +
+              'placeholder="e.g., Overload Emergency Stop" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary"></div>' +
 
             '<div><label class="block text-sm font-medium text-slate-700 mb-1.5">Description</label>' +
             '<textarea id="rule-desc-input" rows="2" placeholder="Describe what this emergency rule does..." ' +
-              'class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">' + (rule ? rule.description : '') + '</textarea>' +
+              'class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary">' + (rule ? rule.description : '') + '</textarea>' +
             '<p class="text-xs text-amber-600 mt-1 flex items-center gap-1">' +
               '<i class="fa-solid fa-triangle-exclamation"></i> Emergency rules trigger an immediate hardware relay output</p></div>' +
 
             '<div><label class="block text-sm font-medium text-slate-700 mb-1.5">Priority</label>' +
             '<div class="grid grid-cols-4 gap-2">' +
-              '<button type="button" class="py-2 px-3 rounded-lg border text-xs font-semibold bg-primary border-primary text-white">Critical</button>' +
+              '<button type="button" class="py-2 px-3 rounded-lg border text-xs font-semibold bg-red-600 border-red-600 text-white">Critical</button>' +
               '<button type="button" disabled class="py-2 px-3 rounded-lg border text-xs font-semibold border-slate-200 text-slate-400 bg-slate-50">High</button>' +
               '<button type="button" disabled class="py-2 px-3 rounded-lg border text-xs font-semibold border-slate-200 text-slate-400 bg-slate-50">Medium</button>' +
               '<button type="button" disabled class="py-2 px-3 rounded-lg border text-xs font-semibold border-slate-200 text-slate-400 bg-slate-50">Low</button>' +
@@ -266,18 +296,33 @@ if (typeof window.rulesLoaded === 'undefined') {
                   '<i class="fa-solid fa-bolt text-red-600 text-xs"></i></div>' +
                 '<span class="font-semibold text-sm text-red-800">Emergency Output Relay</span>' +
               '</div>' +
-              '<label class="block text-xs font-medium text-slate-600 mb-1.5">Relay Tag</label>' +
-              '<select id="relay-tag-input" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">' +
-                buildTagOptions(relayVal) +
-              '</select>' +
+              
+              <!-- Add button for Relay Tag -->
+              '<div class="flex gap-2" style="display: flex !important; gap: 0.5rem; margin-bottom: 0.75rem;">' +
+                '<select id="relay-tag-input" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500" style="background-color: white; color: #1e293b;">' +
+                  buildTagOptions(relayVal) +
+                '</select>' +
+                '<button type="button" class="px-3 py-2 bg-red-600 text-white rounded-lg text-sm transition-colors shadow-sm hover:bg-red-700" style="background-color: #dc2626;" onclick="window.addRelayTag()">' +
+                  '<i class="fa-solid fa-plus mr-1"></i> Add' +
+                '</button>' +
+              '</div>' +
+              
+              <!-- Display selected relay tag -->
+              '<div id="relay-tag-display" class="mt-3">' +
+                (relayVal ? '<div class="tag-item"><span class="tag-name"><i class="fa-solid fa-tag text-xs text-slate-400 mr-2"></i>' + relayVal + '</span>' +
+                '<button type="button" class="remove-tag" onclick="window.removeRelayTag()">' +
+                  '<i class="fa-solid fa-xmark"></i></button></div>' : '<div class="text-xs text-slate-400 italic px-1">No relay tag selected</div>') +
+              '</div>' +
+              
               '<p class="text-xs text-slate-500 mt-1.5">Tag sent to <span class="font-mono">gpio_service</span> when this rule triggers</p>' +
             '</div>' +
 
+            // Individual Save button for Emergency Rule
             '<div class="flex items-center justify-between pt-3 border-t border-slate-100">' +
               '<button type="button" class="text-sm text-slate-500 hover:text-slate-700" onclick="window.clearRuleEditor()">' +
-                '<i class="fa-solid fa-arrow-left mr-1"></i> Back</button>' +
-              '<button type="button" class="px-5 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.saveRule()">' +
-                '<i class="fa-solid fa-floppy-disk"></i> Save Rule</button>' +
+                '<i class="fa-solid fa-arrow-left mr-1"></i> Back to list</button>' +
+              '<button type="button" class="save-rule-btn px-5 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.saveEmergencyRule()">' +
+                '<i class="fa-solid fa-floppy-disk"></i> Save Emergency Rule</button>' +
             '</div>' +
           '</div>';
     }
@@ -289,24 +334,25 @@ if (typeof window.rulesLoaded === 'undefined') {
         var titleEl = document.getElementById('rule-editor-title');
         var idDisp  = document.getElementById('rule-id-display');
         var toggle  = document.getElementById('rule-status-toggle');
+        
         if (!content) return;
 
         if (!rule) {
-            if (titleEl) titleEl.textContent = 'Create New Rule';
-            if (idDisp)  idDisp.textContent  = 'RULE-NEW';
-            if (toggle)  toggle.checked      = true;
-            resetGroupData();
-            content.innerHTML = '<div class="text-center py-16 text-slate-400">' +
-                '<i class="fa-solid fa-diagram-project text-4xl mb-4 block"></i>' +
-                '<p class="text-sm">Use the buttons above to create a Group Rule or Emergency Rule.</p></div>';
+            showEditor(false);
             return;
         }
+
+        showEditor(true);
 
         if (titleEl) titleEl.textContent = 'Edit Rule: ' + rule.name;
         if (idDisp)  idDisp.textContent  = rule.id.toUpperCase();
         if (toggle)  toggle.checked      = rule.enabled;
 
         resetGroupData();
+        
+        // Reset currentRelayTag
+        currentRelayTag = '';
+        
         if (rule.groups) {
             ['hoist','ct','lt'].forEach(function(alias) {
                 var gdata = rule.groups[alias] || null;
@@ -348,28 +394,50 @@ if (typeof window.rulesLoaded === 'undefined') {
     window.createGroupRule = function() {
         selectedRuleId = null;
         resetGroupData();
+        currentRelayTag = '';
         var content = document.getElementById('wizard-content');
         var titleEl = document.getElementById('rule-editor-title');
+        var idDisp  = document.getElementById('rule-id-display');
+        var toggle  = document.getElementById('rule-status-toggle');
+        
         if (titleEl) titleEl.textContent = 'Create Group Rule';
+        if (idDisp) idDisp.textContent = 'RULE-NEW';
+        if (toggle) toggle.checked = true;
+        
         var tempRule = { id: 'new', name: '', description: '', priority: 'medium', ruleType: 'group', groups: {} };
-        if (content) content.innerHTML = renderGroupRuleEditor(tempRule);
+        if (content) {
+            content.innerHTML = renderGroupRuleEditor(tempRule);
+            showEditor(true);
+        }
     };
 
     window.createEmergencyRule = function() {
         selectedRuleId = null;
         resetGroupData();
+        currentRelayTag = '';
         var content = document.getElementById('wizard-content');
         var titleEl = document.getElementById('rule-editor-title');
+        var idDisp  = document.getElementById('rule-id-display');
+        var toggle  = document.getElementById('rule-status-toggle');
+        
         if (titleEl) titleEl.textContent = 'Create Emergency Rule';
-        var tempRule = { id: 'new', name: '', description: '', priority: 'critical', ruleType: 'emergency', relayDatapoint: 'relay2' };
-        if (content) content.innerHTML = renderEmergencyRuleEditor(tempRule);
+        if (idDisp) idDisp.textContent = 'RULE-NEW';
+        if (toggle) toggle.checked = true;
+        
+        var tempRule = { id: 'new', name: '', description: '', priority: 'critical', ruleType: 'emergency', relayDatapoint: '' };
+        if (content) {
+            content.innerHTML = renderEmergencyRuleEditor(tempRule);
+            showEditor(true);
+        }
     };
 
     window.clearRuleEditor = function() {
         selectedRuleId = null;
         resetGroupData();
+        currentRelayTag = '';
         renderRulesList();
         renderRuleEditor(null);
+        showEditor(false);
     };
 
     window.toggleGroup = function(alias, enabled) {
@@ -385,14 +453,51 @@ if (typeof window.rulesLoaded === 'undefined') {
         var list = document.getElementById(alias + '-datapoints-list');
         if (list) list.innerHTML = renderDatapointsList(currentGroupData[alias].datapoints, alias);
         select.value = '';
-        showNotification('Tag added', 'success');
+        showNotification('Tag added to ' + alias.toUpperCase(), 'success');
     };
 
     window.removeDatapoint = function(alias, index) {
         currentGroupData[alias].datapoints.splice(index, 1);
         var list = document.getElementById(alias + '-datapoints-list');
         if (list) list.innerHTML = renderDatapointsList(currentGroupData[alias].datapoints, alias);
-        showNotification('Tag removed', 'info');
+        showNotification('Tag removed from ' + alias.toUpperCase(), 'info');
+    };
+
+    // Function for adding relay tag in emergency rule
+    window.addRelayTag = function() {
+        var select = document.getElementById('relay-tag-input');
+        if (!select || !select.value) { 
+            showNotification('Select a relay tag first', 'warning'); 
+            return; 
+        }
+        var tag = select.value;
+        
+        // Store the relay tag
+        currentRelayTag = tag;
+        
+        // Update the relay tag in the display
+        var display = document.getElementById('relay-tag-display');
+        if (display) {
+            display.innerHTML = '<div class="tag-item"><span class="tag-name"><i class="fa-solid fa-tag text-xs text-slate-400 mr-2"></i>' + tag + '</span>' +
+                '<button type="button" class="remove-tag" onclick="window.removeRelayTag()">' +
+                '<i class="fa-solid fa-xmark"></i></button></div>';
+        }
+        
+        showNotification('Relay tag selected: ' + tag, 'success');
+    };
+
+    // Function for removing relay tag
+    window.removeRelayTag = function() {
+        currentRelayTag = '';
+        var display = document.getElementById('relay-tag-display');
+        if (display) {
+            display.innerHTML = '<div class="text-xs text-slate-400 italic px-1">No relay tag selected</div>';
+        }
+        var select = document.getElementById('relay-tag-input');
+        if (select) {
+            select.value = '';
+        }
+        showNotification('Relay tag removed', 'info');
     };
 
     window.setPriority = function(ruleId, priority) {
@@ -409,90 +514,208 @@ if (typeof window.rulesLoaded === 'undefined') {
         if (rule) rule.priority = priority;
     };
 
-    window.saveRule = async function() {
-        var nameEl   = document.getElementById('rule-name-input');
-        var descEl   = document.getElementById('rule-desc-input');
+    // ========== INDIVIDUAL RULE SAVE FUNCTIONS ==========
+    
+    // Save Group Rule
+    window.saveGroupRule = async function() {
+        console.log('[Rules] Saving Group Rule');
+        
+        var nameEl = document.getElementById('rule-name-input');
+        var descEl = document.getElementById('rule-desc-input');
         var toggleEl = document.getElementById('rule-status-toggle');
 
-        if (!nameEl || !nameEl.value.trim()) { showNotification('Rule name is required', 'warning'); return; }
-
-        var isEmergency = !!document.getElementById('relay-tag-input');
-        var isGroup     = !isEmergency && !!document.getElementById('hoist-select');
-
-        if (!isEmergency && !isGroup) { showNotification('Please create a rule first', 'warning'); return; }
-
-        var ruleId = selectedRuleId && selectedRuleId !== 'new' ? selectedRuleId : genId(isEmergency ? 'emergency' : 'group');
-
-        var ruleData = {
-            id:          ruleId,
-            name:        nameEl.value.trim(),
-            description: descEl ? descEl.value.trim() : '',
-            enabled:     toggleEl ? toggleEl.checked : true,
-            ruleType:    isEmergency ? 'emergency' : 'group',
-            priority:    isEmergency ? 'critical' : 'medium'
-        };
-
-        if (isEmergency) {
-            var relayEl = document.getElementById('relay-tag-input');
-            ruleData.relayDatapoint = relayEl ? relayEl.value : '';
-            ruleData.groups = {};
-
-        } else {
-            // Sync toggle states from DOM
-            ['hoist','ct','lt'].forEach(function(alias) {
-                var chk = document.getElementById(alias + '-enabled');
-                if (chk) currentGroupData[alias].enabled = chk.checked;
-            });
-
-            var hasData = ['hoist','ct','lt'].some(function(alias) {
-                return currentGroupData[alias].enabled && currentGroupData[alias].datapoints.length > 0;
-            });
-            if (!hasData) { showNotification('At least one group must have tags added', 'warning'); return; }
-
-            // Grab current priority from active button
-            ['critical','high','medium','low'].forEach(function(p) {
-                var btn = document.getElementById('prio-' + p);
-                if (btn && btn.classList.contains('bg-primary')) ruleData.priority = p;
-            });
-
-            // Build groups keyed by alias (hoist / ct / lt)
-            ruleData.groups = {};
-            ['hoist','ct','lt'].forEach(function(alias) {
-                ruleData.groups[alias] = {
-                    enabled:    currentGroupData[alias].enabled,
-                    datapoints: currentGroupData[alias].datapoints.slice()
-                };
-            });
+        if (!nameEl || !nameEl.value.trim()) { 
+            showNotification('Rule name is required', 'warning'); 
+            return; 
         }
 
-        // Save to DB via API
-        try {
-            var res  = await fetch('/api/rules/save', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ rule: ruleData })
-            });
-            var data = await res.json();
-            if (!data.success) { showNotification('Save failed: ' + (data.error || 'unknown'), 'error'); return; }
-        } catch(e) {
-            showNotification('Could not reach server', 'error');
+        // Sync toggle states from DOM
+        ['hoist','ct','lt'].forEach(function(alias) {
+            var chk = document.getElementById(alias + '-enabled');
+            if (chk) currentGroupData[alias].enabled = chk.checked;
+        });
+
+        var hasData = ['hoist','ct','lt'].some(function(alias) {
+            return currentGroupData[alias].enabled && currentGroupData[alias].datapoints.length > 0;
+        });
+        
+        if (!hasData) { 
+            showNotification('At least one group must have tags added', 'warning'); 
+            return; 
+        }
+
+        var ruleId = selectedRuleId && selectedRuleId !== 'new' ? selectedRuleId : genId('group');
+
+        var priority = 'medium';
+        // Grab current priority from active button
+        ['critical','high','medium','low'].forEach(function(p) {
+            var btn = document.getElementById('prio-' + p);
+            if (btn && btn.classList.contains('bg-primary')) priority = p;
+        });
+
+        // Build groups
+        var groups = {};
+        ['hoist','ct','lt'].forEach(function(alias) {
+            groups[alias] = {
+                enabled: currentGroupData[alias].enabled,
+                datapoints: currentGroupData[alias].datapoints.slice()
+            };
+        });
+
+        var ruleData = {
+            id: ruleId,
+            name: nameEl.value.trim(),
+            description: descEl ? descEl.value.trim() : '',
+            enabled: toggleEl ? toggleEl.checked : true,
+            ruleType: 'group',
+            priority: priority,
+            groups: groups
+        };
+
+        await saveRuleToServer(ruleData);
+    };
+
+    // Save Emergency Rule
+    window.saveEmergencyRule = async function() {
+        console.log('[Rules] Saving Emergency Rule');
+        
+        var nameEl = document.getElementById('rule-name-input');
+        var descEl = document.getElementById('rule-desc-input');
+        var toggleEl = document.getElementById('rule-status-toggle');
+
+        if (!nameEl || !nameEl.value.trim()) { 
+            showNotification('Rule name is required', 'warning'); 
+            return; 
+        }
+
+        if (!currentRelayTag) {
+            showNotification('Please select a relay tag using the Add button', 'warning');
             return;
         }
 
-        // Reload from DB and re-render
-        await loadRules();
-        selectedRuleId = ruleId;
-        renderRulesList();
-        renderRuleEditor(ruleId);
-        showNotification('Rule saved', 'success');
+        var ruleId = selectedRuleId && selectedRuleId !== 'new' ? selectedRuleId : genId('emergency');
+
+        var ruleData = {
+            id: ruleId,
+            name: nameEl.value.trim(),
+            description: descEl ? descEl.value.trim() : '',
+            enabled: toggleEl ? toggleEl.checked : true,
+            ruleType: 'emergency',
+            priority: 'critical',
+            relayDatapoint: currentRelayTag,
+            groups: {}
+        };
+
+        await saveRuleToServer(ruleData);
     };
 
-    window.testRule        = function() { showNotification('Testing rule...', 'info'); setTimeout(function() { showNotification('Test alert triggered!', 'success'); }, 1500); };
-    window.showFilterModal = function() { showNotification('Filter — coming soon', 'info'); };
-    window.toggleSortOrder = function() { rules.reverse(); renderRulesList(); };
-    window.refreshRules    = function() { loadRules().then(function() { renderRulesList(); renderRuleEditor(selectedRuleId); showNotification('Refreshed', 'success'); }); };
-    window.showImportModal = function() { showNotification('Import — coming soon', 'info'); };
-    window.goToStep        = function(n) { showNotification('Step ' + n + ' — coming soon', 'info'); };
+    // ========== COMMON SERVER SAVE FUNCTION ==========
+    async function saveRuleToServer(ruleData) {
+        console.log('[Rules] Saving to server:', ruleData);
+        
+        try {
+            showNotification('Saving rule...', 'info');
+            
+            var res = await fetch('/api/rules/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rule: ruleData })
+            });
+            
+            var data = await res.json();
+            
+            if (!data.success) { 
+                showNotification('Save failed: ' + (data.error || 'unknown'), 'error'); 
+                return false; 
+            }
+            
+            console.log('[Rules] Save successful, server response:', data);
+            
+            // Reload from DB and re-render
+            await loadRules();
+            selectedRuleId = ruleData.id;
+            renderRulesList();
+            renderRuleEditor(ruleData.id);
+            
+            showNotification('Rule saved successfully', 'success');
+            return true;
+            
+        } catch(e) {
+            console.error('[Rules] Save error:', e);
+            showNotification('Could not reach server', 'error');
+            return false;
+        }
+    }
+
+    // ========== JSON PIPELINE TRIGGER ==========
+    window.triggerJsonPipeline = async function() {
+        console.log('[Rules] Triggering JSON Pipeline');
+        
+        var statusEl = document.getElementById('pipeline-status');
+        if (statusEl) statusEl.textContent = 'Running...';
+        
+        try {
+            showNotification('Triggering JSON pipeline...', 'info');
+            
+            // This is the endpoint that triggers the JSON pipeline
+            var res = await fetch('/api/rules/pipeline/trigger', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    timestamp: new Date().toISOString(),
+                    action: 'generate_json_pipeline'
+                })
+            });
+            
+            var data = await res.json();
+            
+            if (data.success) {
+                if (statusEl) statusEl.textContent = 'Completed';
+                showNotification('JSON pipeline triggered successfully', 'success');
+            } else {
+                if (statusEl) statusEl.textContent = 'Failed';
+                showNotification('Pipeline trigger failed: ' + (data.error || 'unknown'), 'error');
+            }
+            
+        } catch(e) {
+            console.error('[Rules] Pipeline error:', e);
+            if (statusEl) statusEl.textContent = 'Error';
+            showNotification('Could not trigger pipeline', 'error');
+        }
+        
+        // Reset status after 5 seconds
+        setTimeout(function() {
+            if (statusEl) statusEl.textContent = 'Ready';
+        }, 5000);
+    };
+
+    window.testRule = function() { 
+        showNotification('Testing rule...', 'info'); 
+        setTimeout(function() { 
+            showNotification('Test alert triggered!', 'success'); 
+        }, 1500); 
+    };
+    
+    window.showFilterModal = function() { 
+        showNotification('Filter — coming soon', 'info'); 
+    };
+    
+    window.toggleSortOrder = function() { 
+        rules.reverse(); 
+        renderRulesList(); 
+    };
+    
+    window.refreshRules = function() { 
+        loadRules().then(function() { 
+            renderRulesList(); 
+            renderRuleEditor(selectedRuleId); 
+            showNotification('Refreshed', 'success'); 
+        }); 
+    };
+    
+    window.showImportModal = function() { 
+        showNotification('Import — coming soon', 'info'); 
+    };
 
     // ========== INIT ==========
     window.initRules = async function() {
@@ -501,9 +724,17 @@ if (typeof window.rulesLoaded === 'undefined') {
         await loadRules();
         renderRulesList();
         renderRuleEditor(null);
+        showEditor(false);
+        
+        // Ensure pipeline status is set
+        var statusEl = document.getElementById('pipeline-status');
+        if (statusEl) statusEl.textContent = 'Ready';
     };
 
-    window.cleanupRules = function() { selectedRuleId = null; };
+    window.cleanupRules = function() { 
+        selectedRuleId = null; 
+        currentRelayTag = '';
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', window.initRules);

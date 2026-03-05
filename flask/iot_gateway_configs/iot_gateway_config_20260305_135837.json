@@ -1,40 +1,47 @@
 {
-  "version": 12,
+  "version": 1,
   "system": {
     "wifi_ssid": "",
     "wifi_password": ""
   },
   "heartbeat": {
     "interval_sec": 30,
-    "channel": "default_publish"
+    "channel": "PUB CMS"
   },
   "servers": {
     "mqtt": {
       "enabled": true,
       "host": "mcs.univa.cloud",
       "port": 1883,
-      "client_id": "univa-gateway-b67j9cj3",
-      "device_token": "dev_lxvog15joeqw",
+      "client_id": "univa-gateway-0yukru0r",
+      "device_token": "dev_2t10oxb5wrgw",
       "username": "admin",
       "password": "admin",
       "keepalive_sec": 60,
       "channels": {
         "publish": [
           {
-            "name": "tp",
-            "topic": "gateway/topic",
+            "name": "PUB CMS",
+            "topic": "CMS/PUB",
             "qos": 0,
             "retain": false,
             "default": false
           }
         ],
-        "subscribe": []
+        "subscribe": [
+          {
+            "name": "SUB CMS",
+            "topic": "CMS/SUB",
+            "qos": 0,
+            "default": false
+          }
+        ]
       }
     }
   },
   "mappings": [
     {
-      "channel": "tp",
+      "channel": "PUB CMS",
       "datapoints": {
         "float": [
           "capacity"
@@ -42,7 +49,7 @@
       }
     },
     {
-      "channel": "tp",
+      "channel": "PUB CMS",
       "datapoints": {
         "float": [
           "load"
@@ -50,14 +57,15 @@
       }
     },
     {
-      "channel": "tp",
+      "channel": "PUB CMS",
       "datapoints": {
         "float": [
           "Hoist_voltage",
-          "Hoist_current"
+          "Hoist_current",
+          "Hoist_power"
         ]
       },
-      "alias": "hoist"
+      "alias": "hoist_group"
     }
   ]
 }

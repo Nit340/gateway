@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "timestamp": 1772649202.264064,
-  "timestamp_str": "2026-03-05 00:03:22",
+  "timestamp": 1772700097.1319692,
+  "timestamp_str": "2026-03-05 14:11:37",
   "source": "web_ui",
   "logging": [
     {
@@ -21,16 +21,16 @@
         "service_name": "load_cell_service",
         "datapoints": [
           {
-            "name": "LoadCell",
+            "name": "loadcell_1",
             "map": {
-              "weight": "LoadCell.weight_kg",
-              "raw": "LoadCell.raw",
-              "unit": "LoadCell.unit",
-              "known_weight": "LoadCell.known_weight_kg",
-              "known_raw": "LoadCell.known_raw",
-              "is_tared": "LoadCell.tared",
-              "is_calibrated": "LoadCell.calibrated",
-              "capacity": "LoadCell.capacity"
+              "weight": "loadcell_1.weight_kg",
+              "raw": "loadcell_1.raw",
+              "unit": "loadcell_1.unit",
+              "known_weight": "loadcell_1.known_weight_kg",
+              "known_raw": "loadcell_1.known_raw",
+              "is_tared": "loadcell_1.tared",
+              "is_calibrated": "loadcell_1.calibrated",
+              "capacity": "loadcell_1.capacity"
             }
           }
         ]
@@ -39,7 +39,7 @@
   ],
   "load_cells": [
     {
-      "name": "LoadCell",
+      "name": "loadcell_1",
       "device": {
         "type": "sysfs_hx711",
         "parameters": {

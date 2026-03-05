@@ -1,6 +1,9 @@
 // modbus-mapping.js — Full version with group dropdown
 'use strict';
 
+(function() {
+
+
 let _devices = [];
 let _tags    = [];
 let _selectedDeviceId   = null;
@@ -1361,4 +1364,30 @@ function _groupColor(groupName) {
     return g ? (g.color || 'blue') : 'slate';
 }
 
-window._deleteTagGroup = _deleteTagGroup;
+// ─── EXPORTS ─────────────────────────────────────────────────────────────────
+window.initializeModbusMapping = initializeModbusMapping;
+window.editTag                 = editTag;
+window.deleteTag               = deleteTag;
+window.importCSV               = importCSV;
+window.exportCSV               = exportCSV;
+window.highlightTagRow         = highlightTagRow;
+window.changeBrowserPage       = changeBrowserPage;
+window.saveModbusConfig        = saveModbusConfig;
+window._deleteTagGroup         = _deleteTagGroup;
+
+// Auto-init: fires when this script executes (fresh load or re-execution).
+// The router sometimes skips re-injection when the <script> tag is already in
+// the DOM, so we also register on window so the router can call us directly.
+// If the modbus-mapping page DOM is already present, init immediately.
+(function _autoInit() {
+    // A DOM element that only exists on the modbus-mapping page
+    var probe = document.getElementById('mappingTableBody') ||
+                document.getElementById('tagsList')         ||
+                document.getElementById('addMappingBtn');
+    if (probe) {
+        console.log('[modbus-mapping] auto-init: page DOM detected, initializing');
+        initializeModbusMapping();
+    }
+})();
+
+})();

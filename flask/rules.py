@@ -52,7 +52,7 @@ async def rules_list_handler(request):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/rules/save  — insert or update a rule, then send core_config
+# POST /api/rules/save  — DB only, NO pipeline send
 # ---------------------------------------------------------------------------
 async def rules_save_handler(request):
     try:
@@ -61,22 +61,22 @@ async def rules_save_handler(request):
         if not rule:
             return web.json_response({'success': False, 'error': 'Missing rule'})
 
-        # Save to DB
         conn = get_db()
         cur  = conn.cursor()
         cur.execute('''
             INSERT INTO rules
-                (id, name, rule_type, priority, description, enabled, groups_json, relay_datapoint, updated_at)
+                (id, name, rule_type, priority, description, enabled,
+                 groups_json, relay_datapoint, updated_at)
             VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
-                name=excluded.name,
-                rule_type=excluded.rule_type,
-                priority=excluded.priority,
-                description=excluded.description,
-                enabled=excluded.enabled,
-                groups_json=excluded.groups_json,
-                relay_datapoint=excluded.relay_datapoint,
-                updated_at=CURRENT_TIMESTAMP
+                name             = excluded.name,
+                rule_type        = excluded.rule_type,
+                priority         = excluded.priority,
+                description      = excluded.description,
+                enabled          = excluded.enabled,
+                groups_json      = excluded.groups_json,
+                relay_datapoint  = excluded.relay_datapoint,
+                updated_at       = CURRENT_TIMESTAMP
         ''', (
             rule['id'],
             rule.get('name', ''),
@@ -90,9 +90,8 @@ async def rules_save_handler(request):
         conn.commit()
         conn.close()
 
-        # Build and send core_config
-        result = _send_core_config(rule)
-        return web.json_response({'success': True, 'pipeline': result})
+        # Save only — pipeline is triggered separately via Trigger JSON Pipeline button
+        return web.json_response({'success': True})
 
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
@@ -115,37 +114,130 @@ async def rules_delete_handler(request):
 
 
 # ---------------------------------------------------------------------------
-# Build core_config JSON from rule and send via pipeline
-# Follows the same pattern as modbus/loadcell/iot_gateway config sending
+# POST /api/rules/pipeline/trigger
+#
+# Reads ALL enabled rules from DB, builds a single combined core_config JSON
+# matching ilx_craneiq_core-config.json exactly, then sends a SEPARATE
+# datapoint_update call per service section:
+#
+#   datapoint_update(core_svc, "modbus",           json(modbus_section))
+#   datapoint_update(core_svc, "loadcell",         json(loadcell_section))
+#   datapoint_update(core_svc, "emergency_output", json(emergency_section))  <- if any
 # ---------------------------------------------------------------------------
-def _build_core_config(rule):
-    """Build the ilx_craneiq_core config dict from a rule."""
-    from pipeline import pipeline_state
+async def rules_pipeline_trigger_handler(request):
+    try:
+        result = await _build_and_send_core_config()
+        return web.json_response({'success': True, 'pipeline': result})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-    rtype  = rule.get('ruleType', 'group')
-    groups = rule.get('groups', {})
 
-    # Modbus groups: each group key → { enabled, datapoints: [tag, tag, ...] }
-    modbus_groups = []
-    for group_name, gdata in groups.items():
-        if not gdata.get('enabled', True):
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _collect_all_enabled_rules():
+    """Return all enabled rules from DB as list of dicts."""
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("SELECT * FROM rules WHERE enabled=1 ORDER BY created_at ASC")
+    rows = []
+    for row in cur.fetchall():
+        r = dict(row)
+        try:
+            r['groups'] = json.loads(r.get('groups_json') or '{}')
+        except Exception:
+            r['groups'] = {}
+        rows.append(r)
+    conn.close()
+    return rows
+
+
+def _build_combined_core_config(rules):
+    """
+    Build the full core_config dict from all enabled rules.
+    Matches ilx_craneiq_core-config.json exactly:
+
+    {
+      "service_name": "ilx_craneiq_core",
+      "pipeline": { "server", "port", ... },
+      "services": {
+        "modbus": {
+          "service_name": "modbus_service",
+          "groups": [
+            { "datapoint": "hoist_group", "name": "hoist_group", "members": ["hoist_up","hoist_down"] },
+            { "datapoint": "ct_group",    "name": "ct_group",    "members": ["ct_left","ct_right"] },
+            { "datapoint": "lt_group",    "name": "lt_group",    "members": ["lt_forward","lt_backward"] }
+          ]
+        },
+        "loadcell": {
+          "service_name": "load_cell_service",
+          "datapoint_name": "load_weight",
+          "unit_datapoint_name": "load_unit"
+        },
+        "emergency_output": {          <- only if an emergency rule exists
+          "service_name": "gpio_service",
+          "datapoint_name": "relay2"
+        }
+      },
+      "logging": { "level": "info" }
+    }
+    """
+
+    # ── Modbus groups: merge hoist/ct/lt across all group rules ──────────
+    # Each alias maps to one group entry; members merged if multiple rules use same alias.
+    merged = {}  # dp_name -> { datapoint, name, members: [] }
+
+    for rule in rules:
+        if rule.get('rule_type') != 'group':
             continue
-        modbus_groups.append({
-            'datapoint':  group_name,
-            'name':       group_name,
-            'datapoints': gdata.get('datapoints', [])
-        })
+        for alias, gdata in rule.get('groups', {}).items():
+            if not gdata.get('enabled', True):
+                continue
+            members = gdata.get('datapoints', [])
+            if not members:
+                continue
+            # Build datapoint name matching sample: "hoist_group", "ct_group", "lt_group"
+            dp_name = alias if alias.endswith('_group') else alias + '_group'
+            if dp_name not in merged:
+                merged[dp_name] = {
+                    'datapoint': dp_name,
+                    'name':      dp_name,
+                    'members':   [],
+                }
+            for m in members:
+                if m not in merged[dp_name]['members']:
+                    merged[dp_name]['members'].append(m)
 
-    # Read loadcell datapoint names from DB
+    modbus_groups = list(merged.values())
+
+    # ── Loadcell datapoint names from loadcell_device DB ─────────────────
+    lc_datapoint_name      = 'load_weight'
+    lc_unit_datapoint_name = 'load_unit'
     try:
         conn = get_db()
         cur  = conn.cursor()
-        cur.execute('SELECT name FROM loadcell_datapoints ORDER BY id LIMIT 2')
-        lc = [r['name'] for r in cur.fetchall()]
+        cur.execute('SELECT name FROM loadcell_device WHERE enabled=1 ORDER BY id LIMIT 1')
+        row = cur.fetchone()
+        if row:
+            lc_datapoint_name = row['name']
         conn.close()
     except Exception:
-        lc = []
+        pass
 
+    # ── Emergency output from first enabled emergency rule ────────────────
+    emergency_output = None
+    for rule in rules:
+        if rule.get('rule_type') == 'emergency':
+            relay_dp = (rule.get('relay_datapoint') or '').strip()
+            if relay_dp:
+                emergency_output = {
+                    'service_name':   'gpio_service',
+                    'datapoint_name': relay_dp,
+                }
+                break
+
+    # ── Assemble full config ──────────────────────────────────────────────
     core_config = {
         'service_name': 'ilx_craneiq_core',
         'pipeline': {
@@ -153,87 +245,143 @@ def _build_core_config(rule):
             'port':                  7000,
             'connection_timeout_s':  5,
             'max_queue_size':        10,
-            'reconnect_interval_ms': 100
+            'reconnect_interval_ms': 100,
         },
         'services': {
             'modbus': {
                 'service_name': 'modbus_service',
-                'groups':       modbus_groups
+                'groups':       modbus_groups,
             },
             'loadcell': {
                 'service_name':        'load_cell_service',
-                'datapoint_name':      lc[0] if lc       else 'load_weight',
-                'unit_datapoint_name': lc[1] if len(lc) > 1 else 'load_unit'
-            }
+                'datapoint_name':      lc_datapoint_name,
+                'unit_datapoint_name': lc_unit_datapoint_name,
+            },
         },
-        'logging': {'level': 'info'}
+        'logging': {'level': 'info'},
     }
 
-    if rtype == 'emergency':
-        relay_tag = rule.get('relayDatapoint', '')
-        core_config['services']['emergency_output'] = {
-            'service_name':  'gpio_service',
-            'datapoint_name': relay_tag
-        }
+    if emergency_output:
+        core_config['services']['emergency_output'] = emergency_output
 
     return core_config
 
 
-def _send_core_config(rule):
-    """Build core_config, save to disk, send via pipeline. Returns result dict."""
-    from pipeline import pipeline_state
+async def _build_and_send_core_config():
+    """
+    Build combined core_config, save to disk + DB, then send a separate
+    datapoint_update per service section (modbus, loadcell, emergency_output).
+    """
+    from pipeline import pipeline_state, get_pipeline_service_name
 
-    core_config = _build_core_config(rule)
+    rules       = _collect_all_enabled_rules()
+    core_config = _build_combined_core_config(rules)
     config_json = json.dumps(core_config, indent=2)
-    service     = 'ilx_craneiq_core'
 
     print('\n' + '='*60)
-    print('[CORE-CFG] Build -> Save -> Send')
+    print('[CORE-CFG] Trigger — {} enabled rule(s)'.format(len(rules)))
     print('='*60)
+    print(config_json)
 
-    # Save to disk (same pattern as other configs)
-    config_dir = 'core_configs'
+    # ── Save to disk ──────────────────────────────────────────────────────
+    config_dir  = 'core_configs'
     os.makedirs(config_dir, exist_ok=True)
-    ts           = datetime.now().strftime('%Y%m%d_%H%M%S')
-    ts_file      = os.path.join(config_dir, 'core_config_{}.json'.format(ts))
-    latest_file  = os.path.join(config_dir, 'core_config_latest.json')
+    ts          = datetime.now().strftime('%Y%m%d_%H%M%S')
+    ts_file     = os.path.join(config_dir, 'core_config_{}.json'.format(ts))
+    latest_file = os.path.join(config_dir, 'core_config_latest.json')
     for path in (ts_file, latest_file):
         with open(path, 'w') as fh:
             fh.write(config_json)
     print('[CORE-CFG] Saved: {}'.format(ts_file))
 
-    # Send via pipeline
+    # ── Persist to core_configs DB table ──────────────────────────────────
+    try:
+        conn = get_db()
+        cur  = conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                version      INTEGER NOT NULL DEFAULT 1,
+                device_names TEXT,
+                service_name TEXT,
+                config_json  TEXT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cur.execute(
+            'INSERT INTO core_configs (version, service_name, config_json) VALUES (?,?,?)',
+            (1, 'ilx_craneiq_core', config_json)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as db_e:
+        print('[CORE-CFG] DB persist warning: {}'.format(db_e))
+
+    # ── Pipeline send — one datapoint_update per service section ──────────
+    core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
+
     with pipeline_state['lock']:
         client    = pipeline_state.get('client')
         connected = pipeline_state.get('connected', False)
-        services  = pipeline_state.get('connected_services', set())
+        services  = set(pipeline_state.get('connected_services', set()))
 
-    if connected and client and service in services:
+    if not (connected and client and core_svc in services):
+        # Queue as pending — pipeline.py SERVICE_ADDED will dispatch on reconnect
+        with pipeline_state['lock']:
+            pipeline_state['core_config_pending'] = config_json
+        print('[CORE-CFG] Not connected — queued as pending for "{}"'.format(core_svc))
+        return {
+            'sent':        False,
+            'pending':     True,
+            'service':     core_svc,
+            'rules_count': len(rules),
+            'file_saved':  ts_file,
+        }
+
+    # Send each service section as its own datapoint_update call
+    services_cfg = core_config.get('services', {})
+    send_results = {}
+    all_ok       = True
+
+    for section_name, section_data in services_cfg.items():
+        section_json = json.dumps(section_data)
         try:
-            rid = client.datapoint_update(service, 'core_config', config_json)
-            if rid > 0:
-                print('[CORE-CFG] Sent to {} (rid={})'.format(service, rid))
-                with pipeline_state['lock']:
-                    pipeline_state['core_config_pending'] = None
-                return {'sent': True, 'rid': rid}
-            else:
-                print('[CORE-CFG] Send returned rid=0, storing as pending')
+            rid = client.datapoint_update(core_svc, section_name, section_json)
+            ok  = (rid > 0)
+            print('[CORE-CFG] datapoint_update("{}", "{}") -> rid={} {}'.format(
+                core_svc, section_name, rid, 'OK' if ok else 'FAILED'))
+            send_results[section_name] = {'sent': ok, 'rid': rid}
+            if not ok:
+                all_ok = False
         except Exception as e:
-            print('[CORE-CFG] Send error: {}'.format(e))
+            print('[CORE-CFG] Error sending "{}": {}'.format(section_name, e))
+            send_results[section_name] = {'sent': False, 'error': str(e)}
+            all_ok = False
 
-    # Store as pending — dispatched automatically on SERVICE_ADDED
-    with pipeline_state['lock']:
-        pipeline_state['core_config_pending'] = config_json
-    print('[CORE-CFG] Stored as pending (service not connected)')
-    return {'sent': False, 'pending': True}
+    if all_ok:
+        with pipeline_state['lock']:
+            pipeline_state['core_config']         = config_json
+            pipeline_state['core_config_pending'] = None
+    else:
+        with pipeline_state['lock']:
+            pipeline_state['core_config_pending'] = config_json
+
+    return {
+        'sent':          all_ok,
+        'service':       core_svc,
+        'rules_count':   len(rules),
+        'sections_sent': send_results,
+        'file_saved':    ts_file,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Register routes
 # ---------------------------------------------------------------------------
 def register_rules_routes(app):
-    app.router.add_get   ('/api/rules/tags',       rules_tags_handler)
-    app.router.add_get   ('/api/rules',             rules_list_handler)
-    app.router.add_post  ('/api/rules/save',        rules_save_handler)
-    app.router.add_delete('/api/rules/{rule_id}',   rules_delete_handler)
+    app.router.add_get   ('/api/rules/tags',             rules_tags_handler)
+    app.router.add_get   ('/api/rules',                  rules_list_handler)
+    app.router.add_post  ('/api/rules/save',             rules_save_handler)
+    app.router.add_delete('/api/rules/{rule_id}',        rules_delete_handler)
+    app.router.add_post  ('/api/rules/pipeline/trigger', rules_pipeline_trigger_handler)
     print('[Rules] Routes registered OK')

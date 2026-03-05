@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import binascii
 import sqlite3
 
 from aiohttp import web
@@ -62,10 +63,7 @@ def _require_admin(request):
     if not user:
         path = request.path
         if path.startswith('/api/'):
-            raise web.HTTPUnauthorized(
-                text='{"error":"Unauthorized"}',
-                content_type='application/json'
-            )
+            raise web.HTTPUnauthorized()
         raise web.HTTPFound('/admin/login')
     return user
 
@@ -92,7 +90,6 @@ async def admin_login_page(request):
 
 
 async def admin_login_post(request):
-    import secrets
     try:
         data = await request.json()
     except Exception:
@@ -103,7 +100,7 @@ async def admin_login_post(request):
     if not user:
         return web.json_response({'success': False, 'error': 'Invalid credentials'}, status=401)
 
-    token = secrets.token_hex(32)
+    token = binascii.hexlify(os.urandom(32)).decode()
     ADMIN_SESSIONS[token] = user['username']
     resp = web.json_response({'success': True, 'username': user['username'], 'role': user['role']})
     resp.set_cookie(_SESSION_COOKIE, token, httponly=True, samesite='Strict', path='/')

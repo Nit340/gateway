@@ -47,7 +47,7 @@ async def get_all_datapoints(request):
                 md.register_count
             FROM modbus_datapoints md
             JOIN modbus_device m ON md.device_id = m.id
-            LEFT JOIN device_groups dg ON md.group_id = dg.id
+            LEFT JOIN tag_groups dg ON md.group_id = dg.id
             ORDER BY md.device_id, md.slave_id, md.name
         ''')
         
@@ -180,7 +180,7 @@ async def add_modbus_datapoint(request):
         # Try to find matching device group by name for group_id
         group_id = None
         if group_value:
-            cursor.execute('SELECT id FROM device_groups WHERE name = ?', (group_value,))
+            cursor.execute('SELECT id FROM tag_groups WHERE name = ?', (group_value,))
             grp = cursor.fetchone()
             if grp:
                 group_id = grp[0]
@@ -286,7 +286,7 @@ async def update_modbus_datapoint(request):
             
             # Also try to update group_id if group name matches a device group
             if data['group']:
-                cursor.execute('SELECT id FROM device_groups WHERE name = ?', (data['group'],))
+                cursor.execute('SELECT id FROM tag_groups WHERE name = ?', (data['group'],))
                 grp = cursor.fetchone()
                 if grp:
                     update_fields.append('group_id = ?')
@@ -630,7 +630,7 @@ async def update_loadcell_datapoint(request):
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
-# TAG GROUPS (device_groups table - managed from tag mapping page)
+# TAG GROUPS (tag_groups table - managed from tag mapping page)
 # ============================================================================
 
 async def get_all_tag_groups(request):
@@ -641,7 +641,7 @@ async def get_all_tag_groups(request):
         cursor.execute('''
             SELECT id, name, color, description,
                    (SELECT COUNT(*) FROM modbus_datapoints WHERE group_id = dg.id) as tag_count
-            FROM device_groups dg
+            FROM tag_groups dg
             ORDER BY name
         ''')
         groups = []
@@ -670,7 +670,7 @@ async def add_tag_group(request):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO device_groups (name, color, description) VALUES (?, ?, ?)',
+            'INSERT INTO tag_groups (name, color, description) VALUES (?, ?, ?)',
             (name, data.get('color', 'blue'), data.get('description', ''))
         )
         group_id = cursor.lastrowid
@@ -705,7 +705,7 @@ async def update_tag_group(request):
             conn.close()
             return web.json_response({'error': 'Nothing to update'}, status=400)
         values.append(group_id)
-        cursor.execute('UPDATE device_groups SET {} WHERE id = ?'.format(', '.join(fields)), values)
+        cursor.execute('UPDATE tag_groups SET {} WHERE id = ?'.format(', '.join(fields)), values)
         conn.commit()
         conn.close()
         return web.json_response({'success': True, 'message': 'Group updated'})
@@ -721,7 +721,7 @@ async def delete_tag_group(request):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute('UPDATE modbus_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
-        cursor.execute('DELETE FROM device_groups WHERE id = ?', (group_id,))
+        cursor.execute('DELETE FROM tag_groups WHERE id = ?', (group_id,))
         conn.commit()
         conn.close()
         return web.json_response({'success': True, 'message': 'Group deleted'})

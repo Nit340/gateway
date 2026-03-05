@@ -139,7 +139,11 @@ import os
 from datetime import datetime
 
 from aiohttp import web
-from aiohttp import WSMsgType as MsgType
+try:
+    from aiohttp import WSMsgType as MsgType
+except ImportError:
+    # aiohttp 2.x
+    from aiohttp.web import MsgType
 
 try:
     from ilx_pipeline import PipelineClient, EventType, DataType, Config
@@ -170,6 +174,7 @@ pipeline_state = {
     "modbus_config":        None,
     "loadcell_config":      None,
     "iot_gateway_config":   None,
+    "core_config":          None,
     "ws_clients":       set(),
     "lock":             threading.RLock(),
     "main_loop":        None,
@@ -189,6 +194,7 @@ pipeline_state = {
     "modbus_config_pending":       None,
     "loadcell_config_pending":     None,
     "iot_gateway_config_pending":  None,
+    "core_config_pending":         None,
     "core_config_pending":         None,
 }
 
@@ -244,6 +250,16 @@ def _find_iot_gateway_service():
         services = pipeline_state["connected_services"]
     return configured if configured in services else None
 
+
+def _find_core_service():
+    """Return the configured core service name if it is currently connected, else None."""
+    configured = get_pipeline_service_name("core")
+    if not configured:
+        return None
+    with pipeline_state["lock"]:
+        services = pipeline_state["connected_services"]
+    return configured if configured in services else None
+
 # ============================================================================
 # BACKGROUND PIPELINE THREAD
 # ============================================================================
@@ -276,12 +292,25 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         pipeline_state["connection_attempts"] = 0
                     try:
                         if hasattr(client, 'subscribe'):
-                            for dp in ("modbus_config", "loadcell_config", "load_raw"):
-                                client.subscribe(dp)
-                                print("[PIPELINE] Subscribed to '{}'".format(dp))
+                            # Only subscribe to loadcell mapped datapoints —
+                            # modbus/iot_gateway/core are send-only, no subscriptions needed.
+                            # Re-subscribe from the last known loadcell config if available.
                             with pipeline_state["lock"]:
-                                pipeline_state["subscribed_datapoints"].update(
-                                    {"modbus_config", "loadcell_config", "load_raw"})
+                                last_lc_config = pipeline_state.get("loadcell_config")
+                            subscribed = set()
+                            if last_lc_config:
+                                try:
+                                    cfg = json.loads(last_lc_config)
+                                    for ipc_entry in cfg.get("ipc", []):
+                                        for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
+                                            for mapped_dp in (dp_entry.get("map") or {}).values():
+                                                client.subscribe(mapped_dp)
+                                                subscribed.add(mapped_dp)
+                                                print("[PIPELINE] Subscribed to '{}'".format(mapped_dp))
+                                except Exception as parse_e:
+                                    print("[PIPELINE] Re-subscribe parse error: {}".format(parse_e))
+                            with pipeline_state["lock"]:
+                                pipeline_state["subscribed_datapoints"] = subscribed
                         else:
                             client.refresh()
                     except Exception as e:
@@ -329,6 +358,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         print("[PIPELINE] Loadcell service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
                             pending = pipeline_state.get("loadcell_config_pending")
+                            last_config = pipeline_state.get("loadcell_config")
                         if pending:
                             try:
                                 rid = client.datapoint_update(svc, "loadcell_config", pending)
@@ -337,10 +367,37 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                     with pipeline_state["lock"]:
                                         pipeline_state["loadcell_config_pending"] = None
                                         pipeline_state["loadcell_config"] = pending
+                                    last_config = pending
+                                    # Request live data back for each device
+                                    try:
+                                        cfg_parsed = json.loads(pending)
+                                        for lc_entry in cfg_parsed.get("load_cells", []):
+                                            dev_dp = lc_entry.get("name")
+                                            if dev_dp:
+                                                client.datapoint_update(svc, dev_dp, '{}')
+                                                print("[PIPELINE] Requested live data for: '{}'".format(dev_dp))
+                                    except Exception as pull_e:
+                                        print("[PIPELINE] Live data request error: {}".format(pull_e))
                                 else:
                                     print("[PIPELINE] Pending loadcell send failed (rid=0)")
                             except Exception as e:
                                 print("[PIPELINE] Pending loadcell send error: {}".format(e))
+
+                        # Re-subscribe to all mapped receive datapoints from last known config
+                        config_to_use = last_config
+                        if config_to_use and hasattr(client, 'subscribe'):
+                            try:
+                                cfg = json.loads(config_to_use)
+                                for ipc_entry in cfg.get("ipc", []):
+                                    for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
+                                        for mapped_dp in (dp_entry.get("map") or {}).values():
+                                            try:
+                                                client.subscribe(mapped_dp)
+                                                print("[PIPELINE] Re-subscribed to receive: '{}'".format(mapped_dp))
+                                            except Exception as sub_e:
+                                                print("[PIPELINE] Re-subscribe error '{}': {}".format(mapped_dp, sub_e))
+                            except Exception as parse_e:
+                                print("[PIPELINE] Could not parse loadcell config for re-subscribe: {}".format(parse_e))
 
                     if svc == iot_svc:
                         print("[PIPELINE] IoT gateway service connected: '{}'".format(svc))
@@ -359,7 +416,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             except Exception as e:
                                 print("[PIPELINE] Pending iot_gateway send error: {}".format(e))
 
-                    if svc == "ilx_craneiq_core":
+                    core_svc = get_pipeline_service_name("core")
+                    if svc == core_svc:
+                        print("[PIPELINE] Core service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
                             pending = pipeline_state.get("core_config_pending")
                         if pending:
@@ -369,6 +428,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                     print("[PIPELINE] Sent pending core config (rid={})".format(rid))
                                     with pipeline_state["lock"]:
                                         pipeline_state["core_config_pending"] = None
+                                        pipeline_state["core_config"] = pending
                                 else:
                                     print("[PIPELINE] Pending core config send failed (rid=0)")
                             except Exception as e:
@@ -1050,6 +1110,44 @@ async def pipeline_filters_post_handler(request):
                             pipeline_state["loadcell_config"]         = config_json
                             pipeline_state["loadcell_config_pending"] = None
                         print("[LC-CFG] " + pipeline_message)
+
+                        # Request live data back from the service for each device.
+                        # Sending datapoint_update(service, device_name, '{}') tells
+                        # the service to start publishing that device's datapoints back
+                        # to web_ui (weight, raw, tared, calibrated, etc.)
+                        for lc_entry in config.get("load_cells", []):
+                            dev_dp = lc_entry.get("name")
+                            if dev_dp:
+                                try:
+                                    client.datapoint_update(target_service, dev_dp, '{}')
+                                    print("[LC-CFG] Requested live data for: '{}'".format(dev_dp))
+                                except Exception as pull_e:
+                                    print("[LC-CFG] Live data request error for '{}': {}".format(dev_dp, pull_e))
+
+                        # Subscribe to all mapped receive datapoints for this device
+                        # so RECEIVE_DONE fires when the service publishes live data back.
+                        # The map values are the datapoint names the service will publish:
+                        #   e.g. "loadcell_1.weight_kg", "loadcell_1.raw", "loadcell_1.tared" ...
+                        device_name = r["name"]
+                        mapped_datapoints = [
+                            "{}.weight_kg".format(device_name),
+                            "{}.raw".format(device_name),
+                            "{}.unit".format(device_name),
+                            "{}.known_weight_kg".format(device_name),
+                            "{}.known_raw".format(device_name),
+                            "{}.tared".format(device_name),
+                            "{}.calibrated".format(device_name),
+                            "{}.capacity".format(device_name),
+                        ]
+                        if hasattr(client, 'subscribe'):
+                            for dp in mapped_datapoints:
+                                try:
+                                    client.subscribe(dp)
+                                    print("[LC-CFG] Subscribed to receive: '{}'".format(dp))
+                                except Exception as sub_e:
+                                    print("[LC-CFG] Subscribe error for '{}': {}".format(dp, sub_e))
+                            with pipeline_state["lock"]:
+                                pipeline_state["subscribed_datapoints"].update(mapped_datapoints)
                     else:
                         pipeline_message = "Send failed (rid=0) -- queued as pending"
                         record_pipeline_send_failure("loadcell", pipeline_message)
@@ -1521,22 +1619,301 @@ def register_pipeline_routes(app):
     # -- WebSocket stream --------------------------------------------------
     app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
 
-    # -- Loadcell ----------------------------------------------------------
+    # -- Loadcell (send config + receive live data) ------------------------
     app.router.add_get('/api/pipeline/loadcell-devices', pipeline_loadcell_devices_handler)
     app.router.add_get('/api/pipeline/calibration',      pipeline_calibration_get_handler)
     app.router.add_post('/api/pipeline/calibration',     pipeline_calibration_post_handler)
     app.router.add_post('/api/pipeline/filters',         pipeline_filters_post_handler)
 
-    # -- Modbus ------------------------------------------------------------
+    # -- Modbus (send only) ------------------------------------------------
     app.router.add_post('/api/pipeline/modbus-config',      pipeline_modbus_config_handler)
     app.router.add_post('/api/pipeline/modbus-config/save', pipeline_save_modbus_config)
 
-    # -- IoT Gateway -------------------------------------------------------
+    # -- IoT Gateway (send only) -------------------------------------------
     app.router.add_get ('/api/pipeline/iot-gateway-config',      pipeline_iot_gateway_config_view_handler)
     app.router.add_post('/api/pipeline/iot-gateway-config/send', pipeline_send_iot_gateway_config_handler)
 
-    # -- Auto-send + send log
+    # -- Core Config (send only) -------------------------------------------
+    app.router.add_get ('/api/pipeline/core-config',        pipeline_core_config_view_handler)
+    app.router.add_get ('/api/pipeline/core-configs',       pipeline_core_configs_list_handler)
+    app.router.add_post('/api/pipeline/core-config/upload', pipeline_core_config_upload_handler)
+    app.router.add_post('/api/pipeline/core-config/resend', pipeline_core_config_resend_handler)
+
+    # -- Auto-send + send log ----------------------------------------------
     app.router.add_post('/api/pipeline/auto-send',  pipeline_auto_send_handler)
     app.router.add_get ('/api/pipeline/send-log',   pipeline_send_log_handler)
 
+    # Seed any missing pipeline_service_targets rows
+    _seed_pipeline_targets()
+
     print("[PIPELINE] Routes registered OK")
+
+
+def _seed_pipeline_targets():
+    """Ensure all known config types exist in pipeline_service_targets.
+    Inserts missing rows with empty service_name and enabled=False.
+    Never overwrites existing rows.
+    """
+    KNOWN_TYPES = [
+        ("modbus",      "Modbus TCP/RTU service — send only"),
+        ("loadcell",    "Load cell service — send config + receive live data"),
+        ("iot_gateway", "IoT Gateway service — send only"),
+        ("core",        "Core config service — send only"),
+    ]
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        for cfg_type, description in KNOWN_TYPES:
+            cursor.execute(
+                "SELECT 1 FROM pipeline_service_targets WHERE config_type = ?",
+                (cfg_type,)
+            )
+            if not cursor.fetchone():
+                cursor.execute(
+                    "INSERT INTO pipeline_service_targets "
+                    "(config_type, service_name, enabled, description) "
+                    "VALUES (?, '', 0, ?)",
+                    (cfg_type, description)
+                )
+                print("[PIPELINE] Seeded pipeline target: {}".format(cfg_type))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("[PIPELINE] Warning: could not seed pipeline targets: {}".format(e))
+
+
+# ============================================================================
+# CORE CONFIG — receive JSON upload, persist to DB, forward via pipeline (send only)
+# ============================================================================
+
+async def pipeline_core_config_upload_handler(request):
+    """POST /api/pipeline/core-config/upload
+    Accepts an inno_load-style JSON body, extracts device names from load_cells[],
+    persists to DB table core_configs, then forwards to the core pipeline service.
+    """
+    print("\n" + "="*70)
+    print("[CORE-CFG] Upload  ->  Persist  ->  Send")
+    print("="*70)
+
+    try:
+        body = await request.json()
+    except Exception as e:
+        return web.json_response({"success": False, "error": "Invalid JSON: {}".format(e)}, status=400)
+
+    load_cells = body.get("load_cells", [])
+    device_names = [lc.get("name", "") for lc in load_cells if lc.get("name")]
+    service_name_in_cfg = None
+    for entry in body.get("ipc", []):
+        sn = (entry.get("parameters") or {}).get("service_name")
+        if sn:
+            service_name_in_cfg = sn
+            break
+
+    config_json = json.dumps(body, indent=2)
+    new_version  = get_next_pipeline_version("core")
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                version      INTEGER NOT NULL,
+                device_names TEXT,
+                service_name TEXT,
+                config_json  TEXT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute(
+            "INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)",
+            (new_version, json.dumps(device_names), service_name_in_cfg or "", config_json)
+        )
+        conn.commit()
+        conn.close()
+        print("[CORE-CFG] Persisted v{} to DB. Devices: {}".format(new_version, device_names))
+    except Exception as db_err:
+        logging.error("[CORE-CFG] DB persist error: %s", db_err)
+        return web.json_response({"success": False, "error": "DB error: {}".format(db_err)}, status=500)
+
+    config_dir  = "core_configs"
+    os.makedirs(config_dir, exist_ok=True)
+    ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename    = "{}/core_config_{}.json".format(config_dir, ts)
+    latest_file = "{}/core_config_latest.json".format(config_dir)
+    for path in (filename, latest_file):
+        with open(path, 'w') as fh:
+            fh.write(config_json)
+
+    pipeline_sent    = False
+    pipeline_message = "Not sent -- pipeline not connected"
+    target_service   = None
+
+    with pipeline_state["lock"]:
+        client    = pipeline_state.get("client")
+        connected = pipeline_state.get("connected", False)
+
+    if connected and client:
+        target_service = _find_core_service()
+        if target_service:
+            try:
+                rid = client.datapoint_update(target_service, "core_config", config_json)
+                if rid > 0:
+                    pipeline_sent    = True
+                    pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                    record_pipeline_send_success("core", new_version, target_service, pipeline_message)
+                    with pipeline_state["lock"]:
+                        pipeline_state["core_config"]         = config_json
+                        pipeline_state["core_config_pending"] = None
+                else:
+                    pipeline_message = "Send failed (rid=0) -- queued as pending"
+                    record_pipeline_send_failure("core", pipeline_message)
+                    with pipeline_state["lock"]:
+                        pipeline_state["core_config_pending"] = config_json
+            except Exception as exc:
+                pipeline_message = "Error: {} -- queued as pending".format(exc)
+                record_pipeline_send_failure("core", pipeline_message)
+                with pipeline_state["lock"]:
+                    pipeline_state["core_config_pending"] = config_json
+        else:
+            pipeline_message = "Service '{}' not connected -- queued as pending".format(
+                get_pipeline_service_name("core") or "core_service")
+            record_pipeline_send_failure("core", pipeline_message)
+            with pipeline_state["lock"]:
+                pipeline_state["core_config_pending"] = config_json
+    else:
+        pipeline_message = "Queued as pending (not connected)"
+        record_pipeline_send_failure("core", pipeline_message)
+        with pipeline_state["lock"]:
+            pipeline_state["core_config_pending"] = config_json
+
+    return web.json_response({
+        "success":                True,
+        "pipeline_sent":          pipeline_sent,
+        "pipeline_message":       pipeline_message,
+        "target_service":         target_service,
+        "version":                new_version,
+        "device_names":           device_names,
+        "service_name_in_config": service_name_in_cfg,
+        "file_saved":             filename,
+        "file_latest":            latest_file,
+    })
+
+
+async def pipeline_core_config_view_handler(request):
+    """GET /api/pipeline/core-config"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, version, device_names, service_name, config_json, created_at "
+            "FROM core_configs ORDER BY id DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return web.json_response({"success": False, "message": "No core config stored"})
+        d = dict(row)
+        try: d["config_json"] = json.loads(d["config_json"])
+        except Exception: pass
+        try: d["device_names"] = json.loads(d["device_names"])
+        except Exception: pass
+        return web.json_response({"success": True, "config": d})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
+async def pipeline_core_configs_list_handler(request):
+    """GET /api/pipeline/core-configs"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, version INTEGER NOT NULL,
+                device_names TEXT, service_name TEXT, config_json TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute(
+            "SELECT id, version, device_names, service_name, created_at "
+            "FROM core_configs ORDER BY id DESC LIMIT 50"
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        for r in rows:
+            try: r["device_names"] = json.loads(r["device_names"])
+            except Exception: pass
+        return web.json_response({"success": True, "configs": rows})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
+async def pipeline_core_config_resend_handler(request):
+    """POST /api/pipeline/core-config/resend"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT config_json, version FROM core_configs ORDER BY id DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return web.json_response({"success": False, "error": "No core config in DB to resend"})
+
+        config_json = row["config_json"]
+        new_version  = get_next_pipeline_version("core")
+        pipeline_sent    = False
+        pipeline_message = "Not sent -- pipeline not connected"
+        target_service   = None
+
+        with pipeline_state["lock"]:
+            client    = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+
+        if connected and client:
+            target_service = _find_core_service()
+            if target_service:
+                try:
+                    rid = client.datapoint_update(target_service, "core_config", config_json)
+                    if rid > 0:
+                        pipeline_sent    = True
+                        pipeline_message = "Resent to {} (v{})".format(target_service, new_version)
+                        record_pipeline_send_success("core", new_version, target_service, pipeline_message)
+                        with pipeline_state["lock"]:
+                            pipeline_state["core_config"]         = config_json
+                            pipeline_state["core_config_pending"] = None
+                    else:
+                        pipeline_message = "Resend failed (rid=0) -- queued"
+                        record_pipeline_send_failure("core", pipeline_message)
+                        with pipeline_state["lock"]:
+                            pipeline_state["core_config_pending"] = config_json
+                except Exception as exc:
+                    pipeline_message = "Error: {} -- queued".format(exc)
+                    record_pipeline_send_failure("core", pipeline_message)
+                    with pipeline_state["lock"]:
+                        pipeline_state["core_config_pending"] = config_json
+            else:
+                pipeline_message = "Service not connected -- queued"
+                record_pipeline_send_failure("core", pipeline_message)
+                with pipeline_state["lock"]:
+                    pipeline_state["core_config_pending"] = config_json
+        else:
+            pipeline_message = "Not connected -- queued"
+            record_pipeline_send_failure("core", pipeline_message)
+            with pipeline_state["lock"]:
+                pipeline_state["core_config_pending"] = config_json
+
+        return web.json_response({
+            "success":          True,
+            "pipeline_sent":    pipeline_sent,
+            "pipeline_message": pipeline_message,
+            "target_service":   target_service,
+            "version":          new_version,
+        })
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
