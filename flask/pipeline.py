@@ -109,7 +109,7 @@
 #  .calibration.parameters.ref_weight   DB  loadcell_device.known_weight + unit
 #  .calibration.parameters.ref_raw      DB  loadcell_device.known_weight_raw
 #  .filter.raw[]                        POST body  raw_filters[]    (enabled only)
-#  .filter.weight[]                     POST body  weight_filters[] (enabled only)
+#  .filter.weight[]                      POST body  weight_filters[] (enabled only)
 #
 # ============================================================================
 # DATA FLOW -- MODBUS CONFIG
@@ -168,34 +168,33 @@ from auth import ws_auth
 # ============================================================================
 
 pipeline_state = {
-    "client":           None,
-    "connected":        False,
-    "load_raw":         None,
-    "modbus_config":        None,
-    "loadcell_config":      None,
-    "iot_gateway_config":   None,
-    "core_config":          None,
-    "ws_clients":       set(),
-    "lock":             threading.RLock(),
-    "main_loop":        None,
-    "connected_services":   set(),
-    "background_thread":    None,
-    "should_run":           True,
+    "client":                      None,
+    "connected":                    False,
+    "load_raw":                     None,
+    "modbus_config":                None,
+    "loadcell_config":              None,
+    "iot_gateway_config":           None,
+    "core_config":                  None,
+    "ws_clients":                   set(),
+    "lock":                         threading.RLock(),
+    "main_loop":                    None,
+    "connected_services":           set(),
+    "background_thread":            None,
+    "should_run":                   True,
     # version counters
-    "config_version":             1,
-    "loadcell_config_version":    1,
-    "iot_gateway_config_version": 1,
-    "last_config_time":           0,
+    "config_version":               1,
+    "loadcell_config_version":      1,
+    "iot_gateway_config_version":   1,
+    "last_config_time":             0,
     # connection tracking
-    "connection_attempts":      0,
-    "last_connection_attempt":  0,
-    "subscribed_datapoints":    set(),
+    "connection_attempts":          0,
+    "last_connection_attempt":      0,
+    "subscribed_datapoints":        set(),
     # pending configs -- sent automatically when the service appears
-    "modbus_config_pending":       None,
-    "loadcell_config_pending":     None,
-    "iot_gateway_config_pending":  None,
-    "core_config_pending":         None,
-    "core_config_pending":         None,
+    "modbus_config_pending":        None,
+    "loadcell_config_pending":      None,
+    "iot_gateway_config_pending":   None,
+    "core_config_pending":          None,
 }
 
 # ============================================================================
@@ -292,7 +291,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         pipeline_state["connection_attempts"] = 0
                     try:
                         if hasattr(client, 'subscribe'):
-                            # Only subscribe to loadcell mapped datapoints —
+                            # Only subscribe to loadcell mapped datapoints --
                             # modbus/iot_gateway/core are send-only, no subscriptions needed.
                             # Re-subscribe from the last known loadcell config if available.
                             with pipeline_state["lock"]:
@@ -465,6 +464,103 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         with pipeline_state["lock"]:
                             pipeline_state[dp] = val
 
+                        # -- Network-status datapoints ----------------------
+                        # The pipeline publishes JSON strings under the
+                        # "network_status" service with datapoint names like
+                        # "lan", "wlan", "lte", and "network_status" (int).
+                        # We unpack them into flat net.* keys so the UI can
+                        # display live values without a page refresh.
+                        # -- Network-status datapoints ----------------------
+                        # The pipeline publishes JSON strings under the
+                        # "network_status" service with datapoint names like
+                        # "lan", "wlan", "lte", and "network_status" (int).
+                        # We unpack them into flat net.* keys so the UI can
+                        # display live values without a page refresh.
+                        _NET_SERVICES = {"network_status"}
+                        if event.service_name in _NET_SERVICES or dp in (
+                            "lan", "wlan", "lte", "network_status"
+                        ):
+                            try:
+                                from general_config import update_network_status_field
+                                
+                                # Handle integer network_status specially
+                                if dp == "network_status":
+                                    update_network_status_field("network_status", val)
+                                    # Skip further processing for this case
+                                    main_loop = pipeline_state.get("main_loop")
+                                    if main_loop and main_loop.is_running():
+                                        try:
+                                            asyncio.run_coroutine_threadsafe(
+                                                _broadcast_pipeline_msg(
+                                                    json.dumps({"datapoint": dp, "value": val})),
+                                                main_loop)
+                                        except Exception as e:
+                                            print("[PIPELINE] Broadcast error: {}".format(e))
+                                    # Don't use continue here - we need to let the main broadcast happen
+                                else:
+                                    # For other datapoints (lan, wlan, lte), parse JSON
+                                    if isinstance(val, str):
+                                        try:
+                                            parsed = json.loads(val)
+                                            print("[PIPELINE] Parsed {}: {}".format(dp, parsed))  # Debug log
+                                        except json.JSONDecodeError as e:
+                                            print("[PIPELINE] JSON parse error for {}: {}".format(dp, e))
+                                            update_network_status_field(dp, val)
+                                            main_loop = pipeline_state.get("main_loop")
+                                            if main_loop and main_loop.is_running():
+                                                try:
+                                                    asyncio.run_coroutine_threadsafe(
+                                                        _broadcast_pipeline_msg(
+                                                            json.dumps({"datapoint": dp, "value": val})),
+                                                        main_loop)
+                                                except Exception as e:
+                                                    print("[PIPELINE] Broadcast error: {}".format(e))
+                                            # Skip further processing for this case
+                                            # Don't use continue here
+                                    else:
+                                        parsed = val
+                                    
+                                    # Skip if parsed is not a dict
+                                    if not isinstance(parsed, dict):
+                                        update_network_status_field(dp, parsed)
+                                        main_loop = pipeline_state.get("main_loop")
+                                        if main_loop and main_loop.is_running():
+                                            try:
+                                                asyncio.run_coroutine_threadsafe(
+                                                    _broadcast_pipeline_msg(
+                                                        json.dumps({"datapoint": dp, "value": parsed})),
+                                                    main_loop)
+                                            except Exception as e:
+                                                print("[PIPELINE] Broadcast error: {}".format(e))
+                                        # Skip further processing for this case
+                                        # Don't use continue here
+                                    else:
+                                        # For "lan" datapoint with structure like:
+                                        # {"lan":{"dynamic":{"net.lan.eth1.ip":"","net.lan.eth1.state":0}}}
+                                        # We need to extract the nested fields
+                                        for section, section_data in parsed.items():
+                                            if isinstance(section_data, dict):
+                                                for subsection, subsection_data in section_data.items():
+                                                    if isinstance(subsection_data, dict):
+                                                        # This is where the actual fields are (like net.lan.eth1.ip)
+                                                        for field_name, field_value in subsection_data.items():
+                                                            update_network_status_field(field_name, field_value)
+                                                            print("[PIPELINE] Updated {} = {}".format(field_name, field_value))  # Debug log
+                                                    else:
+                                                        # Direct value under subsection
+                                                        update_network_status_field(subsection, subsection_data)
+                                            else:
+                                                # Direct value under section
+                                                update_network_status_field(section, section_data)
+                                                    
+                            except Exception as _ne:
+                                print("[PIPELINE] network_status parse error: {} for dp={}, val={} (type: {})".format(
+                                    _ne, dp, val, type(val)))
+                                import traceback
+                                traceback.print_exc()
+                        # --------------------------------------------------
+                        # --------------------------------------------------
+
                         main_loop = pipeline_state.get("main_loop")
                         if main_loop and main_loop.is_running():
                             try:
@@ -477,10 +573,13 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
 
                     except Exception as e:
                         print("[PIPELINE] Error reading dp '{}': {}".format(dp, e))
+                        import traceback
+                        traceback.print_exc()
 
             except Exception as e:
                 print("[PIPELINE] Event handler error: {}".format(e))
-                import traceback; traceback.print_exc()
+                import traceback
+                traceback.print_exc()
 
         client.set_event_callback(on_event)
         client.start()
@@ -514,7 +613,8 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
 
     except Exception as e:
         print("[PIPELINE] Thread crashed: {}".format(e))
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
     finally:
         print("[PIPELINE] Thread exiting")
         try:
@@ -1187,7 +1287,8 @@ async def pipeline_filters_post_handler(request):
 
     except Exception as e:
         logging.error("pipeline_filters_post_handler error: %s", e)
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         return web.json_response({"success": False, "error": str(e)})
 
 # ============================================================================
@@ -1379,7 +1480,8 @@ async def pipeline_save_modbus_config(request):
 
     except Exception as e:
         print("[MODBUS-CFG] Error: {}".format(e))
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         return web.json_response({"success": False, "error": str(e)})
 
 
@@ -1529,14 +1631,14 @@ async def pipeline_iot_gateway_config_view_handler(request):
 # ============================================================================
 
 # ============================================================================
-# AUTO-SEND  — fire immediately for all enabled targets
+# AUTO-SEND  -- fire immediately for all enabled targets
 # ============================================================================
 
 async def pipeline_auto_send_handler(request):
     """POST /api/pipeline/auto-send
     
     Reads all enabled pipeline service targets from DB and immediately
-    sends each config to its service.  Does NOT wait for connection —
+    sends each config to its service.  Does NOT wait for connection --
     if a service is not yet connected the config is queued as pending
     exactly the same as a manual push.
     """
@@ -1596,7 +1698,7 @@ async def pipeline_auto_send_handler(request):
 
 
 async def pipeline_send_log_handler(request):
-    """GET /api/pipeline/send-log — return per-type send history from DB"""
+    """GET /api/pipeline/send-log -- return per-type send history from DB"""
     from database import get_all_pipeline_send_logs
     logs = get_all_pipeline_send_logs()
     return web.json_response({"logs": logs})
@@ -1655,10 +1757,10 @@ def _seed_pipeline_targets():
     Never overwrites existing rows.
     """
     KNOWN_TYPES = [
-        ("modbus",      "Modbus TCP/RTU service — send only"),
-        ("loadcell",    "Load cell service — send config + receive live data"),
-        ("iot_gateway", "IoT Gateway service — send only"),
-        ("core",        "Core config service — send only"),
+        ("modbus",      "Modbus TCP/RTU service -- send only"),
+        ("loadcell",    "Load cell service -- send config + receive live data"),
+        ("iot_gateway", "IoT Gateway service -- send only"),
+        ("core",        "Core config service -- send only"),
     ]
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -1683,7 +1785,7 @@ def _seed_pipeline_targets():
 
 
 # ============================================================================
-# CORE CONFIG — receive JSON upload, persist to DB, forward via pipeline (send only)
+# CORE CONFIG -- receive JSON upload, persist to DB, forward via pipeline (send only)
 # ============================================================================
 
 async def pipeline_core_config_upload_handler(request):

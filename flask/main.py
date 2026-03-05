@@ -17,7 +17,7 @@ from database import (
     get_all_pipeline_service_targets, set_pipeline_service_name,
     get_all_pipeline_send_logs, get_enabled_pipeline_targets,
 )
-from general_config import get_config_handler, put_config_handler
+from general_config import register_general_config_routes
 from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
     delete_device, test_device, disable_device, duplicate_device,
@@ -31,8 +31,6 @@ from tag_mapping import (
     get_all_tag_groups, add_tag_group, update_tag_group,
     delete_tag_group, assign_tags_to_group,
 )
-from websocket_handler import websocket_handler, device_websocket_handler
-from utils import periodic_updates, device_status_updater
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
 from rules import register_rules_routes
@@ -41,24 +39,14 @@ from pipeline import (
     PIPELINE_AVAILABLE, send_modbus_config_now,
 )
 
-# ---------------------------------------------------------------------------
-# Session helpers (simple cookie-based)
-# ---------------------------------------------------------------------------
-
-ADMIN_SESSIONS = {}   # token -> username
+ADMIN_SESSIONS = {}
 _SESSION_COOKIE = 'gw_admin_session'
-
 
 def _get_admin_session(request):
     token = request.cookies.get(_SESSION_COOKIE)
     return ADMIN_SESSIONS.get(token) if token else None
 
-
 def _require_admin(request):
-    """Return username or raise appropriate error.
-    API routes (/api/...) get a JSON 401.
-    Page routes get an HTTP redirect to login.
-    """
     user = _get_admin_session(request)
     if not user:
         path = request.path
@@ -67,27 +55,15 @@ def _require_admin(request):
         raise web.HTTPFound('/admin/login')
     return user
 
-
-# ---------------------------------------------------------------------------
-# Serve static HTML files from ./admin_ui/
-# ---------------------------------------------------------------------------
-
 ADMIN_UI_DIR = os.path.join(os.path.dirname(__file__), 'admin_ui')
-
 
 def _html(filename):
     path = os.path.join(ADMIN_UI_DIR, filename)
     with open(path, 'r', encoding='utf-8') as f:
         return web.Response(text=f.read(), content_type='text/html')
 
-
-# ---------------------------------------------------------------------------
-# Admin auth handlers
-# ---------------------------------------------------------------------------
-
 async def admin_login_page(request):
     return _html('login.html')
-
 
 async def admin_login_post(request):
     try:
@@ -103,9 +79,8 @@ async def admin_login_post(request):
     token = binascii.hexlify(os.urandom(32)).decode()
     ADMIN_SESSIONS[token] = user['username']
     resp = web.json_response({'success': True, 'username': user['username'], 'role': user['role']})
-    resp.set_cookie(_SESSION_COOKIE, token, httponly=True, samesite='Strict', path='/')
+    resp.set_cookie(_SESSION_COOKIE, token, httponly=True, path='/')
     return resp
-
 
 async def admin_logout(request):
     token = request.cookies.get(_SESSION_COOKIE)
@@ -115,56 +90,40 @@ async def admin_logout(request):
     resp.del_cookie(_SESSION_COOKIE, path='/')
     return resp
 
-
-# ---------------------------------------------------------------------------
-# Admin page handlers (all protected)
-# ---------------------------------------------------------------------------
-
 async def admin_root(request):
     _require_admin(request)
     return _html('dashboard.html')
-
 
 async def admin_pipeline_page(request):
     _require_admin(request)
     return _html('pipeline.html')
 
-
 async def admin_database_page(request):
     _require_admin(request)
     return _html('database.html')
-
 
 async def admin_users_page(request):
     _require_admin(request)
     return _html('users.html')
 
-
-# ---------------------------------------------------------------------------
-# Admin API — pipeline service targets
-# ---------------------------------------------------------------------------
-
 async def api_pipeline_send_log(request):
     _require_admin(request)
     return web.json_response({'logs': get_all_pipeline_send_logs()})
-
 
 async def api_pipeline_targets_get(request):
     _require_admin(request)
     return web.json_response({'targets': get_all_pipeline_service_targets()})
 
-
 async def api_pipeline_targets_put(request):
     _require_admin(request)
     try:
         body = await request.json()
-        config_type  = body.get('config_type')
+        config_type = body.get('config_type')
         service_name = body.get('service_name', '').strip()
-        enabled      = body.get('enabled')
+        enabled = body.get('enabled')
         if not config_type:
             return web.json_response({'success': False, 'error': 'config_type required'}, status=400)
         ok = set_pipeline_service_name(config_type, service_name)
-        # Update enabled flag if provided
         if enabled is not None and ok:
             try:
                 conn = get_db_connection()
@@ -181,11 +140,6 @@ async def api_pipeline_targets_put(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
-# ---------------------------------------------------------------------------
-# Admin API — database viewer  (tables + CRUD)
-# ---------------------------------------------------------------------------
-
 async def api_db_tables(request):
     _require_admin(request)
     try:
@@ -198,11 +152,9 @@ async def api_db_tables(request):
     except Exception as e:
         return web.json_response({'error': str(e)}, status=500)
 
-
 async def api_db_table_data(request):
     _require_admin(request)
     table = request.match_info['table']
-    # Whitelist: only alphanumeric + underscore
     if not table.replace('_', '').isalnum():
         return web.json_response({'error': 'Invalid table name'}, status=400)
     try:
@@ -217,7 +169,6 @@ async def api_db_table_data(request):
     except Exception as e:
         return web.json_response({'error': str(e)}, status=500)
 
-
 async def api_db_insert(request):
     _require_admin(request)
     table = request.match_info['table']
@@ -225,9 +176,8 @@ async def api_db_insert(request):
         return web.json_response({'error': 'Invalid table name'}, status=400)
     try:
         body = await request.json()
-        # Remove id so DB auto-assigns
         body.pop('id', None)
-        keys   = list(body.keys())
+        keys = list(body.keys())
         values = [body[k] for k in keys]
         sql = "INSERT INTO {} ({}) VALUES ({})".format(
             table,
@@ -244,19 +194,18 @@ async def api_db_insert(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
 async def api_db_update(request):
     _require_admin(request)
-    table  = request.match_info['table']
+    table = request.match_info['table']
     row_id = request.match_info['id']
     if not table.replace('_', '').isalnum():
         return web.json_response({'error': 'Invalid table name'}, status=400)
     try:
         body = await request.json()
         body.pop('id', None)
-        keys   = list(body.keys())
+        keys = list(body.keys())
         values = [body[k] for k in keys]
-        sets   = ', '.join('{} = ?'.format(k) for k in keys)
+        sets = ', '.join('{} = ?'.format(k) for k in keys)
         values.append(row_id)
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -268,10 +217,9 @@ async def api_db_update(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
 async def api_db_delete(request):
     _require_admin(request)
-    table  = request.match_info['table']
+    table = request.match_info['table']
     row_id = request.match_info['id']
     if not table.replace('_', '').isalnum():
         return web.json_response({'error': 'Invalid table name'}, status=400)
@@ -286,15 +234,9 @@ async def api_db_delete(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
-# ---------------------------------------------------------------------------
-# Admin API — admin users management
-# ---------------------------------------------------------------------------
-
 async def api_admin_users_get(request):
     _require_admin(request)
     return web.json_response({'users': get_all_admin_users()})
-
 
 async def api_admin_users_post(request):
     _require_admin(request)
@@ -307,7 +249,6 @@ async def api_admin_users_post(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
 async def api_admin_user_put(request):
     _require_admin(request)
     user_id = request.match_info['id']
@@ -318,22 +259,15 @@ async def api_admin_user_put(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
 async def api_admin_user_delete(request):
     _require_admin(request)
     user_id = request.match_info['id']
     ok = delete_admin_user(user_id)
     return web.json_response({'success': ok})
 
-
-# ---------------------------------------------------------------------------
-# Admin API — webui users management
-# ---------------------------------------------------------------------------
-
 async def api_webui_users_get(request):
     _require_admin(request)
     return web.json_response({'users': get_all_webui_users()})
-
 
 async def api_webui_users_post(request):
     _require_admin(request)
@@ -346,7 +280,6 @@ async def api_webui_users_post(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
 async def api_webui_user_put(request):
     _require_admin(request)
     user_id = request.match_info['id']
@@ -357,17 +290,11 @@ async def api_webui_user_put(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-
 async def api_webui_user_delete(request):
     _require_admin(request)
     user_id = request.match_info['id']
     ok = delete_webui_user(user_id)
     return web.json_response({'success': ok})
-
-
-# ---------------------------------------------------------------------------
-# WebUI auth (operator-facing login)
-# ---------------------------------------------------------------------------
 
 async def webui_login_api(request):
     try:
@@ -380,11 +307,6 @@ async def webui_login_api(request):
     if not user:
         return web.json_response({'success': False, 'error': 'Invalid username or password.'}, status=401)
     return web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name']})
-
-
-# ---------------------------------------------------------------------------
-# Legacy database viewer (keep for compatibility)
-# ---------------------------------------------------------------------------
 
 async def database_viewer_handler(request):
     try:
@@ -412,15 +334,47 @@ async def database_viewer_handler(request):
     except Exception as e:
         return web.Response(text='<h1>Error</h1><p>{}</p>'.format(e), content_type='text/html')
 
+_DB_PATH_FILE = os.path.join(os.path.dirname(__file__), '.db_path_override')
 
-# ---------------------------------------------------------------------------
-# Background tasks
-# ---------------------------------------------------------------------------
+def _read_db_path_override():
+    try:
+        return open(_DB_PATH_FILE).read().strip()
+    except FileNotFoundError:
+        return ''
+
+async def api_db_path_get(request):
+    _require_admin(request)
+    import database as _db
+    override = _read_db_path_override()
+    return web.json_response({
+        'current': _db.DB_FILE,
+        'default': '/mnt/data/gateway_config.db',
+        'override': override,
+        'env_var': os.environ.get('GATEWAY_DB_FILE', ''),
+    })
+
+async def api_db_path_put(request):
+    _require_admin(request)
+    try:
+        body = await request.json()
+        new_path = (body.get('path') or '').strip()
+        if not new_path:
+            return web.json_response({'success': False, 'error': 'path is required'}, status=400)
+        if not new_path.endswith('.db'):
+            return web.json_response({'success': False, 'error': 'Path must end in .db'}, status=400)
+        os.makedirs(os.path.dirname(new_path) if os.path.dirname(new_path) else '.', exist_ok=True)
+        open(_DB_PATH_FILE, 'w').write(new_path)
+        os.environ['GATEWAY_DB_FILE'] = new_path
+        return web.json_response({
+            'success': True,
+            'path': new_path,
+            'note': 'Path saved. Restart the server for the new DB file to take effect.'
+        })
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 async def start_background_tasks(app):
     print("[MAIN] Starting background tasks...")
-    app['periodic_updates']     = asyncio.ensure_future(periodic_updates())
-    app['device_status_updater'] = asyncio.ensure_future(device_status_updater())
 
     if PIPELINE_AVAILABLE:
         print("[MAIN] Starting pipeline background thread...")
@@ -437,7 +391,7 @@ async def start_background_tasks(app):
             with pipeline_state["lock"]:
                 connected = pipeline_state["connected"]
             if connected:
-                print("[MAIN] Auto-send: pipeline connected — sending modbus config")
+                print("[MAIN] Auto-send: pipeline connected - sending modbus config")
                 try:
                     result = await send_modbus_config_now()
                     if result.get("success"):
@@ -447,22 +401,21 @@ async def start_background_tasks(app):
                 except Exception as e:
                     print("[MAIN] Auto-send exception: {}".format(e))
             else:
-                print("[MAIN] Auto-send: not connected after 30 s — config queued")
+                print("[MAIN] Auto-send: not connected after 30 s - config queued")
 
         app["auto_send_modbus"] = asyncio.ensure_future(_auto_send_modbus_on_startup())
     else:
-        print("[MAIN] Pipeline not available — skipping")
-
+        print("[MAIN] Pipeline not available - skipping")
 
 async def cleanup_background_tasks(app):
     print("[MAIN] Cleaning up background tasks...")
-    for key in ('periodic_updates', 'device_status_updater', 'auto_send_modbus'):
-        if key in app:
-            app[key].cancel()
-            try:
-                await app[key]
-            except (asyncio.CancelledError, Exception):
-                pass
+    if 'auto_send_modbus' in app:
+        app['auto_send_modbus'].cancel()
+        try:
+            await app['auto_send_modbus']
+        except (asyncio.CancelledError, Exception):
+            pass
+    
     if PIPELINE_AVAILABLE:
         try:
             from pipeline import pipeline_state
@@ -472,78 +425,18 @@ async def cleanup_background_tasks(app):
             print("[MAIN] Error stopping pipeline: {}".format(e))
     print("[MAIN] Cleanup complete")
 
-
-# ---------------------------------------------------------------------------
-# App factory
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Admin API — DB path get/set
-# ---------------------------------------------------------------------------
-
-_DB_PATH_FILE = os.path.join(os.path.dirname(__file__), '.db_path_override')
-
-
-def _read_db_path_override():
-    """Read the DB path override file, or return empty string if not set."""
-    try:
-        return open(_DB_PATH_FILE).read().strip()
-    except FileNotFoundError:
-        return ''
-
-
-async def api_db_path_get(request):
-    """GET /api/admin/db-path — return current DB path and default"""
-    _require_admin(request)
-    import database as _db
-    override = _read_db_path_override()
-    return web.json_response({
-        'current':  _db.DB_FILE,
-        'default':  '/mnt/data/gateway_config.db',
-        'override': override,
-        'env_var':  os.environ.get('GATEWAY_DB_FILE', ''),
-    })
-
-
-async def api_db_path_put(request):
-    """PUT /api/admin/db-path — update the DB file path (persisted + applied on next restart)"""
-    _require_admin(request)
-    try:
-        body = await request.json()
-        new_path = (body.get('path') or '').strip()
-        if not new_path:
-            return web.json_response({'success': False, 'error': 'path is required'}, status=400)
-        if not new_path.endswith('.db'):
-            return web.json_response({'success': False, 'error': 'Path must end in .db'}, status=400)
-        # Persist the override
-        os.makedirs(os.path.dirname(new_path) if os.path.dirname(new_path) else '.', exist_ok=True)
-        open(_DB_PATH_FILE, 'w').write(new_path)
-        # Update the live env variable so it takes effect if re-imported
-        os.environ['GATEWAY_DB_FILE'] = new_path
-        return web.json_response({
-            'success': True,
-            'path':    new_path,
-            'note':    'Path saved. Restart the server for the new DB file to take effect.'
-        })
-    except Exception as e:
-        return web.json_response({'success': False, 'error': str(e)}, status=500)
-
 def create_app():
     app = web.Application()
 
-    # -- Admin UI ----------------------------------------------------------
-    # Root redirects to admin login
-    app.router.add_get ('/admin/login',    admin_login_page)
-    app.router.add_post('/admin/login',    admin_login_post)
-    app.router.add_get ('/admin/logout',   admin_logout)
-    app.router.add_get ('/admin',          admin_root)
-    app.router.add_get ('/admin/',         admin_root)
-    app.router.add_get ('/admin/pipeline', admin_pipeline_page)
-    app.router.add_get ('/admin/database', admin_database_page)
-    app.router.add_get ('/admin/users',    admin_users_page)
+    app.router.add_get('/admin/login', admin_login_page)
+    app.router.add_post('/admin/login', admin_login_post)
+    app.router.add_get('/admin/logout', admin_logout)
+    app.router.add_get('/admin', admin_root)
+    app.router.add_get('/admin/', admin_root)
+    app.router.add_get('/admin/pipeline', admin_pipeline_page)
+    app.router.add_get('/admin/database', admin_database_page)
+    app.router.add_get('/admin/users', admin_users_page)
 
-    # Root / serves the WebUI operator login (login.html from the project root)
     WEBUI_LOGIN_FILE = os.path.join(os.path.dirname(__file__), 'login.html')
     async def webui_login_page(request):
         try:
@@ -553,86 +446,67 @@ def create_app():
             raise web.HTTPNotFound(text='login.html not found beside main.py')
     app.router.add_get('/', webui_login_page)
 
-    # -- Admin API ---------------------------------------------------------
-    # Pipeline service targets
-    app.router.add_get('/api/admin/pipeline-targets',     api_pipeline_targets_get)
-    app.router.add_put('/api/admin/pipeline-targets',     api_pipeline_targets_put)
-    app.router.add_get('/api/admin/pipeline-send-log',    api_pipeline_send_log)
+    app.router.add_get('/api/admin/pipeline-targets', api_pipeline_targets_get)
+    app.router.add_put('/api/admin/pipeline-targets', api_pipeline_targets_put)
+    app.router.add_get('/api/admin/pipeline-send-log', api_pipeline_send_log)
 
-    # Database CRUD
-    app.router.add_get   ('/api/admin/db/tables',              api_db_tables)
-    app.router.add_get   ('/api/admin/db/table/{table}',       api_db_table_data)
-    app.router.add_post  ('/api/admin/db/table/{table}',       api_db_insert)
-    app.router.add_put   ('/api/admin/db/table/{table}/{id}',  api_db_update)
-    app.router.add_delete('/api/admin/db/table/{table}/{id}',  api_db_delete)
+    app.router.add_get('/api/admin/db/tables', api_db_tables)
+    app.router.add_get('/api/admin/db/table/{table}', api_db_table_data)
+    app.router.add_post('/api/admin/db/table/{table}', api_db_insert)
+    app.router.add_put('/api/admin/db/table/{table}/{id}', api_db_update)
+    app.router.add_delete('/api/admin/db/table/{table}/{id}', api_db_delete)
 
-    # Admin users
-    app.router.add_get   ('/api/admin/users/admin',      api_admin_users_get)
-    app.router.add_post  ('/api/admin/users/admin',      api_admin_users_post)
-    app.router.add_put   ('/api/admin/users/admin/{id}', api_admin_user_put)
+    app.router.add_get('/api/admin/users/admin', api_admin_users_get)
+    app.router.add_post('/api/admin/users/admin', api_admin_users_post)
+    app.router.add_put('/api/admin/users/admin/{id}', api_admin_user_put)
     app.router.add_delete('/api/admin/users/admin/{id}', api_admin_user_delete)
 
-    # WebUI users
-    app.router.add_get   ('/api/admin/users/webui',      api_webui_users_get)
-    app.router.add_post  ('/api/admin/users/webui',      api_webui_users_post)
-    app.router.add_put   ('/api/admin/users/webui/{id}', api_webui_user_put)
+    app.router.add_get('/api/admin/users/webui', api_webui_users_get)
+    app.router.add_post('/api/admin/users/webui', api_webui_users_post)
+    app.router.add_put('/api/admin/users/webui/{id}', api_webui_user_put)
     app.router.add_delete('/api/admin/users/webui/{id}', api_webui_user_delete)
 
-    # WebUI operator login (for the crane operator web UI)
     app.router.add_post('/api/auth/login', webui_login_api)
 
-    # -- DB path API (admin only) -----------------------------------------
     app.router.add_get('/api/admin/db-path', api_db_path_get)
     app.router.add_put('/api/admin/db-path', api_db_path_put)
 
-
-    # -- General Config API -----------------------------------------------
-    app.router.add_get('/api/general-configuration', get_config_handler)
-    app.router.add_put('/api/general-configuration', put_config_handler)
+    register_general_config_routes(app)
 
     register_auth_routes(app)
     register_cloud_routes(app)
     register_rules_routes(app)
 
-    # -- Device Management ------------------------------------------------
-    app.router.add_get   ('/api/devices',                          get_all_devices)
-    app.router.add_post  ('/api/devices',                          add_device)
-    app.router.add_get   ('/api/devices/{device_id}/details',      get_device_details)
-    app.router.add_put   ('/api/devices/{device_id}',              update_device)
-    app.router.add_delete('/api/devices/{device_id}',              delete_device)
-    app.router.add_post  ('/api/devices/{device_id}/test',         test_device)
-    app.router.add_post  ('/api/devices/{device_id}/disable',      disable_device)
-    app.router.add_post  ('/api/devices/{device_id}/duplicate',    duplicate_device)
-    app.router.add_get   ('/api/devices/export/csv',               export_devices_csv)
-    app.router.add_post  ('/api/devices/import/csv',               import_devices_csv)
-    app.router.add_get   ('/api/devices/template/csv',             download_csv_template)
-    app.router.add_post  ('/api/devices/{device_id}/status',       update_device_status_api)
+    app.router.add_get('/api/devices', get_all_devices)
+    app.router.add_post('/api/devices', add_device)
+    app.router.add_get('/api/devices/{device_id}/details', get_device_details)
+    app.router.add_put('/api/devices/{device_id}', update_device)
+    app.router.add_delete('/api/devices/{device_id}', delete_device)
+    app.router.add_post('/api/devices/{device_id}/test', test_device)
+    app.router.add_post('/api/devices/{device_id}/disable', disable_device)
+    app.router.add_post('/api/devices/{device_id}/duplicate', duplicate_device)
+    app.router.add_get('/api/devices/export/csv', export_devices_csv)
+    app.router.add_post('/api/devices/import/csv', import_devices_csv)
+    app.router.add_get('/api/devices/template/csv', download_csv_template)
+    app.router.add_post('/api/devices/{device_id}/status', update_device_status_api)
 
-    # -- Tag groups -------------------------------------------------------
-    app.router.add_get   ('/api/tag-groups',                       get_all_tag_groups)
-    app.router.add_post  ('/api/tag-groups',                       add_tag_group)
-    app.router.add_put   ('/api/tag-groups/{group_id}',            update_tag_group)
-    app.router.add_delete('/api/tag-groups/{group_id}',            delete_tag_group)
-    app.router.add_post  ('/api/tag-groups/{group_id}/assign-tags', assign_tags_to_group)
+    app.router.add_get('/api/tag-groups', get_all_tag_groups)
+    app.router.add_post('/api/tag-groups', add_tag_group)
+    app.router.add_put('/api/tag-groups/{group_id}', update_tag_group)
+    app.router.add_delete('/api/tag-groups/{group_id}', delete_tag_group)
+    app.router.add_post('/api/tag-groups/{group_id}/assign-tags', assign_tags_to_group)
 
-    # -- Datapoints -------------------------------------------------------
-    app.router.add_get   ('/api/datapoints',                       get_all_datapoints)
-    app.router.add_post  ('/api/datapoints/modbus',                add_modbus_datapoint)
-    app.router.add_put   ('/api/datapoints/modbus/{id}',           update_modbus_datapoint)
-    app.router.add_put   ('/api/datapoints/loadcell/{id}',         update_loadcell_datapoint)
-    app.router.add_delete('/api/datapoints/{id}',                  delete_datapoint)
-    app.router.add_get   ('/api/datapoints/devices',               get_available_devices)
-    app.router.add_get   ('/api/datapoints/protocol-form/{protocol}', get_protocol_form)
-    app.router.add_get   ('/api/devices/{device_id}/datapoints',   get_device_datapoints)
+    app.router.add_get('/api/datapoints', get_all_datapoints)
+    app.router.add_post('/api/datapoints/modbus', add_modbus_datapoint)
+    app.router.add_put('/api/datapoints/modbus/{id}', update_modbus_datapoint)
+    app.router.add_put('/api/datapoints/loadcell/{id}', update_loadcell_datapoint)
+    app.router.add_delete('/api/datapoints/{id}', delete_datapoint)
+    app.router.add_get('/api/datapoints/devices', get_available_devices)
+    app.router.add_get('/api/datapoints/protocol-form/{protocol}', get_protocol_form)
+    app.router.add_get('/api/devices/{device_id}/datapoints', get_device_datapoints)
 
-    # -- WebSocket --------------------------------------------------------
-    app.router.add_get('/ws/general', websocket_handler)
-    app.router.add_get('/ws/devices', device_websocket_handler)
-
-    # -- Pipeline ---------------------------------------------------------
     register_pipeline_routes(app)
 
-    # /db redirects to the proper admin database manager
     async def db_redirect(request):
         raise web.HTTPFound('/admin/database')
     app.router.add_get('/db', db_redirect)
@@ -640,7 +514,6 @@ def create_app():
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     return app
-
 
 if __name__ == '__main__':
     print("=" * 60)

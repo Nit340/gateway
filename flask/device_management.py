@@ -10,8 +10,7 @@ import re
 from datetime import datetime
 from aiohttp import web
 
-from models import device_status_tracker, device_websockets
-from websocket_handler import broadcast_device_status
+from models import device_status_tracker
 from database import DB_FILE, get_service_by_name
 from utils import initialize_device_status, remove_device_status, update_device_status
 
@@ -1258,8 +1257,6 @@ async def update_device_status_api(request):
         last_poll = data.get('last_poll')
         
         result = update_device_status(device_id, status, last_poll)
-        
-        await broadcast_device_status(device_id, result['status'], result['last_poll'])
         
         return web.json_response({
             'success': True,

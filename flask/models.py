@@ -19,4 +19,4 @@ device_status_tracker = {}
 
 # WebSocket connections
 connected_websockets = set()
-device_websockets = set()
+# device_websockets removed – device status/poll columns use no WebSocket

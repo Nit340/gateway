@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # rules.py - Rules Engine API
 
 import json
@@ -15,7 +16,7 @@ def get_db():
 
 
 # ---------------------------------------------------------------------------
-# GET /api/rules/tags  — all enabled modbus tag names
+# GET /api/rules/tags  -- all enabled modbus tag names
 # ---------------------------------------------------------------------------
 async def rules_tags_handler(request):
     try:
@@ -30,7 +31,7 @@ async def rules_tags_handler(request):
 
 
 # ---------------------------------------------------------------------------
-# GET /api/rules  — all saved rules
+# GET /api/rules  -- all saved rules
 # ---------------------------------------------------------------------------
 async def rules_list_handler(request):
     try:
@@ -52,7 +53,7 @@ async def rules_list_handler(request):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/rules/save  — DB only, NO pipeline send
+# POST /api/rules/save  -- DB only, NO pipeline send
 # ---------------------------------------------------------------------------
 async def rules_save_handler(request):
     try:
@@ -63,34 +64,41 @@ async def rules_save_handler(request):
 
         conn = get_db()
         cur  = conn.cursor()
-        cur.execute('''
-            INSERT INTO rules
-                (id, name, rule_type, priority, description, enabled,
-                 groups_json, relay_datapoint, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
-            ON CONFLICT(id) DO UPDATE SET
-                name             = excluded.name,
-                rule_type        = excluded.rule_type,
-                priority         = excluded.priority,
-                description      = excluded.description,
-                enabled          = excluded.enabled,
-                groups_json      = excluded.groups_json,
-                relay_datapoint  = excluded.relay_datapoint,
-                updated_at       = CURRENT_TIMESTAMP
-        ''', (
-            rule['id'],
-            rule.get('name', ''),
-            rule.get('ruleType', 'group'),
-            rule.get('priority', 'medium'),
-            rule.get('description', ''),
-            1 if rule.get('enabled', True) else 0,
-            json.dumps(rule.get('groups', {})),
-            rule.get('relayDatapoint', ''),
-        ))
+
+        # Use SELECT + UPDATE/INSERT instead of ON CONFLICT(...) DO UPDATE,
+        # which requires SQLite >= 3.24 (not available in Python 3.5 environments).
+        rule_id     = rule['id']
+        name        = rule.get('name', '')
+        rule_type   = rule.get('ruleType', 'group')
+        priority    = rule.get('priority', 'medium')
+        description = rule.get('description', '')
+        enabled     = 1 if rule.get('enabled', True) else 0
+        groups_json = json.dumps(rule.get('groups', {}))
+        relay_dp    = rule.get('relayDatapoint', '')
+
+        cur.execute('SELECT id FROM rules WHERE id=?', (rule_id,))
+        if cur.fetchone():
+            cur.execute('''
+                UPDATE rules
+                SET name=?, rule_type=?, priority=?, description=?,
+                    enabled=?, groups_json=?, relay_datapoint=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            ''', (name, rule_type, priority, description,
+                  enabled, groups_json, relay_dp, rule_id))
+        else:
+            cur.execute('''
+                INSERT INTO rules
+                    (id, name, rule_type, priority, description, enabled,
+                     groups_json, relay_datapoint, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ''', (rule_id, name, rule_type, priority, description,
+                  enabled, groups_json, relay_dp))
+
         conn.commit()
         conn.close()
 
-        # Save only — pipeline is triggered separately via Trigger JSON Pipeline button
+        # Save only -- pipeline is triggered separately via Trigger JSON Pipeline button
         return web.json_response({'success': True})
 
     except Exception as e:
@@ -184,7 +192,7 @@ def _build_combined_core_config(rules):
     }
     """
 
-    # ── Modbus groups: merge hoist/ct/lt across all group rules ──────────
+    # -- Modbus groups: merge hoist/ct/lt across all group rules ----------
     # Each alias maps to one group entry; members merged if multiple rules use same alias.
     merged = {}  # dp_name -> { datapoint, name, members: [] }
 
@@ -211,7 +219,7 @@ def _build_combined_core_config(rules):
 
     modbus_groups = list(merged.values())
 
-    # ── Loadcell datapoint names from loadcell_device DB ─────────────────
+    # -- Loadcell datapoint names from loadcell_device DB -----------------
     lc_datapoint_name      = 'load_weight'
     lc_unit_datapoint_name = 'load_unit'
     try:
@@ -225,7 +233,7 @@ def _build_combined_core_config(rules):
     except Exception:
         pass
 
-    # ── Emergency output from first enabled emergency rule ────────────────
+    # -- Emergency output from first enabled emergency rule ----------------
     emergency_output = None
     for rule in rules:
         if rule.get('rule_type') == 'emergency':
@@ -237,7 +245,7 @@ def _build_combined_core_config(rules):
                 }
                 break
 
-    # ── Assemble full config ──────────────────────────────────────────────
+    # -- Assemble full config ----------------------------------------------
     core_config = {
         'service_name': 'ilx_craneiq_core',
         'pipeline': {
@@ -279,11 +287,11 @@ async def _build_and_send_core_config():
     config_json = json.dumps(core_config, indent=2)
 
     print('\n' + '='*60)
-    print('[CORE-CFG] Trigger — {} enabled rule(s)'.format(len(rules)))
+    print('[CORE-CFG] Trigger -- {} enabled rule(s)'.format(len(rules)))
     print('='*60)
     print(config_json)
 
-    # ── Save to disk ──────────────────────────────────────────────────────
+    # -- Save to disk ------------------------------------------------------
     config_dir  = 'core_configs'
     os.makedirs(config_dir, exist_ok=True)
     ts          = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -294,7 +302,7 @@ async def _build_and_send_core_config():
             fh.write(config_json)
     print('[CORE-CFG] Saved: {}'.format(ts_file))
 
-    # ── Persist to core_configs DB table ──────────────────────────────────
+    # -- Persist to core_configs DB table ----------------------------------
     try:
         conn = get_db()
         cur  = conn.cursor()
@@ -317,7 +325,7 @@ async def _build_and_send_core_config():
     except Exception as db_e:
         print('[CORE-CFG] DB persist warning: {}'.format(db_e))
 
-    # ── Pipeline send — one datapoint_update per service section ──────────
+    # -- Pipeline send -- one datapoint_update per service section ----------
     core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
 
     with pipeline_state['lock']:
@@ -326,10 +334,10 @@ async def _build_and_send_core_config():
         services  = set(pipeline_state.get('connected_services', set()))
 
     if not (connected and client and core_svc in services):
-        # Queue as pending — pipeline.py SERVICE_ADDED will dispatch on reconnect
+        # Queue as pending -- pipeline.py SERVICE_ADDED will dispatch on reconnect
         with pipeline_state['lock']:
             pipeline_state['core_config_pending'] = config_json
-        print('[CORE-CFG] Not connected — queued as pending for "{}"'.format(core_svc))
+        print('[CORE-CFG] Not connected -- queued as pending for "{}"'.format(core_svc))
         return {
             'sent':        False,
             'pending':     True,

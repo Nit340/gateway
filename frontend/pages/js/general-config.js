@@ -1,713 +1,605 @@
 // general-config.js
-// Matching the exact theme and style of the reference
+console.log('general-config.js loaded');
 
-console.log('✅ general-config.js loaded - Script is running');
+(function () {
+    if (window._generalConfigInitialized) return;
 
-// Wrap everything in an IIFE to prevent duplicate declaration errors
-(function() {
-    // Check if already initialized
-    if (window._generalConfigInitialized) {
-        console.log('⏳ General Config already initialized, skipping...');
-        return;
-    }
-    
-    // Helper functions
-    const setInputValue = function(selector, value) {
-        if (value === undefined || value === null) return;
-        const element = document.querySelector(selector);
-        if (element) {
-            element.value = value;
-            element.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log(`📝 Set ${selector} = ${value}`);
-        } else {
-            console.warn(`⚠️ Element not found: ${selector}`);
-        }
+    // =========================================================================
+    // HELPERS
+    // =========================================================================
+    var $ = function (s) { return document.querySelector(s); };
+
+    var setInputValue = function (s, v) {
+        if (v === undefined || v === null) return;
+        var el = $(s); if (el) { el.value = v; el.dispatchEvent(new Event('change', {bubbles:true})); }
     };
-
-    const setRadioValue = function(selector, value) {
-        if (value === undefined || value === null) return;
-        const radios = document.querySelectorAll(selector);
-        radios.forEach(radio => {
-            if (radio.value === value) {
-                radio.checked = true;
-                radio.dispatchEvent(new Event('change', { bubbles: true }));
-                console.log(`📻 Set radio ${selector} = ${value}`);
-            }
+    var setRadioValue = function (s, v) {
+        if (v === undefined || v === null) return;
+        document.querySelectorAll(s).forEach(function (r) {
+            if (r.value === v) { r.checked = true; r.dispatchEvent(new Event('change', {bubbles:true})); }
         });
     };
-
-    const setSelectValue = function(selector, value) {
-        if (value === undefined || value === null) return;
-        const select = document.querySelector(selector);
-        if (select) {
-            select.value = value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log(`📋 Set select ${selector} = ${value}`);
-        }
+    var setSelectValue = function (s, v) {
+        if (v === undefined || v === null) return;
+        var el = $(s); if (el) { el.value = v; el.dispatchEvent(new Event('change', {bubbles:true})); }
     };
+    var getInputValue  = function (s) { var e=$(s); return e?e.value:''; };
+    var getRadioValue  = function (s) { var e=$(s+':checked'); return e?e.value:''; };
+    var getSelectValue = function (s) { var e=$(s); return e?e.value:''; };
 
-    const getInputValue = function(selector) {
-        const element = document.querySelector(selector);
-        return element ? element.value : '';
-    };
+    var el  = function (id) { return document.getElementById(id); };
+    var txt = function (id, v) { var e=el(id); if(e && v!==undefined && v!==null && v!=='') e.textContent=v; };
+    var show = function (id) { var e=el(id); if(e) e.classList.remove('hidden'); };
+    var hide = function (id) { var e=el(id); if(e) e.classList.add('hidden'); };
+    var isUp = function (v)  { return v===1||v===true||v==='1'; };
 
-    const getRadioValue = function(selector) {
-        const radio = document.querySelector(selector + ':checked');
-        return radio ? radio.value : '';
-    };
-
-    const getSelectValue = function(selector) {
-        const select = document.querySelector(selector);
-        return select ? select.value : '';
-    };
-
-    // Initialize password toggles
-    const initializePasswordToggles = function() {
-        document.querySelectorAll('.toggle-password').forEach(button => {
-            // Remove existing listeners
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
-            
-            newButton.addEventListener('click', function(e) {
+    // =========================================================================
+    // PASSWORD TOGGLES
+    // =========================================================================
+    var initializePasswordToggles = function () {
+        document.querySelectorAll('.toggle-password').forEach(function (btn) {
+            var f = btn.cloneNode(true);
+            btn.parentNode.replaceChild(f, btn);
+            f.addEventListener('click', function (e) {
                 e.preventDefault();
-                const input = this.closest('.relative').querySelector('input');
-                const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
-                input.setAttribute('type', type);
-                const icon = this.querySelector('i');
-                if (icon) {
-                    icon.className = type === 'password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
-                }
+                var inp  = this.closest('.relative').querySelector('input');
+                var type = inp.getAttribute('type') === 'password' ? 'text' : 'password';
+                inp.setAttribute('type', type);
+                var ic = this.querySelector('i');
+                if (ic) ic.className = type==='password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
             });
         });
     };
 
-    // Network Toggle Functions
-    const setNetworkMode = function(mode) {
-        console.log('📶 Setting network mode:', mode);
-        
-        // Update radio buttons
-        document.querySelectorAll('input[name="network-mode"]').forEach(r => {
-            r.checked = (r.value === mode);
+    // =========================================================================
+    // NETWORK MODE TAB
+    // =========================================================================
+    var setNetworkMode = function (mode) {
+        document.querySelectorAll('input[name="network-mode"]').forEach(function (r) { r.checked = r.value===mode; });
+        ['ethernet-config','wifi-config','cellular-config'].forEach(function (id) {
+            var e = el(id); if (e) e.style.display = 'none';
         });
-        
-        // Hide all config sections
-        const ethernetConfig = document.getElementById('ethernet-config');
-        const wifiConfig = document.getElementById('wifi-config');
-        const cellularConfig = document.getElementById('cellular-config');
-        
-        if (ethernetConfig) ethernetConfig.style.display = 'none';
-        if (wifiConfig) wifiConfig.style.display = 'none';
-        if (cellularConfig) cellularConfig.style.display = 'none';
-        
-        // Show selected config
-        if (mode === 'ethernet' && ethernetConfig) {
-            ethernetConfig.style.display = 'block';
-        } else if (mode === 'wifi' && wifiConfig) {
-            wifiConfig.style.display = 'block';
-            updateWiFiSignalDisplay(3); // Default to good signal
-        } else if (mode === 'lte' && cellularConfig) {
-            cellularConfig.style.display = 'block';
-        }
+        var map = {ethernet:'ethernet-config', wifi:'wifi-config', lte:'cellular-config'};
+        var e = el(map[mode]||'wifi-config');
+        if (e) e.style.display = 'block';
     };
 
-    const initializeNetworkToggles = function() {
-        // Network mode change
-        document.querySelectorAll('input[name="network-mode"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                setNetworkMode(this.value);
-            });
+    var initializeNetworkToggles = function () {
+        document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
+            r.addEventListener('change', function () { setNetworkMode(this.value); });
         });
-        
-        // IP assignment toggle
-        document.querySelectorAll('input[name="ip-assignment"]').forEach(radio => {
-            radio.addEventListener('change', toggleIPAssignment);
+        document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
+            r.addEventListener('change', toggleIPAssignment);
         });
-        
-        // Initialize with default mode
-        const checkedMode = document.querySelector('input[name="network-mode"]:checked');
-        if (checkedMode) {
-            setNetworkMode(checkedMode.value);
-        } else {
-            setNetworkMode('wifi');
-        }
-        
+        var c = $('input[name="network-mode"]:checked');
+        setNetworkMode(c ? c.value : 'wifi');
         toggleIPAssignment();
     };
 
-    const toggleIPAssignment = function() {
-        const ipAssignment = document.querySelector('input[name="ip-assignment"]:checked');
-        const staticConfig = document.getElementById('static-ip-config');
-        
-        if (!staticConfig) return;
-        
-        if (ipAssignment && ipAssignment.value === 'static') {
-            staticConfig.classList.remove('hidden');
-        } else {
-            staticConfig.classList.add('hidden');
-        }
+    var toggleIPAssignment = function () {
+        var ip  = $('input[name="ip-assignment"]:checked');
+        var box = el('static-ip-config');
+        if (!box) return;
+        if (ip && ip.value === 'static') box.classList.remove('hidden');
+        else                             box.classList.add('hidden');
     };
 
-    // WiFi Signal Functions
-    const updateWiFiSignalStrength = function(strength) {
-        // strength can be 0-4 (0=none, 1=poor, 2=fair, 3=good, 4=excellent)
-        const signalBars = document.querySelectorAll('#wifi-config .signal-bar');
-        const strengthClasses = ['none', 'poor', 'fair', 'good', 'excellent'];
-        
-        if (!signalBars.length) return;
-        
-        // Reset all bars to none
-        signalBars.forEach(bar => {
-            bar.className = 'signal-bar none';
+    // =========================================================================
+    // LIVE CACHE  (never blanked � old values persist until overwritten)
+    // =========================================================================
+    var _cache = { lan: { eth0:{}, eth1:{} }, wlan:{}, lte:{} };
+    var _liveConnected = false;
+
+    var mergeInto = function (target, src) {
+        if (!src || typeof src !== 'object') return;
+        Object.keys(src).forEach(function (k) {
+            var v = src[k];
+            if (v !== null && v !== undefined && v !== '') {
+                if (typeof v === 'object' && !Array.isArray(v)) {
+                    if (!target[k]||typeof target[k]!=='object') target[k]={};
+                    mergeInto(target[k], v);
+                } else { target[k] = v; }
+            }
         });
-        
-        // Activate bars from left to right
-        const effectiveStrength = Math.min(Math.max(Math.floor(strength), 0), 4);
-        
-        for (let i = 0; i <= effectiveStrength; i++) {
-            if (i < signalBars.length) {
-                signalBars[i].className = `signal-bar ${strengthClasses[i]}`;
+    };
+
+    // =========================================================================
+    // RENDER ETHERNET
+    // Fields: eth0.ip, eth0.mac, eth0.state  /  eth1.ip, eth1.mac, eth1.state
+    // =========================================================================
+    var stateBadge = function (id, up) {
+        var e = el(id); if (!e) return;
+        e.textContent = up ? 'Connected' : 'No link';
+        e.className = 'text-xs px-2 py-0.5 rounded-full font-medium ' +
+            (up ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500');
+    };
+
+    var renderEthernet = function () {
+        if (!_liveConnected) return;
+        show('eth-live-panel');
+        var e0 = _cache.lan.eth0 || {};
+        var e1 = _cache.lan.eth1 || {};
+        txt('eth0-ip',  e0.ip  || '--');
+        txt('eth0-mac', e0.mac || '--');
+        stateBadge('eth0-state-badge', isUp(e0.state));
+        txt('eth1-ip',  e1.ip  || '--');
+        txt('eth1-mac', e1.mac || '--');
+        stateBadge('eth1-state-badge', isUp(e1.state));
+        // Update global MAC if eth0 connected
+        if (isUp(e0.state) && e0.mac) {
+            var m = $('[data-mac-address]'); if (m) m.textContent = e0.mac;
+        }
+    };
+
+    // =========================================================================
+    // RENDER WIFI
+    // Fields: state, signal_quality (dBm signed), ssid, bssid, mac, ip, frequency
+    // =========================================================================
+    var dbmToBars = function (dbm) {
+        dbm = parseInt(dbm) || 0;
+        if (dbm >= -55) return 4;
+        if (dbm >= -65) return 3;
+        if (dbm >= -75) return 2;
+        if (dbm >= -85) return 1;
+        return 0;
+    };
+
+    var updateWifiBars = function (dbm) {
+        var bars    = document.querySelectorAll('#wifi-signal-bars .signal-bar');
+        var classes = ['none','poor','fair','good','excellent'];
+        var level   = dbmToBars(dbm);
+        bars.forEach(function (b) { b.className='signal-bar none'; });
+        for (var i=0; i<=level; i++) { if(bars[i]) bars[i].className='signal-bar '+classes[i]; }
+    };
+
+    var renderWifi = function () {
+        if (!_liveConnected) return;
+        show('wifi-live-panel');
+        var w = _cache.wlan;
+        stateBadge('wifi-state-badge', isUp(w.state));
+        // signal_quality is dBm (signed negative number)
+        if (w.signal_quality !== undefined && w.signal_quality !== null) {
+            updateWifiBars(w.signal_quality);
+            var e = el('wifi-signal-dbm');
+            if (e) e.textContent = w.signal_quality + ' dBm';
+        }
+        txt('wifi-ip',   w.ip        || '--');
+        txt('wifi-mac',  w.mac       || '--');
+        txt('wifi-bssid',w.bssid     || '--');
+        var freq = w.frequency ? w.frequency + ' MHz' : '--';
+        txt('wifi-freq', freq);
+        // Update SSID input if empty (don't overwrite user's edit)
+        if (w.ssid && !getInputValue('[name="wifi-ssid"]')) setInputValue('[name="wifi-ssid"]', w.ssid);
+        // Update global MAC
+        if (isUp(w.state) && w.mac) {
+            var m = $('[data-mac-address]'); if (m) m.textContent = w.mac;
+        }
+    };
+
+    // =========================================================================
+    // RENDER LTE
+    // power=0  ? show amber alert only, hide live panel
+    // power=1  ? hide alert, show live panel with all fields
+    // Fields: state, power, signal_pct (0-100%), imei, operator_id, operator_name,
+    //         ip, iccid, imsi, tech
+    // =========================================================================
+    var renderLte = function () {
+        if (!_liveConnected) return;
+        var l = _cache.lte;
+
+        // power_state check
+        if (l.power !== undefined) {
+            if (!isUp(l.power)) {
+                // Hardware off � show alert, hide live panel
+                show('lte-power-off-alert');
+                hide('lte-live-panel');
+                return;
+            } else {
+                hide('lte-power-off-alert');
             }
         }
+
+        show('lte-live-panel');
+        stateBadge('lte-state-badge', isUp(l.state));
+
+        // Signal percent bar
+        var pct = parseInt(l.signal_pct) || 0;
+        var fill = el('lte-signal-fill');
+        if (fill) fill.style.width = pct + '%';
+        var barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-yellow-400' : 'bg-red-400';
+        if (fill) fill.className = 'h-full rounded-full transition-all ' + barColor;
+        var pctEl = el('lte-signal-pct');
+        if (pctEl) pctEl.textContent = pct + '%';
+
+        txt('lte-ip',            l.ip            || '--');
+        txt('lte-operator-name', l.operator_name || '--');
+        txt('lte-operator-id',   l.operator_id   || '--');
+        txt('lte-tech',          l.tech          || '--');
+        txt('lte-imei',          l.imei          || '--');
+        txt('lte-iccid',         l.iccid         || '--');
+        txt('lte-imsi',          l.imsi          || '--');
     };
 
-    const getSignalStrengthText = function(strength) {
-        const texts = ['None', 'Poor', 'Fair', 'Good', 'Excellent'];
-        return texts[Math.min(Math.max(Math.floor(strength), 0), 4)] || 'Unknown';
+    // =========================================================================
+    // APPLY SNAPSHOT  (called on every WS message)
+    // =========================================================================
+    var applySnapshot = function (data) {
+        if (!data) return;
+        mergeInto(_cache.lan,  data.lan  || {});
+        mergeInto(_cache.wlan, data.wlan || {});
+        mergeInto(_cache.lte,  data.lte  || {});
+
+        // Auto-switch tab to the active interface
+        var eth0     = _cache.lan.eth0 || {};
+        var wlan     = _cache.wlan;
+        var lte      = _cache.lte;
+        var lteHasHW = lte.power !== undefined ? isUp(lte.power) : false;
+
+        if      (isUp(wlan.state))                  { setNetworkMode('wifi');     setRadioValue('[name="network-mode"]','wifi'); }
+        else if (isUp(eth0.state))                  { setNetworkMode('ethernet'); setRadioValue('[name="network-mode"]','ethernet'); }
+        else if (isUp(lte.state) || lteHasHW)       { setNetworkMode('lte');      setRadioValue('[name="network-mode"]','lte'); }
+
+        // Render each interface
+        renderEthernet();
+        renderWifi();
+        renderLte();
     };
 
-    const updateWiFiSignalDisplay = function(strength) {
-        updateWiFiSignalStrength(strength);
-        
-        const label = document.querySelector('#wifi-config .signal-label');
-        if (label) {
-            label.textContent = getSignalStrengthText(strength);
-        }
-    };
+    // =========================================================================
+    // LIVE BUTTON + WEBSOCKET
+    // =========================================================================
+    var _netWs        = null;
+    var _netActive    = false;
+    var _netReconnect = null;
 
-    // WiFi scan function
-    window.scanWiFi = function() {
-        const scanButton = document.querySelector('#wifi-config button.ml-2');
-        if (!scanButton) return;
-        
-        const originalHTML = scanButton.innerHTML;
-        
-        // Show scanning animation
-        scanButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-        scanButton.disabled = true;
-        
-        // Simulate WiFi scan
-        setTimeout(() => {
-            const randomStrength = Math.floor(Math.random() * 4) + 1;
-            updateWiFiSignalDisplay(randomStrength);
-            
-            scanButton.innerHTML = '<i class="fa-solid fa-rotate"></i>';
-            scanButton.disabled = false;
-            
-            showNotification(`WiFi scan complete. Signal strength: ${getSignalStrengthText(randomStrength)}`, 'info');
-        }, 1500);
-    };
-
-    // Notification System
-    const showNotification = function(message, type = 'success') {
-        let container = document.getElementById('gc-toast-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'gc-toast-container';
-            container.className = 'fixed top-4 right-4 z-[9999] flex flex-col gap-2';
-            document.body.appendChild(container);
-        }
-        
-        const notification = document.createElement('div');
-        notification.className = `gc-toast px-4 py-3 rounded-lg shadow-lg border transition-all duration-300`;
-        
-        if (type === 'success') {
-            notification.className += ' bg-emerald-50 border-emerald-200 text-emerald-800';
-        } else if (type === 'error') {
-            notification.className += ' bg-red-50 border-red-200 text-red-800';
-        } else if (type === 'warning') {
-            notification.className += ' bg-yellow-50 border-yellow-200 text-yellow-800';
+    var setLiveBtnState = function (connected) {
+        var btn = el('live-btn-network'); if (!btn) return;
+        if (connected) {
+            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 transition-colors';
+            btn.innerHTML = '<i class="fa-solid fa-circle-dot fa-beat"></i> Live';
         } else {
-            notification.className += ' bg-blue-50 border-blue-200 text-blue-800';
+            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 hover:bg-slate-500 transition-colors';
+            btn.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> Live';
         }
-        
-        const iconClass = type === 'success' ? 'fa-circle-check' : 
-                         type === 'error' ? 'fa-circle-exclamation' : 
-                         type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info';
-        
-        notification.innerHTML = `
-            <div class="flex items-center">
-                <i class="fa-solid ${iconClass} mr-3"></i>
-                <span class="font-medium">${message}</span>
-                <button class="ml-4 text-slate-400 hover:text-slate-600" onclick="this.parentElement.parentElement.remove()">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-            </div>
-        `;
-        
-        container.appendChild(notification);
-        
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.classList.add('hide');
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.remove();
-                    }
-                }, 300);
+    };
+
+    var hideLivePanels = function () {
+        hide('eth-live-panel');
+        hide('wifi-live-panel');
+        hide('lte-live-panel');
+        hide('lte-power-off-alert');
+    };
+
+    var connectNetworkStatusWs = function () {
+        if (_netWs && _netWs.readyState === WebSocket.OPEN) return;
+        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var url      = protocol + '//' + window.location.host + '/ws/network-status';
+        console.log('[NET] Connecting:', url);
+        try { _netWs = new WebSocket(url); }
+        catch (e) { showNotification('Could not open live network connection', 'error'); return; }
+
+        _netWs.onopen = function () {
+            _liveConnected = true;
+            setLiveBtnState(true);
+            showNotification('Live network connected', 'success');
+            _netWs.send(JSON.stringify({type:'get_snapshot'}));
+        };
+        _netWs.onmessage = function (ev) {
+            try {
+                var msg = JSON.parse(ev.data);
+                if (msg.type==='network_status_initial'||msg.type==='network_status_update') {
+                    applySnapshot(msg.data);
+                }
+            } catch(e) { console.warn('[NET] parse error', e); }
+        };
+        _netWs.onerror = function (e) { console.error('[NET] WS error', e); };
+        _netWs.onclose = function (ev) {
+            _liveConnected = false;
+            setLiveBtnState(false);
+            console.log('[NET] closed code='+ev.code);
+            if (_netActive) _netReconnect = setTimeout(connectNetworkStatusWs, 5000);
+        };
+        // keepalive
+        var ping = setInterval(function () {
+            if (_netWs && _netWs.readyState===WebSocket.OPEN) _netWs.send(JSON.stringify({type:'ping'}));
+            else clearInterval(ping);
+        }, 30000);
+    };
+
+    var disconnectNetworkStatusWs = function () {
+        _netActive    = false;
+        _liveConnected = false;
+        clearTimeout(_netReconnect);
+        if (_netWs) { _netWs.close(1000,'user stopped'); _netWs=null; }
+        setLiveBtnState(false);
+        hideLivePanels();
+        showNotification('Live network stopped', 'info');
+    };
+
+    var initLiveButton = function () {
+        var btn = el('live-btn-network'); if (!btn) return;
+        var f   = btn.cloneNode(true);
+        btn.parentNode.replaceChild(f, btn);
+        f.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (_netActive) disconnectNetworkStatusWs();
+            else { _netActive=true; connectNetworkStatusWs(); }
+        });
+    };
+
+    // Public API
+    window.networkStatusLive = {
+        connect:    function () { _netActive=true; connectNetworkStatusWs(); },
+        disconnect: disconnectNetworkStatusWs,
+        cache:      function () { return _cache; }
+    };
+
+    // =========================================================================
+    // GENERAL WS  (/ws/general  � time sync only now)
+    // =========================================================================
+    var initializeWebSocket = function () {
+        if (window.ws && window.ws.readyState===WebSocket.OPEN) return;
+        var protocol = window.location.protocol==='https:'?'wss:':'ws:';
+        window.ws = new WebSocket(protocol+'//'+window.location.host+'/ws/general');
+        window.ws.onopen    = function () { console.log('[WS/general] connected'); };
+        window.ws.onmessage = function (ev) {
+            var d = JSON.parse(ev.data);
+            if (d.type==='time_update') {
+                setInputValue('[name="date"]', d.current_date);
+                setInputValue('[name="time"]', d.current_time);
             }
+        };
+        window.ws.onerror = function (e) { console.warn('[WS/general] error', e); };
+        window.ws.onclose = function ()  { setTimeout(initializeWebSocket, 5000); };
+    };
+
+    // =========================================================================
+    // NOTIFICATIONS
+    // =========================================================================
+    var showNotification = function (msg, type) {
+        type = type||'success';
+        var c = el('gc-toast-container');
+        if (!c) {
+            c = document.createElement('div');
+            c.id = 'gc-toast-container';
+            c.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
+            document.body.appendChild(c);
+        }
+        var n = document.createElement('div');
+        var colors = {success:' bg-emerald-50 border-emerald-200 text-emerald-800',error:' bg-red-50 border-red-200 text-red-800',warning:' bg-yellow-50 border-yellow-200 text-yellow-800',info:' bg-blue-50 border-blue-200 text-blue-800'};
+        var icons  = {success:'fa-circle-check',error:'fa-circle-exclamation',warning:'fa-triangle-exclamation',info:'fa-circle-info'};
+        n.className = 'gc-toast px-4 py-3 rounded-lg shadow-lg border transition-all duration-300'+(colors[type]||colors.info);
+        n.innerHTML = '<div class="flex items-center"><i class="fa-solid '+(icons[type]||'fa-circle-info')+' mr-3"></i><span class="font-medium">'+msg+'</span><button class="ml-4 text-slate-400 hover:text-slate-600" onclick="this.parentElement.parentElement.remove()"><i class="fa-solid fa-times"></i></button></div>';
+        c.appendChild(n);
+        setTimeout(function () {
+            if (n.parentNode) { n.classList.add('hide'); setTimeout(function(){if(n.parentNode)n.remove();},300); }
         }, 5000);
     };
 
-    // Collect Form Data for API
-    const collectFormData = function() {
-        const wifiSsid = getInputValue('[name="wifi-ssid"]');
-        const wifiPassword = getInputValue('[name="wifi-password"]');
-        const networkMode = getRadioValue('[name="network-mode"]') || 'wifi';
-        
-        const formData = {
+    // =========================================================================
+    // COLLECT FORM DATA  (live cache included in payload)
+    // =========================================================================
+    var collectFormData = function () {
+        var l   = _cache.lte  || {};
+        var w   = _cache.wlan || {};
+        var e0  = (_cache.lan||{}).eth0 || {};
+        var e1  = (_cache.lan||{}).eth1 || {};
+        return {
             gateway_identity: {
-                name: getInputValue('[name="gateway-name"]') || 'Univa-GW-01',
-                serial_number: getInputValue('[name="serial-number"]') || 'GW2025-1190021',
+                name:            getInputValue('[name="gateway-name"]')    || 'Univa-GW-01',
+                serial_number:   getInputValue('[name="serial-number"]')   || 'GW2025-1190021',
                 deployment_site: getInputValue('[name="deployment-site"]') || 'Chennai Port - Zone A',
-                location_mode: getRadioValue('[name="location-mode"]') || 'manual',
-                latitude: parseFloat(getInputValue('[name="latitude"]')) || 12.99123,
-                longitude: parseFloat(getInputValue('[name="longitude"]')) || 80.12312,
-                asset_id: getInputValue('[name="asset-id"]') || 'CRN-CT-12'
+                location_mode:   getRadioValue('[name="location-mode"]')   || 'manual',
+                latitude:        parseFloat(getInputValue('[name="latitude"]'))  || 12.99123,
+                longitude:       parseFloat(getInputValue('[name="longitude"]')) || 80.12312,
+                asset_id:        getInputValue('[name="asset-id"]')        || 'CRN-CT-12'
             },
             date_time: {
-                timezone: getSelectValue('[name="timezone"]') || 'Asia/Kolkata',
-                ntp_server: getSelectValue('[name="ntp-server"]') || 'pool.ntp.org',
+                timezone:    getSelectValue('[name="timezone"]')    || 'Asia/Kolkata',
+                ntp_server:  getSelectValue('[name="ntp-server"]')  || 'pool.ntp.org',
                 date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
                 time_format: getSelectValue('[name="time-format"]') || '24-hour',
-                language: getSelectValue('[name="language"]') || 'en'
+                language:    getSelectValue('[name="language"]')    || 'en'
             },
             network: {
-                mode: networkMode,
+                mode: getRadioValue('[name="network-mode"]') || 'wifi',
                 wifi: {
-                    ssid: wifiSsid,
-                    password: wifiPassword
+                    ssid:     getInputValue('[name="wifi-ssid"]'),
+                    password: getInputValue('[name="wifi-password"]'),
+                    // live snapshot
+                    live_state:          w.state,
+                    live_signal_quality: w.signal_quality,
+                    live_ip:             w.ip    || '',
+                    live_mac:            w.mac   || '',
+                    live_bssid:          w.bssid || '',
+                    live_frequency:      w.frequency || 0
                 },
                 ethernet: {
                     ip_assignment: getRadioValue('[name="ip-assignment"]') || 'dhcp',
-                    static_ip: getInputValue('[name="static-ip"]'),
-                    subnet_mask: getInputValue('[name="subnet-mask"]'),
-                    gateway: getInputValue('[name="gateway"]'),
-                    dns1: getInputValue('[name="dns1"]'),
-                    dns2: getInputValue('[name="dns2"]')
+                    static_ip:     getInputValue('[name="static-ip"]'),
+                    subnet_mask:   getInputValue('[name="subnet-mask"]'),
+                    gateway:       getInputValue('[name="gateway"]'),
+                    dns1:          getInputValue('[name="dns1"]'),
+                    dns2:          getInputValue('[name="dns2"]'),
+                    // live snapshot
+                    live_eth0_ip:    e0.ip    || '',
+                    live_eth0_mac:   e0.mac   || '',
+                    live_eth0_state: e0.state,
+                    live_eth1_ip:    e1.ip    || '',
+                    live_eth1_mac:   e1.mac   || '',
+                    live_eth1_state: e1.state
                 },
                 cellular: {
-                    apn: getInputValue('[name="apn"]') || 'internet',
+                    apn:      getInputValue('[name="apn"]')             || 'internet',
                     username: getInputValue('[name="cellular-username"]'),
-                    password: getInputValue('[name="cellular-password"]')
+                    password: getInputValue('[name="cellular-password"]'),
+                    // live snapshot
+                    live_state:         l.state,
+                    live_power:         l.power,
+                    live_signal_pct:    l.signal_pct,
+                    live_imei:          l.imei          || '',
+                    live_operator_id:   l.operator_id   || '',
+                    live_operator_name: l.operator_name || '',
+                    live_ip:            l.ip            || '',
+                    live_iccid:         l.iccid         || '',
+                    live_imsi:          l.imsi          || '',
+                    live_tech:          l.tech          || ''
                 }
             },
             heartbeat: {
-                interval: parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
-                offline_threshold: parseInt(getInputValue('[name="offline-threshold"]')) || 120
+                interval:          parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
+                offline_threshold: parseInt(getInputValue('[name="offline-threshold"]'))  || 120
             },
-            mac_address: document.querySelector('[data-mac-address]')?.textContent.trim() || '00:1A:2B:3C:4D:5E'
-        };
-
-        // Debug log
-        console.log('📦 Collected Form Data:', JSON.stringify(formData, null, 2));
-        return formData;
-    };
-
-    // Save Configuration Handler
-    const handleSaveConfiguration = async function() {
-        console.log('💾 Save button clicked');
-        const saveBtn = document.getElementById('save-btn');
-        if (!saveBtn) return;
-        
-        const originalText = saveBtn.innerHTML;
-        
-        // Show loading state
-        saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
-        saveBtn.disabled = true;
-        saveBtn.classList.remove('bg-primary', 'hover:bg-primaryHover');
-        saveBtn.classList.add('bg-gray-500', 'cursor-wait');
-        
-        const configData = collectFormData();
-        
-        console.log('📤 Sending to backend:', JSON.stringify(configData, null, 2));
-        
-        try {
-            console.log('🌐 Making API call to /api/general-configuration');
-            const response = await fetch('/api/general-configuration', {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(configData)
-            });
-            
-            const result = await response.json();
-            console.log('📥 Server response:', result);
-            
-            if (!response.ok) {
-                throw new Error(result.message || `HTTP ${response.status}`);
-            }
-            
-            // Success state
-            saveBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved Successfully!';
-            saveBtn.classList.remove('bg-gray-500', 'cursor-wait');
-            saveBtn.classList.add('bg-success', 'hover:bg-emerald-600');
-            
-            showNotification(result.message || 'Configuration saved successfully!', 'success');
-            
-            // Reset button after 2 seconds
-            setTimeout(() => {
-                saveBtn.innerHTML = originalText;
-                saveBtn.classList.remove('bg-success', 'hover:bg-emerald-600');
-                saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
-                saveBtn.disabled = false;
-            }, 2000);
-            
-        } catch (error) {
-            console.error('❌ Save error:', error);
-            
-            // Error state
-            saveBtn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
-            saveBtn.classList.remove('bg-gray-500', 'cursor-wait');
-            saveBtn.classList.add('bg-danger', 'hover:bg-red-600');
-            
-            showNotification(`Save failed: ${error.message}`, 'error');
-            
-            // Reset button after 3 seconds
-            setTimeout(() => {
-                saveBtn.innerHTML = originalText;
-                saveBtn.classList.remove('bg-danger', 'hover:bg-red-600');
-                saveBtn.classList.add('bg-primary', 'hover:bg-primaryHover');
-                saveBtn.disabled = false;
-            }, 3000);
-        }
-    };
-
-    // Load Configuration
-    const loadConfiguration = async function() {
-        try {
-            console.log('📥 Loading configuration from backend...');
-            
-            console.log('🌐 Making API call to /api/general-configuration');
-            const response = await fetch('/api/general-configuration');
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const config = await response.json();
-            console.log('📥 Configuration loaded:', config);
-            
-            populateFormWithConfig(config);
-            
-        } catch (error) {
-            console.error('❌ Load error:', error);
-            throw error;
-        }
-    };
-
-    const populateFormWithConfig = function(config) {
-        console.log('📝 Populating form with config:', config);
-        
-        // Gateway Identity
-        if (config.gateway_identity) {
-            const id = config.gateway_identity;
-            setInputValue('[name="gateway-name"]', id.name);
-            setInputValue('[name="serial-number"]', id.serial_number);
-            setInputValue('[name="deployment-site"]', id.deployment_site);
-            setRadioValue('[name="location-mode"]', id.location_mode);
-            setInputValue('[name="latitude"]', id.latitude);
-            setInputValue('[name="longitude"]', id.longitude);
-            setInputValue('[name="asset-id"]', id.asset_id);
-        }
-        
-        // Date & Time
-        if (config.date_time) {
-            const dt = config.date_time;
-            setSelectValue('[name="timezone"]', dt.timezone);
-            setSelectValue('[name="ntp-server"]', dt.ntp_server);
-            setSelectValue('[name="date-format"]', dt.date_format);
-            setSelectValue('[name="time-format"]', dt.time_format);
-            setSelectValue('[name="language"]', dt.language);
-        }
-        
-        // Network
-        if (config.network) {
-            const net = config.network;
-            
-            // WiFi
-            const wifi = net.wifi || {};
-            setInputValue('[name="wifi-ssid"]', wifi.ssid || '');
-            setInputValue('[name="wifi-password"]', wifi.password || '');
-            
-            // Ethernet
-            const eth = net.ethernet || {};
-            setRadioValue('[name="ip-assignment"]', eth.ip_assignment || 'dhcp');
-            setInputValue('[name="static-ip"]', eth.static_ip || '');
-            setInputValue('[name="subnet-mask"]', eth.subnet_mask || '');
-            setInputValue('[name="gateway"]', eth.gateway || '');
-            setInputValue('[name="dns1"]', eth.dns1 || '');
-            setInputValue('[name="dns2"]', eth.dns2 || '');
-            
-            // Cellular
-            const cell = net.cellular || {};
-            setInputValue('[name="apn"]', cell.apn || 'internet');
-            setInputValue('[name="cellular-username"]', cell.username || '');
-            setInputValue('[name="cellular-password"]', cell.password || '');
-            
-            // Network Mode
-            setNetworkMode(net.mode || 'wifi');
-        }
-        
-        // Heartbeat
-        if (config.heartbeat) {
-            setInputValue('[name="heartbeat-interval"]', config.heartbeat.interval);
-            setInputValue('[name="offline-threshold"]', config.heartbeat.offline_threshold);
-        }
-        
-        // MAC Address
-        if (config.mac_address) {
-            const macElement = document.querySelector('[data-mac-address]');
-            if (macElement) macElement.textContent = config.mac_address;
-        }
-    };
-
-    // Button Handlers
-    const initializeButtons = function() {
-        // Refresh button
-        const refreshBtn = document.getElementById('refresh-btn');
-        if (refreshBtn) {
-            const newRefreshBtn = refreshBtn.cloneNode(true);
-            refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
-            
-            newRefreshBtn.addEventListener('click', function() {
-                if (confirm('Refresh page? Any unsaved changes will be lost.')) {
-                    location.reload();
-                }
-            });
-        }
-        
-        // Save button
-        const saveBtn = document.getElementById('save-btn');
-        if (saveBtn) {
-            const newSaveBtn = saveBtn.cloneNode(true);
-            saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
-            
-            newSaveBtn.addEventListener('click', handleSaveConfiguration);
-            console.log('✅ Save button initialized');
-        }
-        
-        // Sync time button
-        const syncBtn = document.querySelector('.sync-time-btn');
-        if (syncBtn) {
-            const newSyncBtn = syncBtn.cloneNode(true);
-            syncBtn.parentNode.replaceChild(newSyncBtn, syncBtn);
-            
-            newSyncBtn.addEventListener('click', function() {
-                const originalHTML = this.innerHTML;
-                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>';
-                this.disabled = true;
-                
-                // Try to sync via WebSocket if connected
-                if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-                    wsConnection.send(JSON.stringify({ type: 'sync_time' }));
-                    
-                    setTimeout(() => {
-                        this.innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Sync Now';
-                        this.disabled = false;
-                    }, 1000);
-                } else {
-                    // Fallback to simulated sync
-                    setTimeout(() => {
-                        this.innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Sync Now';
-                        this.disabled = false;
-                        showNotification('Time synchronized (simulated)', 'success');
-                    }, 1000);
-                }
-            });
-        }
-    };
-
-    // WebSocket
-    let wsConnection = null;
-    let reconnectTimeout = null;
-    let signalPollInterval = null;
-
-    const initializeWebSocket = function() {
-        // Close existing connection if any
-        if (wsConnection) {
-            try {
-                wsConnection.close();
-            } catch (e) {
-                console.log('Existing WebSocket closed');
-            }
-            wsConnection = null;
-        }
-        
-        // Clear any pending reconnect
-        if (reconnectTimeout) {
-            clearTimeout(reconnectTimeout);
-            reconnectTimeout = null;
-        }
-        
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/general`;
-        
-        console.log('🔌 Connecting WebSocket:', wsUrl);
-        wsConnection = new WebSocket(wsUrl);
-        
-        wsConnection.onopen = function() {
-            console.log('✅ WebSocket connected');
-            if (reconnectTimeout) {
-                clearTimeout(reconnectTimeout);
-                reconnectTimeout = null;
-            }
-            startSignalPolling();
-        };
-        
-        wsConnection.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
-                handleWebSocketMessage(data);
-            } catch (e) {
-                console.error('WebSocket parse error:', e);
-            }
-        };
-        
-        wsConnection.onclose = function() {
-            console.log('🔌 WebSocket disconnected');
-            if (!document.getElementById('save-btn')) {
-                console.log('Page no longer active, skipping reconnect');
-                return;
-            }
-            if (!reconnectTimeout) {
-                reconnectTimeout = setTimeout(() => {
-                    reconnectTimeout = null;
-                    console.log('🔄 Reconnecting WebSocket...');
-                    initializeWebSocket();
-                }, 5000);
-            }
-        };
-        
-        wsConnection.onerror = function(error) {
-            console.error('❌ WebSocket error:', error);
+            mac_address: (function () { var m=$('[data-mac-address]'); return m?m.textContent.trim():''; }())
         };
     };
 
-    const startSignalPolling = function() {
-        stopSignalPolling();
-        signalPollInterval = setInterval(() => {
-            const wifiPanel = document.getElementById('wifi-config');
-            if (!wifiPanel || wifiPanel.style.display === 'none') return;
-            
-            if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-                wsConnection.send(JSON.stringify({ type: 'get_wifi_signal' }));
-            }
-        }, 10000);
-    };
+    // =========================================================================
+    // SAVE
+    // =========================================================================
+    var handleSaveConfiguration = function () {
+        var btn = el('save-btn'); if (!btn) return;
+        var orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+        btn.disabled  = true;
+        btn.classList.remove('bg-primary','hover:bg-primaryHover');
+        btn.classList.add('bg-gray-500','cursor-wait');
 
-    const stopSignalPolling = function() {
-        if (signalPollInterval) {
-            clearInterval(signalPollInterval);
-            signalPollInterval = null;
-        }
-    };
-
-    const handleWebSocketMessage = function(data) {
-        console.log('WebSocket message:', data.type);
-        
-        switch (data.type) {
-            case 'initial':
-                setInputValue('[name="date"]', data.current_date);
-                setInputValue('[name="time"]', data.current_time);
-                if (data.wifi_signal_strength !== undefined) {
-                    updateWiFiSignalDisplay(data.wifi_signal_strength);
-                }
-                break;
-                
-            case 'wifi_signal_update':
-                updateWiFiSignalDisplay(data.strength);
-                break;
-                
-            case 'time_update':
-                setInputValue('[name="date"]', data.current_date);
-                setInputValue('[name="time"]', data.current_time);
-                break;
-                
-            case 'time_synced':
-                showNotification('Time synchronized successfully', 'success');
-                break;
-                
-            case 'pong':
-                console.log('Pong received');
-                break;
-        }
-    };
-
-    // Cleanup function
-    const cleanupGeneralConfig = function() {
-        stopSignalPolling();
-        
-        if (wsConnection) {
-            try { 
-                wsConnection.close(); 
-            } catch (e) {}
-            wsConnection = null;
-        }
-        
-        if (reconnectTimeout) {
-            clearTimeout(reconnectTimeout);
-            reconnectTimeout = null;
-        }
-        
-        window._generalConfigInitializing = false;
-        console.log('🧹 Cleanup complete');
-    };
-
-    // Main initialization
-    window.initGeneralConfig = function() {
-        console.log('🚀 initGeneralConfig CALLED at', new Date().toISOString());
-        
-        if (window._generalConfigInitializing) {
-            console.log('⏳ Already initializing, skipping...');
-            return;
-        }
-        window._generalConfigInitializing = true;
-
-        console.log('🚀 Initializing General Configuration...');
-
-        cleanupGeneralConfig();
-        initializeButtons();
-        initializeNetworkToggles();
-        initializePasswordToggles();
-
-        console.log('📥 Starting loadConfiguration...');
-        loadConfiguration().then(() => {
-            console.log('✅ loadConfiguration completed, initializing WebSocket');
-            initializeWebSocket();
-            window._generalConfigInitializing = false;
-            window._generalConfigInitialized = true;
-            console.log('✅ General Configuration initialized');
-        }).catch(error => {
-            console.error('❌ Load error:', error);
-            initializeWebSocket();
-            showNotification('Failed to load configuration', 'warning');
-            window._generalConfigInitializing = false;
+        fetch('/api/general-configuration', {
+            method:'PUT', credentials:'same-origin',
+            headers:{'Content-Type':'application/json','Accept':'application/json'},
+            body: JSON.stringify(collectFormData())
+        })
+        .then(function (r) { if(!r.ok) return r.json().then(function(e){throw new Error(e.message||'HTTP '+r.status);}); return r.json(); })
+        .then(function (result) {
+            btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved!';
+            btn.classList.remove('bg-gray-500','cursor-wait');
+            btn.classList.add('bg-emerald-600','hover:bg-emerald-700');
+            showNotification(result.message||'Configuration saved!', 'success');
+            setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 2000);
+        })
+        .catch(function (err) {
+            btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
+            btn.classList.remove('bg-gray-500','cursor-wait');
+            btn.classList.add('bg-red-600','hover:bg-red-700');
+            showNotification('Save failed: '+err.message, 'error');
+            setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-red-600','hover:bg-red-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 3000);
         });
     };
 
-    window.cleanupGeneralConfig = cleanupGeneralConfig;
-    window.showNotification = showNotification;
+    // =========================================================================
+    // LOAD CONFIGURATION
+    // =========================================================================
+    var loadConfiguration = function () {
+        return new Promise(function (resolve, reject) {
+            fetch('/api/general-configuration', {credentials:'same-origin'})
+            .then(function (r) { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+            .then(function (cfg) {
+                populateFormWithConfig(cfg);
+                var now = new Date();
+                setInputValue('[name="date"]', now.toISOString().slice(0,10));
+                setInputValue('[name="time"]', now.toTimeString().slice(0,5));
+                resolve(cfg);
+            }).catch(reject);
+        });
+    };
 
-    // Auto-initialize if we're on the right page
-    if (document.querySelector('[name="gateway-name"]')) {
-        console.log('🔄 Auto-initializing from script');
-        setTimeout(() => {
-            if (window.initGeneralConfig) {
-                window.initGeneralConfig();
-            }
-        }, 100);
+    var populateFormWithConfig = function (cfg) {
+        if (cfg.gateway_identity) {
+            var id = cfg.gateway_identity;
+            setInputValue('[name="gateway-name"]',    id.name);
+            setInputValue('[name="serial-number"]',   id.serial_number);
+            setInputValue('[name="deployment-site"]', id.deployment_site);
+            setRadioValue('[name="location-mode"]',   id.location_mode);
+            setInputValue('[name="latitude"]',        id.latitude);
+            setInputValue('[name="longitude"]',       id.longitude);
+            setInputValue('[name="asset-id"]',        id.asset_id);
+        }
+        if (cfg.date_time) {
+            setSelectValue('[name="timezone"]',    cfg.date_time.timezone);
+            setSelectValue('[name="ntp-server"]',  cfg.date_time.ntp_server);
+            setSelectValue('[name="date-format"]', cfg.date_time.date_format);
+            setSelectValue('[name="time-format"]', cfg.date_time.time_format);
+            setSelectValue('[name="language"]',    cfg.date_time.language);
+        }
+        if (cfg.network) {
+            var n=cfg.network, w=n.wifi||{}, e=n.ethernet||{}, c=n.cellular||{};
+            setInputValue('[name="wifi-ssid"]',         w.ssid     ||'');
+            setInputValue('[name="wifi-password"]',     w.password ||'');
+            setRadioValue('[name="ip-assignment"]',     e.ip_assignment||'dhcp');
+            setInputValue('[name="static-ip"]',         e.static_ip||'');
+            setInputValue('[name="subnet-mask"]',       e.subnet_mask||'');
+            setInputValue('[name="gateway"]',           e.gateway||'');
+            setInputValue('[name="dns1"]',              e.dns1||'');
+            setInputValue('[name="dns2"]',              e.dns2||'');
+            setInputValue('[name="apn"]',               c.apn||'internet');
+            setInputValue('[name="cellular-username"]', c.username||'');
+            setInputValue('[name="cellular-password"]', c.password||'');
+            setNetworkMode(n.mode||'wifi');
+        }
+        if (cfg.heartbeat) {
+            setInputValue('[name="heartbeat-interval"]', cfg.heartbeat.interval);
+            setInputValue('[name="offline-threshold"]',  cfg.heartbeat.offline_threshold);
+        }
+        if (cfg.mac_address) { var m=$('[data-mac-address]'); if(m) m.textContent=cfg.mac_address; }
+    };
+
+    // =========================================================================
+    // BUTTONS
+    // =========================================================================
+    var initializeButtons = function () {
+        var refreshBtn = el('refresh-btn');
+        if (refreshBtn) {
+            var nb = refreshBtn.cloneNode(true);
+            refreshBtn.parentNode.replaceChild(nb, refreshBtn);
+            nb.addEventListener('click', function () { if(confirm('Refresh? Unsaved changes will be lost.')) location.reload(); });
+        }
+        var saveBtn = el('save-btn');
+        if (saveBtn) {
+            var ns = saveBtn.cloneNode(true);
+            saveBtn.parentNode.replaceChild(ns, saveBtn);
+            ns.addEventListener('click', handleSaveConfiguration);
+        }
+        var syncBtn = $('.sync-time-btn');
+        if (syncBtn) {
+            var nsy = syncBtn.cloneNode(true);
+            syncBtn.parentNode.replaceChild(nsy, syncBtn);
+            nsy.addEventListener('click', function () {
+                var orig=this.innerHTML; this.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>'; this.disabled=true;
+                var now=new Date();
+                setInputValue('[name="date"]', now.toISOString().slice(0,10));
+                setInputValue('[name="time"]', now.toTimeString().slice(0,5));
+                fetch('/api/sync-time',{method:'POST',credentials:'same-origin'})
+                .then(function(){showNotification('Time synchronized','success');})
+                .catch(function(){showNotification('Time synchronized locally','info');})
+                .then(function(){ nsy.innerHTML=orig; nsy.disabled=false; });
+            });
+        }
+    };
+
+    // =========================================================================
+    // INIT
+    // =========================================================================
+    var cleanup = function () { window._generalConfigInitializing = false; };
+
+    window.initGeneralConfig = function () {
+        if (window._generalConfigInitializing) return;
+        window._generalConfigInitializing = true;
+        cleanup();
+        initializeButtons();
+        initializeNetworkToggles();
+        initializePasswordToggles();
+        initLiveButton();
+        initializeWebSocket();
+        loadConfiguration()
+        .then(function () { window._generalConfigInitializing=false; window._generalConfigInitialized=true; })
+        .catch(function (err) { console.error('Load error:',err); showNotification('Failed to load config','warning'); window._generalConfigInitializing=false; });
+    };
+
+    window.cleanupGeneralConfig = cleanup;
+    window.showNotification     = showNotification;
+
+    if ($('[name="gateway-name"]')) {
+        setTimeout(function () { if(window.initGeneralConfig) window.initGeneralConfig(); }, 100);
     }
 })();

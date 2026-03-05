@@ -36,7 +36,7 @@ def init_database():
 
 
 def create_tables(cursor):
-    """Create all tables — schema is complete at creation, no ALTER TABLE migrations needed"""
+    """Create all tables -- schema is complete at creation, no ALTER TABLE migrations needed"""
 
     # -----------------------------------------------------------------------
     # General configuration (single-row store, id always = 1)
@@ -338,7 +338,7 @@ def create_tables(cursor):
     ''')
 
     # -----------------------------------------------------------------------
-    # Pipeline send log — one row per config_type, tracks last sent version
+    # Pipeline send log -- one row per config_type, tracks last sent version
     # Version is read from here, incremented, written back ONLY on success
     # -----------------------------------------------------------------------
     cursor.execute('''
@@ -357,7 +357,7 @@ def create_tables(cursor):
 
 def _migrate_existing_db(cursor):
     """Safe additive migrations for DBs created before schema updates.
-    Only adds missing columns — never drops or modifies existing data.
+    Only adds missing columns -- never drops or modifies existing data.
     """
     # pipeline_service_targets: add enabled column if missing
     cursor.execute("PRAGMA table_info(pipeline_service_targets)")
@@ -421,7 +421,7 @@ def _migrate_existing_db(cursor):
         ''')
         print("[DB] Migration: created admin_users table")
 
-    # rules table — stores each rule as a flat row with groups/datapoints as JSON
+    # rules table -- stores each rule as a flat row with groups/datapoints as JSON
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rules'")
     if not cursor.fetchone():
         cursor.execute('''
@@ -448,7 +448,7 @@ def _hash_password(plain):
 
 
 def insert_default_data(cursor):
-    """Insert default seed data (idempotent — uses INSERT OR IGNORE)"""
+    """Insert default seed data (idempotent -- uses INSERT OR IGNORE)"""
 
     # General configuration row
     cursor.execute('SELECT COUNT(*) FROM general_configuration')
@@ -634,7 +634,7 @@ def get_next_pipeline_version(config_type):
 
 
 def record_pipeline_send_success(config_type, version, service_name, message=''):
-    """Called ONLY when pipeline send succeeds — persists the new version."""
+    """Called ONLY when pipeline send succeeds -- persists the new version."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1114,26 +1114,35 @@ def save_rule(rule):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute('''
-            INSERT INTO rules (id, name, rule_type, priority, description, enabled,
-                               groups_json, relay_datapoint, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
-            ON CONFLICT(id) DO UPDATE SET
-                name=excluded.name, priority=excluded.priority,
-                description=excluded.description, enabled=excluded.enabled,
-                groups_json=excluded.groups_json,
-                relay_datapoint=excluded.relay_datapoint,
-                updated_at=CURRENT_TIMESTAMP
-        ''', (
-            rule['id'],
-            rule.get('name', ''),
-            rule.get('ruleType', rule.get('rule_type', 'group')),
-            rule.get('priority', 'medium'),
-            rule.get('description', ''),
-            1 if rule.get('enabled', True) else 0,
-            _json.dumps(rule.get('groups', {})),
-            rule.get('relayDatapoint', rule.get('relay_datapoint', '')),
-        ))
+
+        # Avoid ON CONFLICT(...) DO UPDATE -- requires SQLite >= 3.24 (not in Python 3.5).
+        rule_id     = rule['id']
+        name        = rule.get('name', '')
+        rule_type   = rule.get('ruleType', rule.get('rule_type', 'group'))
+        priority    = rule.get('priority', 'medium')
+        description = rule.get('description', '')
+        enabled     = 1 if rule.get('enabled', True) else 0
+        groups_json = _json.dumps(rule.get('groups', {}))
+        relay_dp    = rule.get('relayDatapoint', rule.get('relay_datapoint', ''))
+
+        cur.execute('SELECT id FROM rules WHERE id=?', (rule_id,))
+        if cur.fetchone():
+            cur.execute('''
+                UPDATE rules
+                SET name=?, rule_type=?, priority=?, description=?,
+                    enabled=?, groups_json=?, relay_datapoint=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            ''', (name, rule_type, priority, description,
+                  enabled, groups_json, relay_dp, rule_id))
+        else:
+            cur.execute('''
+                INSERT INTO rules (id, name, rule_type, priority, description, enabled,
+                                   groups_json, relay_datapoint, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ''', (rule_id, name, rule_type, priority, description,
+                  enabled, groups_json, relay_dp))
+
         conn.commit()
         conn.close()
         return True

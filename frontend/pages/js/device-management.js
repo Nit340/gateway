@@ -17,15 +17,10 @@
     let devices = [];
     let selectedDeviceId = null;
     let isSaving = false;
-    let deviceWsConnection = null;
     let currentViewingDeviceId = null;
     let currentViewingDevice = null;
     let eventListenersBoundToNode = null;
     let isRefreshing = false;
-
-    // ==================== WEBSOCKET FIX PATCH VARIABLES ====================
-    let wsConnectionAttempts = 0;
-    let wsReconnectTimeout = null;
 
     // ==================== STYLES ====================
     function addDeviceManagementStyles() {
@@ -255,18 +250,11 @@
     async function initApp() {
         console.log('Initializing Device Management...');
 
-        wsConnectionAttempts = 0;
-
         await loadDevices();
         renderDevicesTable();
         setupEventListeners();
-        connectDeviceWebSocket();
 
         console.log('Device Management initialized successfully');
-
-        window.addEventListener('beforeunload', cleanupWebSocket);
-        window.addEventListener('pagehide',     cleanupWebSocket);
-        window.addEventListener('popstate',     cleanupWebSocket);
     }
 
     // ==================== DATA LOADING ====================
@@ -323,185 +311,10 @@
         }
     }
 
-    // ==================== WEBSOCKET CONNECTION ====================
-    function connectDeviceWebSocket() {
-        if (deviceWsConnection && 
-            (deviceWsConnection.readyState === WebSocket.OPEN || 
-             deviceWsConnection.readyState === WebSocket.CONNECTING)) {
-            console.log('Device WebSocket already connected or connecting');
-            return;
-        }
-
-        if (wsReconnectTimeout) {
-            clearTimeout(wsReconnectTimeout);
-            wsReconnectTimeout = null;
-        }
-
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/devices`;
-        
-        console.log('Connecting to device WebSocket:', wsUrl);
-        
-        try {
-            deviceWsConnection = new WebSocket(wsUrl);
-            
-            deviceWsConnection.onopen = () => {
-                console.log('Device WebSocket connected');
-                wsConnectionAttempts = 0;
-                showNotification('Real-time updates enabled', 'success', 2000);
-            };
-            
-            deviceWsConnection.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'initial_devices' && data.devices) {
-                        console.log('Received initial device status:', data.devices.length, 'devices');
-                        data.devices.forEach(device => {
-                            handleDeviceStatusUpdate({
-                                type: 'device_status',
-                                device_id: device.device_id,
-                                status: device.status,
-                                last_poll: device.last_poll
-                            });
-                        });
-                    } else {
-                        handleDeviceStatusUpdate(data);
-                    }
-                } catch (error) {
-                    console.error('Error parsing WebSocket message:', error);
-                }
-            };
-            
-            deviceWsConnection.onerror = (error) => {
-                console.error('Device WebSocket error:', error);
-            };
-            
-            deviceWsConnection.onclose = () => {
-                console.log('Device WebSocket disconnected');
-                deviceWsConnection = null;
-
-                if (document.getElementById('devicesTableBody') && wsConnectionAttempts < 5) {
-                    wsConnectionAttempts++;
-                    const delay = Math.min(1000 * Math.pow(2, wsConnectionAttempts), 30000);
-                    console.log(`Reconnecting in ${delay/1000}s (attempt ${wsConnectionAttempts}/5)`);
-
-                    wsReconnectTimeout = setTimeout(() => {
-                        connectDeviceWebSocket();
-                    }, delay);
-                } else if (wsConnectionAttempts >= 5) {
-                    console.log('Max WebSocket reconnection attempts reached');
-                    const existing = document.getElementById('ws-retry-banner');
-                    if (!existing) {
-                        const banner = document.createElement('div');
-                        banner.id = 'ws-retry-banner';
-                        banner.className = 'fixed bottom-4 right-4 z-50 bg-yellow-50 border border-yellow-300 rounded-lg shadow-lg p-4 flex items-center gap-3 max-w-sm';
-                        banner.innerHTML = `
-                            <i class="fa-solid fa-triangle-exclamation text-yellow-500 text-lg"></i>
-                            <span class="text-sm text-yellow-800 flex-1">Real-time updates disconnected.</span>
-                            <button id="ws-retry-btn" class="px-3 py-1 text-xs font-semibold bg-yellow-500 text-white rounded hover:bg-yellow-600">Retry</button>
-                            <button onclick="this.parentElement.remove()" class="text-yellow-500 hover:text-yellow-700 ml-1"><i class="fa-solid fa-times"></i></button>
-                        `;
-                        document.body.appendChild(banner);
-                        document.getElementById('ws-retry-btn').addEventListener('click', function() {
-                            banner.remove();
-                            wsConnectionAttempts = 0;
-                            connectDeviceWebSocket();
-                        });
-                    }
-                }
-            };
-        } catch (error) {
-            console.error('WebSocket connection error:', error);
-        }
-    }
-
-    function cleanupWebSocket() {
-        if (wsReconnectTimeout) {
-            clearTimeout(wsReconnectTimeout);
-            wsReconnectTimeout = null;
-        }
-        
-        if (deviceWsConnection) {
-            console.log('Closing WebSocket connection...');
-            try {
-                deviceWsConnection.close();
-            } catch (e) {
-                console.error('Error closing WebSocket:', e);
-            }
-            deviceWsConnection = null;
-        }
-        
-        wsConnectionAttempts = 0;
-    }
-
     window.cleanupDeviceManagement = function() {
-        cleanupWebSocket();
         eventListenersBoundToNode = null;
-        window.removeEventListener('beforeunload', cleanupWebSocket);
-        window.removeEventListener('pagehide',     cleanupWebSocket);
-        window.removeEventListener('popstate',     cleanupWebSocket);
         console.log('✅ Device Management cleaned up');
     };
-
-    function handleDeviceStatusUpdate(data) {
-        if (data.type === 'device_status') {
-            const deviceId = data.device_id;
-            const status = data.status;
-            const lastPoll = data.last_poll;
-            
-            const device = devices.find(d => d.id === deviceId);
-            if (device && device.status !== status) {
-                console.log(`Device ${deviceId} status changed: ${device.status} -> ${status}`);
-            }
-            
-            if (device) {
-                device.status = status;
-                device.lastPoll = lastPoll;
-            }
-            
-            updateDeviceRowUI(deviceId, status, lastPoll);
-            
-            if (currentViewingDeviceId === deviceId) {
-                updateInlineViewStatus(status, lastPoll);
-            }
-        }
-    }
-
-    function updateInlineViewStatus(status, lastPoll) {
-        const statusElement = document.getElementById('viewDeviceStatus');
-        const pollElement = document.getElementById('viewDeviceLastPoll');
-        
-        if (statusElement) {
-            const statusDotClass = status === 'Online' ? 'status-online' : 
-                                 status === 'Warning' ? 'status-warning' : 'status-offline';
-            statusElement.innerHTML = `
-                <div class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full ${statusDotClass}"></span>
-                    <span class="text-sm text-slate-700">${status}</span>
-                </div>
-            `;
-        }
-        
-        if (pollElement) {
-            pollElement.textContent = lastPoll || 'Never';
-        }
-    }
-
-    function updateDeviceRowUI(deviceId, status, lastPoll) {
-        const row = document.querySelector(`tr[id="device-${deviceId}"]`);
-        if (!row) return;
-        
-        const statusCell = row.querySelector('.device-status-cell');
-        if (statusCell) {
-            statusCell.innerHTML = getStatusBadge({ status: status, lastPoll: lastPoll });
-        }
-        
-        const pollCell = row.querySelector('.device-poll-cell');
-        if (pollCell) {
-            pollCell.textContent = lastPoll || 'Never';
-        }
-    }
 
     // ==================== RENDERING ====================
     function renderDevicesTable() {
@@ -539,9 +352,7 @@
             row.id = `device-${device.id}`;
             
             const deviceTypeBadge = getDeviceTypeBadge(device);
-            const statusBadge = getStatusBadge(device);
             const address = getDeviceAddress(device);
-            const lastPoll = device.lastPoll || device.last_poll || 'Never';
             
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -553,12 +364,8 @@
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-slate-700 font-mono text-xs">${escapeHtml(address)}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap device-status-cell">
-                    ${statusBadge}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 device-poll-cell">
-                    ${escapeHtml(lastPoll)}
-                </td>
+                <td class="px-6 py-4 whitespace-nowrap device-status-cell">&nbsp;</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 device-poll-cell">&nbsp;</td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button class="text-green-600 hover:text-green-800 mr-3" onclick="window.deviceManagement.viewDeviceInline('${device.id}')" title="View Details">
                         <i class="fa-solid fa-eye"></i>

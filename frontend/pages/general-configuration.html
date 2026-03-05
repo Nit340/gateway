@@ -337,9 +337,9 @@
                     <label class="block text-sm font-medium text-slate-700 mb-1">Language</label>
                     <select name="language" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
                         <option value="en">English</option>
-                        <option value="hi">हिंदी (Hindi)</option>
-                        <option value="es">Español (Spanish)</option>
-                        <option value="fr">Français (French)</option>
+                        <option value="hi">????? (Hindi)</option>
+                        <option value="es">Espa�ol (Spanish)</option>
+                        <option value="fr">Fran�ais (French)</option>
                         <option value="de">Deutsch (German)</option>
                     </select>
                 </div>
@@ -350,44 +350,64 @@
         <section id="section-network" class="bg-white rounded-xl shadow-sm border border-border p-6">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-network-wired mr-2 text-primary"></i> 
+                    <i class="fa-solid fa-network-wired mr-2 text-primary"></i>
                     <span class="mr-2">Network Configuration</span>
                     <span class="text-xs font-normal text-slate-500">SECTION C</span>
                 </h2>
-                <div class="badge-warning">
-                    Defines MQTT, Modbus TCP, OTA, and Cloud API connections
+                <div class="flex items-center gap-3">
+                    <!-- SINGLE Live button for the whole network section -->
+                    <button type="button" id="live-btn-network"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 hover:bg-slate-500 transition-colors">
+                        <i class="fa-solid fa-tower-broadcast"></i> Live
+                    </button>
+                    <div class="badge-warning">Defines MQTT, Modbus TCP, OTA, and Cloud API connections</div>
                 </div>
             </div>
-            
+
             <!-- Network Mode Selection -->
             <div class="mb-6">
                 <label class="block text-sm font-medium text-slate-700 mb-3">Network Mode</label>
                 <div class="flex flex-wrap gap-4">
                     <label class="flex items-center cursor-pointer">
                         <input type="radio" name="network-mode" value="ethernet" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700 flex items-center">
-                            <i class="fa-solid fa-ethernet mr-2"></i> Ethernet
-                        </span>
+                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-ethernet mr-2"></i> Ethernet</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="radio" name="network-mode" value="wifi" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                        <span class="ml-2 text-sm text-slate-700 flex items-center">
-                            <i class="fa-solid fa-wifi mr-2"></i> WiFi
-                        </span>
+                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-wifi mr-2"></i> WiFi</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="radio" name="network-mode" value="lte" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700 flex items-center">
-                            <i class="fa-solid fa-signal mr-2"></i> LTE/4G
-                        </span>
+                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
                     </label>
                 </div>
             </div>
-            
-            <!-- Ethernet Configuration -->
-            <div id="ethernet-config" class="mb-6 space-y-4 hidden">
+
+            <!-- -- ETHERNET ---------------------------------------------------- -->
+            <div id="ethernet-config" class="mb-6 hidden">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Ethernet Configuration</h3>
-                
+
+                <!-- Live status cards: hidden until Live connected -->
+                <div id="eth-live-panel" class="hidden mb-4 grid grid-cols-2 gap-3">
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth0</span>
+                            <span id="eth0-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        </div>
+                        <div class="text-xs text-slate-500">IP &nbsp;<span id="eth0-ip"  class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500">MAC <span id="eth0-mac" class="font-mono text-slate-800">--</span></div>
+                    </div>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth1</span>
+                            <span id="eth1-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        </div>
+                        <div class="text-xs text-slate-500">IP &nbsp;<span id="eth1-ip"  class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500">MAC <span id="eth1-mac" class="font-mono text-slate-800">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Editable config -->
                 <div class="flex items-center space-x-6 mb-4">
                     <label class="flex items-center cursor-pointer">
                         <input type="radio" name="ip-assignment" value="dhcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
@@ -398,50 +418,70 @@
                         <span class="ml-2 text-sm text-slate-700">Static IP</span>
                     </label>
                 </div>
-                
                 <div id="static-ip-config" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
-                        <input type="text" name="static-ip" value="192.168.1.50" 
-                            class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="text" name="static-ip" value="192.168.1.50" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Subnet Mask</label>
-                        <input type="text" name="subnet-mask" value="255.255.255.0" 
-                            class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="text" name="subnet-mask" value="255.255.255.0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Gateway</label>
-                        <input type="text" name="gateway" value="192.168.1.1" 
-                            class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="text" name="gateway" value="192.168.1.1" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">DNS 1</label>
-                        <input type="text" name="dns1" value="8.8.8.8" 
-                            class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="text" name="dns1" value="8.8.8.8" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">DNS 2</label>
-                        <input type="text" name="dns2" value="8.8.4.4" 
-                            class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="text" name="dns2" value="8.8.4.4" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
                     </div>
                 </div>
             </div>
-            
-            <!-- WiFi Configuration - FIXED with proper name attributes -->
-            <div id="wifi-config" class="mb-6 space-y-4">
+
+            <!-- -- WIFI -------------------------------------------------------- -->
+            <div id="wifi-config" class="mb-6">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">WiFi Configuration</h3>
+
+                <!-- Live status strip: hidden until Live connected -->
+                <div id="wifi-live-panel" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <!-- state + signal bars row -->
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="wifi-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        <div class="flex items-center gap-2">
+                            <div class="signal-strength" id="wifi-signal-bars">
+                                <div class="signal-bar none" style="height:4px"></div>
+                                <div class="signal-bar none" style="height:8px"></div>
+                                <div class="signal-bar none" style="height:12px"></div>
+                                <div class="signal-bar none" style="height:16px"></div>
+                                <div class="signal-bar none" style="height:20px"></div>
+                            </div>
+                            <span id="wifi-signal-dbm" class="text-xs font-mono text-slate-600">-- dBm</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-500">
+                        <div>IP &nbsp;&nbsp;<span id="wifi-ip"   class="font-mono text-slate-800">--</span></div>
+                        <div>MAC &nbsp;<span id="wifi-mac"  class="font-mono text-slate-800">--</span></div>
+                        <div>BSSID <span id="wifi-bssid" class="font-mono text-slate-800">--</span></div>
+                        <div>Freq &nbsp;<span id="wifi-freq" class="font-mono text-slate-800">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Editable fields (SSID + password only) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID</label>
-                        <input type="text" name="wifi-ssid" value="Univa-Guest" 
+                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID <span class="text-red-500">*</span></label>
+                        <input type="text" name="wifi-ssid" value="Univa-Guest"
                             class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                             placeholder="WiFi network name">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
                         <div class="relative">
-                            <input type="password" name="wifi-password" value="password123" 
+                            <input type="password" name="wifi-password" value="password123"
                                 class="wifi-password-input w-full rounded-lg border-slate-300 border px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                 placeholder="WiFi password">
                             <button type="button" class="toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-primary">
@@ -450,66 +490,72 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- WiFi Signal Strength - exactly as in your reference -->
-                <div class="flex items-center space-x-2 mt-3">
-                    <span class="text-sm text-slate-700">Signal Strength:</span>
-                    <div class="signal-strength">
-                        <div class="signal-bar none" style="height: 4px;"></div>
-                        <div class="signal-bar poor" style="height: 8px;"></div>
-                        <div class="signal-bar fair" style="height: 12px;"></div>
-                        <div class="signal-bar good" style="height: 16px;"></div>
-                        <div class="signal-bar excellent" style="height: 20px;"></div>
-                    </div>
-                    <span class="text-sm font-medium text-slate-700 ml-2 signal-label">Good</span>
-                    <button type="button" onclick="scanWiFi()" class="ml-2 text-xs text-primary hover:text-primaryHover">
-                        <i class="fa-solid fa-rotate"></i>
-                    </button>
-                </div>
             </div>
-            
-            <!-- Cellular/LTE Configuration -->
-            <div id="cellular-config" class="mb-6 space-y-4 hidden">
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">Cellular/LTE Configuration</h3>
+
+            <!-- -- LTE --------------------------------------------------------- -->
+            <div id="cellular-config" class="mb-6 hidden">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Cellular / LTE Configuration</h3>
+
+                <!-- Power-off alert: shown ONLY when power = 0. No other live UI shown. -->
+                <div id="lte-power-off-alert" class="hidden mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                    <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>
+                    <span>No GSM / LTE modem detected &mdash; hardware power state is off.</span>
+                </div>
+
+                <!-- Live status strip: shown only when power = 1 AND Live connected -->
+                <div id="lte-live-panel" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span id="lte-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-400">Signal</span>
+                            <div class="w-28 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div id="lte-signal-fill" class="h-full bg-emerald-500 rounded-full transition-all" style="width:0%"></div>
+                            </div>
+                            <span id="lte-signal-pct" class="text-xs font-mono text-slate-600">--%</span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-500">
+                        <div>IP &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-ip"            class="font-mono text-slate-800">--</span></div>
+                        <div>Operator &nbsp;<span id="lte-operator-name" class="font-mono text-slate-800">--</span></div>
+                        <div>Op ID &nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-operator-id"   class="font-mono text-slate-800">--</span></div>
+                        <div>Tech &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-tech"          class="font-mono text-slate-800">--</span></div>
+                        <div>IMEI &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-imei"          class="font-mono text-slate-800">--</span></div>
+                        <div>ICCID &nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-iccid"         class="font-mono text-slate-800">--</span></div>
+                        <div>IMSI &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-imsi"          class="font-mono text-slate-800">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Editable fields -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">APN</label>
-                        <input type="text" name="apn" value="internet" 
+                        <input type="text" name="apn" value="internet"
                             class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
-                        <input type="text" name="cellular-username" value="" 
+                        <input type="text" name="cellular-username" value=""
                             class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                     </div>
-                    <div>
+                    <div class="md:col-span-2 md:w-1/2">
                         <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
                         <div class="relative">
-                            <input type="password" name="cellular-password" value="" 
+                            <input type="password" name="cellular-password" value=""
                                 class="cellular-password-input w-full rounded-lg border-slate-300 border px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                             <button type="button" class="toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-primary">
                                 <i class="fa-solid fa-eye"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="flex items-center">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Signal Strength</label>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-sm font-mono">-67 dBm</span>
-                                <span class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full">Good</span>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
-            
-            <!-- MAC Address Display -->
+
+            <!-- MAC Address (live � updated from active interface) -->
             <div class="border-t border-slate-200 pt-6">
                 <div class="p-4 border border-slate-200 rounded-lg bg-slate-50">
                     <label class="block text-sm font-medium text-slate-700 mb-1">MAC Address</label>
-                    <div class="font-mono text-slate-600" data-mac-address>00:1A:2B:3C:4D:5E</div>
-                    <p class="text-xs text-slate-500 mt-1">Unique hardware identifier for network communication</p>
+                    <div class="font-mono text-slate-600" data-mac-address>--</div>
+                    <p class="text-xs text-slate-500 mt-1">Active interface hardware address (updated live)</p>
                 </div>
             </div>
         </section>
