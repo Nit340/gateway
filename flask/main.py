@@ -120,10 +120,11 @@ async def api_pipeline_targets_put(request):
         body = await request.json()
         config_type = body.get('config_type')
         service_name = body.get('service_name', '').strip()
+        config_name  = body.get('config_name', '').strip() if 'config_name' in body else None
         enabled = body.get('enabled')
         if not config_type:
             return web.json_response({'success': False, 'error': 'config_type required'}, status=400)
-        ok = set_pipeline_service_name(config_type, service_name)
+        ok = set_pipeline_service_name(config_type, service_name, config_name)
         if enabled is not None and ok:
             try:
                 conn = get_db_connection()
@@ -380,9 +381,9 @@ async def start_background_tasks(app):
         print("[MAIN] Starting pipeline background thread...")
         start_pipeline_background(app)
 
-        async def _auto_send_modbus_on_startup():
-            from pipeline import pipeline_state
-            print("[MAIN] Auto-send: waiting for pipeline connection (max 30 s)...")
+        async def _startup_auto_send():
+            from pipeline import pipeline_state, _do_auto_send
+            print("[MAIN] Startup auto-send: waiting for pipeline connection (max 30 s)...")
             for _ in range(30):
                 await asyncio.sleep(1)
                 with pipeline_state["lock"]:
@@ -390,29 +391,31 @@ async def start_background_tasks(app):
                         break
             with pipeline_state["lock"]:
                 connected = pipeline_state["connected"]
-            if connected:
-                print("[MAIN] Auto-send: pipeline connected - sending modbus config")
-                try:
-                    result = await send_modbus_config_now()
-                    if result.get("success"):
-                        print("[MAIN] Auto-send OK")
-                    else:
-                        print("[MAIN] Auto-send failed: {}".format(result.get("error")))
-                except Exception as e:
-                    print("[MAIN] Auto-send exception: {}".format(e))
-            else:
-                print("[MAIN] Auto-send: not connected after 30 s - config queued")
+            print("[MAIN] Startup auto-send: pipeline {} -- running ordered send".format(
+                "connected" if connected else "not connected (will queue)"))
+            try:
+                result = await _do_auto_send()
+                import json as _j
+                body   = _j.loads(result.body) if hasattr(result, "body") else result
+                sent   = body.get("auto_sent", False)
+                count  = body.get("targets_attempted", 0)
+                print("[MAIN] Startup auto-send complete: {} target(s), sent={}".format(count, sent))
+                for r in body.get("results", []):
+                    print("[MAIN]   {} order={} sent={} -> {}".format(
+                        r.get("config_type"), r.get("send_order"), r.get("pipeline_sent"), r.get("message", "")))
+            except Exception as e:
+                print("[MAIN] Startup auto-send error: {}".format(e))
 
-        app["auto_send_modbus"] = asyncio.ensure_future(_auto_send_modbus_on_startup())
+        app["startup_auto_send"] = asyncio.ensure_future(_startup_auto_send())
     else:
         print("[MAIN] Pipeline not available - skipping")
 
 async def cleanup_background_tasks(app):
     print("[MAIN] Cleaning up background tasks...")
-    if 'auto_send_modbus' in app:
-        app['auto_send_modbus'].cancel()
+    if 'startup_auto_send' in app:
+        app['startup_auto_send'].cancel()
         try:
-            await app['auto_send_modbus']
+            await app['startup_auto_send']
         except (asyncio.CancelledError, Exception):
             pass
 

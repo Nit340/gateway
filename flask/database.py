@@ -260,7 +260,7 @@ def create_tables(cursor):
         try:
             cursor.execute('ALTER TABLE loadcell_device ADD COLUMN {} {}'.format(_col, _defn))
         except Exception:
-            pass  # column already exists — safe to ignore
+            pass  # column already exists ï¿½ safe to ignore
 
     # -----------------------------------------------------------------------
     # Cloud integration
@@ -347,6 +347,7 @@ def create_tables(cursor):
             config_type  TEXT    NOT NULL UNIQUE
                              CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway', 'core')),
             service_name TEXT    NOT NULL DEFAULT '',
+            config_name  TEXT    NOT NULL DEFAULT '',
             enabled      BOOLEAN DEFAULT 1,
             description  TEXT    DEFAULT '',
             updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -370,6 +371,30 @@ def create_tables(cursor):
         )
     ''')
 
+    # -----------------------------------------------------------------------
+    # Virtual Devices
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS virtual_device (
+            id         TEXT    PRIMARY KEY,
+            name       TEXT    NOT NULL,
+            enabled    BOOLEAN DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS virtual_datapoints (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT    NOT NULL REFERENCES virtual_device(id) ON DELETE CASCADE,
+            name      TEXT    NOT NULL,
+            unit      TEXT    DEFAULT \'\',
+            UNIQUE(device_id, name)
+        )
+    ''')
+
+
 
 def _migrate_existing_db(cursor):
     """Safe additive migrations for DBs created before schema updates.
@@ -381,6 +406,21 @@ def _migrate_existing_db(cursor):
     if 'enabled' not in cols:
         cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN enabled BOOLEAN DEFAULT 1")
         print("[DB] Migration: added pipeline_service_targets.enabled")
+    if 'config_name' not in cols:
+        cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN config_name TEXT NOT NULL DEFAULT ''")
+        # Seed default config names for existing rows
+        defaults = {
+            'modbus':      'modbus_config',
+            'loadcell':    'loadcell_config',
+            'iot_gateway': 'iot_gateway_config',
+            'core':        'core_config',
+        }
+        for cfg_type, cfg_name in defaults.items():
+            cursor.execute(
+                "UPDATE pipeline_service_targets SET config_name=? WHERE config_type=? AND (config_name IS NULL OR config_name='')",
+                (cfg_name, cfg_type)
+            )
+        print("[DB] Migration: added pipeline_service_targets.config_name")
 
     # pipeline_send_log: ensure table exists (added in later version)
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pipeline_send_log'")
@@ -459,6 +499,30 @@ def _migrate_existing_db(cursor):
         print("[DB] Migration: created rules table")
 
 
+    # virtual_device / virtual_datapoints: ensure tables exist on older DBs
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='virtual_device'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS virtual_device (
+                id         TEXT    PRIMARY KEY,
+                name       TEXT    NOT NULL,
+                enabled    BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS virtual_datapoints (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT    NOT NULL REFERENCES virtual_device(id) ON DELETE CASCADE,
+                name      TEXT    NOT NULL,
+                unit      TEXT    DEFAULT \'\',
+                UNIQUE(device_id, name)
+            )
+        ''')
+        print("[DB] Migration: created virtual_device and virtual_datapoints tables")
+
+
 def _hash_password(plain):
     return hashlib.sha256(plain.encode()).hexdigest()
 
@@ -489,15 +553,15 @@ def insert_default_data(cursor):
     )
 
     # Default pipeline service targets
-    for cfg_type, svc_name, desc in [
-        ('modbus',      'modbus_service',      'Modbus pipeline service name'),
-        ('loadcell',    'load_cell_service',   'Load-cell pipeline service name'),
-        ('iot_gateway', 'iot_gateway_service', 'IoT gateway pipeline service name'),
-        ('core',        'core_service',        'Core config pipeline service name'),
+    for cfg_type, svc_name, cfg_name, desc in [
+        ('modbus',      'modbus_service',      'modbus_config',       'Modbus pipeline service name'),
+        ('loadcell',    'load_cell_service',   'loadcell_config',     'Load-cell pipeline service name'),
+        ('iot_gateway', 'iot_gateway_service', 'iot_gateway_config',  'IoT gateway pipeline service name'),
+        ('core',        'core_service',        'core_config',         'Core config pipeline service name'),
     ]:
         cursor.execute(
-            'INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, description, enabled) VALUES (?, ?, ?, 1)',
-            (cfg_type, svc_name, desc)
+            'INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, config_name, description, enabled) VALUES (?, ?, ?, ?, 1)',
+            (cfg_type, svc_name, cfg_name, desc)
         )
 
     # Default pipeline send log rows
@@ -570,15 +634,21 @@ def get_pipeline_service_name(config_type):
         return ''
 
 
-def set_pipeline_service_name(config_type, service_name):
-    """Update the pipeline service name for a config type."""
+def set_pipeline_service_name(config_type, service_name, config_name=None):
+    """Update the pipeline service name (and optionally config_name) for a config type."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            'UPDATE pipeline_service_targets SET service_name=?, updated_at=CURRENT_TIMESTAMP WHERE config_type=?',
-            (service_name, config_type)
-        )
+        if config_name is not None:
+            cursor.execute(
+                'UPDATE pipeline_service_targets SET service_name=?, config_name=?, updated_at=CURRENT_TIMESTAMP WHERE config_type=?',
+                (service_name, config_name, config_type)
+            )
+        else:
+            cursor.execute(
+                'UPDATE pipeline_service_targets SET service_name=?, updated_at=CURRENT_TIMESTAMP WHERE config_type=?',
+                (service_name, config_type)
+            )
         conn.commit()
         conn.close()
         return True
@@ -587,13 +657,34 @@ def set_pipeline_service_name(config_type, service_name):
         return False
 
 
+def get_pipeline_config_name(config_type):
+    """Return the configured pipeline config name for a config type (e.g. 'modbus_config')."""
+    _defaults = {
+        'modbus':      'modbus_config',
+        'loadcell':    'loadcell_config',
+        'iot_gateway': 'iot_gateway_config',
+        'core':        'core_config',
+    }
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT config_name FROM pipeline_service_targets WHERE config_type=?', (config_type,))
+        row = cursor.fetchone()
+        conn.close()
+        val = row[0] if row else ''
+        return val if val else _defaults.get(config_type, config_type + '_config')
+    except Exception as e:
+        print("[DB] get_pipeline_config_name error: {}".format(e))
+        return _defaults.get(config_type, config_type + '_config')
+
+
 def get_all_pipeline_service_targets():
     """Return all pipeline service target rows."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            'SELECT config_type, service_name, enabled, description, updated_at '
+            'SELECT config_type, service_name, config_name, enabled, description, updated_at '
             'FROM pipeline_service_targets ORDER BY config_type'
         )
         rows = cursor.fetchall()
@@ -602,9 +693,10 @@ def get_all_pipeline_service_targets():
             {
                 'config_type':  r[0],
                 'service_name': r[1],
-                'enabled':      bool(r[2]),
-                'description':  r[3],
-                'updated_at':   r[4],
+                'config_name':  r[2] if r[2] else (r[0] + '_config'),
+                'enabled':      bool(r[3]),
+                'description':  r[4],
+                'updated_at':   r[5],
             }
             for r in rows
         ]

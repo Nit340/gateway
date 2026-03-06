@@ -133,6 +133,38 @@ async def get_all_datapoints(request):
                 'type': 'loadcell'
             })
         
+        # Get Virtual datapoints
+        cursor.execute('''
+            SELECT
+                vd.id,
+                vd.device_id,
+                vd.name,
+                vd.unit,
+                v.name as device_name
+            FROM virtual_datapoints vd
+            JOIN virtual_device v ON vd.device_id = v.id
+            ORDER BY vd.device_id, vd.name
+        ''')
+        
+        rows = cursor.fetchall()
+        
+        for row in rows:
+            r = dict(row)
+            tags.append({
+                'id': r['id'],
+                'device_id': r['device_id'],
+                'device_name': r['device_name'],
+                'device_type': 'Virtual',
+                'tag_name': r['name'],
+                'name': r['name'],
+                'unit': r['unit'] or '',
+                'data_type': 'string',
+                'dataType': 'string',
+                'description': "Virtual tag {}".format(r['name']),
+                'enabled': True,
+                'type': 'virtual'
+            })
+        
         conn.close()
         return web.json_response({'tags': tags})
         

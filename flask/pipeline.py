@@ -158,6 +158,7 @@ except ImportError:
 from database import (
     DB_FILE,
     get_pipeline_service_name,
+    get_pipeline_config_name,
     get_next_pipeline_version,
     record_pipeline_send_success,
     record_pipeline_send_failure,
@@ -352,7 +353,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             pending = pipeline_state.get("modbus_config_pending")
                         if pending:
                             try:
-                                rid = client.datapoint_update(svc, "modbus_config", pending)
+                                rid = client.datapoint_update(svc, get_pipeline_config_name("modbus"), pending)
                                 if rid > 0:
                                     print("[PIPELINE] Sent pending modbus config (rid={})".format(rid))
                                     with pipeline_state["lock"]:
@@ -371,7 +372,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         if pending:
                             try:
                                 cfg_obj = Config(
-                                    name="loadcell_config",
+                                    name=get_pipeline_config_name("loadcell"),
                                     value=pending,
                                     version=pending_version,
                                     service=svc,
@@ -422,7 +423,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         if pending:
                             try:
                                 ok = client.publish_config(Config(
-                                    name    = "iot_gateway_config",
+                                    name    = get_pipeline_config_name("iot_gateway"),
                                     value   = pending,
                                     version = pending_version,
                                     service = svc,
@@ -446,7 +447,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         if pending:
                             try:
                                 ok = client.publish_config(Config(
-                                    name    = "core_config",
+                                    name    = get_pipeline_config_name("core"),
                                     value   = pending,
                                     version = pending_version,
                                     service = svc,
@@ -1417,7 +1418,7 @@ async def pipeline_filters_post_handler(request):
             if target_service:
                 try:
                     cfg_obj = Config(
-                        name="loadcell_config",
+                        name=get_pipeline_config_name("loadcell"),
                         value=config_json,
                         version=new_version,
                         service=target_service,
@@ -1640,7 +1641,7 @@ async def pipeline_save_modbus_config(request):
 
             if target_service:
                 try:
-                    rid = client.datapoint_update(target_service, "modbus_config", config_json)
+                    rid = client.datapoint_update(target_service, get_pipeline_config_name("modbus"), config_json)
                     if rid > 0:
                         pipeline_sent    = True
                         pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
@@ -1752,7 +1753,7 @@ async def send_iot_gateway_config_now():
         if target_service:
             try:
                 ok = client.publish_config(Config(
-                    name    = "iot_gateway_config",
+                    name    = get_pipeline_config_name("iot_gateway"),
                     value   = config_json,
                     version = new_version,
                     service = target_service,
@@ -1829,15 +1830,30 @@ async def pipeline_iot_gateway_config_view_handler(request):
 async def pipeline_auto_send_handler(request):
     """POST /api/pipeline/auto-send"""
     from database import get_enabled_pipeline_targets
+    return await _do_auto_send()
 
-    targets  = get_enabled_pipeline_targets()
-    results  = []
 
+async def _do_auto_send():
+    """Core auto-send logic — reads enabled targets ordered by send_order from DB."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT config_type, service_name, send_order FROM pipeline_service_targets "
+            "WHERE enabled = 1 ORDER BY send_order ASC, config_type ASC"
+        )
+        targets = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+    except Exception as e:
+        return web.json_response({"success": False, "error": "DB error: {}".format(e)})
+
+    results = []
     for tgt in targets:
         cfg_type = tgt["config_type"]
         svc_name = tgt["service_name"]
-        print("[AUTO-SEND] Sending {} -> {}".format(cfg_type, svc_name or "(no service configured)"))
-
+        print("[AUTO-SEND] order={} {} -> {}".format(
+            tgt.get("send_order", "?"), cfg_type, svc_name or "(no service configured)"))
         try:
             if cfg_type == "modbus":
                 class _FakeReq: pass
@@ -1854,33 +1870,124 @@ async def pipeline_auto_send_handler(request):
                     d = {"success": False, "error": "no loadcell device configured"}
             elif cfg_type == "iot_gateway":
                 d = await send_iot_gateway_config_now()
+            elif cfg_type == "core":
+                # resend latest stored core config
+                conn2 = sqlite3.connect(DB_FILE)
+                conn2.row_factory = sqlite3.Row
+                cur2 = conn2.cursor()
+                try:
+                    cur2.execute(
+                        "SELECT config_json, version FROM core_configs ORDER BY id DESC LIMIT 1"
+                    )
+                    row = cur2.fetchone()
+                finally:
+                    conn2.close()
+                if not row:
+                    d = {"success": False, "error": "no core config stored"}
+                else:
+                    # inline resend
+                    config_json = row["config_json"]
+                    new_version = get_next_pipeline_version("core")
+                    pipeline_sent = False
+                    pipeline_message = "Not sent -- pipeline not connected"
+                    target_service = None
+                    with pipeline_state["lock"]:
+                        client    = pipeline_state.get("client")
+                        connected = pipeline_state.get("connected", False)
+                    if connected and client:
+                        target_service = _find_core_service()
+                        if target_service:
+                            try:
+                                ok = client.publish_config(Config(
+                                    name    = get_pipeline_config_name("core"),
+                                    value   = config_json,
+                                    version = new_version,
+                                    service = target_service,
+                                ))
+                                if ok:
+                                    pipeline_sent    = True
+                                    pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                                    record_pipeline_send_success("core", new_version, target_service, pipeline_message)
+                                    with pipeline_state["lock"]:
+                                        pipeline_state["core_config"]         = config_json
+                                        pipeline_state["core_config_pending"] = None
+                                        pipeline_state["core_config_version"] = new_version
+                                else:
+                                    pipeline_message = "publish_config failed -- queued"
+                                    with pipeline_state["lock"]:
+                                        pipeline_state["core_config_pending"] = config_json
+                            except Exception as exc:
+                                pipeline_message = "Error: {} -- queued".format(exc)
+                                with pipeline_state["lock"]:
+                                    pipeline_state["core_config_pending"] = config_json
+                        else:
+                            pipeline_message = "Service not connected -- queued"
+                            with pipeline_state["lock"]:
+                                pipeline_state["core_config_pending"] = config_json
+                    else:
+                        pipeline_message = "Not connected -- queued"
+                        with pipeline_state["lock"]:
+                            pipeline_state["core_config_pending"] = config_json
+                    d = {
+                        "success":          True,
+                        "pipeline_sent":    pipeline_sent,
+                        "pipeline_message": pipeline_message,
+                        "version":          new_version,
+                    }
             else:
                 d = {"success": False, "error": "unknown config_type"}
 
             results.append({
-                "config_type":    cfg_type,
-                "service_name":   svc_name,
-                "success":        d.get("success", False),
-                "pipeline_sent":  d.get("pipeline_sent", False),
-                "version":        d.get("version"),
-                "message":        d.get("pipeline_message") or d.get("error") or "",
+                "config_type":   cfg_type,
+                "service_name":  svc_name,
+                "send_order":    tgt.get("send_order", 0),
+                "success":       d.get("success", False),
+                "pipeline_sent": d.get("pipeline_sent", False),
+                "version":       d.get("version"),
+                "message":       d.get("pipeline_message") or d.get("error") or "",
             })
         except Exception as e:
             results.append({
-                "config_type":  cfg_type,
-                "service_name": svc_name,
-                "success":      False,
+                "config_type":   cfg_type,
+                "service_name":  svc_name,
+                "send_order":    tgt.get("send_order", 0),
+                "success":       False,
                 "pipeline_sent": False,
-                "message":      str(e),
+                "message":       str(e),
             })
 
     any_sent = any(r.get("pipeline_sent") for r in results)
     return web.json_response({
-        "success": True,
-        "auto_sent": any_sent,
-        "results": results,
+        "success":           True,
+        "auto_sent":         any_sent,
+        "results":           results,
         "targets_attempted": len(results),
     })
+
+
+async def pipeline_save_send_order_handler(request):
+    """POST /api/pipeline/auto-send/order
+    Body: { "order": ["modbus", "loadcell", "iot_gateway", "core"] }
+    Saves the send_order for each config_type in the DB.
+    """
+    try:
+        body  = await request.json()
+        order = body.get("order", [])
+        if not isinstance(order, list):
+            return web.json_response({"success": False, "error": "order must be a list"}, status=400)
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        for idx, cfg_type in enumerate(order, start=1):
+            cursor.execute(
+                "UPDATE pipeline_service_targets SET send_order = ? WHERE config_type = ?",
+                (idx, cfg_type)
+            )
+        conn.commit()
+        conn.close()
+        print("[PIPELINE] Saved send order: {}".format(order))
+        return web.json_response({"success": True, "order": order})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
 
 
 async def pipeline_send_log_handler(request):
@@ -1962,7 +2069,7 @@ async def pipeline_core_config_upload_handler(request):
         if target_service:
             try:
                 ok = client.publish_config(Config(
-                    name    = "core_config",
+                    name    = get_pipeline_config_name("core"),
                     value   = config_json,
                     version = new_version,
                     service = target_service,
@@ -2094,7 +2201,7 @@ async def pipeline_core_config_resend_handler(request):
             if target_service:
                 try:
                     ok = client.publish_config(Config(
-                        name    = "core_config",
+                        name    = get_pipeline_config_name("core"),
                         value   = config_json,
                         version = new_version,
                         service = target_service,
@@ -2183,8 +2290,9 @@ def register_pipeline_routes(app):
     app.router.add_post('/api/pipeline/core-config/resend', pipeline_core_config_resend_handler)
 
     # -- Auto-send + send log ----------------------------------------------
-    app.router.add_post('/api/pipeline/auto-send',  pipeline_auto_send_handler)
-    app.router.add_get ('/api/pipeline/send-log',   pipeline_send_log_handler)
+    app.router.add_post('/api/pipeline/auto-send',       pipeline_auto_send_handler)
+    app.router.add_post('/api/pipeline/auto-send/order', pipeline_save_send_order_handler)
+    app.router.add_get ('/api/pipeline/send-log',        pipeline_send_log_handler)
 
     # Seed any missing pipeline_service_targets rows
     _seed_pipeline_targets()
@@ -2193,17 +2301,28 @@ def register_pipeline_routes(app):
 
 
 def _seed_pipeline_targets():
-    """Ensure all known config types exist in pipeline_service_targets."""
+    """Ensure all known config types exist in pipeline_service_targets,
+    and that the send_order column exists (added in v2)."""
     KNOWN_TYPES = [
-        ("modbus",      "Modbus TCP/RTU service -- send only"),
-        ("loadcell",    "Load cell service -- send config + receive live data"),
-        ("iot_gateway", "IoT Gateway service -- send only"),
-        ("core",        "Core config service -- send only"),
+        ("modbus",      "Modbus TCP/RTU service -- send only",                    1),
+        ("loadcell",    "Load cell service -- send config + receive live data",   2),
+        ("iot_gateway", "IoT Gateway service -- send only",                       3),
+        ("core",        "Core config service -- send only",                       4),
     ]
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        for cfg_type, description in KNOWN_TYPES:
+
+        # Migrate: add send_order column if it doesn't exist yet
+        cursor.execute("PRAGMA table_info(pipeline_service_targets)")
+        cols = [r[1] for r in cursor.fetchall()]
+        if "send_order" not in cols:
+            cursor.execute(
+                "ALTER TABLE pipeline_service_targets ADD COLUMN send_order INTEGER DEFAULT 0"
+            )
+            print("[PIPELINE] Migrated pipeline_service_targets: added send_order column")
+
+        for cfg_type, description, default_order in KNOWN_TYPES:
             cursor.execute(
                 "SELECT 1 FROM pipeline_service_targets WHERE config_type = ?",
                 (cfg_type,)
@@ -2211,11 +2330,18 @@ def _seed_pipeline_targets():
             if not cursor.fetchone():
                 cursor.execute(
                     "INSERT INTO pipeline_service_targets "
-                    "(config_type, service_name, enabled, description) "
-                    "VALUES (?, '', 0, ?)",
-                    (cfg_type, description)
+                    "(config_type, service_name, enabled, description, send_order) "
+                    "VALUES (?, '', 0, ?, ?)",
+                    (cfg_type, description, default_order)
                 )
                 print("[PIPELINE] Seeded pipeline target: {}".format(cfg_type))
+            else:
+                # Set default order if still 0
+                cursor.execute(
+                    "UPDATE pipeline_service_targets SET send_order = ? "
+                    "WHERE config_type = ? AND (send_order IS NULL OR send_order = 0)",
+                    (default_order, cfg_type)
+                )
         conn.commit()
         conn.close()
     except Exception as e:

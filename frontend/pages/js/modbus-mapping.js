@@ -142,10 +142,11 @@ function _renderTagsTable() {
     rows.forEach(tag => {
         // Determine if it's a load cell tag (check protocol or type)
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
+        const isVirtual = tag.protocol === 'virtual' || tag.type === 'virtual';
         const tr = document.createElement('tr');
         
         // Use type-prefixed ID to avoid collisions between loadcell and modbus IDs
-        const tagType = isLC ? 'loadcell' : 'modbus';
+        const tagType = isLC ? 'loadcell' : (isVirtual ? 'virtual' : 'modbus');
         tr.id = `tag-row-${tagType}-${tag.id}`;
         tr.className = 'tag-table-row';
         tr.dataset.tagId = tag.id;
@@ -166,7 +167,21 @@ function _renderTagsTable() {
         const enabled = tag.enabled !== undefined ? tag.enabled : true;
         const writable = tag.writable !== undefined ? tag.writable : false;
 
-        if (isLC) {
+        if (isVirtual) {
+            tr.innerHTML = `
+                <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
+                <td><span class="protocol-badge virtual">Virtual</span></td>
+                <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-600 text-xs">string</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td class="text-slate-300">—</td>
+                <td><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Enabled</span></td>
+                <td class="text-right whitespace-nowrap text-slate-300">—</td>`;
+        } else if (isLC) {
             tr.innerHTML = `
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
                 <td><span class="protocol-badge loadcell">Load Cell</span></td>
@@ -251,15 +266,16 @@ function _renderTagsBrowser() {
 
     paginatedRows.forEach(tag => {
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
+        const isVirtual = tag.protocol === 'virtual' || tag.type === 'virtual';
         const d = document.createElement('div');
         d.className = 'tag-card';
         d.dataset.tagId = tag.id;
-        d.dataset.tagType = isLC ? 'loadcell' : 'modbus';
+        d.dataset.tagType = isLC ? 'loadcell' : (isVirtual ? 'virtual' : 'modbus');
         
         // Use click event listener
         d.addEventListener('click', function(e) {
             e.stopPropagation();
-            const tagType = isLC ? 'loadcell' : 'modbus';
+            const tagType = isLC ? 'loadcell' : (isVirtual ? 'virtual' : 'modbus');
             console.log(`Tag card clicked: ID ${tag.id}, Type: ${tagType}, Name: ${tag.tag_name || tag.name}`);
             highlightTagRow(tag.id, tagType);
         });
@@ -282,13 +298,14 @@ function _renderTagsBrowser() {
         const registerCount = tag.register_count || tag.registerCount || 1;
         
         let badgeClass = 'modbus-tcp';
-        if (isLC) badgeClass = 'loadcell';
+        if (isVirtual) badgeClass = 'virtual';
+        else if (isLC) badgeClass = 'loadcell';
         else if (tag.device_type === 'rtu') badgeClass = 'modbus-rtu';
         
         let html = `
             <div class="tag-card-header">
                 <div class="tag-card-name">${_esc(tagName)}</div>
-                <span class="protocol-badge ${badgeClass}">${isLC ? 'LOADCELL' : 'MODBUS'}</span>
+                <span class="protocol-badge ${badgeClass}">${isVirtual ? 'VIRTUAL' : (isLC ? 'LOADCELL' : 'MODBUS')}</span>
             </div>
             <div class="tag-card-body">
                 <div class="tag-card-row">
@@ -296,7 +313,17 @@ function _renderTagsBrowser() {
                     <span class="font-medium text-slate-700">${_esc(deviceName)}</span>
                 </div>`;
         
-        if (!isLC) {
+        if (isVirtual) {
+            html += `
+                <div class="tag-card-row">
+                    <span>Type</span>
+                    <span>Virtual</span>
+                </div>
+                <div class="tag-card-row">
+                    <span>Data Type</span>
+                    <span>string</span>
+                </div>`;
+        } else if (!isLC) {
             html += `
                 <div class="tag-card-row">
                     <span>Slave ID</span>
@@ -548,8 +575,10 @@ function _bindStaticListeners() {
     document.getElementById('proceedToTagForm')?.addEventListener('click', _proceedToTagForm);
     document.getElementById('modbusFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
     document.getElementById('lcFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
+    document.getElementById('virtualFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
     document.getElementById('modbusFormCancel')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('lcFormClose')?.addEventListener('click', _closeAddTagModal);
+    document.getElementById('virtualFormClose')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('modbusTagForm')?.addEventListener('submit', _handleModbusCreate);
     document.getElementById('addTagModal')?.addEventListener('click', e => { if (e.target.id === 'addTagModal') _closeAddTagModal(); });
 
@@ -627,20 +656,23 @@ function _buildModalDeviceList() {
     }
 
     _devices.forEach(dev => {
-        const isLC = dev.protocol === 'loadcell';
         const cnt = (_tags || []).filter(t => String(t.device_id) === String(dev.id)).length;
+        const isLC = dev.protocol === 'loadcell';
+        const isVirtual = dev.protocol === 'virtual';
         const el = document.createElement('div');
         el.className = 'modal-device-item';
         el.dataset.modalDeviceId = dev.id;
+        const icon = isVirtual ? 'fa-microchip text-indigo-600' : (isLC ? 'fa-scale-balanced text-green-600' : 'fa-ethernet text-blue-600');
+        const viewOnly = (isLC || isVirtual) ? '<span class="text-xs text-slate-400 italic">· view only</span>' : '';
         el.innerHTML = `
             <div class="flex items-center gap-3 min-w-0 flex-1">
-                <i class="fa-solid ${isLC ? 'fa-scale-balanced text-green-600' : 'fa-ethernet text-blue-600'} text-sm w-4 flex-shrink-0"></i>
+                <i class="fa-solid ${icon} text-sm w-4 flex-shrink-0"></i>
                 <div class="min-w-0">
                     <div class="text-sm font-semibold text-slate-900 truncate">${_esc(dev.name)}</div>
                     <div class="flex items-center gap-1.5 mt-0.5">
                         <span class="protocol-badge ${_pBadge(dev.protocol)}">${_pLabel(dev.protocol)}</span>
                         <span class="text-xs text-slate-400">${cnt} tag${cnt !== 1 ? 's' : ''}</span>
-                        ${isLC ? '<span class="text-xs text-slate-400 italic">· view only</span>' : ''}
+                        ${viewOnly}
                     </div>
                 </div>
             </div>
@@ -698,13 +730,16 @@ function _proceedToTagForm() {
         const lt = (_tags || []).find(t => String(t.device_id) === String(_selectedDeviceId) && (t.tag_name === 'load' || t.name === 'load'));
         document.getElementById('lcUnitDisplay').textContent = lt?.unit || 'kg';
         _showStep('stepLoadcellInfo');
+    } else if (proto === 'virtual') {
+        document.getElementById('virtualCtxDevice').textContent = _selectedDeviceData.name;
+        _showStep('stepVirtualInfo');
     } else {
         _toast('Unknown protocol: ' + proto, 'error');
     }
 }
 
 function _showStep(id) {
-    ['stepDeviceSelect', 'stepModbusForm', 'stepLoadcellInfo'].forEach(s => {
+    ['stepDeviceSelect', 'stepModbusForm', 'stepLoadcellInfo', 'stepVirtualInfo'].forEach(s => {
         const el = document.getElementById(s);
         if (el) el.style.display = s === id ? 'block' : 'none';
     });
@@ -1110,7 +1145,8 @@ function _pLabel(p) {
     const labels = {
         'modbus-tcp': 'Modbus TCP',
         'modbus-rtu': 'Modbus RTU',
-        'loadcell': 'Load Cell'
+        'loadcell': 'Load Cell',
+        'virtual': 'Virtual'
     };
     return labels[p] || p.toUpperCase();
 }
@@ -1119,6 +1155,7 @@ function _pBadge(p) {
     if (!p) return '';
     if (p === 'modbus-tcp') return 'modbus-tcp';
     if (p === 'modbus-rtu') return 'modbus-rtu';
+    if (p === 'virtual') return 'virtual';
     return 'loadcell';
 }
 

@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "system": {
+    "wifi_ssid": "",
+    "wifi_password": ""
+  },
+  "heartbeat": {
+    "interval_sec": 30,
+    "channel": "re"
+  },
+  "servers": {
+    "mqtt": {
+      "enabled": true,
+      "host": "ems.univa.cloud",
+      "port": 1883,
+      "client_id": "",
+      "device_token": "",
+      "username": "",
+      "password": "",
+      "keepalive_sec": 60,
+      "channels": {
+        "publish": [
+          {
+            "name": "re",
+            "topic": "send/tro",
+            "qos": 0,
+            "retain": false,
+            "default": false
+          }
+        ],
+        "subscribe": []
+      }
+    }
+  },
+  "mappings": [
+    {
+      "channel": "re",
+      "datapoints": {
+        "bool": [
+          "capacity"
+        ]
+      },
+      "alias": "hoist motor"
+    },
+    {
+      "channel": "re",
+      "datapoints": {
+        "string": [
+          "capacity",
+          "load_weight",
+          "capacity"
+        ]
+      },
+      "alias": "lt motor"
+    },
+    {
+      "channel": "re",
+      "datapoints": {
+        "float": [
+          "capacity"
+        ]
+      }
+    },
+    {
+      "channel": "re",
+      "datapoints": {
+        "float": [
+          "load_weight"
+        ]
+      }
+    }
+  ]
+}

@@ -745,36 +745,25 @@ async function _saveMqttPublishing(id) {
                 datapoints: { [dtype]: allTagNames },
             });
 
-        } else {
-            // INDIVIDUAL: read type + channel from DOM row, bucket by (channel, dtype)
-            const row     = document.querySelector(`tr[data-mapping-idx="${mIdx}"]`);
-            const typeSel = row?.querySelector('.tag-type-select');
-            const chSel   = row?.querySelector('.tag-channel');
-            const tagName = row?.dataset.tagName;
-
-            if (!tagName) {
-                // DOM row missing — fall back to keeping the stored mapping
-                updatedMappings.push(mapping);
-                return;
-            }
-
-            const dtype   = typeSel ? typeSel.value : _detectGroupType(mapping.datapoints);
-            const channel = chSel?.value.trim() || mapping.channel || '';
-            const key     = channel + '||' + dtype;
-
-            if (!individualBuckets[key]) {
-                individualBuckets[key] = { channel, dtype, names: [] };
-            }
-            individualBuckets[key].names.push(tagName);
         }
     });
 
-    // -- PASS 2: emit one merged mapping per (channel, dtype) bucket -----------
-    for (const { channel, dtype, names } of Object.values(individualBuckets)) {
-        const entry = { datapoints: { [dtype]: names } };
+    // -- INDIVIDUAL tags: read directly from every DOM row in the individual table --
+    // This is more reliable than iterating existingMappings because:
+    //   1. After a previous save, multiple tags can share the same mapping-idx
+    //   2. data-tag-name lookup can collide with group table rows
+    // We read every <tr data-individual-idx> row directly from the DOM.
+    document.querySelectorAll('#individual-tags-table tr[data-individual-idx]').forEach(row => {
+        const tagName = row.dataset.tagName;
+        if (!tagName) return;
+        const typeSel = row.querySelector('.tag-type-select');
+        const chSel   = row.querySelector('.tag-channel');
+        const dtype   = typeSel?.value || 'float';
+        const channel = chSel?.value.trim() || '';
+        const entry   = { datapoints: { [dtype]: [tagName] } };
         if (channel) entry.channel = channel;
         updatedMappings.push(entry);
-    }
+    });
 
     await _putCfg(id, { mappings: updatedMappings }, 'Mapping settings saved');
 }
@@ -950,19 +939,13 @@ async function _openTagsModal(conn) {
             if (channel) newMapping.channel = channel;
             newMappings = [...existingMappings, newMapping];
         } else {
-            // -- INDIVIDUAL: group by (channel, dtype) so tags sharing the same
-            //    channel and type land in ONE mapping entry, not one per tag.
-            const buckets = {};   // key "channel||dtype" ? { channel, dtype, names[] }
+            // INDIVIDUAL: one mapping entry per tag
+            const addedMappings = [];
             checked.forEach(cb => {
                 const dtype = cb.dataset.dtype || 'float';
-                const key   = channel + '||' + dtype;
-                if (!buckets[key]) buckets[key] = { channel, dtype, names: [] };
-                buckets[key].names.push(cb.dataset.tag);
-            });
-            const addedMappings = Object.values(buckets).map(({ channel: ch, dtype, names }) => {
-                const m = { datapoints: { [dtype]: names } };
-                if (ch) m.channel = ch;
-                return m;
+                const m = { datapoints: { [dtype]: [cb.dataset.tag] } };
+                if (channel) m.channel = channel;
+                addedMappings.push(m);
             });
             newMappings = [...existingMappings, ...addedMappings];
         }

@@ -521,6 +521,7 @@ console.log('general-config.js loaded');
             btn.classList.remove('bg-gray-500','cursor-wait');
             btn.classList.add('bg-emerald-600','hover:bg-emerald-700');
             showNotification(result.message||'Configuration saved!', 'success');
+            window.dispatchEvent(new Event('gateway-config-saved'));
             setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 2000);
         })
         .catch(function (err) {

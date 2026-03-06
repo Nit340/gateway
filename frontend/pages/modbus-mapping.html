@@ -362,6 +362,50 @@
                 </div>
             </div>
 
+            <!-- STEP 2C: Virtual device info (read-only, auto tags) -->
+            <div id="stepVirtualInfo" style="display:none;">
+                <div class="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <div class="text-xs text-indigo-700 mb-0.5">Selected Device</div>
+                    <div class="text-sm font-semibold text-indigo-900" id="virtualCtxDevice">—</div>
+                </div>
+
+                <div class="mb-5 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+                    <i class="fa-solid fa-info-circle mr-2"></i>
+                    Virtual device tags (<strong>lan</strong>, <strong>wlan</strong>, <strong>lte</strong>) are <strong>auto-created</strong> when the device is added and cannot be manually added here.
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 mb-5">
+                    <div class="p-3 rounded-lg border border-indigo-200 bg-indigo-50">
+                        <div class="text-xs text-indigo-500 mb-1">Auto Tag</div>
+                        <div class="font-semibold text-indigo-900 text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-network-wired text-xs"></i> lan
+                        </div>
+                        <div class="text-xs text-indigo-500 mt-1">STRING</div>
+                    </div>
+                    <div class="p-3 rounded-lg border border-indigo-200 bg-indigo-50">
+                        <div class="text-xs text-indigo-500 mb-1">Auto Tag</div>
+                        <div class="font-semibold text-indigo-900 text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-wifi text-xs"></i> wlan
+                        </div>
+                        <div class="text-xs text-indigo-500 mt-1">STRING</div>
+                    </div>
+                    <div class="p-3 rounded-lg border border-indigo-200 bg-indigo-50">
+                        <div class="text-xs text-indigo-500 mb-1">Auto Tag</div>
+                        <div class="font-semibold text-indigo-900 text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-signal text-xs"></i> lte
+                        </div>
+                        <div class="text-xs text-indigo-500 mt-1">STRING</div>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="virtualFormBack">
+                        <i class="fa-solid fa-arrow-left mr-1"></i> Back
+                    </button>
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="virtualFormClose">Close</button>
+                </div>
+            </div>
+
         </div><!-- /p-5 -->
     </div>
 </div><!-- /addTagModal -->
@@ -568,6 +612,7 @@
 .protocol-badge.modbus-tcp { background:#EFF6FF; color:#2563EB; border:1px solid #BFDBFE; }
 .protocol-badge.modbus-rtu { background:#F5F3FF; color:#7C3AED; border:1px solid #DDD6FE; }
 .protocol-badge.loadcell   { background:#F0FDF4; color:#16A34A; border:1px solid #BBF7D0; }
+.protocol-badge.virtual    { background:#EEF2FF; color:#4F46E5; border:1px solid #C7D2FE; }
 
 .compact-button {
     padding:6px 12px; font-size:13px; border-radius:6px; cursor:pointer;

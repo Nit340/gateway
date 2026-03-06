@@ -31,6 +31,13 @@
                         <div class="font-medium text-sm text-slate-900">Loadcell</div>
                     </div>
                 </label>
+                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option col-span-2">
+                    <input type="radio" name="device-type" value="virtual" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                    <div class="ml-3">
+                        <div class="font-medium text-sm text-slate-900">Virtual Device</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Auto-creates LAN, WLAN, LTE tags</div>
+                    </div>
+                </label>
             </div>
         </div>
         
@@ -253,6 +260,31 @@
                         </p>
                     </div>
 
+                </div>
+            </div>
+            <!-- Virtual Device Configuration -->
+            <div id="virtual-config" class="protocol-config">
+                <div class="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <i class="fa-solid fa-microchip text-indigo-600 text-sm"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-indigo-900 mb-1">Virtual Device</h4>
+                            <p class="text-xs text-indigo-700 leading-relaxed">Just enter a device name above. Three datapoint tags will be automatically created:</p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded">
+                                    <i class="fa-solid fa-network-wired text-xs"></i> lan
+                                </span>
+                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded">
+                                    <i class="fa-solid fa-wifi text-xs"></i> wlan
+                                </span>
+                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded">
+                                    <i class="fa-solid fa-signal text-xs"></i> lte
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

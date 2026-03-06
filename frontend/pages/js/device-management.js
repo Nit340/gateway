@@ -137,6 +137,11 @@
                 color: #92400E;
             }
             
+            .type-virtual {
+                background-color: #EDE9FE;
+                color: #5B21B6;
+            }
+            
             .animate-fade-in {
                 animation: fadeIn 0.3s ease;
             }
@@ -409,6 +414,9 @@
         } else if (protocol === 'loadcell') {
             badgeClass += 'type-loadcell';
             typeText = 'Loadcell';
+        } else if (protocol === 'virtual') {
+            badgeClass += 'type-virtual';
+            typeText = 'Virtual';
         } else {
             badgeClass += 'type-modbus-tcp';
             typeText = device.type || 'Unknown';
@@ -462,6 +470,8 @@
             typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'Modbus RTU' };
         } else if (protocol === 'loadcell') {
             typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell' };
+        } else if (protocol === 'virtual') {
+            typeStyle = { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Virtual Device' };
         }
         
         const config = device.config || {};
@@ -615,7 +625,7 @@
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Raw Range</div>
-                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} – ${config.raw_max ?? 16383}</div>
+                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} ï¿½ ${config.raw_max ?? 16383}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Capacity Min</div>
@@ -628,6 +638,25 @@
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Unit</div>
                                     <div class="text-sm text-slate-700">${config.unit || 'kg'}</div>
+                                </div>
+            `;
+        } else if (protocol === 'virtual') {
+            detailsHtml += `
+                                <div class="col-span-2">
+                                    <div class="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                        <p class="text-xs font-semibold text-indigo-800 mb-2">Auto-created Tags</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded">
+                                                <i class="fa-solid fa-network-wired text-xs"></i> lan
+                                            </span>
+                                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded">
+                                                <i class="fa-solid fa-wifi text-xs"></i> wlan
+                                            </span>
+                                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded">
+                                                <i class="fa-solid fa-signal text-xs"></i> lte
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
             `;
         }
@@ -694,7 +723,7 @@
             
             document.getElementById('deviceNameInput').value = '';
             
-            const firstRadio = document.querySelector('input[name="device-type"][value="modbus-rtu"]');
+            const firstRadio = panel.querySelector('input[name="device-type"][value="modbus-rtu"]');
             if (firstRadio) {
                 firstRadio.checked = true;
                 switchDeviceType('modbus-rtu');
@@ -711,7 +740,8 @@
     }
 
     function switchDeviceType(type) {
-        const configs = document.querySelectorAll('.protocol-config');
+        const panel = document.getElementById('addDevicePanel');
+        const configs = (panel || document).querySelectorAll('.protocol-config');
         configs.forEach(config => config.classList.remove('active'));
         
         const selectedConfig = document.getElementById(`${type}-config`);
@@ -732,7 +762,8 @@
                 return;
             }
             
-            const deviceType = document.querySelector('input[name="device-type"]:checked')?.value;
+            const panel = document.getElementById('addDevicePanel');
+            const deviceType = document.querySelector('#addDevicePanel input[name="device-type"]:checked')?.value;
             if (!deviceType) {
                 showNotification('Please select a device type', 'error');
                 isSaving = false;
@@ -794,6 +825,10 @@
                     load_name: 'load_weight',
                     capacity_name: 'capacity'
                 };
+            } else if (deviceType === 'virtual') {
+                requestData.type = 'virtual';
+                requestData.protocol = 'virtual';
+                requestData.config = {};
             }
             
             const method = selectedDeviceId ? 'PUT' : 'POST';
@@ -907,6 +942,8 @@
                     deviceTypeValue = 'modbus-rtu';
                 } else if (protocol === 'loadcell') {
                     deviceTypeValue = 'loadcell';
+                } else if (protocol === 'virtual') {
+                    deviceTypeValue = 'virtual';
                 }
                 
                 console.log('Selected device type value:', deviceTypeValue);
@@ -1175,7 +1212,7 @@
     
     function showDuplicateConfirmation(duplicates, newDevicesCount) {
         return new Promise((resolve) => {
-            const duplicateNames = duplicates.map(d => `• ${d.name} (${d.type})`).slice(0, 10).join('\n');
+            const duplicateNames = duplicates.map(d => `ï¿½ ${d.name} (${d.type})`).slice(0, 10).join('\n');
             const moreText = duplicates.length > 10 ? `\n... and ${duplicates.length - 10} more` : '';
             
             const message = `Found ${duplicates.length} duplicate device(s) with the same name:\n\n${duplicateNames}${moreText}\n\n${newDevicesCount} new device(s) will be imported.\n\nHow would you like to proceed?`;
@@ -1376,7 +1413,8 @@
             saveDeviceBtn.addEventListener('click', saveDevice);
         }
         
-        document.querySelectorAll('input[name="device-type"]').forEach(radio => {
+        const addDevicePanel = document.getElementById('addDevicePanel');
+        document.querySelectorAll('#addDevicePanel input[name="device-type"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 switchDeviceType(this.value);
             });

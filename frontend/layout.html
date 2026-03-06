@@ -458,15 +458,9 @@
 
                     <!-- Right: Controls -->
                     <div class="flex items-center space-x-4">
-                        <div class="relative hidden sm:block">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i class="fa-solid fa-server text-slate-400 text-sm"></i>
-                            </div>
-                            <select id="gateway-select" class="pl-9 pr-8 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-slate-50 text-slate-700 font-medium cursor-pointer hover:bg-white transition-colors">
-                                <option>Univa-GW-01</option>
-                                <option>Univa-GW-02</option>
-                                <option>Univa-GW-03</option>
-                            </select>
+                        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                            <span id="header-gateway-name" class="text-sm font-medium text-slate-700">Loading...</span>
                         </div>
                         <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
                         <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
@@ -522,6 +516,28 @@
     <script src="pages/js/rules.js"></script>
     <script src="pages/js/router.js"></script> <!-- Router should be last -->
     <!-- Initialize the router -->
+    <script>
+        // Fetch gateway name from API and keep header label updated
+        (function () {
+            function updateHeaderGatewayName() {
+                fetch('/api/general-configuration', { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (cfg) {
+                        if (!cfg) return;
+                        var name = (cfg.gateway_identity && cfg.gateway_identity.name) ? cfg.gateway_identity.name : '';
+                        if (!name) return;
+                        var el = document.getElementById('header-gateway-name');
+                        if (el) el.textContent = name;
+                    })
+                    .catch(function () {});
+            }
+            // Run on load, then re-check every 30 s (picks up saves without refresh)
+            updateHeaderGatewayName();
+            setInterval(updateHeaderGatewayName, 30000);
+            // Also re-fetch whenever general-config page saves (listen for custom event)
+            window.addEventListener('gateway-config-saved', updateHeaderGatewayName);
+        })();
+    </script>
     <script>
         // Initialize router
         const router = new Router();

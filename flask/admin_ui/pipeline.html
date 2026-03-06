@@ -17,6 +17,7 @@
   .sidebar-link:hover .mat { color:#ea580c; }
   input.field, select.field, textarea.field { padding:8px 12px; border:1.5px solid #e7e5e4; border-radius:8px; font-size:13px; outline:none; transition:border-color .15s; }
   input.field:focus, select.field:focus, textarea.field:focus { border-color:#f97316; }
+  input.field[readonly] { background:#fafaf9; color:#a8a29e; cursor:default; }
   ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
   .toggle { position:relative; display:inline-block; width:36px; height:20px; flex-shrink:0; }
   .toggle input { opacity:0; width:0; height:0; }
@@ -29,22 +30,23 @@
   .ver-ok    { background:#dcfce7; color:#15803d; }
   .ver-fail  { background:#fee2e2; color:#dc2626; }
   .ver-queue { background:#fef3c7; color:#d97706; }
-  @keyframes pulse-ring {
-    0%   { box-shadow: 0 0 0 0 rgba(249,115,22,0.5); }
-    70%  { box-shadow: 0 0 0 10px rgba(249,115,22,0); }
-    100% { box-shadow: 0 0 0 0 rgba(249,115,22,0); }
-  }
+  @keyframes pulse-ring { 0%{box-shadow:0 0 0 0 rgba(249,115,22,0.5);} 70%{box-shadow:0 0 0 10px rgba(249,115,22,0);} 100%{box-shadow:0 0 0 0 rgba(249,115,22,0);} }
   .pulse-btn { animation: pulse-ring 2.2s infinite; }
   .cfg-tab { padding:8px 18px; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer; border:1.5px solid #e7e5e4; color:#78716c; transition:all .15s; background:white; white-space:nowrap; }
   .cfg-tab:hover { border-color:#f97316; color:#f97316; }
   .cfg-tab.active { background:#f97316; border-color:#f97316; color:white; }
   .cfg-panel { display:none; }
   .cfg-panel.active { display:block; }
-  .drop-zone { border:2px dashed #fed7aa; border-radius:14px; padding:36px 20px; text-align:center; cursor:pointer; transition:all .2s; }
-  .drop-zone:hover, .drop-zone.drag-over { border-color:#f97316; background:#fff7ed; }
   .lc-card { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; border:2px solid #f5f5f4; cursor:pointer; transition:all .15s; }
   .lc-card:hover { border-color:#fed7aa; }
   .lc-card.selected { border-color:#f97316; background:#fff7ed; }
+  .order-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; border:1.5px solid #e7e5e4; background:white; cursor:grab; transition:all .15s; user-select:none; }
+  .order-row:hover { border-color:#fed7aa; background:#fffaf7; }
+  .order-row.dragging { opacity:0.45; cursor:grabbing; }
+  .order-row.drag-over { border-color:#f97316; background:#fff7ed; }
+  .order-row.disabled { opacity:0.45; }
+  .order-num { width:22px; height:22px; border-radius:6px; background:#f97316; color:white; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .order-row.disabled .order-num { background:#d4d4d4; }
 </style>
 </head>
 <body class="bg-stone-50 min-h-screen flex">
@@ -80,9 +82,7 @@
   <header class="h-14 bg-white border-b border-stone-100 flex items-center px-6 gap-4 flex-shrink-0">
     <h1 class="text-base font-bold text-stone-800 flex-1">Pipeline Controller</h1>
     <div id="pipelineStatus" class="flex items-center gap-2 text-xs font-semibold text-stone-400">
-      <span class="relative flex h-2 w-2">
-        <span class="relative inline-flex rounded-full h-2 w-2 bg-stone-300"></span>
-      </span>
+      <span class="relative flex h-2 w-2"><span class="relative inline-flex rounded-full h-2 w-2 bg-stone-300"></span></span>
       Checking…
     </div>
     <button onclick="loadAll()" class="flex items-center gap-1 text-xs font-semibold text-orange-500 hover:underline">
@@ -92,29 +92,33 @@
 
   <main class="flex-1 p-6 overflow-auto space-y-5">
 
-    <!-- AUTO-SEND CARD -->
+    <!-- AUTO-SEND CARD — ordered startup send -->
     <div class="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5">
       <div class="flex items-start gap-5">
-        <div class="flex-1">
+        <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <span class="mat" style="color:#f97316;font-size:22px;">bolt</span>
-            <span class="text-sm font-extrabold text-stone-800">Auto-Send</span>
-            <span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-full">Fires Immediately</span>
+            <span class="text-sm font-extrabold text-stone-800">Auto-Send on Startup</span>
+            <span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-orange-50 px-2 py-0.5 rounded-full">Runs on every restart</span>
           </div>
           <p class="text-xs text-stone-400 mb-4">
-            Sends configs for all <strong>enabled</strong> targets at once.
-            If a service is not yet connected the config is queued as pending — no wait, no timeout.
+            Enabled targets are sent <strong>in the numbered order</strong> on every backend start/restart.
+            Drag rows to reorder — saved to DB immediately.
           </p>
-          <div id="autoSendToggles" class="flex flex-wrap gap-4 mb-4">
+
+          <!-- Drag-to-reorder list -->
+          <div id="sendOrderList" class="space-y-2 mb-3 select-none">
             <span class="text-xs text-stone-300">Loading…</span>
           </div>
+          <div id="orderSaveStatus" class="hidden text-xs font-semibold text-green-600 mb-3">✓ Order saved to database</div>
           <div id="autoSendResult" class="hidden rounded-xl p-3 space-y-1.5 text-xs font-mono" style="background:#fafaf9;border:1px solid #e7e5e4;"></div>
         </div>
+
         <button id="autoSendBtn" onclick="doAutoSend()"
           class="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-2xl text-white font-extrabold transition-all active:scale-95 pulse-btn"
           style="width:108px;height:84px;background:#f97316;box-shadow:0 8px 24px rgba(249,115,22,0.35);font-size:12px;letter-spacing:.05em;">
           <span class="mat" style="font-size:30px;color:white;">send</span>
-          AUTO SEND
+          SEND NOW
         </button>
       </div>
     </div>
@@ -126,35 +130,37 @@
       <div id="servicesList" class="mt-3"></div>
     </div>
 
-    <!-- SERVICE NAMES + ENABLED TOGGLES -->
+    <!-- SERVICE NAMES + CONFIG NAMES + ENABLED TOGGLES -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
-      <div class="text-sm font-bold text-stone-700 mb-1">Pipeline Service Names</div>
+      <div class="text-sm font-bold text-stone-700 mb-1">Pipeline Service &amp; Config Names</div>
       <p class="text-xs text-stone-400 mb-5">
-        Set the exact service name from <code class="bg-stone-100 px-1 rounded">SERVICE_ADDED</code> events.
-        <strong>Toggle to enable</strong> for Auto-Send. All names are stored in the database — nothing is hardcoded.
-        The <strong>Loadcell</strong> row has an extra <code class="bg-stone-100 px-1 rounded">service path</code> field (e.g. <code class="bg-stone-100 px-1 rounded">/dev/spidev0.0</code>) stored in the DB.
+        Set the <strong>service name</strong> (from <code class="bg-stone-100 px-1 rounded">SERVICE_ADDED</code> events) and the
+        <strong>config name</strong> (the key sent to the pipeline service, e.g. <code class="bg-stone-100 px-1 rounded">modbus_config</code>).
+        Both are stored in the database — nothing is hardcoded. Version numbers are also tracked per config in the DB.
       </p>
-      <div id="targetsForm" class="space-y-4">Loading…</div>
+      <div id="targetsForm" class="space-y-0">Loading…</div>
       <button onclick="saveTargets()"
         class="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white active:scale-95"
         style="background:#ea580c;box-shadow:0 4px 14px rgba(234,88,12,0.2);">
-        <span class="mat" style="font-size:17px;">save</span> Save Service Names
+        <span class="mat" style="font-size:17px;">save</span> Save All Names
       </button>
     </div>
 
     <!-- CONFIG MANAGER — dynamic tabs -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
       <div class="text-sm font-bold text-stone-700 mb-1">Config Manager</div>
-      <p class="text-xs text-stone-400 mb-4">Push or upload configuration per service type. Tabs are generated from your pipeline service targets.</p>
+      <p class="text-xs text-stone-400 mb-4">Push configuration per service type. The config name used for each push is what you set above.</p>
 
-      <!-- Tab bar (built dynamically) -->
       <div id="cfgTabBar" class="flex flex-wrap gap-2 mb-5 pb-4 border-b border-stone-100">
         <span class="text-xs text-stone-300">Loading…</span>
       </div>
 
       <!-- MODBUS panel -->
       <div class="cfg-panel" id="panel-modbus">
-        <p class="text-xs text-stone-400 mb-4">Push the current Modbus tag configuration (built from DB) to the pipeline service.</p>
+        <div class="flex items-center gap-3 mb-3">
+          <p class="text-xs text-stone-400">Push the current Modbus tag configuration (built from DB) to the pipeline service.</p>
+          <span class="cfg-name-pill" id="cname-pill-modbus"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-modbus">modbus_config</span></span>
+        </div>
         <button onclick="pushGeneric('modbus')"
           class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
           <span class="mat" style="font-size:17px;">memory</span> Push Modbus Config
@@ -162,74 +168,17 @@
         <div id="pushResult-modbus" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
       </div>
 
-      <!-- LOADCELL panel — send config + live receive -->
+      <!-- LOADCELL panel -->
       <div class="cfg-panel" id="panel-loadcell">
-
-        <!-- ── SEND SECTION ──────────────────────────────────────────── -->
         <div class="mb-6 pb-6 border-b border-stone-100">
           <div class="flex items-center gap-2 mb-3">
             <span class="mat" style="color:#f97316;font-size:18px;">upload</span>
             <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Send Config</span>
+            <span class="cfg-name-pill ml-auto" id="cname-pill-loadcell"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-loadcell">loadcell_config</span></span>
           </div>
           <p class="text-xs text-stone-400 mb-4">
             Select a device and push its filter &amp; calibration config to the loadcell pipeline service.
-            Supports multiple devices — push each individually.
-            You can also <strong>upload a JSON config file</strong> to import all device settings from an
-            <code class="bg-stone-100 px-1 rounded text-stone-600">inno_load</code>-style config directly into the database.
           </p>
-
-          <!-- ── JSON UPLOAD SUB-SECTION ──────────────────────────────── -->
-          <div class="mb-5 rounded-xl border-2 border-dashed border-orange-100 bg-orange-50/40 p-4">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="mat" style="color:#f97316;font-size:16px;">upload_file</span>
-              <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Import from JSON File</span>
-              <span class="text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-orange-100 px-2 py-0.5 rounded-full ml-1">Saves to DB</span>
-            </div>
-            <p class="text-xs text-stone-400 mb-3">
-              Upload an <code class="bg-white/70 px-1 rounded">inno_load</code> JSON — device settings, filters, calibration,
-              levels and IPC config are extracted and saved to the <code class="bg-white/70 px-1 rounded">loadcell_device</code> table.
-              Then push to the service using the selector below.
-            </p>
-
-            <!-- Drop zone -->
-            <div id="lcDropZone" class="drop-zone mb-3" style="padding:20px 14px;"
-              onclick="document.getElementById('lcFileInput').click()"
-              ondragover="event.preventDefault();this.classList.add('drag-over')"
-              ondragleave="this.classList.remove('drag-over')"
-              ondrop="handleLcDrop(event)">
-              <span class="mat" style="font-size:30px;color:#fcd9b0;">description</span>
-              <p class="text-xs font-semibold text-stone-500 mt-1">Drop loadcell JSON here or click to browse</p>
-              <p class="text-[10px] text-stone-300 mt-0.5">inno_load-config style · load_cells[] extracted</p>
-            </div>
-            <input type="file" id="lcFileInput" accept=".json,application/json" class="hidden"
-              onchange="handleLcFileSelect(event)"/>
-
-            <!-- Preview -->
-            <div id="lcImportPreview" class="hidden mb-3">
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="text-xs font-bold text-stone-500 uppercase tracking-wide">Preview</span>
-                <span id="lcImportDevNames" class="text-xs text-green-600 font-semibold"></span>
-              </div>
-              <textarea id="lcImportEditor" class="field w-full font-mono text-xs" rows="10"
-                style="resize:vertical;background:#fafaf9;" oninput="refreshLcImportPreview()"></textarea>
-            </div>
-
-            <!-- Import actions -->
-            <div class="flex gap-2 flex-wrap">
-              <button onclick="importLcJson()"
-                class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white active:scale-95 transition-all"
-                style="background:#f97316;box-shadow:0 3px 10px rgba(249,115,22,0.22);">
-                <span class="mat" style="font-size:15px;">save</span> Save to DB
-              </button>
-              <button onclick="clearLcImport()"
-                class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-stone-200 text-stone-400 hover:border-orange-300 hover:text-orange-400 transition-all">
-                <span class="mat" style="font-size:15px;">clear</span> Clear
-              </button>
-            </div>
-            <div id="lcImportResult" class="hidden mt-3 p-2.5 rounded-xl text-xs font-medium"></div>
-          </div>
-          <!-- ── END JSON UPLOAD ──────────────────────────────────────── -->
-
           <div id="loadcellDeviceList" class="space-y-2 mb-4">
             <span class="text-xs text-stone-300">Loading devices…</span>
           </div>
@@ -240,19 +189,14 @@
           <div id="pushResult-loadcell" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
         </div>
 
-        <!-- ── RECEIVE SECTION ──────────────────────────────────────── -->
+        <!-- RECEIVE SECTION -->
         <div>
           <div class="flex items-center gap-2 mb-3">
             <span class="mat" style="color:#f97316;font-size:18px;">download</span>
             <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Live Data — Received from Service</span>
             <span id="lcWsStatus" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400">WS Disconnected</span>
           </div>
-          <p class="text-xs text-stone-400 mb-4">
-            Real-time values pushed back from the loadcell service via WebSocket.
-            Datapoints are mapped per device from the config's <code class="bg-stone-100 px-1 rounded">ipc.datapoints</code>.
-          </p>
-
-          <!-- Live weight cards — populated dynamically -->
+          <p class="text-xs text-stone-400 mb-4">Real-time values pushed back from the loadcell service via WebSocket.</p>
           <div id="lcLiveCards" class="grid grid-cols-2 gap-3 mb-4">
             <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
               <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Weight</div>
@@ -279,25 +223,24 @@
               </div>
             </div>
           </div>
-
-          <!-- Raw datapoint stream log -->
           <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw Datapoint Stream</div>
           <div id="lcStreamLog" class="rounded-xl p-3 font-mono text-xs text-stone-500 space-y-0.5 overflow-y-auto"
             style="background:#fafaf9;border:1px solid #e7e5e4;max-height:160px;">
             <div class="text-stone-300">Waiting for data…</div>
           </div>
-
           <button onclick="connectLcWs()" id="lcWsConnectBtn"
             class="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border border-stone-200 text-stone-500 hover:border-orange-300 hover:text-orange-500 transition-all">
             <span class="mat" style="font-size:15px;">sync</span> Connect Live Feed
           </button>
         </div>
-
       </div>
 
       <!-- IOT GATEWAY panel -->
       <div class="cfg-panel" id="panel-iot_gateway">
-        <p class="text-xs text-stone-400 mb-4">Push the current IoT Gateway configuration to the pipeline service.</p>
+        <div class="flex items-center gap-3 mb-3">
+          <p class="text-xs text-stone-400">Push the current IoT Gateway configuration to the pipeline service.</p>
+          <span class="cfg-name-pill" id="cname-pill-iot_gateway"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-iot_gateway">iot_gateway_config</span></span>
+        </div>
         <button onclick="pushGeneric('iot')"
           class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
           <span class="mat" style="font-size:17px;">cloud_upload</span> Push IoT Gateway Config
@@ -305,57 +248,30 @@
         <div id="pushResult-iot_gateway" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
       </div>
 
-      <!-- CORE panel — JSON upload -->
+      <!-- CORE panel — NO file upload, just config name display + push/resend -->
       <div class="cfg-panel" id="panel-core">
-        <p class="text-xs text-stone-400 mb-5">
-          Upload an <code class="bg-stone-100 px-1 rounded text-stone-600">inno_load</code>-style JSON config.
-          Device names are auto-extracted from <code class="bg-stone-100 px-1 rounded text-stone-600">load_cells[]</code>,
-          the config is stored in the database, then forwarded to the core pipeline service.
-        </p>
+        <div class="flex items-center gap-3 mb-4">
+          <p class="text-xs text-stone-400">
+            Forward the stored core config to the core pipeline service.
+            The config name used is set in the <strong>Service &amp; Config Names</strong> section above.
+          </p>
+          <span class="cfg-name-pill" id="cname-pill-core"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-core">core_config</span></span>
+        </div>
 
-        <!-- History table -->
+        <!-- Upload history -->
         <div class="mb-6">
           <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Upload History</div>
           <div id="coreConfigList" class="text-xs text-stone-300">Loading…</div>
         </div>
 
-        <!-- Drop zone -->
-        <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Upload New Config</div>
-        <div id="coreDropZone" class="drop-zone mb-4"
-          onclick="document.getElementById('coreFileInput').click()"
-          ondragover="event.preventDefault();this.classList.add('drag-over')"
-          ondragleave="this.classList.remove('drag-over')"
-          ondrop="handleCoreDrop(event)">
-          <span class="mat" style="font-size:38px;color:#fcd9b0;">upload_file</span>
-          <p class="text-sm font-semibold text-stone-500 mt-2">Drop JSON file here or click to browse</p>
-          <p class="text-xs text-stone-300 mt-1">inno_load-config style JSON</p>
-        </div>
-        <input type="file" id="coreFileInput" accept=".json,application/json" class="hidden"
-          onchange="handleCoreFileSelect(event)"/>
-
-        <!-- Editor / preview -->
-        <div id="coreEditorWrap" class="hidden mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <div class="text-xs font-bold text-stone-500 uppercase tracking-wide">Config Preview / Editor</div>
-            <div id="coreDeviceNames" class="text-xs text-green-600 font-semibold"></div>
-          </div>
-          <textarea id="coreJsonEditor" class="field w-full font-mono text-xs" rows="14"
-            style="resize:vertical;" oninput="refreshCoreDeviceNames()"></textarea>
-        </div>
-
         <div class="flex gap-3 flex-wrap">
-          <button onclick="uploadCoreConfig()"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white active:scale-95 transition-all"
-            style="background:#f97316;box-shadow:0 4px 14px rgba(249,115,22,0.25);">
-            <span class="mat" style="font-size:17px;">send</span> Upload &amp; Send
-          </button>
           <button onclick="resendCoreConfig()"
             class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
             <span class="mat" style="font-size:17px;">replay</span> Resend Latest
           </button>
         </div>
         <div id="pushResult-core" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
-      </div><!-- /panel-core -->
+      </div>
 
     </div><!-- /Config Manager -->
 
@@ -364,23 +280,24 @@
       <div class="flex items-center gap-3 mb-4">
         <div class="text-sm font-bold text-stone-700">Send Version Log</div>
         <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-50 px-2 py-0.5 rounded-full">
-          Version increments on confirmed send only
+          Version increments on confirmed send only · stored in DB
         </span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
             <tr style="border-bottom:1.5px solid #fed7aa;">
-              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Config</th>
-              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Version</th>
-              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Status</th>
-              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Service</th>
-              <th class="text-left pb-2 pr-5 font-bold uppercase tracking-wide text-stone-400">Last Sent</th>
+              <th class="text-left pb-2 pr-4 font-bold uppercase tracking-wide text-stone-400">Config Type</th>
+              <th class="text-left pb-2 pr-4 font-bold uppercase tracking-wide text-stone-400">Config Name</th>
+              <th class="text-left pb-2 pr-4 font-bold uppercase tracking-wide text-stone-400">Version</th>
+              <th class="text-left pb-2 pr-4 font-bold uppercase tracking-wide text-stone-400">Status</th>
+              <th class="text-left pb-2 pr-4 font-bold uppercase tracking-wide text-stone-400">Service</th>
+              <th class="text-left pb-2 pr-4 font-bold uppercase tracking-wide text-stone-400">Last Sent</th>
               <th class="text-left pb-2 font-bold uppercase tracking-wide text-stone-400">Message</th>
             </tr>
           </thead>
           <tbody id="sendLogRows">
-            <tr><td colspan="6" class="py-6 text-center text-stone-300">Loading…</td></tr>
+            <tr><td colspan="7" class="py-6 text-center text-stone-300">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -405,20 +322,19 @@
     t._t = setTimeout(() => t.classList.add('hidden'), 3500);
   }
 
-  // Human-readable labels & icons per config_type
   const TAB_META = {
-    modbus:      { label: 'Modbus',      icon: 'memory',                desc: 'Push Modbus tag config to pipeline service.' },
-    loadcell:    { label: 'Loadcell',    icon: 'scale',                 desc: 'Push loadcell filter/calibration config.' },
-    iot_gateway: { label: 'IoT Gateway', icon: 'cloud_upload',          desc: 'Push IoT Gateway config to pipeline service.' },
-    core:        { label: 'Core',        icon: 'settings_applications', desc: 'Upload inno_load JSON config for the core service.' },
+    modbus:      { label: 'Modbus',      icon: 'memory',                desc: 'Push Modbus tag config to pipeline service.',            defaultConfigName: 'modbus_config' },
+    loadcell:    { label: 'Loadcell',    icon: 'scale',                 desc: 'Push loadcell filter/calibration config.',               defaultConfigName: 'loadcell_config' },
+    iot_gateway: { label: 'IoT Gateway', icon: 'cloud_upload',          desc: 'Push IoT Gateway config to pipeline service.',           defaultConfigName: 'iot_gateway_config' },
+    core:        { label: 'Core',        icon: 'settings_applications', desc: 'Forward stored core config to core pipeline service.',   defaultConfigName: 'core_config' },
   };
-  // Canonical order — always show these 4 tabs
   const ALL_TYPES = ['modbus', 'loadcell', 'iot_gateway', 'core'];
 
-  function tabLabel(ct) { return (TAB_META[ct] || {label: ct}).label; }
-  function tabIcon(ct)  { return (TAB_META[ct] || {icon: 'settings'}).icon; }
+  function tabLabel(ct)  { return (TAB_META[ct] || {label: ct}).label; }
+  function tabIcon(ct)   { return (TAB_META[ct] || {icon: 'settings'}).icon; }
+  function defaultCfgName(ct) { return (TAB_META[ct] || {defaultConfigName: ct + '_config'}).defaultConfigName; }
 
-  // ── Pipeline status ────────────────────────────────────────────────────
+  // ── Pipeline status ──────────────────────────────────────────────────
   async function loadStatus() {
     try {
       const d = await fetch('/api/pipeline/status').then(r => r.json());
@@ -447,70 +363,203 @@
     }
   }
 
-  // ── Targets + dynamic tabs ─────────────────────────────────────────────
+  // ── Targets + config names ───────────────────────────────────────────
   let targetsData = [];
   let activeTab   = null;
+  let sendLogData = []; // cache for config_name lookup
+
+  // ── Send-order list state ────────────────────────────────────────────
+  let _sendOrder = []; // array of config_type strings in current order
+
+  function renderSendOrderList() {
+    const container = document.getElementById('sendOrderList');
+    if (!container) return;
+    container.innerHTML = _sendOrder.map((ct, idx) => {
+      const t        = targetsData.find(x => x.config_type === ct) || {};
+      const enabled  = t.enabled ?? false;
+      const svcName  = t.service_name || '—';
+      const cfgName  = t.config_name  || defaultCfgName(ct);
+      return `<div class="order-row ${enabled ? '' : 'disabled'}" draggable="true"
+                   id="order-row-${ct}" data-ct="${ct}"
+                   ondragstart="onOrderDragStart(event)"
+                   ondragover="onOrderDragOver(event)"
+                   ondragleave="onOrderDragLeave(event)"
+                   ondrop="onOrderDrop(event)">
+        <span class="order-num">${idx + 1}</span>
+        <span class="mat" style="font-size:16px;color:${enabled?'#f97316':'#d4d4d4'};flex-shrink:0;">${tabIcon(ct)}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-bold text-stone-700">${tabLabel(ct)}</div>
+          <div class="text-[10px] text-stone-400 font-mono truncate">${svcName} · <span style="color:#f97316;">${cfgName}</span></div>
+        </div>
+        <label class="toggle flex-shrink-0" title="${enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}">
+          <input type="checkbox" ${enabled ? 'checked' : ''}
+            onchange="toggleOrderRowEnabled('${ct}', this.checked)" onclick="event.stopPropagation()"/>
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="mat text-stone-300 flex-shrink-0" style="font-size:18px;cursor:grab;" title="Drag to reorder">drag_indicator</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Drag-and-drop for order rows ─────────────────────────────────────
+  let _dragSrc = null;
+  function onOrderDragStart(e) {
+    _dragSrc = e.currentTarget.dataset.ct;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onOrderDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('drag-over');
+  }
+  function onOrderDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+  function onOrderDrop(e) {
+    e.preventDefault();
+    const target = e.currentTarget.dataset.ct;
+    e.currentTarget.classList.remove('drag-over');
+    document.getElementById('order-row-' + _dragSrc)?.classList.remove('dragging');
+    if (!_dragSrc || _dragSrc === target) return;
+    const fromIdx = _sendOrder.indexOf(_dragSrc);
+    const toIdx   = _sendOrder.indexOf(target);
+    if (fromIdx < 0 || toIdx < 0) return;
+    _sendOrder.splice(fromIdx, 1);
+    _sendOrder.splice(toIdx, 0, _dragSrc);
+    _dragSrc = null;
+    renderSendOrderList();
+    saveSendOrder();
+  }
+
+  async function saveSendOrder() {
+    try {
+      await fetch('/api/pipeline/auto-send/order', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: _sendOrder })
+      });
+      const status = document.getElementById('orderSaveStatus');
+      if (status) {
+        status.classList.remove('hidden');
+        clearTimeout(status._t);
+        status._t = setTimeout(() => status.classList.add('hidden'), 2000);
+      }
+    } catch(e) { toast('Order save failed: ' + e.message, false); }
+  }
+
+  async function toggleOrderRowEnabled(ct, enabled) {
+    const t = targetsData.find(x => x.config_type === ct);
+    if (t) t.enabled = enabled;
+    const svcName = document.getElementById('target-' + ct)?.value.trim() || (t ? t.service_name : '') || '';
+    const cfgName = document.getElementById('target-cfgname-' + ct)?.value.trim() || defaultCfgName(ct);
+    await fetch('/api/admin/pipeline-targets', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config_type: ct, service_name: svcName, config_name: cfgName, enabled })
+    });
+    // sync table toggle if visible
+    const tgtEl = document.getElementById('tgt-en-' + ct);
+    if (tgtEl) tgtEl.checked = enabled;
+    renderSendOrderList();
+  }
 
   async function loadTargets() {
     try {
-      const d = await fetch('/api/admin/pipeline-targets').then(r => r.json());
+      const [d, logD] = await Promise.all([
+        fetch('/api/admin/pipeline-targets').then(r => r.json()),
+        fetch('/api/admin/pipeline-send-log').then(r => r.json()),
+      ]);
       targetsData = d.targets || [];
+      sendLogData = logD.logs || [];
 
-      // Build a lookup map from DB rows
-      const byType = {};
+      const byType   = {};
       targetsData.forEach(t => { byType[t.config_type] = t; });
+      const logByType = {};
+      sendLogData.forEach(l => { logByType[l.config_type] = l; });
 
-      // Auto-send toggles — show all known types
-      document.getElementById('autoSendToggles').innerHTML = ALL_TYPES.map(ct => {
-        const t = byType[ct] || {};
-        return `<label class="flex items-center gap-2 cursor-pointer select-none">
-          <span class="toggle">
-            <input type="checkbox" id="auto-en-${ct}" ${t.enabled ? 'checked' : ''}
-              onchange="saveTargetEnabled('${ct}', this.checked)"/>
-            <span class="toggle-slider"></span>
-          </span>
-          <span class="text-xs font-bold text-stone-600">${tabLabel(ct)}</span>
-          <span class="text-xs text-stone-300 font-mono">${t.service_name || '—'}</span>
-        </label>`;
-      }).join('');
+      // ── Build ordered list from DB send_order ──
+      const sorted = [...targetsData].sort((a, b) => (a.send_order || 0) - (b.send_order || 0));
+      // Include any types not yet in DB
+      const sortedTypes = sorted.map(t => t.config_type);
+      ALL_TYPES.forEach(ct => { if (!sortedTypes.includes(ct)) sortedTypes.push(ct); });
+      _sendOrder = sortedTypes;
+      renderSendOrderList();
 
-      // Service names form — all known types
-      document.getElementById('targetsForm').innerHTML = ALL_TYPES.map(ct => {
-        const t = byType[ct] || {};
-        // loadcell gets an extra service_path field
-        const extraField = ct === 'loadcell' ? `
-          <input class="field" id="target-path-${ct}" type="text" style="width:200px;flex-shrink:0;"
-            value="${t.service_path || ''}" placeholder="service path (e.g. /dev/spidev0.0)"/>` : '';
-        return `<div class="flex items-center gap-4 flex-wrap">
-          <label class="flex items-center gap-2 w-44 cursor-pointer select-none flex-shrink-0">
-            <span class="toggle">
-              <input type="checkbox" id="tgt-en-${ct}" ${t.enabled ? 'checked' : ''}
-                onchange="syncAutoToggle('${ct}', this.checked)"/>
-              <span class="toggle-slider"></span>
-            </span>
-            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">${tabLabel(ct)}</span>
-          </label>
-          <input class="field flex-1" id="target-${ct}" type="text"
-            value="${t.service_name || ''}" placeholder="service_name (from SERVICE_ADDED)"/>
-          ${extraField}
-          <div class="text-xs text-stone-400 w-48 flex-shrink-0">${TAB_META[ct]?.desc || ''}</div>
+      // ── Service + config names form ──
+      document.getElementById('targetsForm').innerHTML = `
+        <div class="rounded-xl overflow-hidden border border-stone-100">
+          <table class="w-full text-xs">
+            <thead>
+              <tr style="background:#fffaf7;border-bottom:1.5px solid #fed7aa;">
+                <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400 w-8">En</th>
+                <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400 w-28">Type</th>
+                <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400">Service Name</th>
+                <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400">Config Name</th>
+                <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400 w-24">Version (DB)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${ALL_TYPES.map((ct, i) => {
+                const t = byType[ct] || {};
+                const log = logByType[ct] || {};
+                const ver = log.last_version > 0
+                  ? `<span class="ver-badge ver-ok">v${log.last_version}</span>`
+                  : `<span class="ver-badge ver-never">—</span>`;
+                const cfgName = t.config_name || defaultCfgName(ct);
+                return `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-stone-50/50'}" style="border-bottom:1px solid #f5f5f4;">
+                  <td class="py-3 px-4">
+                    <label class="toggle">
+                      <input type="checkbox" id="tgt-en-${ct}" ${t.enabled ? 'checked' : ''}
+                        onchange="toggleOrderRowEnabled('${ct}', this.checked)"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </td>
+                  <td class="py-3 px-4">
+                    <span class="flex items-center gap-1.5 font-bold text-stone-700">
+                      <span class="mat" style="font-size:15px;color:#f97316;">${tabIcon(ct)}</span>
+                      ${tabLabel(ct)}
+                    </span>
+                    <div class="text-[10px] text-stone-300 mt-0.5">${TAB_META[ct]?.desc || ''}</div>
+                  </td>
+                  <td class="py-3 px-4">
+                    <input class="field w-full" id="target-${ct}" type="text"
+                      value="${t.service_name || ''}" placeholder="e.g. modbus_service"/>
+                  </td>
+                  <td class="py-3 px-4">
+                    <input class="field w-full font-mono" id="target-cfgname-${ct}" type="text"
+                      value="${cfgName}" placeholder="e.g. ${defaultCfgName(ct)}"
+                      oninput="updateCfgNamePill('${ct}', this.value)"/>
+                  </td>
+                  <td class="py-3 px-4">${ver}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
         </div>`;
-      }).join('');
 
-      // Always build all 4 tabs regardless of what's in DB
+      // Update config name pills in each panel
+      ALL_TYPES.forEach(ct => {
+        const t = byType[ct] || {};
+        const cfgName = t.config_name || defaultCfgName(ct);
+        const el = document.getElementById('cname-display-' + ct);
+        if (el) el.textContent = cfgName;
+      });
+
+      // Build tab bar
       const tabBar = document.getElementById('cfgTabBar');
       tabBar.innerHTML = ALL_TYPES.map(ct => `
         <button class="cfg-tab" id="tab-${ct}" onclick="switchTab('${ct}')">
           <span class="mat" style="font-size:15px;vertical-align:middle;margin-right:4px;">${tabIcon(ct)}</span>${tabLabel(ct)}
         </button>`).join('');
 
-      // Activate first tab or previously active
       const toActivate = ALL_TYPES.includes(activeTab) ? activeTab : ALL_TYPES[0];
       switchTab(toActivate);
 
     } catch (e) {
       document.getElementById('targetsForm').textContent = 'Error loading service targets.';
     }
+  }
+
+  function updateCfgNamePill(ct, val) {
+    const el = document.getElementById('cname-display-' + ct);
+    if (el) el.textContent = val || defaultCfgName(ct);
   }
 
   function switchTab(type) {
@@ -521,80 +570,75 @@
     document.querySelectorAll('.cfg-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('panel-' + type);
     if (panel) panel.classList.add('active');
-    // Lazy load
     if (type === 'loadcell') { loadLoadcellDevices(); connectLcWs(); }
     if (type === 'core')     loadCoreConfigs();
   }
 
   function syncAutoToggle(cfgType, val) {
-    const el = document.getElementById('auto-en-' + cfgType);
-    if (el) el.checked = val;
     const t = targetsData.find(x => x.config_type === cfgType);
     if (t) t.enabled = val;
   }
 
   async function saveTargetEnabled(cfgType, enabled) {
     const t = targetsData.find(x => x.config_type === cfgType);
-    const svcName = t ? (document.getElementById('target-' + cfgType)?.value.trim() || t.service_name || '') : '';
+    const svcName  = t ? (document.getElementById('target-' + cfgType)?.value.trim() || t.service_name || '') : '';
+    const cfgName  = document.getElementById('target-cfgname-' + cfgType)?.value.trim() || defaultCfgName(cfgType);
     await fetch('/api/admin/pipeline-targets', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config_type: cfgType, service_name: svcName, enabled })
+      body: JSON.stringify({ config_type: cfgType, service_name: svcName, config_name: cfgName, enabled })
     });
-    const fullEl = document.getElementById('tgt-en-' + cfgType);
-    if (fullEl) fullEl.checked = enabled;
     if (t) t.enabled = enabled;
+    renderSendOrderList();
   }
 
   async function saveTargets() {
     try {
       for (const ct of ALL_TYPES) {
-        const svc  = document.getElementById('target-' + ct)?.value.trim() || '';
-        const en   = document.getElementById('tgt-en-' + ct)?.checked ?? false;
-        const path = ct === 'loadcell'
-          ? (document.getElementById('target-path-' + ct)?.value.trim() || '')
-          : undefined;
-        const body = { config_type: ct, service_name: svc, enabled: en };
-        if (path !== undefined) body.service_path = path;
+        const svc     = document.getElementById('target-' + ct)?.value.trim() || '';
+        const cfgName = document.getElementById('target-cfgname-' + ct)?.value.trim() || defaultCfgName(ct);
+        const en      = document.getElementById('tgt-en-' + ct)?.checked ?? false;
         await fetch('/api/admin/pipeline-targets', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify({ config_type: ct, service_name: svc, config_name: cfgName, enabled: en })
         });
       }
-      toast('Service names saved!');
+      toast('Service & config names saved!');
       await loadTargets();
     } catch (e) {
       toast('Save failed: ' + e.message, false);
     }
   }
 
-  // ── Auto-Send ─────────────────────────────────────────────────────────
+  // ── Send Now (manual trigger, same logic as startup) ──────────────────
   async function doAutoSend() {
     const btn = document.getElementById('autoSendBtn');
     const res = document.getElementById('autoSendResult');
     btn.disabled = true; btn.style.opacity = '0.65';
     btn.classList.remove('pulse-btn');
     res.classList.remove('hidden');
-    res.innerHTML = '<span class="text-stone-400">⏳ Sending all enabled targets…</span>';
+    res.innerHTML = '<span class="text-stone-400">⏳ Sending in order…</span>';
     try {
       const d = await fetch('/api/pipeline/auto-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       const results = d.results || [];
       if (!results.length) {
-        res.innerHTML = '<span style="color:#d97706;">⚠ No enabled targets. Toggle at least one above.</span>';
+        res.innerHTML = '<span style="color:#d97706;">⚠ No enabled targets. Enable at least one in the list above.</span>';
       } else {
         res.innerHTML = results.map(r => {
           const icon  = r.pipeline_sent ? '✓' : (r.success ? '⏳' : '✗');
           const color = r.pipeline_sent ? '#15803d' : (r.success ? '#d97706' : '#dc2626');
-          return `<div style="color:${color};">${icon} <strong>${tabLabel(r.config_type).toUpperCase()}</strong>` +
-                 ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v'+r.version : ''}` +
-                 ` — ${r.message || ''}</div>`;
+          return `<div style="color:${color};">
+            <span style="color:#aaa;margin-right:4px;">#${r.send_order||'?'}</span>
+            ${icon} <strong>${tabLabel(r.config_type).toUpperCase()}</strong>` +
+            ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v' + r.version : ''}` +
+            ` — ${r.message || ''}</div>`;
         }).join('');
-        toast(d.auto_sent ? 'Auto-Send sent!' : 'Auto-Send queued (service not connected yet)');
+        toast(d.auto_sent ? 'Sent!' : 'Queued (service not yet connected)');
       }
     } catch (e) {
       res.innerHTML = `<span style="color:#dc2626;">✗ Error: ${e.message}</span>`;
-      toast('Auto-Send failed', false);
+      toast('Send failed', false);
     } finally {
       btn.disabled = false; btn.style.opacity = '1';
       btn.classList.add('pulse-btn');
@@ -602,7 +646,7 @@
     }
   }
 
-  // ── Generic push (modbus / iot_gateway) ───────────────────────────────
+  // ── Generic push (modbus / iot_gateway) ──────────────────────────────
   const PUSH_EP = {
     modbus: '/api/pipeline/modbus-config/save',
     iot:    '/api/pipeline/iot-gateway-config/send',
@@ -629,10 +673,10 @@
     }
   }
 
-  // ── Loadcell — multi-device selector ──────────────────────────────────
-  let loadcellDevices = [];
+  // ── Loadcell devices ─────────────────────────────────────────────────
+  let loadcellDevices  = [];
   let selectedLoadcellId = null;
-  let lcDevicesLoaded = false;
+  let lcDevicesLoaded  = false;
 
   async function loadLoadcellDevices() {
     if (lcDevicesLoaded) return;
@@ -645,10 +689,7 @@
         container.innerHTML = '<p class="text-xs text-stone-300">No enabled loadcell devices found in DB.</p>';
         return;
       }
-      // Auto-select first
-      if (!selectedLoadcellId && loadcellDevices.length) {
-        selectedLoadcellId = loadcellDevices[0].id;
-      }
+      if (!selectedLoadcellId && loadcellDevices.length) selectedLoadcellId = loadcellDevices[0].id;
       renderLoadcellList();
     } catch (e) {
       container.innerHTML = '<p class="text-xs text-red-400">Error: ' + e.message + '</p>';
@@ -668,102 +709,10 @@
             Capacity: ${dev.capacity_min ?? 0}–${dev.capacity_max ?? '?'} ${dev.unit || 'kg'} &nbsp;·&nbsp;
             Tare: ${dev.tare_offset ?? '—'} &nbsp;·&nbsp;
             Poll: ${dev.poll_ms ?? '—'} ms
-            ${dev.service_path ? `&nbsp;·&nbsp; <span class="font-mono text-orange-500">${dev.service_path}</span>` : ''}
           </div>
         </div>
         <span class="text-[10px] font-mono text-stone-300 flex-shrink-0">id:${dev.id}</span>
       </div>`).join('');
-  }
-
-  // ── Loadcell JSON import ───────────────────────────────────────────────
-
-  function handleLcDrop(e) {
-    e.preventDefault();
-    document.getElementById('lcDropZone').classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) readLcFile(file);
-  }
-
-  function handleLcFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) readLcFile(file);
-  }
-
-  function readLcFile(file) {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const parsed = JSON.parse(ev.target.result);
-        document.getElementById('lcImportEditor').value = JSON.stringify(parsed, null, 2);
-        document.getElementById('lcImportPreview').classList.remove('hidden');
-        refreshLcImportPreview();
-        toast('JSON loaded — ' + (file.name || 'config'));
-      } catch (err) {
-        toast('Invalid JSON: ' + err.message, false);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function refreshLcImportPreview() {
-    try {
-      const parsed = JSON.parse(document.getElementById('lcImportEditor').value);
-      const names = (parsed.load_cells || []).map(lc => lc.name).filter(Boolean);
-      document.getElementById('lcImportDevNames').textContent =
-        names.length ? '📍 Devices: ' + names.join(', ') : '⚠ No load_cells[] found';
-    } catch (_) {
-      document.getElementById('lcImportDevNames').textContent = '⚠ Invalid JSON';
-    }
-  }
-
-  function clearLcImport() {
-    document.getElementById('lcImportEditor').value = '';
-    document.getElementById('lcImportPreview').classList.add('hidden');
-    document.getElementById('lcImportResult').classList.add('hidden');
-    document.getElementById('lcFileInput').value = '';
-    document.getElementById('lcImportDevNames').textContent = '';
-  }
-
-  async function importLcJson() {
-    const editorVal = document.getElementById('lcImportEditor').value.trim();
-    if (!editorVal) { toast('Load a JSON file first', false); return; }
-    let payload;
-    try { payload = JSON.parse(editorVal); }
-    catch (e) { toast('JSON parse error: ' + e.message, false); return; }
-
-    const el = document.getElementById('lcImportResult');
-    el.className = 'mt-3 p-2.5 rounded-xl text-xs font-medium bg-stone-50 text-stone-500';
-    el.classList.remove('hidden');
-    el.textContent = 'Saving to database…';
-
-    try {
-      const d = await fetch('/api/pipeline/loadcell-config/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).then(r => r.json());
-
-      el.className = 'mt-3 p-2.5 rounded-xl text-xs font-medium ' +
-        (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-
-      if (d.success) {
-        const devs = (d.device_names || []).join(', ') || '—';
-        el.innerHTML = `✓ Saved to DB · Devices: <strong>${devs}</strong>` +
-          (d.created ? ` · <span class="text-green-600">${d.created} created</span>` : '') +
-          (d.updated ? ` · <span class="text-blue-600">${d.updated} updated</span>` : '');
-        // Reload device list so new entries appear
-        lcDevicesLoaded = false;
-        loadLoadcellDevices();
-        toast('Loadcell config imported to DB!');
-      } else {
-        el.textContent = '✗ ' + (d.error || 'Import failed');
-        toast('Import failed', false);
-      }
-    } catch (e) {
-      el.className = 'mt-3 p-2.5 rounded-xl text-xs font-medium bg-red-50 text-red-600';
-      el.textContent = '✗ Network error: ' + e.message;
-      toast('Network error', false);
-    }
   }
 
   function selectLoadcell(id) {
@@ -800,37 +749,31 @@
     }
   }
 
-  // ── Loadcell WebSocket — live receive ─────────────────────────────────
+  // ── Loadcell WebSocket ───────────────────────────────────────────────
   let lcWs = null;
-  let lcStreamEntries = [];
 
   function connectLcWs() {
     if (lcWs && lcWs.readyState <= 1) { lcWs.close(); }
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     lcWs = new WebSocket(`${proto}://${location.host}/ws/pipeline/load_raw`);
-
     const statusEl = document.getElementById('lcWsStatus');
     const btn      = document.getElementById('lcWsConnectBtn');
-
     lcWs.onopen = () => {
       statusEl.textContent = 'WS Connected';
       statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-600';
       btn.innerHTML = '<span class="mat" style="font-size:15px;">stop_circle</span> Disconnect';
       btn.onclick = () => { lcWs.close(); };
     };
-
     lcWs.onclose = () => {
       statusEl.textContent = 'WS Disconnected';
       statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400';
       btn.innerHTML = '<span class="mat" style="font-size:15px;">sync</span> Connect Live Feed';
       btn.onclick = connectLcWs;
     };
-
     lcWs.onerror = () => {
       statusEl.textContent = 'WS Error';
       statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-500';
     };
-
     lcWs.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data);
@@ -842,12 +785,7 @@
 
   function handleLcDatapoint(dp, val) {
     if (!dp) return;
-    // load_raw — raw ADC value
-    if (dp === 'load_raw') {
-      document.getElementById('lc-raw').textContent = val !== null && val !== undefined ? val : '—';
-      return;
-    }
-    // Mapped datapoints from ipc: e.g. "loadcell_1.weight_kg", "loadcell_1.tared", etc.
+    if (dp === 'load_raw') { document.getElementById('lc-raw').textContent = val ?? '—'; return; }
     if (dp.endsWith('.weight_kg') || dp.endsWith('.weight')) {
       const v = parseFloat(val);
       document.getElementById('lc-weight').textContent = isNaN(v) ? val : v.toFixed(3);
@@ -862,19 +800,15 @@
       el.textContent = 'Cal: ' + (val ? 'Yes' : 'No');
       el.className = 'ver-badge ' + (val ? 'ver-ok' : 'ver-never');
     } else if (dp.endsWith('.raw')) {
-      document.getElementById('lc-raw').textContent = val !== null ? val : '—';
+      document.getElementById('lc-raw').textContent = val ?? '—';
     } else if (dp.endsWith('.capacity')) {
-      // capacity value → use for level bar denominator
       window._lcCapacity = parseFloat(val) || null;
     }
-    // Level percentage: derive from weight / capacity if available
-    const weightEl = document.getElementById('lc-weight');
-    const wNum = parseFloat(weightEl.textContent);
+    const wNum = parseFloat(document.getElementById('lc-weight').textContent);
     if (!isNaN(wNum) && window._lcCapacity) {
       const pct = Math.min(100, Math.max(0, (wNum / window._lcCapacity) * 100));
       document.getElementById('lc-level-fill').style.width = pct.toFixed(1) + '%';
-      document.getElementById('lc-level-fill').style.background =
-        pct > 80 ? '#ef4444' : pct > 50 ? '#f97316' : '#22c55e';
+      document.getElementById('lc-level-fill').style.background = pct > 80 ? '#ef4444' : pct > 50 ? '#f97316' : '#22c55e';
       document.getElementById('lc-level').textContent = pct.toFixed(1) + '%';
     }
   }
@@ -886,20 +820,19 @@
     line.className = 'text-stone-400';
     const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '—');
     line.innerHTML = `<span class="text-stone-300">${ts}</span> <span class="text-orange-400">${dp}</span> = <span class="text-stone-600">${displayVal}</span>`;
-    if (log.firstChild?.classList?.contains('text-stone-300') && log.firstChild.textContent === 'Waiting for data…') {
-      log.innerHTML = '';
-    }
+    if (log.firstChild?.textContent === 'Waiting for data…') log.innerHTML = '';
     log.insertBefore(line, log.firstChild);
-    // Keep max 60 entries
     while (log.children.length > 60) log.removeChild(log.lastChild);
   }
+
+  // ── Core config history ──────────────────────────────────────────────
   async function loadCoreConfigs() {
     const container = document.getElementById('coreConfigList');
     try {
       const d = await fetch('/api/pipeline/core-configs').then(r => r.json());
       const configs = d.configs || [];
       if (!configs.length) {
-        container.innerHTML = '<p class="text-stone-300 text-xs">No configs uploaded yet.</p>';
+        container.innerHTML = '<p class="text-stone-300 text-xs">No configs stored yet.</p>';
         return;
       }
       container.innerHTML = `<div class="overflow-x-auto rounded-xl border border-stone-100">
@@ -929,75 +862,6 @@
     }
   }
 
-  function handleCoreDrop(e) {
-    e.preventDefault();
-    document.getElementById('coreDropZone').classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) readCoreFile(file);
-  }
-  function handleCoreFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) readCoreFile(file);
-  }
-  function readCoreFile(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const parsed = JSON.parse(e.target.result);
-        document.getElementById('coreJsonEditor').value = JSON.stringify(parsed, null, 2);
-        document.getElementById('coreEditorWrap').classList.remove('hidden');
-        refreshCoreDeviceNames();
-        toast('JSON loaded — ' + (file.name || 'config'));
-      } catch (err) {
-        toast('Invalid JSON: ' + err.message, false);
-      }
-    };
-    reader.readAsText(file);
-  }
-  function refreshCoreDeviceNames() {
-    try {
-      const parsed = JSON.parse(document.getElementById('coreJsonEditor').value);
-      const names = (parsed.load_cells || []).map(lc => lc.name).filter(Boolean);
-      document.getElementById('coreDeviceNames').textContent =
-        names.length ? '📍 Devices: ' + names.join(', ') : '';
-    } catch (_) {
-      document.getElementById('coreDeviceNames').textContent = '';
-    }
-  }
-
-  async function uploadCoreConfig() {
-    const editorVal = document.getElementById('coreJsonEditor').value.trim();
-    if (!editorVal) { toast('Load a JSON file first', false); return; }
-    let payload;
-    try { payload = JSON.parse(editorVal); }
-    catch (e) { toast('JSON parse error: ' + e.message, false); return; }
-    const el = document.getElementById('pushResult-core');
-    el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
-    el.classList.remove('hidden');
-    el.textContent = 'Uploading & sending to pipeline…';
-    try {
-      const d = await fetch('/api/pipeline/core-config/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).then(r => r.json());
-      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
-        (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      if (d.success) {
-        const devs = (d.device_names || []).join(', ') || '—';
-        el.innerHTML = `✓ Saved to DB (v${d.version}) · Devices: <strong>${devs}</strong><br>
-          <span class="text-xs opacity-75">${d.pipeline_message || ''}</span>`;
-        loadCoreConfigs();
-      } else {
-        el.textContent = '✗ ' + (d.error || 'Upload failed');
-      }
-      loadStatus(); loadSendLog();
-    } catch (e) {
-      el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '✗ Network error: ' + e.message;
-    }
-  }
-
   async function resendCoreConfig() {
     const el = document.getElementById('pushResult-core');
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
@@ -1018,14 +882,21 @@
     }
   }
 
-  // ── Version log ────────────────────────────────────────────────────────
+  // ── Version log ──────────────────────────────────────────────────────
   async function loadSendLog() {
     try {
-      const d = await fetch('/api/admin/pipeline-send-log').then(r => r.json());
-      const logs = d.logs || [];
+      const [d, tgtD] = await Promise.all([
+        fetch('/api/admin/pipeline-send-log').then(r => r.json()),
+        fetch('/api/admin/pipeline-targets').then(r => r.json()),
+      ]);
+      const logs   = d.logs    || [];
+      const tgts   = tgtD.targets || [];
+      const tgtMap = {};
+      tgts.forEach(t => { tgtMap[t.config_type] = t; });
+
       const tbody = document.getElementById('sendLogRows');
       if (!logs.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="py-6 text-center text-stone-300">No log entries yet</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-stone-300">No log entries yet</td></tr>';
         return;
       }
       tbody.innerHTML = logs.map(l => {
@@ -1035,19 +906,22 @@
           ? `<span class="ver-badge ver-ok">v${l.last_version}</span>`
           : '<span class="ver-badge ver-never">—</span>';
         const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : '—';
-        const msg = (l.last_message || '').slice(0, 65) + ((l.last_message||'').length > 65 ? '…' : '');
+        const msg = (l.last_message || '').slice(0, 60) + ((l.last_message||'').length > 60 ? '…' : '');
+        const tgt = tgtMap[l.config_type] || {};
+        const cfgName = tgt.config_name || defaultCfgName(l.config_type);
         return `<tr class="border-b border-stone-50 hover:bg-stone-50">
-          <td class="py-2.5 pr-5 font-bold text-stone-700">${tabLabel(l.config_type)}</td>
-          <td class="py-2.5 pr-5">${ver}</td>
-          <td class="py-2.5 pr-5"><span class="ver-badge ${sc}">${l.last_status}</span></td>
-          <td class="py-2.5 pr-5 font-mono text-stone-500">${l.last_service || '—'}</td>
-          <td class="py-2.5 pr-5 text-stone-400 whitespace-nowrap">${ts}</td>
+          <td class="py-2.5 pr-4 font-bold text-stone-700">${tabLabel(l.config_type)}</td>
+          <td class="py-2.5 pr-4 font-mono text-orange-500">${cfgName}</td>
+          <td class="py-2.5 pr-4">${ver}</td>
+          <td class="py-2.5 pr-4"><span class="ver-badge ${sc}">${l.last_status}</span></td>
+          <td class="py-2.5 pr-4 font-mono text-stone-500">${l.last_service || '—'}</td>
+          <td class="py-2.5 pr-4 text-stone-400 whitespace-nowrap">${ts}</td>
           <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message||'').replace(/"/g,'&quot;')}">${msg||'—'}</td>
         </tr>`;
       }).join('');
     } catch (e) {
       document.getElementById('sendLogRows').innerHTML =
-        '<tr><td colspan="6" class="py-4 text-center text-red-400">Error loading log</td></tr>';
+        '<tr><td colspan="7" class="py-4 text-center text-red-400">Error loading log</td></tr>';
     }
   }
 

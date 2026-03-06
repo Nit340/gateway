@@ -345,16 +345,10 @@ def build_iot_gateway_config():
             if pub:
                 heartbeat_channel = pub[0].get('name', 'default_publish')
 
-        # Collect mappings with auto-assigned channels.
-        # Individual tags (no alias) are merged by (channel, dtype) so that all
-        # tags with the same channel and data type end up in a single mapping entry,
-        # e.g. { channel:"PUB CMS", datapoints:{ float:["load","tension"] } }
-        # instead of one entry per tag.
+        # Collect mappings — groups pass through as-is;
+        # individual tags each become their own mapping entry.
         default_ch   = _get_default_channel_for_connection(cfg)
         raw_mappings = cfg.get('mappings', [])
-
-        # bucket: { (channel, dtype): [tag_name, ...] }
-        individual_buckets = {}
 
         for m in raw_mappings:
             channel = m.get('channel') or default_ch
@@ -363,19 +357,13 @@ def build_iot_gateway_config():
                 entry = {'channel': channel, 'datapoints': m.get('datapoints', {}), 'alias': m['alias']}
                 all_mappings.append(entry)
             else:
-                # Individual: sort into (channel, dtype) buckets
+                # Individual: one mapping entry per tag (preserves per-tag dtype)
                 for dtype, names in (m.get('datapoints') or {}).items():
-                    key = (channel, dtype)
-                    if key not in individual_buckets:
-                        individual_buckets[key] = []
-                    individual_buckets[key].extend(names)
-
-        # Emit one merged entry per (channel, dtype) bucket
-        for (channel, dtype), names in individual_buckets.items():
-            all_mappings.append({
-                'channel':    channel,
-                'datapoints': {dtype: names},
-            })
+                    for name in names:
+                        all_mappings.append({
+                            'channel':    channel,
+                            'datapoints': {dtype: [name]},
+                        })
 
     # -- 3. Assemble ---------------------------------------------------------
     return {

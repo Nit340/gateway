@@ -105,6 +105,33 @@ async def get_all_devices(request):
                 'service': service_name
             })
         
+        # Get Virtual devices
+        cursor.execute('''
+            SELECT v.id, v.name, v.enabled
+            FROM virtual_device v
+            ORDER BY v.id
+        ''')
+        
+        for row in cursor.fetchall():
+            device_id, name, enabled = row
+            
+            if device_id not in device_status_tracker:
+                initialize_device_status(device_id, 'Online')
+            
+            status = device_status_tracker[device_id]
+            
+            devices.append({
+                'id': device_id,
+                'name': name,
+                'type': 'Virtual',
+                'protocol': 'virtual',
+                'address': 'N/A',
+                'status': status['status'],
+                'lastPoll': status['last_poll'],
+                'enabled': bool(enabled),
+                'service': None
+            })
+        
         conn.close()
         return web.json_response({'devices': devices})
         
@@ -260,6 +287,33 @@ async def get_device_details(request):
             conn.close()
             return web.json_response(details)
         
+        # Try Virtual device
+        cursor.execute('SELECT id, name, enabled FROM virtual_device WHERE id = ?', (device_id,))
+        row = cursor.fetchone()
+        
+        if row:
+            dev_id, name, enabled = row
+            
+            if device_id not in device_status_tracker:
+                initialize_device_status(device_id, 'Online')
+            
+            status = device_status_tracker[device_id]
+            
+            details = {
+                'id': dev_id,
+                'name': name,
+                'type': 'Virtual',
+                'protocol': 'virtual',
+                'service': None,
+                'enabled': bool(enabled),
+                'status': status['status'],
+                'lastPoll': status['last_poll'],
+                'config': {}
+            }
+            
+            conn.close()
+            return web.json_response(details)
+        
         conn.close()
         return web.json_response({'error': 'Device not found'}, status=404)
         
@@ -284,17 +338,29 @@ async def add_device(request):
         
         # Generate device ID with unique prefix
         if device_type == 'loadcell':
-            # ENFORCE: Only one loadcell device allowed (LC1 only)
-            cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-            lc_count = cursor.fetchone()[0]
-            if lc_count >= 1:
-                conn.close()
-                return web.json_response({
-                    'success': False,
-                    'error': 'Only one Load Cell device (LC1) is allowed. A load cell device already exists.'
-                }, status=400)
-            
-            device_id = 'LC1'
+            cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
+            existing_ids = [row[0] for row in cursor.fetchall()]
+            max_num = 0
+            for existing_id in existing_ids:
+                try:
+                    num = int(existing_id[2:])
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+            device_id = 'LC{}'.format(max_num + 1)
+        elif device_type == 'virtual':
+            cursor.execute('SELECT id FROM virtual_device WHERE id LIKE "VD%" ORDER BY id')
+            existing_ids = [row[0] for row in cursor.fetchall()]
+            max_num = 0
+            for existing_id in existing_ids:
+                try:
+                    num = int(existing_id[2:])
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+            device_id = 'VD{}'.format(max_num + 1)
         else:  # modbus
             cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
@@ -314,7 +380,21 @@ async def add_device(request):
         service_name = 'loadcell' if device_type == 'loadcell' else 'modbus'
         service_id = get_service_by_name(service_name)
         
-        if device_type == 'loadcell':
+        if device_type == 'virtual':
+            # Add Virtual device — no service needed
+            cursor.execute('''
+                INSERT INTO virtual_device (id, name, enabled)
+                VALUES (?, ?, 1)
+            ''', (device_id, data.get('name', 'Virtual Device')))
+            
+            # Automatically create lan, wlan, lte datapoints
+            for tag_name in ('lan', 'wlan', 'lte'):
+                cursor.execute('''
+                    INSERT OR IGNORE INTO virtual_datapoints (device_id, name, unit)
+                    VALUES (?, ?, '')
+                ''', (device_id, tag_name))
+        
+        elif device_type == 'loadcell':
             # Add Loadcell device
             config = data.get('config', {})
             
@@ -561,6 +641,7 @@ async def delete_device(request):
         
         cursor.execute('DELETE FROM modbus_device WHERE id = ?', (device_id,))
         cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
+        cursor.execute('DELETE FROM virtual_device WHERE id = ?', (device_id,))
         
         conn.commit()
         conn.close()
@@ -617,6 +698,7 @@ async def disable_device(request):
         
         cursor.execute('UPDATE modbus_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         cursor.execute('UPDATE loadcell_device SET enabled = ? WHERE id = ?', (enabled, device_id))
+        cursor.execute('UPDATE virtual_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         
         conn.commit()
         conn.close()
@@ -753,12 +835,75 @@ async def duplicate_device(request):
             loadcell_row = cursor.fetchone()
             
             if loadcell_row:
-                # Block duplicating loadcell
+                # Get column names
+                cursor.execute('PRAGMA table_info(loadcell_device)')
+                columns = [col[1] for col in cursor.fetchall()]
+                old_device = dict(zip(columns, loadcell_row))
+                
+                # Generate new LC ID
+                cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
+                existing_ids = [row[0] for row in cursor.fetchall()]
+                max_num = 0
+                for existing_id in existing_ids:
+                    try:
+                        num = int(existing_id[2:])
+                        if num > max_num:
+                            max_num = num
+                    except ValueError:
+                        continue
+                new_device_id = 'LC{}'.format(max_num + 1)
+                
+                # Generate new name
+                base_name_clean = re.sub(r'-\d+$', '', old_device['name'])
+                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
+                existing_names = [row[0] for row in cursor.fetchall()]
+                numbers = []
+                for name in existing_names:
+                    match = re.search(r'-(\d+)$', name)
+                    if match:
+                        numbers.append(int(match.group(1)))
+                counter = (max(numbers) + 1) if numbers else 1
+                new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
+                
+                cursor.execute('''
+                    INSERT INTO loadcell_device (
+                        id, name, service_id, device_path,
+                        poll_ms, resolution_bits, effective_bits, signed, gain, vref,
+                        raw_min, raw_max, capacity_min, capacity_max, unit,
+                        load_name, capacity_name, enabled
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    new_device_id, new_name, old_device.get('service_id'),
+                    old_device.get('device_path'), old_device.get('poll_ms'),
+                    old_device.get('resolution_bits'), old_device.get('effective_bits'),
+                    old_device.get('signed'), old_device.get('gain'), old_device.get('vref'),
+                    old_device.get('raw_min'), old_device.get('raw_max'),
+                    old_device.get('capacity_min'), old_device.get('capacity_max'),
+                    old_device.get('unit'), old_device.get('load_name', 'load_weight'),
+                    old_device.get('capacity_name', 'capacity'), old_device.get('enabled', 1)
+                ))
+                
+                # Duplicate loadcell datapoints
+                cursor.execute('SELECT name, unit FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
+                datapoints = cursor.fetchall()
+                for dp in datapoints:
+                    cursor.execute(
+                        'INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, ?)',
+                        (new_device_id, dp[0], dp[1])
+                    )
+                
+                initialize_device_status(new_device_id, 'Online')
+                conn.commit()
                 conn.close()
+                
                 return web.json_response({
-                    'success': False,
-                    'error': 'Cannot duplicate Load Cell device. Only one Load Cell (LC1) is allowed.'
-                }, status=400)
+                    'success': True,
+                    'message': 'Device duplicated successfully as {}'.format(new_name),
+                    'device_id': new_device_id,
+                    'device_name': new_name,
+                    'datapoints_copied': len(datapoints)
+                })
             
             conn.close()
             return web.json_response({
@@ -826,13 +971,13 @@ async def export_devices_csv(request):
             SELECT l.id, l.name,
                    l.device_path, l.capacity_max, l.unit, l.enabled
             FROM loadcell_device l
-            WHERE l.id = 'LC1'
+            ORDER BY l.id
         ''')
         
         for row in cursor.fetchall():
             device_id, name, device_path, capacity_max, unit, enabled = row
             writer.writerow([
-                'LC1', name, 'Loadcell', 'loadcell',
+                device_id, name, 'Loadcell', 'loadcell',
                 '', '', '',
                 '', '', '', '',
                 '', '', '', '',
@@ -895,18 +1040,6 @@ async def import_devices_csv(request):
                     continue
                 
                 if device_type.lower() == 'loadcell':
-                    cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-                    lc_existing_count = cursor.fetchone()[0]
-                    lc_in_new = sum(1 for d in new_devices if d.get('data', {}).get('Type', '').lower() == 'loadcell')
-                    if lc_existing_count > 0 or lc_in_new > 0:
-                        duplicates.append({
-                            'row': row_num,
-                            'name': name,
-                            'type': device_type,
-                            'existing_id': 'LC1',
-                            'reason': 'Only one Load Cell (LC1) is allowed'
-                        })
-                        continue
                     cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
                 else:
                     cursor.execute('SELECT id, name FROM modbus_device WHERE name = ?', (name,))
@@ -988,12 +1121,15 @@ async def import_devices_csv(request):
                 service_id = get_service_by_name(service_name)
                 
                 if device_type.lower() == 'loadcell':
-                    cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-                    if cursor.fetchone()[0] >= 1:
-                        errors.append('Row {}: Only one Load Cell (LC1) is allowed. Skipping.'.format(row_num))
-                        skipped_count += 1
-                        continue
-                    device_id = 'LC1'
+                    cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
+                    existing_lc_ids = [r[0] for r in cursor.fetchall()]
+                    lc_max = 0
+                    for eid in existing_lc_ids:
+                        try:
+                            lc_max = max(lc_max, int(eid[2:]))
+                        except ValueError:
+                            pass
+                    device_id = 'LC{}'.format(lc_max + 1)
                     
                     device_path = row.get('Device Path', '/dev/spidev0.0').strip()
                     capacity = float(row.get('Capacity', '40000'))
