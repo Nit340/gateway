@@ -316,7 +316,7 @@ def build_iot_gateway_config():
         cid, name, enabled, cfg_raw = row
         cfg = _cfg(cfg_raw)
 
-        # Canonical server key: local broker → 'mqtt', cloud/CMS → 'mqtt_cloud'
+        # Canonical server key: local broker ? 'mqtt', cloud/CMS ? 'mqtt_cloud'
         server_key = name.lower().replace(' ', '_').replace('-', '_')
         if 'cloud' in server_key or 'cms' in server_key:
             server_key = 'mqtt_cloud'
@@ -345,15 +345,37 @@ def build_iot_gateway_config():
             if pub:
                 heartbeat_channel = pub[0].get('name', 'default_publish')
 
-        # Collect mappings with auto-assigned channels
+        # Collect mappings with auto-assigned channels.
+        # Individual tags (no alias) are merged by (channel, dtype) so that all
+        # tags with the same channel and data type end up in a single mapping entry,
+        # e.g. { channel:"PUB CMS", datapoints:{ float:["load","tension"] } }
+        # instead of one entry per tag.
         default_ch   = _get_default_channel_for_connection(cfg)
         raw_mappings = cfg.get('mappings', [])
+
+        # bucket: { (channel, dtype): [tag_name, ...] }
+        individual_buckets = {}
+
         for m in raw_mappings:
             channel = m.get('channel') or default_ch
-            entry   = {'channel': channel, 'datapoints': m.get('datapoints', {})}
             if m.get('alias'):
-                entry['alias'] = m['alias']
-            all_mappings.append(entry)
+                # Groups go through as-is
+                entry = {'channel': channel, 'datapoints': m.get('datapoints', {}), 'alias': m['alias']}
+                all_mappings.append(entry)
+            else:
+                # Individual: sort into (channel, dtype) buckets
+                for dtype, names in (m.get('datapoints') or {}).items():
+                    key = (channel, dtype)
+                    if key not in individual_buckets:
+                        individual_buckets[key] = []
+                    individual_buckets[key].extend(names)
+
+        # Emit one merged entry per (channel, dtype) bucket
+        for (channel, dtype), names in individual_buckets.items():
+            all_mappings.append({
+                'channel':    channel,
+                'datapoints': {dtype: names},
+            })
 
     # -- 3. Assemble ---------------------------------------------------------
     return {

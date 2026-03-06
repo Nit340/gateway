@@ -2,7 +2,7 @@
 console.log('general-config.js loaded');
 
 (function () {
-    if (window._generalConfigInitialized) return;
+    if (window._generalConfigInitialized || window._generalConfigInitializing) return;
 
     // =========================================================================
     // HELPERS
@@ -85,7 +85,7 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
-    // LIVE CACHE  (never blanked — old values persist until overwritten)
+    // LIVE CACHE  (never blanked   old values persist until overwritten)
     // =========================================================================
     var _cache = { lan: { eth0:{}, eth1:{} }, wlan:{}, lte:{} };
     var _liveConnected = false;
@@ -115,8 +115,7 @@ console.log('general-config.js loaded');
     };
 
     var renderEthernet = function () {
-        if (!_liveConnected) return;
-        show('eth-live-panel');
+        // Panel always visible - no guard needed
         var e0 = _cache.lan.eth0 || {};
         var e1 = _cache.lan.eth1 || {};
         txt('eth0-ip',  e0.ip  || '--');
@@ -153,8 +152,7 @@ console.log('general-config.js loaded');
     };
 
     var renderWifi = function () {
-        if (!_liveConnected) return;
-        show('wifi-live-panel');
+        // Panel always visible - no guard needed
         var w = _cache.wlan;
         stateBadge('wifi-state-badge', isUp(w.state));
         // signal_quality is dBm (signed negative number)
@@ -184,13 +182,12 @@ console.log('general-config.js loaded');
     //         ip, iccid, imsi, tech
     // =========================================================================
     var renderLte = function () {
-        if (!_liveConnected) return;
         var l = _cache.lte;
 
         // power_state check
         if (l.power !== undefined) {
             if (!isUp(l.power)) {
-                // Hardware off — show alert, hide live panel
+                // Hardware off   show alert, hide live panel
                 show('lte-power-off-alert');
                 hide('lte-live-panel');
                 return;
@@ -251,37 +248,61 @@ console.log('general-config.js loaded');
     var _netWs        = null;
     var _netActive    = false;
     var _netReconnect = null;
+    var _netAttempts  = 0;   // connection attempt counter
 
-    var setLiveBtnState = function (connected) {
-        var btn = el('live-btn-network'); if (!btn) return;
-        if (connected) {
-            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-emerald-500 hover:bg-emerald-600 transition-colors';
-            btn.innerHTML = '<i class="fa-solid fa-circle-dot fa-beat"></i> Live';
-        } else {
-            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 hover:bg-slate-500 transition-colors';
-            btn.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> Live';
+        var setLiveBtnState = function (connected) {
+        // Update indicator badge
+        var btn = el('live-btn-network');
+        if (btn) {
+            btn.className = connected
+                ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-emerald-500 transition-colors'
+                : 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 transition-colors';
+            btn.innerHTML = connected
+                ? '<i class="fa-solid fa-circle-dot fa-beat"></i> Live'
+                : '<i class="fa-solid fa-tower-broadcast"></i> Live';
+        }
+        // Update status bar
+        var bar  = el('net-ws-status');
+        var icon = el('net-ws-icon');
+        var txt  = el('net-ws-status-text');
+        if (bar) {
+            if (connected) {
+                bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs';
+                if (icon) icon.className = 'fa-solid fa-circle-dot fa-beat text-emerald-500';
+                if (txt)  txt.textContent = 'Live   receiving network data from pipeline';
+            } else {
+                bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs';
+                if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-amber-400';
+                if (txt && txt.textContent.indexOf('Connecting') === -1) txt.textContent = 'Reconnecting to live network data...';
+            }
         }
     };
 
     var hideLivePanels = function () {
-        hide('eth-live-panel');
-        hide('wifi-live-panel');
-        hide('lte-live-panel');
+        // Panels stay visible; just hide the power-off alert
         hide('lte-power-off-alert');
     };
 
     var connectNetworkStatusWs = function () {
-        if (_netWs && _netWs.readyState === WebSocket.OPEN) return;
+        if (_netWs && (_netWs.readyState === WebSocket.OPEN || _netWs.readyState === WebSocket.CONNECTING)) return;
+        _netAttempts++;
         var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         var url      = protocol + '//' + window.location.host + '/ws/network-status';
         console.log('[NET] Connecting:', url);
+        // Update status bar: first attempt = Connecting, subsequent = Reconnecting
+        var bar = el('net-ws-status'); var icon = el('net-ws-icon'); var txt = el('net-ws-status-text');
+        if (bar) {
+            bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs';
+            if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-slate-400';
+            if (txt)  txt.textContent = _netAttempts <= 1 ? 'Connecting to live network data...' : 'Reconnecting... (attempt ' + _netAttempts + ')';
+        }
         try { _netWs = new WebSocket(url); }
-        catch (e) { showNotification('Could not open live network connection', 'error'); return; }
+        catch (e) { return; }
 
         _netWs.onopen = function () {
             _liveConnected = true;
+            _netAttempts = 0;
             setLiveBtnState(true);
-            showNotification('Live network connected', 'success');
             _netWs.send(JSON.stringify({type:'get_snapshot'}));
         };
         _netWs.onmessage = function (ev) {
@@ -292,12 +313,31 @@ console.log('general-config.js loaded');
                 }
             } catch(e) { console.warn('[NET] parse error', e); }
         };
-        _netWs.onerror = function (e) { console.error('[NET] WS error', e); };
+        _netWs.onerror = function (e) { /* connection error handled in onclose */ };
         _netWs.onclose = function (ev) {
             _liveConnected = false;
             setLiveBtnState(false);
             console.log('[NET] closed code='+ev.code);
-            if (_netActive) _netReconnect = setTimeout(connectNetworkStatusWs, 5000);
+            // On first failure (1006 = TCP refused), check if API is reachable
+            // to distinguish nginx WS proxy issue from server down
+            if (ev.code === 1006 && _netAttempts === 1) {
+                fetch('/api/general-configuration', {credentials:'same-origin'})
+                .then(function(r) {
+                    if (r.ok) {
+                        // API works but WS fails = nginx not proxying /ws/ correctly
+                        var txt = el('net-ws-status-text');
+                        var bar = el('net-ws-status');
+                        var icon = el('net-ws-icon');
+                        if (bar) bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs';
+                        if (icon) icon.className = 'fa-solid fa-triangle-exclamation text-red-500';
+                        if (txt)  txt.textContent = 'Server reachable but WebSocket failed   check nginx /ws/ proxy config (proxy_read_timeout, Connection upgrade)';
+                    }
+                })
+                .catch(function() { /* server unreachable - normal reconnect message shown */ });
+            }
+            // Exponential backoff: 3s, 6s, 12s ... max 30s
+            var delay = Math.min(3000 * Math.pow(2, Math.min(_netAttempts - 1, 0)), 30000);
+            if (_netActive) _netReconnect = setTimeout(connectNetworkStatusWs, delay);
         };
         // keepalive
         var ping = setInterval(function () {
@@ -309,23 +349,16 @@ console.log('general-config.js loaded');
     var disconnectNetworkStatusWs = function () {
         _netActive    = false;
         _liveConnected = false;
+        _netAttempts  = 0;
         clearTimeout(_netReconnect);
         if (_netWs) { _netWs.close(1000,'user stopped'); _netWs=null; }
         setLiveBtnState(false);
         hideLivePanels();
-        showNotification('Live network stopped', 'info');
+        var txt = el('net-ws-status-text');
+        if (txt) txt.textContent = 'Reconnecting...';
     };
 
-    var initLiveButton = function () {
-        var btn = el('live-btn-network'); if (!btn) return;
-        var f   = btn.cloneNode(true);
-        btn.parentNode.replaceChild(f, btn);
-        f.addEventListener('click', function (e) {
-            e.preventDefault();
-            if (_netActive) disconnectNetworkStatusWs();
-            else { _netActive=true; connectNetworkStatusWs(); }
-        });
-    };
+    var initLiveButton = function () { /* auto-connect - no button click needed */ };
 
     // Public API
     window.networkStatusLive = {
@@ -335,22 +368,34 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
-    // GENERAL WS  (/ws/general  — time sync only now)
+    // GENERAL WS  (/ws/general    time sync only now)
     // =========================================================================
+    var _wsRetryDelay = 5000;
+    var _wsRetryTimer = null;
     var initializeWebSocket = function () {
-        if (window.ws && window.ws.readyState===WebSocket.OPEN) return;
+        if (window.ws && (window.ws.readyState===WebSocket.OPEN||window.ws.readyState===WebSocket.CONNECTING)) return;
+        clearTimeout(_wsRetryTimer);
         var protocol = window.location.protocol==='https:'?'wss:':'ws:';
-        window.ws = new WebSocket(protocol+'//'+window.location.host+'/ws/general');
-        window.ws.onopen    = function () { console.log('[WS/general] connected'); };
-        window.ws.onmessage = function (ev) {
-            var d = JSON.parse(ev.data);
-            if (d.type==='time_update') {
-                setInputValue('[name="date"]', d.current_date);
-                setInputValue('[name="time"]', d.current_time);
-            }
+        var url = protocol+'//'+window.location.host+'/ws/general';
+        try { window.ws = new WebSocket(url); } catch(e) { return; }
+        window.ws.onopen = function () {
+            console.log('[WS/general] connected');
+            _wsRetryDelay = 5000; // reset backoff
         };
-        window.ws.onerror = function (e) { console.warn('[WS/general] error', e); };
-        window.ws.onclose = function ()  { setTimeout(initializeWebSocket, 5000); };
+        window.ws.onmessage = function (ev) {
+            try {
+                var d = JSON.parse(ev.data);
+                if (d.type==='time_update') {
+                    setInputValue('[name="date"]', d.current_date);
+                    setInputValue('[name="time"]', d.current_time);
+                }
+            } catch(e) {}
+        };
+        window.ws.onerror = function (e) { /* handled in onclose */ };
+        window.ws.onclose = function () {
+            _wsRetryDelay = Math.min(_wsRetryDelay * 2, 60000); // exponential backoff up to 60s
+            _wsRetryTimer = setTimeout(initializeWebSocket, _wsRetryDelay);
+        };
     };
 
     // =========================================================================
@@ -576,14 +621,15 @@ console.log('general-config.js loaded');
             });
         }
     };
-
     // =========================================================================
     // INIT
     // =========================================================================
-    var cleanup = function () { window._generalConfigInitializing = false; };
+    var cleanup = function () { window._generalConfigInitializing = false; window._generalConfigInitialized = false; };
 
     window.initGeneralConfig = function () {
-        if (window._generalConfigInitializing) return;
+        // Strong double-init guard - set both flags immediately
+        if (window._generalConfigInitialized || window._generalConfigInitializing) return;
+        window._generalConfigInitialized  = true;
         window._generalConfigInitializing = true;
         cleanup();
         initializeButtons();
@@ -591,15 +637,16 @@ console.log('general-config.js loaded');
         initializePasswordToggles();
         initLiveButton();
         initializeWebSocket();
+        // Auto-connect network status WebSocket on page open
+        _netActive = true;
+        connectNetworkStatusWs();
         loadConfiguration()
-        .then(function () { window._generalConfigInitializing=false; window._generalConfigInitialized=true; })
+        .then(function () { window._generalConfigInitializing=false; })
         .catch(function (err) { console.error('Load error:',err); showNotification('Failed to load config','warning'); window._generalConfigInitializing=false; });
     };
 
     window.cleanupGeneralConfig = cleanup;
     window.showNotification     = showNotification;
 
-    if ($('[name="gateway-name"]')) {
-        setTimeout(function () { if(window.initGeneralConfig) window.initGeneralConfig(); }, 100);
-    }
+    // Router handles initialization - no auto-trigger needed
 })();

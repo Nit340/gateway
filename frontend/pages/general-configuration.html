@@ -338,8 +338,8 @@
                     <select name="language" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
                         <option value="en">English</option>
                         <option value="hi">????? (Hindi)</option>
-                        <option value="es">Español (Spanish)</option>
-                        <option value="fr">Français (French)</option>
+                        <option value="es">Espa ol (Spanish)</option>
+                        <option value="fr">Fran ais (French)</option>
                         <option value="de">Deutsch (German)</option>
                     </select>
                 </div>
@@ -355,13 +355,16 @@
                     <span class="text-xs font-normal text-slate-500">SECTION C</span>
                 </h2>
                 <div class="flex items-center gap-3">
-                    <!-- SINGLE Live button for the whole network section -->
-                    <button type="button" id="live-btn-network"
-                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 hover:bg-slate-500 transition-colors">
-                        <i class="fa-solid fa-tower-broadcast"></i> Live
-                    </button>
+                    <!-- Live indicator (auto-connected) -->
+                    <span id="live-btn-network" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 transition-colors"><i class="fa-solid fa-tower-broadcast"></i> Live</span>
                     <div class="badge-warning">Defines MQTT, Modbus TCP, OTA, and Cloud API connections</div>
                 </div>
+            </div>
+
+                        <!-- WebSocket connection status bar -->
+            <div id="net-ws-status" class="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs">
+                <i class="fa-solid fa-circle-notch fa-spin text-slate-400" id="net-ws-icon"></i>
+                <span id="net-ws-status-text">Connecting to live network data...</span>
             </div>
 
             <!-- Network Mode Selection -->
@@ -388,7 +391,7 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Ethernet Configuration</h3>
 
                 <!-- Live status cards: hidden until Live connected -->
-                <div id="eth-live-panel" class="hidden mb-4 grid grid-cols-2 gap-3">
+                <div id="eth-live-panel" class="mb-4 grid grid-cols-2 gap-3">
                     <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth0</span>
@@ -407,39 +410,7 @@
                     </div>
                 </div>
 
-                <!-- Editable config -->
-                <div class="flex items-center space-x-6 mb-4">
-                    <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="ip-assignment" value="dhcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                        <span class="ml-2 text-sm text-slate-700">DHCP</span>
-                    </label>
-                    <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="ip-assignment" value="static" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700">Static IP</span>
-                    </label>
-                </div>
-                <div id="static-ip-config" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
-                        <input type="text" name="static-ip" value="192.168.1.50" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Subnet Mask</label>
-                        <input type="text" name="subnet-mask" value="255.255.255.0" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Gateway</label>
-                        <input type="text" name="gateway" value="192.168.1.1" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">DNS 1</label>
-                        <input type="text" name="dns1" value="8.8.8.8" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">DNS 2</label>
-                        <input type="text" name="dns2" value="8.8.4.4" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm">
-                    </div>
-                </div>
+
             </div>
 
             <!-- -- WIFI -------------------------------------------------------- -->
@@ -447,7 +418,7 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">WiFi Configuration</h3>
 
                 <!-- Live status strip: hidden until Live connected -->
-                <div id="wifi-live-panel" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <div id="wifi-live-panel" class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <!-- state + signal bars row -->
                     <div class="flex items-center justify-between mb-2">
                         <span id="wifi-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
@@ -503,7 +474,7 @@
                 </div>
 
                 <!-- Live status strip: shown only when power = 1 AND Live connected -->
-                <div id="lte-live-panel" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                <div id="lte-live-panel" class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="flex items-center justify-between mb-2">
                         <span id="lte-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                         <div class="flex items-center gap-2">
@@ -525,32 +496,10 @@
                     </div>
                 </div>
 
-                <!-- Editable fields -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">APN</label>
-                        <input type="text" name="apn" value="internet"
-                            class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
-                        <input type="text" name="cellular-username" value=""
-                            class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
-                    </div>
-                    <div class="md:col-span-2 md:w-1/2">
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                        <div class="relative">
-                            <input type="password" name="cellular-password" value=""
-                                class="cellular-password-input w-full rounded-lg border-slate-300 border px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
-                            <button type="button" class="toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-primary">
-                                <i class="fa-solid fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+
             </div>
 
-            <!-- MAC Address (live — updated from active interface) -->
+            <!-- MAC Address (live   updated from active interface) -->
             <div class="border-t border-slate-200 pt-6">
                 <div class="p-4 border border-slate-200 rounded-lg bg-slate-50">
                     <label class="block text-sm font-medium text-slate-700 mb-1">MAC Address</label>
@@ -618,4 +567,4 @@
 <!-- Toast Container -->
 <div id="gc-toast-container" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2"></div>
 
-<!-- REMOVED the inline script that was causing double initialization -->
+<!-- REMOVED the inline script that was causing double initialization

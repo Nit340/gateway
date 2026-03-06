@@ -243,7 +243,7 @@ async def get_device_details(request):
                     'capacity_min':    capacity_min,
                     'capacity_max':    capacity_max,
                     'unit':            unit,
-                    'load_name':       load_name or 'load',
+                    'load_name':       load_name or 'load_weight',
                     'capacity_name':   capacity_name or 'capacity',
                     'pipeline_server': pipeline_server,
                     'pipeline_port':   pipeline_port,
@@ -343,14 +343,14 @@ async def add_device(request):
                 config.get('capacity_min', 0),
                 config.get('capacity_max', 1000),
                 config.get('unit', 'kg'),
-                'load',
+                'load_weight',
                 'capacity'
             ))
             
-            # Automatically create 'load' and 'capacity' datapoints
+            # Automatically create 'load_weight' and 'capacity' datapoints
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                VALUES (?, 'load', '')
+                VALUES (?, 'load_weight', '')
             ''', (device_id,))
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
@@ -1015,11 +1015,11 @@ async def import_devices_csv(request):
                         10, 24, 14, 0, 1, 5,
                         0, 16383,
                         0, capacity, unit,
-                        'load', 'capacity', enabled
+                        'load_weight', 'capacity', enabled
                     ))
                     
                     cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'load', '')",
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'load_weight', '')",
                         (device_id,)
                     )
                     cursor.execute(

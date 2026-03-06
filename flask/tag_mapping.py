@@ -124,7 +124,7 @@ async def get_all_datapoints(request):
                 'name': r['name'],
                 'unit': r['unit'] or r.get('device_unit') or '',
                 'capacity': r['capacity'],
-                'load_name': r['load_name'] or 'load',
+                'load_name': r['load_name'] or 'load_weight',
                 'capacity_name': r['capacity_name'] or 'capacity',
                 'data_type': 'float32',
                 'dataType': 'float32',
@@ -339,7 +339,7 @@ async def delete_datapoint(request):
             # Don't allow deleting auto-created loadcell tags
             cursor.execute('SELECT name FROM loadcell_datapoints WHERE id = ?', (tag_id,))
             row = cursor.fetchone()
-            if row and row[0] in ['load', 'capacity']:
+            if row and row[0] in ['load_weight', 'capacity']:
                 conn.close()
                 return web.json_response({
                     'success': False,

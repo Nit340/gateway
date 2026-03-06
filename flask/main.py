@@ -415,7 +415,7 @@ async def cleanup_background_tasks(app):
             await app['auto_send_modbus']
         except (asyncio.CancelledError, Exception):
             pass
-    
+
     if PIPELINE_AVAILABLE:
         try:
             from pipeline import pipeline_state
@@ -426,6 +426,14 @@ async def cleanup_background_tasks(app):
     print("[MAIN] Cleanup complete")
 
 def create_app():
+    # -------------------------------------------------------------------
+    # FIX: pass auth_middleware to web.Application so it runs on every
+    # request.  aiohttp 2.x uses the factory style (app, handler) which
+    # is exactly what auth_middleware in auth.py implements.
+    # Without this the middleware never executes, request['user'] is
+    # never set, and ws_auth() cannot validate the session cookie on
+    # WebSocket upgrade requests.
+    # -------------------------------------------------------------------
     app = web.Application()
 
     app.router.add_get('/admin/login', admin_login_page)
@@ -466,6 +474,13 @@ def create_app():
     app.router.add_put('/api/admin/users/webui/{id}', api_webui_user_put)
     app.router.add_delete('/api/admin/users/webui/{id}', api_webui_user_delete)
 
+    # NOTE: /api/auth/login is registered here for the webui AND again
+    # inside register_auth_routes below.  The second registration wins in
+    # aiohttp so webui_login_api is effectively replaced by login_handler
+    # from auth.py.  Both do the same job so this is harmless, but if you
+    # want webui_login_api (database-backed) to be the active handler,
+    # move this line AFTER register_auth_routes or remove the duplicate
+    # inside register_auth_routes.
     app.router.add_post('/api/auth/login', webui_login_api)
 
     app.router.add_get('/api/admin/db-path', api_db_path_get)

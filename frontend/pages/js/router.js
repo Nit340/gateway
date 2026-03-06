@@ -264,7 +264,7 @@ class Router {
         // This forces the script to re-execute on next navigation
         // Fixes modal/event listener issues after navigation
         this.loadedScripts.delete(scriptName);
-        console.log(`✅ Cleared script cache for ${scriptName} to allow re-execution`);
+        console.log(`? Cleared script cache for ${scriptName} to allow re-execution`);
         
         // Remove script promise (but keep in loadedScripts for caching)
         this.scriptPromises.delete(scriptName);
@@ -272,25 +272,22 @@ class Router {
         // Clean up page-specific global variables and connections
         switch(page) {
             case 'general-configuration':
-                // Clean up WebSocket
+                // Clean up general WS
                 if (typeof window.wsConnection !== 'undefined' && window.wsConnection) {
-                    try {
-                        window.wsConnection.close();
-                    } catch (e) {
-                        console.log('WebSocket already closed');
-                    }
+                    try { window.wsConnection.close(); } catch (e) {}
                     window.wsConnection = null;
                 }
-                
+                // Clean up network status WS + timers via public API
+                if (window.networkStatusLive && typeof window.networkStatusLive.disconnect === 'function') {
+                    window.networkStatusLive.disconnect();
+                }
                 // Clear reconnect interval
                 if (typeof window.reconnectInterval !== 'undefined' && window.reconnectInterval) {
                     clearInterval(window.reconnectInterval);
                     window.reconnectInterval = null;
                 }
-                
                 // Clear global flag
                 delete window.general_configuration_initialized;
-                
                 // Call cleanup if exists
                 if (typeof window.cleanupGeneralConfig === 'function') {
                     window.cleanupGeneralConfig();
@@ -477,11 +474,15 @@ class Router {
         }
         
         // Also check global flag (extra protection)
-        const globalFlag = `${page.replace('-', '_')}_initialized`;
+        const globalFlag = `${page.replace(/-/g, '_')}_initialized`;
         if (window[globalFlag]) {
             console.log(`Page ${page} already initialized (global flag), skipping...`);
             return;
         }
+
+        // Lock immediately BEFORE the timer - blocks any concurrent calls
+        this.initializedPages.add(page);
+        window[globalFlag] = true;
         
         console.log(`Scheduling initialization for page: ${page}`);
         
@@ -699,7 +700,7 @@ class Router {
             this.initializedPages.delete(this.currentPage);
             
             // Clear global flag
-            const globalFlag = `${this.currentPage.replace('-', '_')}_initialized`;
+            const globalFlag = `${this.currentPage.replace(/-/g, '_')}_initialized`;
             delete window[globalFlag];
             
             this.loadPage(this.currentPage);

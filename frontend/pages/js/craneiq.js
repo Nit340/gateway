@@ -24,7 +24,7 @@
                 var btn = el('pipeline-connect-btn');
                 if (btn) { btn.disabled = true; btn.classList.add('opacity-40'); }
                 var lbl = el('lc-device-label');
-                if (lbl) lbl.textContent = 'No device ï¿½ add one in Device Management';
+                if (lbl) lbl.textContent = 'No device   add one in Device Management';
                 return;
             }
             selectedDevice = devices[0];
@@ -36,50 +36,274 @@
         .catch(function() {});
     }
 
-    // ---- Populate filter inputs from device object ----
-    // Filters are now arrays: raw_filters, weight_filters, levels
-    // Each item: { type, parameters, enabled }
-    function findFilter(arr, type) {
-        if (!Array.isArray(arr)) return null;
-        return arr.find(function(f) { return f.type === type; }) || null;
+    // ============================================================
+    // DYNAMIC FILTER BUILDER
+    // Filters are stored as ordered arrays. UI renders cards in
+    // DOM order — that order IS the processing order in the JSON.
+    // Drag-to-reorder uses HTML5 drag-and-drop.
+    // ============================================================
+
+    // Default parameters per filter type
+    var FILTER_DEFAULTS = {
+        Median:              { window_size: 3 },
+        MovingAverage:       { window_size: 5 },
+        Kalman:              { process_noise: 0.01, measurement_noise: 0.1 },
+        AdaptiveDeadband:    { grow_rate: 0.8, shrink_rate: 0.1, min_deadband: 1.0, max_deadband: 20.0 },
+        LowPass:             { alpha: 0.1 },
+        NotchFilter:         { center_frequency: 60.0, q: 30.0 },
+        HysteresisQuantizer: { step_size: 10.0, hysteresis_margin: 0.75 }
+    };
+
+    var FILTER_LABELS = {
+        Median:              'Median',
+        MovingAverage:       'Moving Average',
+        Kalman:              'Kalman',
+        AdaptiveDeadband:    'Adaptive Deadband',
+        LowPass:             'Low Pass',
+        NotchFilter:         'Notch Filter',
+        HysteresisQuantizer: 'Hysteresis Quantizer'
+    };
+
+    // Build the parameter fields HTML for a given type + values
+    function _filterParamFields(type, params) {
+        params = params || FILTER_DEFAULTS[type] || {};
+        var inp = 'class="w-full text-xs border border-slate-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"';
+        switch (type) {
+            case 'Median':
+            case 'MovingAverage':
+                return '<label class="block text-xs text-slate-500 mb-0.5">Window Size</label>' +
+                       '<input type="number" min="1" max="999" ' + inp + ' data-param="window_size" value="' + (params.window_size || 3) + '">';
+            case 'Kalman':
+                return '<div class="grid grid-cols-2 gap-2">' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Process Noise</label>' +
+                    '<input type="number" step="0.0001" ' + inp + ' data-param="process_noise" value="' + (params.process_noise || 0.01) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Meas. Noise</label>' +
+                    '<input type="number" step="0.001" ' + inp + ' data-param="measurement_noise" value="' + (params.measurement_noise || 0.1) + '"></div>' +
+                    '</div>';
+            case 'AdaptiveDeadband':
+                return '<div class="grid grid-cols-2 gap-2">' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Grow Rate</label>' +
+                    '<input type="number" step="0.01" ' + inp + ' data-param="grow_rate" value="' + (params.grow_rate || 0.8) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Shrink Rate</label>' +
+                    '<input type="number" step="0.01" ' + inp + ' data-param="shrink_rate" value="' + (params.shrink_rate || 0.1) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Min Deadband</label>' +
+                    '<input type="number" step="0.1" ' + inp + ' data-param="min_deadband" value="' + (params.min_deadband || 1.0) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Max Deadband</label>' +
+                    '<input type="number" step="0.1" ' + inp + ' data-param="max_deadband" value="' + (params.max_deadband || 20.0) + '"></div>' +
+                    '</div>';
+            case 'LowPass':
+                return '<div class="grid grid-cols-2 gap-2">' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Alpha (0–1) <span class="text-slate-400 italic">or</span></label>' +
+                    '<input type="number" step="0.01" min="0.01" max="0.99" ' + inp + ' data-param="alpha" value="' + (params.alpha !== undefined ? params.alpha : 0.1) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Cutoff Freq (Hz) <span class="text-slate-400 italic">optional</span></label>' +
+                    '<input type="number" step="0.1" min="0" ' + inp + ' data-param="cutoff_frequency" value="' + (params.cutoff_frequency !== undefined ? params.cutoff_frequency : '') + '" placeholder="leave blank to use alpha"></div>' +
+                    '</div>';
+            case 'NotchFilter':
+                return '<div class="grid grid-cols-2 gap-2">' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Center Freq (Hz)</label>' +
+                    '<input type="number" step="0.1" min="0.1" ' + inp + ' data-param="center_frequency" value="' + (params.center_frequency || 60.0) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Q Factor</label>' +
+                    '<input type="number" step="0.1" min="0.1" ' + inp + ' data-param="q" value="' + (params.q || 30.0) + '"></div>' +
+                    '</div>';
+            case 'HysteresisQuantizer':
+                return '<div class="grid grid-cols-2 gap-2">' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Step Size</label>' +
+                    '<input type="number" step="0.1" min="0.01" ' + inp + ' data-param="step_size" value="' + (params.step_size || 10.0) + '"></div>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Hysteresis Margin (0–1)</label>' +
+                    '<input type="number" step="0.01" min="0" max="1" ' + inp + ' data-param="hysteresis_margin" value="' + (params.hysteresis_margin !== undefined ? params.hysteresis_margin : 0.75) + '"></div>' +
+                    '</div>';
+            default:
+                return '';
+        }
     }
 
+    // Create a filter card DOM element
+    function _makeFilterCard(type, params, enabled) {
+        if (enabled === undefined) enabled = true;
+        var card = document.createElement('div');
+        card.className = 'lc-filter-card bg-white rounded-lg border border-slate-200 p-3 select-none';
+        card.draggable = true;
+        card.dataset.filterType = type;
+
+        var badgeClass = 'lc-badge-' + type;
+        card.innerHTML =
+            '<div class="flex items-center gap-2 mb-2">' +
+                // Drag handle
+                '<span class="lc-drag-handle flex-shrink-0" title="Drag to reorder">' +
+                    '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">' +
+                        '<circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>' +
+                        '<circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>' +
+                        '<circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>' +
+                    '</svg>' +
+                '</span>' +
+                // Type badge
+                '<span class="text-xs font-semibold px-2 py-0.5 rounded ' + badgeClass + '">' + (FILTER_LABELS[type] || type) + '</span>' +
+                // Spacer
+                '<span class="flex-1"></span>' +
+                // Enabled toggle
+                '<label class="relative inline-flex items-center cursor-pointer flex-shrink-0">' +
+                    '<input type="checkbox" class="sr-only peer lc-filter-enabled" ' + (enabled ? 'checked' : '') + '>' +
+                    '<div class="w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>' +
+                '</label>' +
+                // Remove button
+                '<button class="lc-filter-remove flex-shrink-0 text-slate-300 hover:text-red-500 transition-colors" title="Remove filter">' +
+                    '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">' +
+                        '<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>' +
+                    '</svg>' +
+                '</button>' +
+            '</div>' +
+            '<div class="lc-filter-params">' + _filterParamFields(type, params) + '</div>';
+
+        // Remove button
+        card.querySelector('.lc-filter-remove').addEventListener('click', function() {
+            card.parentNode.removeChild(card);
+            _refreshFilterBadges(card.closest('#lc-raw-filter-list') || card.closest('#lc-weight-filter-list'));
+            _updateEmptyStates();
+        });
+
+        // Drag-and-drop
+        card.addEventListener('dragstart', function(e) {
+            e.dataTransfer.effectAllowed = 'move';
+            card.classList.add('dragging');
+            window._lcDragging = card;
+        });
+        card.addEventListener('dragend', function() {
+            card.classList.remove('dragging');
+            document.querySelectorAll('.lc-filter-card').forEach(function(c) { c.classList.remove('drag-over'); });
+            window._lcDragging = null;
+            _refreshFilterBadges(card.closest('#lc-raw-filter-list') || card.closest('#lc-weight-filter-list'));
+        });
+        card.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            if (window._lcDragging && window._lcDragging !== card) {
+                card.classList.add('drag-over');
+                var list = card.parentNode;
+                var draggingRect = window._lcDragging.getBoundingClientRect();
+                var cardRect     = card.getBoundingClientRect();
+                if (e.clientY < cardRect.top + cardRect.height / 2) {
+                    list.insertBefore(window._lcDragging, card);
+                } else {
+                    list.insertBefore(window._lcDragging, card.nextSibling);
+                }
+            }
+        });
+        card.addEventListener('dragleave', function() {
+            card.classList.remove('drag-over');
+        });
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            card.classList.remove('drag-over');
+        });
+
+        return card;
+    }
+
+    // Refresh [raw[0]], [raw[1]] … index badges in a list container
+    function _refreshFilterBadges(list) {
+        if (!list) return;
+        var cards = list.querySelectorAll('.lc-filter-card');
+        var prefix = list.id === 'lc-raw-filter-list' ? 'raw' : 'weight';
+        cards.forEach(function(card, idx) {
+            var existingBadge = card.querySelector('.lc-index-badge');
+            if (existingBadge) existingBadge.remove();
+            var badge = document.createElement('span');
+            badge.className = 'lc-index-badge text-xs text-slate-400 font-mono ml-1';
+            badge.textContent = prefix + '[' + idx + ']';
+            card.querySelector('.lc-drag-handle').after(badge);
+        });
+    }
+
+    function _updateEmptyStates() {
+        var rawList   = document.getElementById('lc-raw-filter-list');
+        var weightList = document.getElementById('lc-weight-filter-list');
+        var rawEmpty   = document.getElementById('lc-raw-empty');
+        var wEmpty     = document.getElementById('lc-weight-empty');
+        if (rawList && rawEmpty) {
+            var hasRaw = rawList.querySelectorAll('.lc-filter-card').length > 0;
+            rawEmpty.style.display = hasRaw ? 'none' : '';
+            rawEmpty.classList.toggle('hidden', hasRaw);
+        }
+        if (weightList && wEmpty) {
+            var hasWeight = weightList.querySelectorAll('.lc-filter-card').length > 0;
+            wEmpty.style.display = hasWeight ? 'none' : '';
+            wEmpty.classList.toggle('hidden', hasWeight);
+        }
+    }
+
+    // Add a filter card to a list
+    function _appendFilter(listId, type, params, enabled) {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        var card = _makeFilterCard(type, params, enabled);
+        list.appendChild(card);
+        _refreshFilterBadges(list);
+        _updateEmptyStates();
+    }
+
+    // Public: add raw filter from "Add" button
+    window.lcAddRawFilter = function() {
+        var sel = document.getElementById('lc-add-raw-type');
+        if (sel) _appendFilter('lc-raw-filter-list', sel.value, null, true);
+    };
+
+    // Public: add weight filter from "Add" button
+    window.lcAddWeightFilter = function() {
+        var sel = document.getElementById('lc-add-weight-type');
+        if (sel) _appendFilter('lc-weight-filter-list', sel.value, null, true);
+    };
+
+    // Read all filter cards from a list into an array of {type, enabled, parameters}
+    function _readFilterList(listId) {
+        var list = document.getElementById(listId);
+        if (!list) return [];
+        var out = [];
+        list.querySelectorAll('.lc-filter-card').forEach(function(card) {
+            var type    = card.dataset.filterType;
+            var enabled = card.querySelector('.lc-filter-enabled').checked;
+            var params  = {};
+            card.querySelectorAll('[data-param]').forEach(function(inp) {
+                var key = inp.dataset.param;
+                var raw = inp.value.trim();
+                // LowPass: cutoff_frequency is optional — omit from JSON if blank
+                if (raw === '') return;
+                var val = parseFloat(raw);
+                if (isNaN(val)) return;
+                // integers for window_size
+                params[key] = (key === 'window_size') ? Math.round(val) : val;
+            });
+            out.push({ type: type, enabled: enabled, parameters: params });
+        });
+        return out;
+    }
+
+    // ---- Populate filter inputs from device object ----
     function populateFilters(dev) {
         var rawFilters    = dev.raw_filters    || [];
         var weightFilters = dev.weight_filters || [];
         var levels        = dev.levels         || [];
 
+        // Clear existing cards
+        var rawList    = document.getElementById('lc-raw-filter-list');
+        var weightList = document.getElementById('lc-weight-filter-list');
+        if (rawList)    rawList.innerHTML    = '';
+        if (weightList) weightList.innerHTML = '';
+
+        // Render raw filters in order — every entry gets its own card
+        rawFilters.forEach(function(f) {
+            _appendFilter('lc-raw-filter-list', f.type, f.parameters, f.enabled !== false);
+        });
+
+        // Render weight filters in order
+        weightFilters.forEach(function(f) {
+            _appendFilter('lc-weight-filter-list', f.type, f.parameters, f.enabled !== false);
+        });
+
+        _updateEmptyStates();
+
         function setVal(id, v) { var e = document.getElementById(id); if (e && v !== undefined && v !== null) e.value = v; }
         function setChk(id, v) { var e = document.getElementById(id); if (e) e.checked = !!v; }
 
-        // --- Raw filters ---
-        var median = findFilter(rawFilters, 'Median');
-        setChk('lc-median-enabled',  median ? median.enabled !== false : true);
-        setVal('lc-median-window',   median ? median.parameters.window_size : 3);
-
-        // Two MovingAverage filters in raw â€” use first for raw, second ignored in UI (shown as one control)
-        var mavgRaw = findFilter(rawFilters, 'MovingAverage');
-        setChk('lc-mavg-raw-enabled', mavgRaw ? mavgRaw.enabled !== false : true);
-        setVal('lc-mavg-raw-window',  mavgRaw ? mavgRaw.parameters.window_size : 5);
-
-        var kalman = findFilter(rawFilters, 'Kalman');
-        setChk('lc-kalman-enabled',       kalman ? kalman.enabled !== false : true);
-        setVal('lc-kalman-process-noise',  kalman ? kalman.parameters.process_noise  : 0.01);
-        setVal('lc-kalman-meas-noise',     kalman ? kalman.parameters.measurement_noise : 0.1);
-
-        var deadband = findFilter(rawFilters, 'AdaptiveDeadband');
-        setChk('lc-deadband-enabled',   deadband ? deadband.enabled !== false : true);
-        setVal('lc-deadband-grow',       deadband ? deadband.parameters.grow_rate    : 0.8);
-        setVal('lc-deadband-shrink',     deadband ? deadband.parameters.shrink_rate  : 0.1);
-        setVal('lc-deadband-min',        deadband ? deadband.parameters.min_deadband : 1.0);
-        setVal('lc-deadband-max',        deadband ? deadband.parameters.max_deadband : 20.0);
-
-        // --- Weight filters ---
-        var mavgWeight = findFilter(weightFilters, 'MovingAverage');
-        setChk('lc-mavg-weight-enabled', mavgWeight ? mavgWeight.enabled !== false : true);
-        setVal('lc-mavg-weight-window',  mavgWeight ? mavgWeight.parameters.window_size : 5);
-
-        // --- Levels ---
+        // Levels (fixed set)
         ['low', 'normal', 'high'].forEach(function(name) {
             var lvl = (levels || []).find(function(l) { return l.name === name; });
             setChk('lc-level-' + name + '-enabled', lvl ? lvl.enabled !== false : true);
@@ -87,70 +311,19 @@
         });
     }
 
-    // ---- Build filter arrays from UI inputs ----
+    // ---- Build filter arrays from UI — DOM order IS processing order ----
     function buildFiltersFromUI() {
-        function getVal(id, fallback) {
-            var e = document.getElementById(id);
-            return e ? parseFloat(e.value) : fallback;
-        }
-        function getInt(id, fallback) {
-            var e = document.getElementById(id);
-            return e ? parseInt(e.value) : fallback;
-        }
-        function isChk(id, fallback) {
-            var e = document.getElementById(id);
-            return e ? e.checked : !!fallback;
-        }
+        var rawFilters    = _readFilterList('lc-raw-filter-list');
+        var weightFilters = _readFilterList('lc-weight-filter-list');
 
-        var rawFilters = [
-            {
-                type: 'Median',
-                enabled: isChk('lc-median-enabled', true),
-                parameters: { window_size: getInt('lc-median-window', 3) }
-            },
-            {
-                type: 'MovingAverage',
-                enabled: isChk('lc-mavg-raw-enabled', true),
-                parameters: { window_size: getInt('lc-mavg-raw-window', 5) }
-            },
-            {
-                type: 'MovingAverage',
-                enabled: isChk('lc-mavg-raw-enabled', true),
-                parameters: { window_size: getInt('lc-mavg-raw-window', 5) }
-            },
-            {
-                type: 'Kalman',
-                enabled: isChk('lc-kalman-enabled', true),
-                parameters: {
-                    process_noise:     getVal('lc-kalman-process-noise', 0.01),
-                    measurement_noise: getVal('lc-kalman-meas-noise', 0.1)
-                }
-            },
-            {
-                type: 'AdaptiveDeadband',
-                enabled: isChk('lc-deadband-enabled', true),
-                parameters: {
-                    grow_rate:    getVal('lc-deadband-grow', 0.8),
-                    shrink_rate:  getVal('lc-deadband-shrink', 0.1),
-                    min_deadband: getVal('lc-deadband-min', 1.0),
-                    max_deadband: getVal('lc-deadband-max', 20.0)
-                }
-            }
-        ];
-
-        var weightFilters = [
-            {
-                type: 'MovingAverage',
-                enabled: isChk('lc-mavg-weight-enabled', true),
-                parameters: { window_size: getInt('lc-mavg-weight-window', 5) }
-            }
-        ];
+        function getVal(id, fallback) { var e = document.getElementById(id); return e ? parseFloat(e.value) : fallback; }
+        function isChk(id, fallback)  { var e = document.getElementById(id); return e ? e.checked : !!fallback; }
 
         var levels = ['low', 'normal', 'high'].map(function(name) {
             return {
-                name: name,
+                name:    name,
                 enabled: isChk('lc-level-' + name + '-enabled', true),
-                ratio: getVal('lc-level-' + name + '-ratio', name === 'normal' ? 0.6 : 0.2)
+                ratio:   getVal('lc-level-' + name + '-ratio', name === 'normal' ? 0.6 : 0.2)
             };
         });
 
@@ -188,26 +361,26 @@
 
                 if (data.pipeline_sent) {
                     if (s) {
-                        s.textContent = 'âœ“ Saved & sent to pipeline (' + (data.target_service || 'service') + ')';
+                        s.textContent = '? Saved & sent to pipeline (' + (data.target_service || 'service') + ')';
                         s.style.color = '#16a34a';
                     }
                 } else {
-                    // Saved to DB but pipeline not connected â€” config is queued as pending
-                    var msg = 'âœ“ Saved';
+                    // Saved to DB but pipeline not connected — config is queued as pending
+                    var msg = '? Saved';
                     if (data.pipeline_message && data.pipeline_message.indexOf('pending') !== -1) {
-                        msg += ' Â· queued for pipeline (connect to send)';
+                        msg += ' · queued for pipeline (connect to send)';
                     } else if (data.pipeline_message) {
-                        msg += ' Â· pipeline: ' + data.pipeline_message;
+                        msg += ' · pipeline: ' + data.pipeline_message;
                     }
                     if (s) { s.textContent = msg; s.style.color = '#d97706'; }
                 }
             } else {
-                if (s) { s.textContent = 'âœ— Error: ' + (data.error || 'unknown'); s.style.color = '#dc2626'; }
+                if (s) { s.textContent = '? Error: ' + (data.error || 'unknown'); s.style.color = '#dc2626'; }
             }
             setTimeout(function() { if (s) { s.textContent = ''; s.style.color = ''; } }, 5000);
         })
         .catch(function(e) {
-            if (s) { s.textContent = 'âœ— ' + e.message; s.style.color = '#dc2626'; }
+            if (s) { s.textContent = '? ' + e.message; s.style.color = '#dc2626'; }
         });
     };
 
@@ -430,7 +603,7 @@
 
 
 // ============================================================
-// PART 2: Static UI logic ï¿½ NEW sections (no backend)
+// PART 2: Static UI logic   NEW sections (no backend)
 // ============================================================
 (function () {
     'use strict';
@@ -458,7 +631,7 @@
         hoist_motor: [
             { name: 'Motor Speed',       address: '40301', type: 'REAL', description: 'Current motor RPM' },
             { name: 'Motor Current',     address: '40303', type: 'REAL', description: 'Motor current draw in Amps' },
-            { name: 'Motor Temperature', address: '40305', type: 'REAL', description: 'Motor winding temperature in ï¿½C' }
+            { name: 'Motor Temperature', address: '40305', type: 'REAL', description: 'Motor winding temperature in  C' }
         ],
         trolley_motor: [
             { name: 'Trolley Position', address: '40401', type: 'REAL', description: 'Trolley position on beam in meters' },
@@ -491,7 +664,7 @@
         weather_station: [
             { name: 'Wind Speed',    address: '41101', type: 'REAL',   description: 'Current wind speed in m/s' },
             { name: 'Wind Direction',address: '41103', type: 'UINT16', description: 'Wind direction in degrees (0-360)' },
-            { name: 'Temperature',   address: '41105', type: 'REAL',   description: 'Ambient temperature in ï¿½C' },
+            { name: 'Temperature',   address: '41105', type: 'REAL',   description: 'Ambient temperature in  C' },
             { name: 'Humidity',      address: '41107', type: 'REAL',   description: 'Relative humidity percentage' }
         ],
         vibration_sensor: [
@@ -499,9 +672,9 @@
             { name: 'Vibration Frequency',address: '41203', type: 'REAL', description: 'Dominant frequency in Hz' }
         ],
         temperature_sensor: [
-            { name: 'Temperature 1', address: '41301', type: 'REAL', description: 'First sensor reading ï¿½C' },
-            { name: 'Temperature 2', address: '41302', type: 'REAL', description: 'Second sensor reading ï¿½C' },
-            { name: 'Temperature 3', address: '41303', type: 'REAL', description: 'Third sensor reading ï¿½C' }
+            { name: 'Temperature 1', address: '41301', type: 'REAL', description: 'First sensor reading  C' },
+            { name: 'Temperature 2', address: '41302', type: 'REAL', description: 'Second sensor reading  C' },
+            { name: 'Temperature 3', address: '41303', type: 'REAL', description: 'Third sensor reading  C' }
         ],
         wind_sensor: [
             { name: 'Wind Speed', address: '41401', type: 'REAL', description: 'Current wind speed in m/s' },

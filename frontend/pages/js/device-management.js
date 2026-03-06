@@ -313,7 +313,7 @@
 
     window.cleanupDeviceManagement = function() {
         eventListenersBoundToNode = null;
-        console.log('✅ Device Management cleaned up');
+        console.log('? Device Management cleaned up');
     };
 
     // ==================== RENDERING ====================
@@ -615,7 +615,7 @@
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Raw Range</div>
-                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} – ${config.raw_max ?? 16383}</div>
+                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} � ${config.raw_max ?? 16383}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Capacity Min</div>
@@ -791,7 +791,7 @@
                     capacity_max: parseFloat(document.getElementById('lcCapacityMax')?.value) || 1000,
                     unit: document.getElementById('lcUnit')?.value?.trim() || 'kg',
                     // Auto-generated names (not user input)
-                    load_name: 'load',
+                    load_name: 'load_weight',
                     capacity_name: 'capacity'
                 };
             }
@@ -1175,7 +1175,7 @@
     
     function showDuplicateConfirmation(duplicates, newDevicesCount) {
         return new Promise((resolve) => {
-            const duplicateNames = duplicates.map(d => `• ${d.name} (${d.type})`).slice(0, 10).join('\n');
+            const duplicateNames = duplicates.map(d => `� ${d.name} (${d.type})`).slice(0, 10).join('\n');
             const moreText = duplicates.length > 10 ? `\n... and ${duplicates.length - 10} more` : '';
             
             const message = `Found ${duplicates.length} duplicate device(s) with the same name:\n\n${duplicateNames}${moreText}\n\n${newDevicesCount} new device(s) will be imported.\n\nHow would you like to proceed?`;
@@ -1204,7 +1204,7 @@
             `;
             
             dialog.innerHTML = `
-                <h3 style="margin: 0 0 16px 0; color: #f59e0b;">⚠️ Duplicate Devices Found</h3>
+                <h3 style="margin: 0 0 16px 0; color: #f59e0b;">?? Duplicate Devices Found</h3>
                 <p style="white-space: pre-wrap; margin: 16px 0; font-family: monospace; font-size: 13px; color: #666;">${escapeHtml(message)}</p>
                 <div style="display: flex; gap: 12px; margin-top: 20px;">
                     <button id="replaceBtn" style="flex: 1; padding: 10px 16px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
@@ -1346,12 +1346,12 @@
     function setupEventListeners() {
         const anchorNode = document.getElementById('addDeviceBtn');
         if (anchorNode && document.contains(anchorNode) && eventListenersBoundToNode === anchorNode) {
-            console.log('📌 Event listeners already setup, skipping...');
+            console.log('?? Event listeners already setup, skipping...');
             return;
         }
         eventListenersBoundToNode = anchorNode;
         
-        console.log('📌 Setting up Device Management event listeners...');
+        console.log('?? Setting up Device Management event listeners...');
         
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
@@ -1434,7 +1434,7 @@
         
         setupImportExportListeners();
         
-        console.log('✅ Device Management event listeners setup complete');
+        console.log('? Device Management event listeners setup complete');
     }
 
     // ==================== UTILITY ====================

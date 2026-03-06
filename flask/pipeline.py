@@ -65,9 +65,11 @@
 #    |     loadcell_configs/loadcell_config_YYYYMMDD_HHMMSS.json
 #    |     loadcell_configs/loadcell_config_latest.json
 #    |
-#    |  STEP 5 -- Send via pipeline
-#    |     client.datapoint_update("load_cell_service",
-#    |                             "loadcell_config", config_json)
+#    |  STEP 5 -- Send via pipeline CONFIG channel
+#    |     client.publish_config(Config(name="loadcell_config",
+#    |                                  value=config_json,
+#    |                                  version=new_version,
+#    |                                  service=load_cell_service))
 #    |     If service not yet connected:
 #    |       pipeline_state["loadcell_config_pending"] = config_json
 #    |       -> sent automatically when SERVICE_ADDED fires
@@ -185,6 +187,7 @@ pipeline_state = {
     "config_version":               1,
     "loadcell_config_version":      1,
     "iot_gateway_config_version":   1,
+    "core_config_version":          1,
     "last_config_time":             0,
     # connection tracking
     "connection_attempts":          0,
@@ -195,6 +198,10 @@ pipeline_state = {
     "loadcell_config_pending":      None,
     "iot_gateway_config_pending":   None,
     "core_config_pending":          None,
+    # crash / restart tracking
+    "thread_crash_count":           0,
+    "thread_last_crash_reason":     None,
+    "thread_last_crash_time":       0,
 }
 
 # ============================================================================
@@ -269,6 +276,8 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+
+    crash_reason = None  # track why we exited for the watchdog
 
     try:
         client = PipelineClient("web_ui", host, port, 1000, 10)
@@ -358,16 +367,23 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         with pipeline_state["lock"]:
                             pending = pipeline_state.get("loadcell_config_pending")
                             last_config = pipeline_state.get("loadcell_config")
+                            pending_version = pipeline_state.get("loadcell_config_version", 1)
                         if pending:
                             try:
-                                rid = client.datapoint_update(svc, "loadcell_config", pending)
-                                if rid > 0:
-                                    print("[PIPELINE] Sent pending loadcell config (rid={})".format(rid))
+                                cfg_obj = Config(
+                                    name="loadcell_config",
+                                    value=pending,
+                                    version=pending_version,
+                                    service=svc,
+                                )
+                                ok = client.publish_config(cfg_obj)
+                                if ok:
+                                    print("[PIPELINE] Sent pending loadcell config via publish_config (v{})".format(pending_version))
                                     with pipeline_state["lock"]:
                                         pipeline_state["loadcell_config_pending"] = None
                                         pipeline_state["loadcell_config"] = pending
                                     last_config = pending
-                                    # Request live data back for each device
+                                    # Request live datapoints back for each load cell device
                                     try:
                                         cfg_parsed = json.loads(pending)
                                         for lc_entry in cfg_parsed.get("load_cells", []):
@@ -378,7 +394,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                     except Exception as pull_e:
                                         print("[PIPELINE] Live data request error: {}".format(pull_e))
                                 else:
-                                    print("[PIPELINE] Pending loadcell send failed (rid=0)")
+                                    print("[PIPELINE] Pending loadcell publish_config failed -- will retry on next connect")
                             except Exception as e:
                                 print("[PIPELINE] Pending loadcell send error: {}".format(e))
 
@@ -401,17 +417,23 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     if svc == iot_svc:
                         print("[PIPELINE] IoT gateway service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
-                            pending = pipeline_state.get("iot_gateway_config_pending")
+                            pending         = pipeline_state.get("iot_gateway_config_pending")
+                            pending_version = pipeline_state.get("iot_gateway_config_version", 1)
                         if pending:
                             try:
-                                rid = client.datapoint_update(svc, "iot_gateway_config", pending)
-                                if rid > 0:
-                                    print("[PIPELINE] Sent pending iot_gateway config (rid={})".format(rid))
+                                ok = client.publish_config(Config(
+                                    name    = "iot_gateway_config",
+                                    value   = pending,
+                                    version = pending_version,
+                                    service = svc,
+                                ))
+                                if ok:
+                                    print("[PIPELINE] Sent pending iot_gateway config via publish_config (v{})".format(pending_version))
                                     with pipeline_state["lock"]:
                                         pipeline_state["iot_gateway_config_pending"] = None
                                         pipeline_state["iot_gateway_config"] = pending
                                 else:
-                                    print("[PIPELINE] Pending iot_gateway send failed (rid=0)")
+                                    print("[PIPELINE] Pending iot_gateway publish_config failed -- will retry on next connect")
                             except Exception as e:
                                 print("[PIPELINE] Pending iot_gateway send error: {}".format(e))
 
@@ -419,17 +441,23 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     if svc == core_svc:
                         print("[PIPELINE] Core service connected: '{}'".format(svc))
                         with pipeline_state["lock"]:
-                            pending = pipeline_state.get("core_config_pending")
+                            pending         = pipeline_state.get("core_config_pending")
+                            pending_version = pipeline_state.get("core_config_version", 1)
                         if pending:
                             try:
-                                rid = client.datapoint_update(svc, "core_config", pending)
-                                if rid > 0:
-                                    print("[PIPELINE] Sent pending core config (rid={})".format(rid))
+                                ok = client.publish_config(Config(
+                                    name    = "core_config",
+                                    value   = pending,
+                                    version = pending_version,
+                                    service = svc,
+                                ))
+                                if ok:
+                                    print("[PIPELINE] Sent pending core config via publish_config (v{})".format(pending_version))
                                     with pipeline_state["lock"]:
                                         pipeline_state["core_config_pending"] = None
                                         pipeline_state["core_config"] = pending
                                 else:
-                                    print("[PIPELINE] Pending core config send failed (rid=0)")
+                                    print("[PIPELINE] Pending core config publish_config failed -- will retry on next connect")
                             except Exception as e:
                                 print("[PIPELINE] Pending core config send error: {}".format(e))
 
@@ -465,28 +493,15 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             pipeline_state[dp] = val
 
                         # -- Network-status datapoints ----------------------
-                        # The pipeline publishes JSON strings under the
-                        # "network_status" service with datapoint names like
-                        # "lan", "wlan", "lte", and "network_status" (int).
-                        # We unpack them into flat net.* keys so the UI can
-                        # display live values without a page refresh.
-                        # -- Network-status datapoints ----------------------
-                        # The pipeline publishes JSON strings under the
-                        # "network_status" service with datapoint names like
-                        # "lan", "wlan", "lte", and "network_status" (int).
-                        # We unpack them into flat net.* keys so the UI can
-                        # display live values without a page refresh.
                         _NET_SERVICES = {"network_status"}
                         if event.service_name in _NET_SERVICES or dp in (
                             "lan", "wlan", "lte", "network_status"
                         ):
                             try:
-                                from general_config import update_network_status_field
-                                
-                                # Handle integer network_status specially
+                                from general import update_network_status_field
+
                                 if dp == "network_status":
                                     update_network_status_field("network_status", val)
-                                    # Skip further processing for this case
                                     main_loop = pipeline_state.get("main_loop")
                                     if main_loop and main_loop.is_running():
                                         try:
@@ -496,13 +511,11 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                                 main_loop)
                                         except Exception as e:
                                             print("[PIPELINE] Broadcast error: {}".format(e))
-                                    # Don't use continue here - we need to let the main broadcast happen
                                 else:
-                                    # For other datapoints (lan, wlan, lte), parse JSON
                                     if isinstance(val, str):
                                         try:
                                             parsed = json.loads(val)
-                                            print("[PIPELINE] Parsed {}: {}".format(dp, parsed))  # Debug log
+                                            print("[PIPELINE] Parsed {}: {}".format(dp, parsed))
                                         except json.JSONDecodeError as e:
                                             print("[PIPELINE] JSON parse error for {}: {}".format(dp, e))
                                             update_network_status_field(dp, val)
@@ -515,12 +528,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                                         main_loop)
                                                 except Exception as e:
                                                     print("[PIPELINE] Broadcast error: {}".format(e))
-                                            # Skip further processing for this case
-                                            # Don't use continue here
                                     else:
                                         parsed = val
-                                    
-                                    # Skip if parsed is not a dict
+
                                     if not isinstance(parsed, dict):
                                         update_network_status_field(dp, parsed)
                                         main_loop = pipeline_state.get("main_loop")
@@ -532,34 +542,24 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                                     main_loop)
                                             except Exception as e:
                                                 print("[PIPELINE] Broadcast error: {}".format(e))
-                                        # Skip further processing for this case
-                                        # Don't use continue here
                                     else:
-                                        # For "lan" datapoint with structure like:
-                                        # {"lan":{"dynamic":{"net.lan.eth1.ip":"","net.lan.eth1.state":0}}}
-                                        # We need to extract the nested fields
                                         for section, section_data in parsed.items():
                                             if isinstance(section_data, dict):
                                                 for subsection, subsection_data in section_data.items():
                                                     if isinstance(subsection_data, dict):
-                                                        # This is where the actual fields are (like net.lan.eth1.ip)
                                                         for field_name, field_value in subsection_data.items():
                                                             update_network_status_field(field_name, field_value)
-                                                            print("[PIPELINE] Updated {} = {}".format(field_name, field_value))  # Debug log
+                                                            print("[PIPELINE] Updated {} = {}".format(field_name, field_value))
                                                     else:
-                                                        # Direct value under subsection
                                                         update_network_status_field(subsection, subsection_data)
                                             else:
-                                                # Direct value under section
                                                 update_network_status_field(section, section_data)
-                                                    
+
                             except Exception as _ne:
                                 print("[PIPELINE] network_status parse error: {} for dp={}, val={} (type: {})".format(
                                     _ne, dp, val, type(val)))
                                 import traceback
                                 traceback.print_exc()
-                        # --------------------------------------------------
-                        # --------------------------------------------------
 
                         main_loop = pipeline_state.get("main_loop")
                         if main_loop and main_loop.is_running():
@@ -576,6 +576,17 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         import traceback
                         traceback.print_exc()
 
+                # -- Config received (publish_config channel) -------------
+                elif etype == EventType.CONFIG_RECEIVED:
+                    cfg = event.config
+                    if cfg is not None:
+                        print("[PIPELINE] CONFIG_RECEIVED: name='{}' version={}".format(
+                            cfg.name, cfg.version))
+                        if cfg.name == "loadcell_config":
+                            with pipeline_state["lock"]:
+                                pipeline_state["loadcell_config"] = cfg.value
+                                pipeline_state["loadcell_config_version"] = cfg.version
+
             except Exception as e:
                 print("[PIPELINE] Event handler error: {}".format(e))
                 import traceback
@@ -589,7 +600,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
             pipeline_state["connected"] = connected
         print("[PIPELINE] Initial connection: {}".format("OK" if connected else "waiting"))
 
-        # Keep alive; retry every 10 s if disconnected
+        # ----------------------------------------------------------------
+        # Keep-alive loop: sleep 1 s, attempt reconnect every 10 s if down
+        # ----------------------------------------------------------------
         while pipeline_state.get("should_run", True):
             time.sleep(1)
             with pipeline_state["lock"]:
@@ -611,18 +624,40 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     except Exception as e:
                         print("[PIPELINE] Refresh failed: {}".format(e))
 
+        # Normal exit (should_run was set to False)
+        print("[PIPELINE] Thread: should_run=False, exiting cleanly")
+
     except Exception as e:
-        print("[PIPELINE] Thread crashed: {}".format(e))
+        crash_reason = "{}: {}".format(type(e).__name__, e)
+        print("[PIPELINE] Thread CRASHED: {}".format(crash_reason))
         import traceback
         traceback.print_exc()
+
+        # Record crash info in shared state so the watchdog / UI can see it
+        with pipeline_state["lock"]:
+            pipeline_state["thread_crash_count"]      += 1
+            pipeline_state["thread_last_crash_reason"] = crash_reason
+            pipeline_state["thread_last_crash_time"]   = time.time()
+
     finally:
-        print("[PIPELINE] Thread exiting")
+        # Always mark as disconnected when this thread stops
+        with pipeline_state["lock"]:
+            pipeline_state["connected"] = False
+            pipeline_state["connected_services"].clear()
+
+        # Best-effort client stop
         try:
             with pipeline_state["lock"]:
-                if pipeline_state.get("client"):
-                    pipeline_state["client"].stop()
+                cli = pipeline_state.get("client")
+            if cli:
+                cli.stop()
         except Exception:
             pass
+
+        if crash_reason:
+            print("[PIPELINE] Thread exiting after crash: {}".format(crash_reason))
+        else:
+            print("[PIPELINE] Thread exiting")
 
 
 def start_pipeline_background(app=None):
@@ -632,7 +667,8 @@ def start_pipeline_background(app=None):
         return
 
     with pipeline_state["lock"]:
-        if pipeline_state["background_thread"] and pipeline_state["background_thread"].is_alive():
+        existing = pipeline_state.get("background_thread")
+        if existing and existing.is_alive():
             print("[PIPELINE] Background thread already running")
             return
         pipeline_state["should_run"]                 = True
@@ -640,6 +676,7 @@ def start_pipeline_background(app=None):
         pipeline_state["loadcell_config_pending"]    = None
         pipeline_state["iot_gateway_config_pending"] = None
 
+    # Capture the main event loop so the thread can schedule coroutines
     try:
         main_loop = asyncio.get_event_loop()
         with pipeline_state["lock"]:
@@ -651,7 +688,7 @@ def start_pipeline_background(app=None):
         target=_run_pipeline_thread,
         args=("127.0.0.1", 7000),
         daemon=True,
-        name="PipelineThread"
+        name="PipelineThread",
     )
     thread.start()
 
@@ -678,11 +715,16 @@ async def pipeline_connect_handler(request):
     host = body.get("host", "127.0.0.1")
     port = body.get("port", 7000)
 
+    # Signal existing thread to stop, then wait briefly for it to exit
     with pipeline_state["lock"]:
         pipeline_state["should_run"] = False
     await asyncio.sleep(1)
+
+    # Clear stale connection state
     with pipeline_state["lock"]:
         pipeline_state["should_run"] = True
+        pipeline_state["connected"] = False
+        pipeline_state["connected_services"].clear()
 
     try:
         main_loop = asyncio.get_event_loop()
@@ -691,7 +733,12 @@ async def pipeline_connect_handler(request):
     except Exception:
         pass
 
-    thread = threading.Thread(target=_run_pipeline_thread, args=(host, port), daemon=True)
+    thread = threading.Thread(
+        target=_run_pipeline_thread,
+        args=(host, port),
+        daemon=True,
+        name="PipelineThread",
+    )
     thread.start()
     with pipeline_state["lock"]:
         pipeline_state["background_thread"] = thread
@@ -768,6 +815,7 @@ async def pipeline_status_handler(request):
             except Exception:
                 return {"note": "not valid JSON"}
 
+        thread = pipeline_state.get("background_thread")
         return web.json_response({
             "connected":               pipeline_state["connected"],
             "load_raw":                pipeline_state["load_raw"],
@@ -785,6 +833,11 @@ async def pipeline_status_handler(request):
             "subscribed":              list(pipeline_state["subscribed_datapoints"]),
             "has_pending_modbus":      pipeline_state["modbus_config_pending"]   is not None,
             "has_pending_loadcell":    pipeline_state["loadcell_config_pending"] is not None,
+            # Thread health info
+            "thread_alive":            thread.is_alive() if thread else False,
+            "thread_crash_count":      pipeline_state["thread_crash_count"],
+            "thread_last_crash":       pipeline_state["thread_last_crash_reason"],
+            "thread_last_crash_time":  pipeline_state["thread_last_crash_time"],
         })
 
 
@@ -843,6 +896,8 @@ async def pipeline_debug_handler(request):
                     out[k + "_preview"] = "not JSON"
             else:
                 out[k] = v
+        thread = pipeline_state.get("background_thread")
+        out["thread_alive"] = thread.is_alive() if thread else False
         return web.json_response(out)
 
 # ============================================================================
@@ -850,7 +905,12 @@ async def pipeline_debug_handler(request):
 # ============================================================================
 
 async def pipeline_loadraw_ws_handler(request):
-    """WS /ws/pipeline/load_raw -- streams load_raw, modbus_config, loadcell_config"""
+    """WS /ws/pipeline/load_raw -- streams live load-cell datapoints (load_raw, weight, etc.)
+
+    loadcell_config is NOT sent here; it is served separately via
+    GET /api/pipeline/loadcell-config (REST) because it is configuration,
+    not a live data stream.
+    """
     user = ws_auth(request)
     if user is None:
         return web.Response(status=401, text="Unauthorized")
@@ -861,9 +921,8 @@ async def pipeline_loadraw_ws_handler(request):
     print("[PIPELINE] WS client connected (total={})".format(len(pipeline_state["ws_clients"])))
 
     with pipeline_state["lock"]:
-        raw   = pipeline_state["load_raw"]
-        mcfg  = pipeline_state["modbus_config"]
-        lccfg = pipeline_state["loadcell_config"]
+        raw  = pipeline_state["load_raw"]
+        mcfg = pipeline_state["modbus_config"]
 
     async def _send(payload):
         try:
@@ -871,9 +930,12 @@ async def pipeline_loadraw_ws_handler(request):
         except Exception:
             pass
 
+    # Push current load_raw value immediately on connect so the UI doesn't
+    # have to wait for the next update tick.
     if raw is not None:
         await _send({"datapoint": "load_raw", "value": raw})
 
+    # Modbus config summary is still useful for the live dashboard.
     if mcfg is not None:
         try:
             p = json.loads(mcfg)
@@ -886,16 +948,8 @@ async def pipeline_loadraw_ws_handler(request):
         except Exception:
             await _send({"datapoint": "modbus_config", "value": mcfg})
 
-    if lccfg is not None:
-        try:
-            p = json.loads(lccfg)
-            await _send({"datapoint": "loadcell_config",
-                          "value": {"version": p.get("version"),
-                                    "timestamp": p.get("timestamp_str"),
-                                    "load_cells": len(p.get("load_cells", []))},
-                          "full": p})
-        except Exception:
-            await _send({"datapoint": "loadcell_config", "value": lccfg})
+    # loadcell_config is intentionally NOT pushed here.
+    # Fetch it via GET /api/pipeline/loadcell-config when needed.
 
     try:
         while True:
@@ -958,38 +1012,6 @@ async def pipeline_loadcell_import_handler(request):
     Accepts an inno_load-style JSON body, upserts each entry in
     load_cells[] into the loadcell_device table, then returns a
     summary of created / updated rows.
-
-    JSON structure expected (mirrors simulator / inno_load schema):
-      {
-        "load_cells": [
-          {
-            "name": "crane_loadcell",
-            "device": {
-              "type": "sysfs_hx711",
-              "parameters": {
-                "poll_ms": 10,
-                "channels": [{"path": "/sys/bus/iio/devices/iio:device0/in_voltage0_raw"}],
-                "resolution_bits": 24, "effective_bits": 14,
-                "signed": false, "gain": 1, "vref": 5,
-                "raw_min": 0, "raw_max": 16383
-              }
-            },
-            "specifications": {
-              "capacity": {
-                "min": {"value": 0,    "unit": "kg"},
-                "max": {"value": 5000, "unit": "kg"}
-              }
-            },
-            "tare":        {"type": "manual",       "parameters": {"offset_raw": 0.0}},
-            "calibration": {"type": "single_point", "parameters": {"ref_weight": {...}, "ref_raw": 4096.0}},
-            "filter": {
-              "raw":    [...],
-              "weight": [...]
-            },
-            "levels": {"type": "ratio", "parameters": {"ratios": [...]}}
-          }
-        ]
-      }
     """
     print("\n" + "="*70)
     print("[LC-IMPORT] Loadcell JSON import handler called")
@@ -1022,7 +1044,6 @@ async def pipeline_loadcell_import_handler(request):
 
             device_names.append(name)
 
-            # ── device / hardware params ──────────────────────────────
             dev_params   = (lc.get("device") or {}).get("parameters") or {}
             channels     = dev_params.get("channels") or []
             device_path  = channels[0].get("path", "") if channels else dev_params.get("path", "")
@@ -1036,7 +1057,6 @@ async def pipeline_loadcell_import_handler(request):
             raw_min         = dev_params.get("raw_min", 0)
             raw_max         = dev_params.get("raw_max", 16383)
 
-            # ── capacity / unit ───────────────────────────────────────
             specs     = lc.get("specifications") or {}
             cap       = specs.get("capacity") or {}
             cap_min_d = cap.get("min") or {}
@@ -1045,22 +1065,18 @@ async def pipeline_loadcell_import_handler(request):
             capacity_max = cap_max_d.get("value", 1000)
             unit         = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
 
-            # ── tare ──────────────────────────────────────────────────
             tare_params  = (lc.get("tare") or {}).get("parameters") or {}
             tare_offset  = tare_params.get("offset_raw", tare_params.get("offset", 0.0))
 
-            # ── calibration ───────────────────────────────────────────
             cal_params       = (lc.get("calibration") or {}).get("parameters") or {}
             ref_weight_d     = cal_params.get("ref_weight") or {}
             known_weight     = ref_weight_d.get("value", 0.0) if isinstance(ref_weight_d, dict) else float(ref_weight_d or 0)
             known_weight_raw = cal_params.get("ref_raw", 0.0)
 
-            # ── filters ───────────────────────────────────────────────
             filters_d      = lc.get("filter") or {}
             raw_filters    = json.dumps(filters_d.get("raw",    []))
             weight_filters = json.dumps(filters_d.get("weight", []))
 
-            # ── levels ────────────────────────────────────────────────
             levels_cfg = lc.get("levels") or {}
             if isinstance(levels_cfg, dict):
                 lvl_params = levels_cfg.get("parameters") or {}
@@ -1071,7 +1087,6 @@ async def pipeline_loadcell_import_handler(request):
                 levels_list = []
             levels = json.dumps(levels_list)
 
-            # ── pipeline IPC params (optional) ────────────────────────
             pipeline_server = "127.0.0.1"
             pipeline_port   = 7000
             for ipc in body.get("ipc", []):
@@ -1079,7 +1094,6 @@ async def pipeline_loadcell_import_handler(request):
                 if p.get("server"):   pipeline_server = p["server"]
                 if p.get("port"):     pipeline_port   = int(p["port"])
 
-            # ── upsert ────────────────────────────────────────────────
             cursor.execute("SELECT id FROM loadcell_device WHERE name = ?", (name,))
             existing = cursor.fetchone()
 
@@ -1161,7 +1175,7 @@ async def pipeline_loadcell_import_handler(request):
         logging.error("[LC-IMPORT] DB error: %s", db_err)
         return web.json_response({"success": False, "error": "DB error: {}".format(db_err)}, status=500)
 
-    print("[LC-IMPORT] Done — created={} updated={} devices={}".format(created, updated, device_names))
+    print("[LC-IMPORT] Done -- created={} updated={} devices={}".format(created, updated, device_names))
     return web.json_response({
         "success":      True,
         "device_names": device_names,
@@ -1236,12 +1250,7 @@ async def pipeline_calibration_post_handler(request):
 # ============================================================================
 
 async def pipeline_filters_post_handler(request):
-    """POST /api/pipeline/filters
-
-    Saves filter/level arrays to DB, builds the complete inno_load config JSON,
-    saves it to disk, then sends it to load_cell_service via the pipeline client.
-    See the data-flow diagram at the top of this file for full field mapping.
-    """
+    """POST /api/pipeline/filters"""
     print("\n" + "="*70)
     print("[LC-CFG] Save Filters & Levels  ->  Build  ->  Send")
     print("="*70)
@@ -1256,7 +1265,6 @@ async def pipeline_filters_post_handler(request):
         weight_filters = body.get("weight_filters", [])
         levels         = body.get("levels", [])
 
-        # -- STEP 1: Persist to DB -----------------------------------------
         conn = sqlite3.connect(DB_FILE)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -1274,7 +1282,6 @@ async def pipeline_filters_post_handler(request):
             conn.close()
             return web.json_response({"success": False, "error": "Device not found"})
 
-        # -- STEP 2: Read full device row ----------------------------------
         cursor.execute('''
             SELECT id, name, device_path,
                    poll_ms, resolution_bits, effective_bits, signed, gain, vref,
@@ -1292,9 +1299,7 @@ async def pipeline_filters_post_handler(request):
         r = dict(row)
         print("[LC-CFG] Device: {} ({})".format(r['name'], r['id']))
 
-        # -- STEP 3: Build inno_load config JSON ---------------------------
         def _active(arr):
-            """Return only enabled filter/level entries, stripped of the 'enabled' key."""
             return [{"type": f["type"], "parameters": f["parameters"]}
                     for f in arr if f.get("enabled", True)]
 
@@ -1303,7 +1308,6 @@ async def pipeline_filters_post_handler(request):
         active_levels = [{"name": lv["name"], "ratio": lv["ratio"]}
                          for lv in levels if lv.get("enabled", True)]
 
-        # Get next version from DB (only written back on success)
         new_version = get_next_pipeline_version("loadcell")
 
         config = {
@@ -1311,12 +1315,10 @@ async def pipeline_filters_post_handler(request):
             "timestamp":     time.time(),
             "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "source":        "web_ui",
-            # -- logging --------------------------------------------------
             "logging": [{
                 "type":       "console",
                 "parameters": {"level": r.get("log_level") or "info"}
             }],
-            # -- ipc (pipeline connection info) ----------------------------
             "ipc": [{
                 "type":    "pipeline",
                 "enabled": True,
@@ -1339,10 +1341,8 @@ async def pipeline_filters_post_handler(request):
                     }]
                 }
             }],
-            # -- load_cells ------------------------------------------------
             "load_cells": [{
                 "name": r["name"],
-                # Hardware device (from DB hardware columns)
                 "device": {
                     "type": "sysfs_hx711",
                     "parameters": {
@@ -1357,24 +1357,20 @@ async def pipeline_filters_post_handler(request):
                         "raw_max":         r["raw_max"] if r["raw_max"] is not None else 16383,
                     }
                 },
-                # Capacity (from DB capacity columns)
                 "specifications": {
                     "capacity": {
                         "min": {"value": r.get("capacity_min") or 0,    "unit": r.get("unit") or "kg"},
                         "max": {"value": r.get("capacity_max") or 1000, "unit": r.get("unit") or "kg"},
                     }
                 },
-                # Levels (from POST body -- enabled only)
                 "levels": {
                     "type": "ratio",
                     "parameters": {"ratios": active_levels}
                 },
-                # Tare (from DB calibration columns)
                 "tare": {
                     "type": "manual",
                     "parameters": {"offset_raw": r.get("tare_offset") or 0.0}
                 },
-                # Calibration (from DB calibration columns)
                 "calibration": {
                     "type": "single_point",
                     "parameters": {
@@ -1385,7 +1381,6 @@ async def pipeline_filters_post_handler(request):
                         "ref_raw": r.get("known_weight_raw") or 0.0,
                     }
                 },
-                # Filters (from POST body -- enabled only, 'enabled' key stripped)
                 "filter": {
                     "raw":    active_raw,
                     "weight": active_weight,
@@ -1397,7 +1392,6 @@ async def pipeline_filters_post_handler(request):
         print("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
             new_version, len(active_raw), len(active_weight), len(active_levels)))
 
-        # -- STEP 4: Save to disk ------------------------------------------
         config_dir  = "loadcell_configs"
         os.makedirs(config_dir, exist_ok=True)
         ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1408,7 +1402,6 @@ async def pipeline_filters_post_handler(request):
                 fh.write(config_json)
         print("[LC-CFG] Saved: {}".format(filename))
 
-        # -- STEP 5: Send via pipeline -------------------------------------
         pipeline_sent    = False
         pipeline_message = "Not sent -- pipeline not connected"
         target_service   = None
@@ -1423,9 +1416,15 @@ async def pipeline_filters_post_handler(request):
 
             if target_service:
                 try:
-                    rid = client.datapoint_update(target_service, "loadcell_config", config_json)
-                    print("[LC-CFG] datapoint_update -> rid={}".format(rid))
-                    if rid > 0:
+                    cfg_obj = Config(
+                        name="loadcell_config",
+                        value=config_json,
+                        version=new_version,
+                        service=target_service,
+                    )
+                    ok = client.publish_config(cfg_obj)
+                    print("[LC-CFG] publish_config -> ok={}".format(ok))
+                    if ok:
                         pipeline_sent    = True
                         pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
                         record_pipeline_send_success("loadcell", new_version, target_service, pipeline_message)
@@ -1434,10 +1433,6 @@ async def pipeline_filters_post_handler(request):
                             pipeline_state["loadcell_config_pending"] = None
                         print("[LC-CFG] " + pipeline_message)
 
-                        # Request live data back from the service for each device.
-                        # Sending datapoint_update(service, device_name, '{}') tells
-                        # the service to start publishing that device's datapoints back
-                        # to web_ui (weight, raw, tared, calibrated, etc.)
                         for lc_entry in config.get("load_cells", []):
                             dev_dp = lc_entry.get("name")
                             if dev_dp:
@@ -1447,10 +1442,6 @@ async def pipeline_filters_post_handler(request):
                                 except Exception as pull_e:
                                     print("[LC-CFG] Live data request error for '{}': {}".format(dev_dp, pull_e))
 
-                        # Subscribe to all mapped receive datapoints for this device
-                        # so RECEIVE_DONE fires when the service publishes live data back.
-                        # The map values are the datapoint names the service will publish:
-                        #   e.g. "loadcell_1.weight_kg", "loadcell_1.raw", "loadcell_1.tared" ...
                         device_name = r["name"]
                         mapped_datapoints = [
                             "{}.weight_kg".format(device_name),
@@ -1472,7 +1463,7 @@ async def pipeline_filters_post_handler(request):
                             with pipeline_state["lock"]:
                                 pipeline_state["subscribed_datapoints"].update(mapped_datapoints)
                     else:
-                        pipeline_message = "Send failed (rid=0) -- queued as pending"
+                        pipeline_message = "publish_config failed -- queued as pending"
                         record_pipeline_send_failure("loadcell", pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["loadcell_config_pending"] = config_json
@@ -1519,11 +1510,7 @@ async def pipeline_filters_post_handler(request):
 # ============================================================================
 
 async def pipeline_save_modbus_config(request):
-    """POST /api/pipeline/modbus-config/save
-
-    Reads all enabled modbus tags from DB, builds {connections, assets, version},
-    saves to disk, sends to the modbus pipeline service.
-    """
+    """POST /api/pipeline/modbus-config/save"""
     print("\n" + "="*70)
     print("[MODBUS-CFG] Save Modbus Configuration  ->  Build  ->  Send")
     print("="*70)
@@ -1532,7 +1519,6 @@ async def pipeline_save_modbus_config(request):
         return web.json_response({"success": False, "error": "ilx_pipeline not available"})
 
     try:
-        # -- STEP 1: Read tags from DB -------------------------------------
         conn = sqlite3.connect(DB_FILE)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -1560,7 +1546,6 @@ async def pipeline_save_modbus_config(request):
         if not rows:
             return web.json_response({"success": False, "error": "No Modbus tags found in database"})
 
-        # -- STEP 2: Build connections + assets ----------------------------
         connection_map = {}
         assets = []
 
@@ -1615,7 +1600,6 @@ async def pipeline_save_modbus_config(request):
                 asset['group'] = r['tag_group']
             assets.append(asset)
 
-        # -- STEP 3: Get next version from DB (only written back on success) --
         new_version = get_next_pipeline_version("modbus")
         with pipeline_state["lock"]:
             pipeline_state["last_config_time"] = time.time()
@@ -1633,7 +1617,6 @@ async def pipeline_save_modbus_config(request):
         print("[MODBUS-CFG] Built v{}: {} connections, {} assets".format(
             new_version, len(connection_map), len(assets)))
 
-        # -- STEP 4: Save to disk ------------------------------------------
         config_dir = "modbus_configs"
         os.makedirs(config_dir, exist_ok=True)
         ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1644,7 +1627,6 @@ async def pipeline_save_modbus_config(request):
                 fh.write(config_json)
         print("[MODBUS-CFG] Saved: {}".format(filename))
 
-        # -- STEP 5: Send via pipeline -------------------------------------
         pipeline_sent    = False
         pipeline_message = "Not sent -- pipeline not connected"
         target_service   = None
@@ -1708,13 +1690,8 @@ async def pipeline_save_modbus_config(request):
         return web.json_response({"success": False, "error": str(e)})
 
 
-# Standalone coroutine -- callable without an HTTP request (e.g. on startup)
 async def send_modbus_config_now():
-    """Build and send the modbus config directly (no HTTP request needed).
-
-    Returns a dict with success, pipeline_sent, version, pipeline_message.
-    Safe to call at startup or from any async context.
-    """
+    """Build and send the modbus config directly (no HTTP request needed)."""
     class _FakeRequest:
         pass
     resp = await pipeline_save_modbus_config(_FakeRequest())
@@ -1725,7 +1702,6 @@ async def send_modbus_config_now():
         return {"success": False, "error": "could not parse response"}
 
 
-# Legacy alias
 async def pipeline_modbus_config_handler(request):
     """POST /api/pipeline/modbus-config -- legacy alias"""
     return await pipeline_save_modbus_config(request)
@@ -1735,15 +1711,7 @@ async def pipeline_modbus_config_handler(request):
 # ============================================================================
 
 async def send_iot_gateway_config_now():
-    """Build iot_gateway config, save timestamped copy to disk, send via pipeline.
-
-    Called from:
-      - general_config.put_config_handler  (wifi/heartbeat changed)
-      - mqtt_cloud._save_all               (MQTT channels/mappings changed)
-      - POST /api/pipeline/iot-gateway-config/send  (manual trigger)
-
-    Returns dict: {success, pipeline_sent, pipeline_message, version, file_saved}
-    """
+    """Build iot_gateway config, save timestamped copy to disk, send via pipeline."""
     print("\n" + "="*60)
     print("[IOT-CFG] Build  ->  Save  ->  Send")
     print("="*60)
@@ -1755,17 +1723,13 @@ async def send_iot_gateway_config_now():
         print("[IOT-CFG] build error: {}".format(e))
         return {"success": False, "error": "build failed: {}".format(e)}
 
-    # Bump version
-    # Get next version from DB (only written back on success)
     new_version = get_next_pipeline_version("iot_gateway")
-
     config["version"] = new_version
     config_json = json.dumps(config, indent=2)
     print("[IOT-CFG] Built v{}: {} server(s), {} mapping(s)".format(
         new_version, len(config.get("servers", {})), len(config.get("mappings", []))))
 
-    # Save to disk
-    config_dir  = "iot_gateway_configs"
+    config_dir  = "gateway_config"
     os.makedirs(config_dir, exist_ok=True)
     ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename    = "{}/iot_gateway_config_{}.json".format(config_dir, ts)
@@ -1775,7 +1739,6 @@ async def send_iot_gateway_config_now():
             fh.write(config_json)
     print("[IOT-CFG] Saved: {}".format(filename))
 
-    # Send via pipeline
     pipeline_sent    = False
     pipeline_message = "Not sent -- pipeline not connected"
     target_service   = None
@@ -1788,37 +1751,47 @@ async def send_iot_gateway_config_now():
         target_service = _find_iot_gateway_service()
         if target_service:
             try:
-                rid = client.datapoint_update(target_service, "iot_gateway_config", config_json)
-                if rid > 0:
+                ok = client.publish_config(Config(
+                    name    = "iot_gateway_config",
+                    value   = config_json,
+                    version = new_version,
+                    service = target_service,
+                ))
+                if ok:
                     pipeline_sent    = True
                     pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
                     record_pipeline_send_success("iot_gateway", new_version, target_service, pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["iot_gateway_config"]         = config_json
                         pipeline_state["iot_gateway_config_pending"] = None
+                        pipeline_state["iot_gateway_config_version"] = new_version
                     print("[IOT-CFG] " + pipeline_message)
                 else:
-                    pipeline_message = "Send failed (rid=0) -- queued as pending"
+                    pipeline_message = "publish_config failed -- queued as pending"
                     record_pipeline_send_failure("iot_gateway", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["iot_gateway_config_pending"] = config_json
+                        pipeline_state["iot_gateway_config_version"] = new_version
             except Exception as exc:
                 pipeline_message = "Error: {} -- queued as pending".format(exc)
                 record_pipeline_send_failure("iot_gateway", pipeline_message)
                 with pipeline_state["lock"]:
                     pipeline_state["iot_gateway_config_pending"] = config_json
+                    pipeline_state["iot_gateway_config_version"] = new_version
         else:
             pipeline_message = "Service '{}' not connected -- queued as pending".format(
                 get_pipeline_service_name("iot_gateway") or "iot_gateway_service")
             record_pipeline_send_failure("iot_gateway", pipeline_message)
             with pipeline_state["lock"]:
                 pipeline_state["iot_gateway_config_pending"] = config_json
+                pipeline_state["iot_gateway_config_version"] = new_version
             print("[IOT-CFG] " + pipeline_message)
     else:
         pipeline_message = "Queued as pending (not connected)"
         record_pipeline_send_failure("iot_gateway", pipeline_message)
         with pipeline_state["lock"]:
             pipeline_state["iot_gateway_config_pending"] = config_json
+            pipeline_state["iot_gateway_config_version"] = new_version
         print("[IOT-CFG] " + pipeline_message)
 
     return {
@@ -1850,21 +1823,11 @@ async def pipeline_iot_gateway_config_view_handler(request):
         return web.json_response({"success": True, "config": config, "error": str(e)})
 
 # ============================================================================
-# ROUTE REGISTRATION
-# ============================================================================
-
-# ============================================================================
 # AUTO-SEND  -- fire immediately for all enabled targets
 # ============================================================================
 
 async def pipeline_auto_send_handler(request):
-    """POST /api/pipeline/auto-send
-    
-    Reads all enabled pipeline service targets from DB and immediately
-    sends each config to its service.  Does NOT wait for connection --
-    if a service is not yet connected the config is queued as pending
-    exactly the same as a manual push.
-    """
+    """POST /api/pipeline/auto-send"""
     from database import get_enabled_pipeline_targets
 
     targets  = get_enabled_pipeline_targets()
@@ -1921,102 +1884,17 @@ async def pipeline_auto_send_handler(request):
 
 
 async def pipeline_send_log_handler(request):
-    """GET /api/pipeline/send-log -- return per-type send history from DB"""
+    """GET /api/pipeline/send-log"""
     from database import get_all_pipeline_send_logs
     logs = get_all_pipeline_send_logs()
     return web.json_response({"logs": logs})
 
-
-def register_pipeline_routes(app):
-    """Register all pipeline API routes."""
-
-    # -- Connection --------------------------------------------------------
-    app.router.add_post('/api/pipeline/connect',    pipeline_connect_handler)
-    app.router.add_post('/api/pipeline/disconnect', pipeline_disconnect_handler)
-
-    # -- Status / info -----------------------------------------------------
-    app.router.add_get('/api/pipeline/status',          pipeline_status_handler)
-    app.router.add_get('/api/pipeline/services',        pipeline_services_handler)
-    app.router.add_get('/api/pipeline/debug',           pipeline_debug_handler)
-    app.router.add_get('/api/pipeline/config',          pipeline_modbus_config_view_handler)
-    app.router.add_get('/api/pipeline/loadcell-config', pipeline_loadcell_config_view_handler)
-
-    # -- WebSocket stream --------------------------------------------------
-    app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
-
-    # -- Loadcell (send config + receive live data) ------------------------
-    app.router.add_get ('/api/pipeline/loadcell-devices',        pipeline_loadcell_devices_handler)
-    app.router.add_post('/api/pipeline/loadcell-config/import',  pipeline_loadcell_import_handler)
-    app.router.add_get ('/api/pipeline/calibration',             pipeline_calibration_get_handler)
-    app.router.add_post('/api/pipeline/calibration',             pipeline_calibration_post_handler)
-    app.router.add_post('/api/pipeline/filters',         pipeline_filters_post_handler)
-
-    # -- Modbus (send only) ------------------------------------------------
-    app.router.add_post('/api/pipeline/modbus-config',      pipeline_modbus_config_handler)
-    app.router.add_post('/api/pipeline/modbus-config/save', pipeline_save_modbus_config)
-
-    # -- IoT Gateway (send only) -------------------------------------------
-    app.router.add_get ('/api/pipeline/iot-gateway-config',      pipeline_iot_gateway_config_view_handler)
-    app.router.add_post('/api/pipeline/iot-gateway-config/send', pipeline_send_iot_gateway_config_handler)
-
-    # -- Core Config (send only) -------------------------------------------
-    app.router.add_get ('/api/pipeline/core-config',        pipeline_core_config_view_handler)
-    app.router.add_get ('/api/pipeline/core-configs',       pipeline_core_configs_list_handler)
-    app.router.add_post('/api/pipeline/core-config/upload', pipeline_core_config_upload_handler)
-    app.router.add_post('/api/pipeline/core-config/resend', pipeline_core_config_resend_handler)
-
-    # -- Auto-send + send log ----------------------------------------------
-    app.router.add_post('/api/pipeline/auto-send',  pipeline_auto_send_handler)
-    app.router.add_get ('/api/pipeline/send-log',   pipeline_send_log_handler)
-
-    # Seed any missing pipeline_service_targets rows
-    _seed_pipeline_targets()
-
-    print("[PIPELINE] Routes registered OK")
-
-
-def _seed_pipeline_targets():
-    """Ensure all known config types exist in pipeline_service_targets.
-    Inserts missing rows with empty service_name and enabled=False.
-    Never overwrites existing rows.
-    """
-    KNOWN_TYPES = [
-        ("modbus",      "Modbus TCP/RTU service -- send only"),
-        ("loadcell",    "Load cell service -- send config + receive live data"),
-        ("iot_gateway", "IoT Gateway service -- send only"),
-        ("core",        "Core config service -- send only"),
-    ]
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        for cfg_type, description in KNOWN_TYPES:
-            cursor.execute(
-                "SELECT 1 FROM pipeline_service_targets WHERE config_type = ?",
-                (cfg_type,)
-            )
-            if not cursor.fetchone():
-                cursor.execute(
-                    "INSERT INTO pipeline_service_targets "
-                    "(config_type, service_name, enabled, description) "
-                    "VALUES (?, '', 0, ?)",
-                    (cfg_type, description)
-                )
-                print("[PIPELINE] Seeded pipeline target: {}".format(cfg_type))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print("[PIPELINE] Warning: could not seed pipeline targets: {}".format(e))
-
-
 # ============================================================================
-# CORE CONFIG -- receive JSON upload, persist to DB, forward via pipeline (send only)
+# CORE CONFIG -- receive JSON upload, persist to DB, forward via pipeline
 # ============================================================================
 
 async def pipeline_core_config_upload_handler(request):
-    """POST /api/pipeline/core-config/upload
-    Accepts an inno_load-style JSON body, extracts device names from load_cells[],
-    persists to DB table core_configs, then forwards to the core pipeline service.
-    """
+    """POST /api/pipeline/core-config/upload"""
     print("\n" + "="*70)
     print("[CORE-CFG] Upload  ->  Persist  ->  Send")
     print("="*70)
@@ -2083,35 +1961,45 @@ async def pipeline_core_config_upload_handler(request):
         target_service = _find_core_service()
         if target_service:
             try:
-                rid = client.datapoint_update(target_service, "core_config", config_json)
-                if rid > 0:
+                ok = client.publish_config(Config(
+                    name    = "core_config",
+                    value   = config_json,
+                    version = new_version,
+                    service = target_service,
+                ))
+                if ok:
                     pipeline_sent    = True
                     pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
                     record_pipeline_send_success("core", new_version, target_service, pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["core_config"]         = config_json
                         pipeline_state["core_config_pending"] = None
+                        pipeline_state["core_config_version"] = new_version
                 else:
-                    pipeline_message = "Send failed (rid=0) -- queued as pending"
+                    pipeline_message = "publish_config failed -- queued as pending"
                     record_pipeline_send_failure("core", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["core_config_pending"] = config_json
+                        pipeline_state["core_config_version"] = new_version
             except Exception as exc:
                 pipeline_message = "Error: {} -- queued as pending".format(exc)
                 record_pipeline_send_failure("core", pipeline_message)
                 with pipeline_state["lock"]:
                     pipeline_state["core_config_pending"] = config_json
+                    pipeline_state["core_config_version"] = new_version
         else:
             pipeline_message = "Service '{}' not connected -- queued as pending".format(
                 get_pipeline_service_name("core") or "core_service")
             record_pipeline_send_failure("core", pipeline_message)
             with pipeline_state["lock"]:
                 pipeline_state["core_config_pending"] = config_json
+                pipeline_state["core_config_version"] = new_version
     else:
         pipeline_message = "Queued as pending (not connected)"
         record_pipeline_send_failure("core", pipeline_message)
         with pipeline_state["lock"]:
             pipeline_state["core_config_pending"] = config_json
+            pipeline_state["core_config_version"] = new_version
 
     return web.json_response({
         "success":                True,
@@ -2205,24 +2093,32 @@ async def pipeline_core_config_resend_handler(request):
             target_service = _find_core_service()
             if target_service:
                 try:
-                    rid = client.datapoint_update(target_service, "core_config", config_json)
-                    if rid > 0:
+                    ok = client.publish_config(Config(
+                        name    = "core_config",
+                        value   = config_json,
+                        version = new_version,
+                        service = target_service,
+                    ))
+                    if ok:
                         pipeline_sent    = True
                         pipeline_message = "Resent to {} (v{})".format(target_service, new_version)
                         record_pipeline_send_success("core", new_version, target_service, pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["core_config"]         = config_json
                             pipeline_state["core_config_pending"] = None
+                            pipeline_state["core_config_version"] = new_version
                     else:
-                        pipeline_message = "Resend failed (rid=0) -- queued"
+                        pipeline_message = "publish_config failed -- queued"
                         record_pipeline_send_failure("core", pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["core_config_pending"] = config_json
+                            pipeline_state["core_config_version"] = new_version
                 except Exception as exc:
                     pipeline_message = "Error: {} -- queued".format(exc)
                     record_pipeline_send_failure("core", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["core_config_pending"] = config_json
+                        pipeline_state["core_config_version"] = new_version
             else:
                 pipeline_message = "Service not connected -- queued"
                 record_pipeline_send_failure("core", pipeline_message)
@@ -2243,3 +2139,84 @@ async def pipeline_core_config_resend_handler(request):
         })
     except Exception as e:
         return web.json_response({"success": False, "error": str(e)}, status=500)
+
+# ============================================================================
+# ROUTE REGISTRATION
+# ============================================================================
+
+def register_pipeline_routes(app):
+    """Register all pipeline API routes."""
+
+    # -- Connection --------------------------------------------------------
+    app.router.add_post('/api/pipeline/connect',    pipeline_connect_handler)
+    app.router.add_post('/api/pipeline/disconnect', pipeline_disconnect_handler)
+
+    # -- Status / info -----------------------------------------------------
+    app.router.add_get('/api/pipeline/status',          pipeline_status_handler)
+    app.router.add_get('/api/pipeline/services',        pipeline_services_handler)
+    app.router.add_get('/api/pipeline/debug',           pipeline_debug_handler)
+    app.router.add_get('/api/pipeline/config',          pipeline_modbus_config_view_handler)
+    app.router.add_get('/api/pipeline/loadcell-config', pipeline_loadcell_config_view_handler)
+
+    # -- WebSocket stream --------------------------------------------------
+    app.router.add_get('/ws/pipeline/load_raw', pipeline_loadraw_ws_handler)
+
+    # -- Loadcell ----------------------------------------------------------
+    app.router.add_get ('/api/pipeline/loadcell-devices',        pipeline_loadcell_devices_handler)
+    app.router.add_post('/api/pipeline/loadcell-config/import',  pipeline_loadcell_import_handler)
+    app.router.add_get ('/api/pipeline/calibration',             pipeline_calibration_get_handler)
+    app.router.add_post('/api/pipeline/calibration',             pipeline_calibration_post_handler)
+    app.router.add_post('/api/pipeline/filters',                 pipeline_filters_post_handler)
+
+    # -- Modbus ------------------------------------------------------------
+    app.router.add_post('/api/pipeline/modbus-config',      pipeline_modbus_config_handler)
+    app.router.add_post('/api/pipeline/modbus-config/save', pipeline_save_modbus_config)
+
+    # -- IoT Gateway -------------------------------------------------------
+    app.router.add_get ('/api/pipeline/iot-gateway-config',      pipeline_iot_gateway_config_view_handler)
+    app.router.add_post('/api/pipeline/iot-gateway-config/send', pipeline_send_iot_gateway_config_handler)
+
+    # -- Core Config -------------------------------------------------------
+    app.router.add_get ('/api/pipeline/core-config',        pipeline_core_config_view_handler)
+    app.router.add_get ('/api/pipeline/core-configs',       pipeline_core_configs_list_handler)
+    app.router.add_post('/api/pipeline/core-config/upload', pipeline_core_config_upload_handler)
+    app.router.add_post('/api/pipeline/core-config/resend', pipeline_core_config_resend_handler)
+
+    # -- Auto-send + send log ----------------------------------------------
+    app.router.add_post('/api/pipeline/auto-send',  pipeline_auto_send_handler)
+    app.router.add_get ('/api/pipeline/send-log',   pipeline_send_log_handler)
+
+    # Seed any missing pipeline_service_targets rows
+    _seed_pipeline_targets()
+
+    print("[PIPELINE] Routes registered OK")
+
+
+def _seed_pipeline_targets():
+    """Ensure all known config types exist in pipeline_service_targets."""
+    KNOWN_TYPES = [
+        ("modbus",      "Modbus TCP/RTU service -- send only"),
+        ("loadcell",    "Load cell service -- send config + receive live data"),
+        ("iot_gateway", "IoT Gateway service -- send only"),
+        ("core",        "Core config service -- send only"),
+    ]
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        for cfg_type, description in KNOWN_TYPES:
+            cursor.execute(
+                "SELECT 1 FROM pipeline_service_targets WHERE config_type = ?",
+                (cfg_type,)
+            )
+            if not cursor.fetchone():
+                cursor.execute(
+                    "INSERT INTO pipeline_service_targets "
+                    "(config_type, service_name, enabled, description) "
+                    "VALUES (?, '', 0, ?)",
+                    (cfg_type, description)
+                )
+                print("[PIPELINE] Seeded pipeline target: {}".format(cfg_type))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print("[PIPELINE] Warning: could not seed pipeline targets: {}".format(e))

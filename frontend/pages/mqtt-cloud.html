@@ -143,7 +143,7 @@
         <div class="grid grid-cols-2 gap-3 mb-4" id="typeGrid"></div>
         <div id="typePreview" class="hidden mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <div class="text-xs text-blue-600 mb-0.5">Selected</div>
-          <div class="font-semibold text-blue-900" id="typePreviewName">â€”</div>
+          <div class="font-semibold text-blue-900" id="typePreviewName">—</div>
         </div>
         <div class="flex justify-end gap-2 pt-4 border-t border-slate-200">
           <button id="cancelType" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
@@ -156,7 +156,7 @@
       <div id="stepForm" style="display:none;">
         <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <div class="text-xs text-blue-600 mb-0.5">Protocol</div>
-          <div class="font-semibold text-blue-900" id="formCtxName">â€”</div>
+          <div class="font-semibold text-blue-900" id="formCtxName">—</div>
         </div>
         <form id="createForm" novalidate class="space-y-3">
           <div>
@@ -249,35 +249,36 @@
 
 <!-- ADD TAGS MODAL -->
 <div id="addTagsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
-  <div style="background:white;border-radius:10px;width:92%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+  <div style="background:white;border-radius:10px;width:95%;max-width:1000px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);">
     <div class="p-5 border-b border-slate-200">
       <div class="flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-800"><i class="fa-solid fa-tags mr-2 text-blue-600"></i>Add Tags to Publish</h2>
         <button id="closeTagsModal" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="relative mt-3">
-        <input id="tagSearch" type="text" placeholder="Search tagsâ€¦" class="w-full pl-8 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+        <input id="tagSearch" type="text" placeholder="Search tags by name, device, or source..." class="w-full pl-8 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
         <i class="fa-solid fa-search absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
       </div>
     </div>
     <div class="overflow-y-auto flex-1">
-      <table class="w-full text-xs">
+      <table class="w-full text-sm">
         <thead class="bg-slate-50 sticky top-0">
           <tr>
-            <th class="p-2 w-8"><input type="checkbox" id="selectAllTags"></th>
-            <th class="p-2 text-left font-medium text-slate-600">Tag Name</th>
-            <th class="p-2 text-left font-medium text-slate-600">Device</th>
-            <th class="p-2 text-left font-medium text-slate-600">Unit</th>
-            <th class="p-2 text-left font-medium text-slate-600">Source</th>
+            <th class="p-3 w-10"><input type="checkbox" id="selectAllTags"></th>
+            <th class="p-3 text-left font-medium text-slate-600">Tag Name</th>
+            <th class="p-3 text-left font-medium text-slate-600">Device</th>
+            <th class="p-3 text-left font-medium text-slate-600">Unit</th>
+            <th class="p-3 text-left font-medium text-slate-600">Data Type <span class="text-xs font-normal text-blue-500">(editable)</span></th>
+            <th class="p-3 text-left font-medium text-slate-600">Source</th>
           </tr>
         </thead>
         <tbody id="tagsModalBody">
-          <tr><td colspan="5" class="p-6 text-center text-slate-400">Loadingâ€¦</td></tr>
+          <tr><td colspan="6" class="p-6 text-center text-slate-400">Loading…</td></tr>
         </tbody>
       </table>
     </div>
     <div class="p-4 border-t border-slate-200 flex justify-between items-center">
-      <span class="text-xs text-slate-500"><span id="tagsSelectedCount">0</span> selected</span>
+      <span class="text-sm text-slate-500"><span id="tagsSelectedCount">0</span> tags selected</span>
       <div class="flex gap-2">
         <button id="tagsCancel" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
         <button id="tagsConfirm" class="compact-button bg-blue-600 hover:bg-blue-700 text-white"><i class="fa-solid fa-check mr-1"></i>Add Selected</button>
@@ -285,7 +286,6 @@
     </div>
   </div>
 </div>
-
 <!-- TEST RESULTS MODAL REMOVED -->
 
 <style>

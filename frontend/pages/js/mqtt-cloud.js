@@ -1,4 +1,4 @@
-// mqtt-cloud.js  — Cloud Connection Manager orchestrator
+// mqtt-cloud.js    Cloud Connection Manager orchestrator
 'use strict';
 
 const API = '/api/cloud-integration';
@@ -7,13 +7,13 @@ let _selectedId   = null;
 let _selectedType = null;
 let _availTags    = [];
 
-// ─── ENTRY ────────────────────────────────────────────────────────────────────
+// --- ENTRY --------------------------------------------------------------------
 window.initMqttCloud = async function () {
     _bindPageListeners();
     await _loadConnections();
 };
 
-// ─── LOAD LIST ────────────────────────────────────────────────────────────────
+// --- LOAD LIST ----------------------------------------------------------------
 async function _loadConnections() {
     try {
         const d = await _api('GET', `${API}/connections`);
@@ -26,7 +26,7 @@ async function _loadConnections() {
     } catch { _toast('Failed to load connections', 'error'); }
 }
 
-// ─── RENDER LIST ──────────────────────────────────────────────────────────────
+// --- RENDER LIST --------------------------------------------------------------
 function _renderList() {
     const list  = _el('connectionsList');
     const empty = _el('connectionsEmpty');
@@ -61,7 +61,7 @@ function _renderList() {
     });
 }
 
-// ─── SELECT CONNECTION ────────────────────────────────────────────────────────
+// --- SELECT CONNECTION --------------------------------------------------------
 async function _selectConnection(id) {
     _selectedId = id;
     document.querySelectorAll('.conn-item').forEach(el =>
@@ -80,7 +80,7 @@ async function _selectConnection(id) {
     await _loadForm(conn);
 }
 
-// ─── LOAD FORM HTML ───────────────────────────────────────────────────────────
+// --- LOAD FORM HTML -----------------------------------------------------------
 async function _loadForm(conn) {
     const ph = _el('formPlaceholder');
     const fc = _el('formContent');
@@ -122,7 +122,7 @@ async function _loadForm(conn) {
     }
 }
 
-// ─── POPULATE MQTT ────────────────────────────────────────────────────────────
+// --- POPULATE MQTT ------------------------------------------------------------
 function _populateMqtt(conn) {
     const c = conn.config || {};
     
@@ -145,17 +145,17 @@ function _populateMqtt(conn) {
     _renderMappingsTable(conn);
 }
 
-// ─── GENERATE CLIENT ID ───────────────────────────────────────────────────────
+// --- GENERATE CLIENT ID -------------------------------------------------------
 function _generateClientId() {
     return 'univa-gateway-' + Math.random().toString(36).substring(2, 10);
 }
 
-// ─── GENERATE DEVICE TOKEN ────────────────────────────────────────────────────
+// --- GENERATE DEVICE TOKEN ----------------------------------------------------
 function _generateDeviceToken() {
     return 'dev_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 6);
 }
 
-// ─── RENDER PUBLISH CHANNELS ──────────────────────────────────────────────────
+// --- RENDER PUBLISH CHANNELS --------------------------------------------------
 function _renderPublishChannels(list) {
     const tbody = _el('publish-channels-table');
     if (!tbody) return;
@@ -185,7 +185,7 @@ function _renderPublishChannels(list) {
     });
 }
 
-// ─── RENDER SUBSCRIBE CHANNELS ────────────────────────────────────────────────
+// --- RENDER SUBSCRIBE CHANNELS ------------------------------------------------
 function _renderSubscribeChannels(list) {
     const tbody = _el('subscribe-channels-table');
     if (!tbody) return;
@@ -214,7 +214,7 @@ function _renderSubscribeChannels(list) {
     });
 }
 
-// ─── ADD CHANNEL ROWS ─────────────────────────────────────────────────────────
+// --- ADD CHANNEL ROWS ---------------------------------------------------------
 window._addPublishChannel = function () {
     const tbody = _el('publish-channels-table');
     if (!tbody) return;
@@ -260,7 +260,7 @@ window._addSubscribeChannel = function () {
     tbody.appendChild(tr);
 };
 
-// ─── RENDER MAPPINGS TABLE ────────────────────────────────────────────────────
+// --- RENDER MAPPINGS TABLE ----------------------------------------------------
 // New and improved: groups as cards, individuals in table
 function _renderMappingsTable(conn) {
     const groupsContainer = _el('groups-container');
@@ -290,52 +290,92 @@ function _renderMappingsTable(conn) {
     // Render Groups as Cards
     if (groups.length) {
         groupsContainer.style.display = 'block';
+        // Build publish channel options for dropdowns
+        const pubChannelOptions = _getPublishChannelOptions();
         groupsContainer.innerHTML = groups.map((mapping, idx) => {
             const points = _flattenDatapoints(mapping.datapoints || {});
             const groupId = `group-${idx}`;
+            const currentChannel = mapping.channel || '';
             
             return `
-                <div class="group-card border border-slate-200 rounded-lg overflow-hidden bg-white" data-group-idx="${idx}">
-                    <!-- Group Header -->
-                    <div class="bg-blue-50 px-3 py-2 flex items-center justify-between border-b border-blue-100">
+                <div class="group-card border-2 border-blue-200 rounded-xl overflow-hidden bg-white shadow-sm" data-group-idx="${idx}">
+                    <!-- Group Header   large prominent bar -->
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-3 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <input type="checkbox" class="tag-select group-select" data-group="${idx}" onchange="window._updateTagCount()">
-                            <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-layer-group text-blue-500"></i>
-                                <span class="font-medium text-sm text-blue-700">${_esc(mapping.alias)}</span>
-                                <span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">${points.length} tags</span>
-                            </div>
+                            <input type="checkbox" class="tag-select group-select w-4 h-4" data-group="${idx}" onchange="window._updateTagCount()">
+                            <i class="fa-solid fa-layer-group text-white text-base"></i>
+                            <span class="font-semibold text-white text-base">${_esc(mapping.alias)}</span>
+                            <span class="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">${points.length} tag${points.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button class="text-white/70 hover:text-white" onclick="window._toggleGroup('${groupId}')">
+                                <i class="fa-solid fa-chevron-down text-sm"></i>
+                            </button>
+                            <button class="text-white/70 hover:text-red-200" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${idx})" title="Remove group">
+                                <i class="fa-solid fa-trash text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Channel + Type Assignment Row (applies to ALL tags in this group) -->
+                    <div class="bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-4 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-broadcast-tower text-blue-400 text-xs"></i>
+                            <span class="text-xs font-semibold text-blue-700 whitespace-nowrap">Channel:</span>
+                            <select class="compact-select text-xs group-channel-select"
+                                    style="min-width:160px"
+                                    data-conn="${_esc(conn.id)}" data-group-idx="${idx}"
+                                    onchange="window._updateGroupChannel('${_esc(conn.id)}', ${idx}, this.value)">
+                                <option value="">  default channel  </option>
+                                ${pubChannelOptions.map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                ${currentChannel && !pubChannelOptions.find(c => c.name === currentChannel)
+                                    ? `<option value="${_esc(currentChannel)}" selected>${_esc(currentChannel)}</option>` : ''}
+                            </select>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-xs text-slate-500 mr-2">
-                                Channel: <span class="font-mono text-blue-600">${_esc(mapping.channel || 'default')}</span>
-                            </span>
-                            <button class="text-slate-400 hover:text-slate-600 text-xs" onclick="window._toggleGroup('${groupId}')">
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </button>
-                            <button class="text-red-400 hover:text-red-600 text-xs" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${idx})" title="Remove group">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
+                            <i class="fa-solid fa-tag text-blue-400 text-xs"></i>
+                            <span class="text-xs font-semibold text-blue-700 whitespace-nowrap">Type (all tags):</span>
+                            <select class="compact-select text-xs group-type-select"
+                                    style="min-width:100px"
+                                    data-group-idx="${idx}">
+                                ${['int','float','string','bool'].map(t => {
+                                    // Detect current common type from first tag
+                                    const firstDtype = points[0]?.dtype || 'float';
+                                    return `<option value="${t}" ${firstDtype===t?'selected':''}>${t}</option>`;
+                                }).join('')}
+                            </select>
                         </div>
+                        <span class="text-xs text-blue-400 italic ml-auto">All tags share the same channel &amp; type</span>
                     </div>
                     
                     <!-- Group Tags Table -->
                     <div id="${groupId}" class="group-tags">
                         <table class="w-full text-xs">
+                            <thead class="bg-slate-50 text-slate-500 border-b border-slate-100">
+                                <tr>
+                                    <th class="p-2 pl-8 w-8"></th>
+                                    <th class="p-2 text-left font-medium">Tag Name</th>
+                                    <th class="p-2 text-left font-medium w-32">Type</th>
+                                    <th class="p-2 text-center font-medium w-24">Channel</th>
+                                    <th class="p-2 w-12"></th>
+                                </tr>
+                            </thead>
                             <tbody class="divide-y divide-slate-100">
                                 ${points.map(({name, dtype}) => `
-                                    <tr class="hover:bg-slate-50">
+                                    <tr class="hover:bg-slate-50" data-tag-row data-group-idx="${idx}" data-tag-name="${_esc(name)}">
                                         <td class="p-2 pl-8 w-8">
                                             <input type="checkbox" class="tag-select" data-tag="${_esc(name)}" data-group="${idx}" onchange="window._updateTagCount()">
                                         </td>
                                         <td class="p-2 font-mono text-xs">
-                                            <i class="fa-regular fa-arrow-right text-xs text-slate-300 mr-1"></i>${_esc(name)}
+                                            <i class="fa-regular fa-circle-dot text-blue-300 mr-1"></i>${_esc(name)}
                                         </td>
                                         <td class="p-2">
-                                            <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">${_esc(dtype)}</span>
+                                            <span class="text-xs text-slate-400 italic">via group</span>
                                         </td>
-                                        <td class="p-2 text-slate-400">via group</td>
-                                        <td class="p-2 w-20">
+                                        <td class="p-2 text-center">
+                                            <span class="text-xs text-slate-400 italic">via group</span>
+                                        </td>
+                                        <td class="p-2 w-12 text-center">
                                             <button class="text-red-400 hover:text-red-600" onclick="window._cloudRemoveTagFromMapping('${_esc(conn.id)}',${idx},'${_esc(name)}')" title="Remove tag">
                                                 <i class="fa-solid fa-xmark"></i>
                                             </button>
@@ -369,19 +409,29 @@ function _renderMappingsTable(conn) {
             });
         });
         
+        const pubChannelOptionsInd = _getPublishChannelOptions();
         individualTable.innerHTML = allIndividualTags.map((item, idx) => `
-            <tr class="hover:bg-slate-50" data-individual-idx="${idx}">
+            <tr class="hover:bg-slate-50" data-individual-idx="${idx}" data-mapping-idx="${item.mappingIdx}" data-tag-name="${_esc(item.name)}">
                 <td class="p-2">
                     <input type="checkbox" class="tag-select individual-select" data-tag="${_esc(item.name)}" onchange="window._updateTagCount()">
                 </td>
                 <td class="p-2 font-mono text-xs">${_esc(item.name)}</td>
                 <td class="p-2">
-                    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">${_esc(item.dtype)}</span>
+                    <select class="compact-select text-xs tag-type-select" data-tag="${_esc(item.name)}" data-mapping-idx="${item.mappingIdx}">
+                        <option value="int"    ${item.dtype==='int'    ?'selected':''}>int</option>
+                        <option value="float"  ${item.dtype==='float'  ?'selected':''}>float</option>
+                        <option value="string" ${item.dtype==='string' ?'selected':''}>string</option>
+                        <option value="bool"   ${item.dtype==='bool'   ?'selected':''}>bool</option>
+                    </select>
                 </td>
                 <td class="p-2">
-                    <input type="text" class="compact-input text-xs tag-channel" value="${_esc(item.channel)}" 
-                           placeholder="channel name" style="width: 120px;"
-                           onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
+                    <select class="compact-select text-xs tag-channel" data-mapping-idx="${item.mappingIdx}"
+                            onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
+                        <option value="">  default  </option>
+                        ${pubChannelOptionsInd.map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        ${item.channel && !pubChannelOptionsInd.find(c => c.name === item.channel)
+                            ? `<option value="${_esc(item.channel)}" selected>${_esc(item.channel)}</option>` : ''}
+                    </select>
                 </td>
                 <td class="p-2 text-center">
                     <button class="text-red-400 hover:text-red-600" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${item.mappingIdx})" title="Remove tag">
@@ -400,6 +450,39 @@ function _flattenDatapoints(dp) {
     ['bool','int','float','string'].forEach(dtype => (dp[dtype]||[]).forEach(name => out.push({name,dtype})));
     return out;
 }
+
+// Get publish channel list for use in dropdowns (from table or in-memory)
+function _getPublishChannelOptions() {
+    const options = [];
+    document.querySelectorAll('#publish-channels-table tr[data-idx]').forEach(tr => {
+        const name = tr.querySelector('.ch-name')?.value.trim();
+        const topic = tr.querySelector('.ch-topic')?.value.trim();
+        if (name) options.push({ name, topic: topic || '' });
+    });
+    if (!options.length && _selectedId) {
+        const conn = _connections.find(c => c.id === _selectedId);
+        (conn?.config?.channels?.publish || []).forEach(ch => {
+            if (ch.name) options.push({ name: ch.name, topic: ch.topic || '' });
+        });
+    }
+    return options;
+}
+
+// Update group channel assignment live
+window._updateGroupChannel = async function(connId, groupIdx, channel) {
+    const conn = _connections.find(c => c.id === connId);
+    if (!conn) return;
+    const mappings = conn.config?.mappings || [];
+    const groups = mappings.filter(m => m.alias);
+    const mapping = groups[groupIdx];
+    if (!mapping) return;
+    if (channel) mapping.channel = channel;
+    else delete mapping.channel;
+    try {
+        await _api('PUT', `${API}/connections/${connId}`, { config: { mappings } });
+        _toast('Group channel updated', 'success');
+    } catch { _toast('Update failed', 'error'); }
+};
 
 // Helper to update individual tag channel
 window._updateIndividualChannel = async function(connId, mappingIdx, tagName, channel) {
@@ -534,7 +617,7 @@ window._updateTagCount = function() {
     }
 };
 
-// ─── POPULATE FTP ─────────────────────────────────────────────────────────────
+// --- POPULATE FTP -------------------------------------------------------------
 function _populateFtp(conn) {
     const c = conn.config || {};
     _sv('field-host',            c.host            ?? '');
@@ -554,7 +637,7 @@ function _populateFtp(conn) {
     _sv('field-retryAttempts',   c.retryAttempts   ?? 3);
 }
 
-// ─── WIRE SAVE BUTTONS ────────────────────────────────────────────────────────
+// --- WIRE SAVE BUTTONS --------------------------------------------------------
 function _wireFormSaves(conn) {
     if (conn.type === 'mqtt') {
         if (!window.mqttFormLogic) window.mqttFormLogic = {};
@@ -569,7 +652,7 @@ function _wireFormSaves(conn) {
     }
 }
 
-// ─── WIRE ADD TAGS BTN ────────────────────────────────────────────────────────
+// --- WIRE ADD TAGS BTN --------------------------------------------------------
 function _wireAddTagsBtn(conn) {
     const openFn = () => _openTagsModal(conn);
     window.showAddTagModal = openFn;
@@ -598,7 +681,7 @@ function _wireAddTagsBtn(conn) {
     };
 }
 
-// ─── SAVE: MQTT CONNECTION ────────────────────────────────────────────────────
+// --- SAVE: MQTT CONNECTION ----------------------------------------------------
 async function _saveMqttConnection(id) {
     await _putCfg(id, {
         enabled:       _gc('field-enabled'),
@@ -612,7 +695,7 @@ async function _saveMqttConnection(id) {
     }, 'Connection settings saved');
 }
 
-// ─── SAVE: MQTT CHANNELS ──────────────────────────────────────────────────────
+// --- SAVE: MQTT CHANNELS ------------------------------------------------------
 async function _saveMqttChannels(id) {
     // Save channels (publish + subscribe arrays)
     const publish = [];
@@ -637,22 +720,86 @@ async function _saveMqttChannels(id) {
     await _putCfg(id, { channels: { publish, subscribe } }, 'Channel settings saved');
 }
 
-// ─── SAVE: MQTT PUBLISHING (MAPPINGS) ─────────────────────────────────────────
+// --- SAVE: MQTT PUBLISHING (MAPPINGS) -----------------------------------------
 async function _saveMqttPublishing(id) {
-    // Save mappings — update channel overrides on individual (non-group) rows
     const conn = _connections.find(c => c.id === id);
-    const mappings = (conn?.config?.mappings || []).map((mapping, mIdx) => {
-        const channelInput = document.querySelector(`tr[data-mapping-idx="${mIdx}"] .tag-channel`);
-        if (channelInput) {
-            const ch = channelInput.value.trim();
-            return { ...mapping, ...(ch ? { channel: ch } : {}) };
+    if (!conn) return;
+    const existingMappings = conn.config?.mappings || [];
+    const updatedMappings = [];
+
+    // -- PASS 1: groups go through as-is; collect individual tags into buckets --
+    // bucket key: "channel||dtype"  ?  [tagName, ...]
+    const individualBuckets = {};   // key ? { channel, dtype, names[] }
+
+    existingMappings.forEach((mapping, mIdx) => {
+        const isGroup = !!mapping.alias;
+
+        if (isGroup) {
+            // GROUP: one shared type + channel for all tags
+            const visualIdx = _getGroupVisualIdx(existingMappings, mIdx);
+            const typeSel   = document.querySelector(`.group-type-select[data-group-idx="${visualIdx}"]`);
+            const dtype     = typeSel ? typeSel.value : _detectGroupType(mapping.datapoints);
+            const allTagNames = _flattenDatapoints(mapping.datapoints || {}).map(p => p.name);
+            updatedMappings.push({
+                ...mapping,
+                datapoints: { [dtype]: allTagNames },
+            });
+
+        } else {
+            // INDIVIDUAL: read type + channel from DOM row, bucket by (channel, dtype)
+            const row     = document.querySelector(`tr[data-mapping-idx="${mIdx}"]`);
+            const typeSel = row?.querySelector('.tag-type-select');
+            const chSel   = row?.querySelector('.tag-channel');
+            const tagName = row?.dataset.tagName;
+
+            if (!tagName) {
+                // DOM row missing � fall back to keeping the stored mapping
+                updatedMappings.push(mapping);
+                return;
+            }
+
+            const dtype   = typeSel ? typeSel.value : _detectGroupType(mapping.datapoints);
+            const channel = chSel?.value.trim() || mapping.channel || '';
+            const key     = channel + '||' + dtype;
+
+            if (!individualBuckets[key]) {
+                individualBuckets[key] = { channel, dtype, names: [] };
+            }
+            individualBuckets[key].names.push(tagName);
         }
-        return mapping;
     });
-    await _putCfg(id, { mappings }, 'Mapping settings saved');
+
+    // -- PASS 2: emit one merged mapping per (channel, dtype) bucket -----------
+    for (const { channel, dtype, names } of Object.values(individualBuckets)) {
+        const entry = { datapoints: { [dtype]: names } };
+        if (channel) entry.channel = channel;
+        updatedMappings.push(entry);
+    }
+
+    await _putCfg(id, { mappings: updatedMappings }, 'Mapping settings saved');
 }
 
-// ─── SAVE: FTP ────────────────────────────────────────────────────────────────
+// Get the visual (groups-only) index for a group mapping
+function _getGroupVisualIdx(mappings, targetMIdx) {
+    let gIdx = 0;
+    for (let i = 0; i < mappings.length; i++) {
+        if (mappings[i].alias) {
+            if (i === targetMIdx) return gIdx;
+            gIdx++;
+        }
+    }
+    return 0;
+}
+
+// Detect the dominant type from existing datapoints (first non-empty bucket)
+function _detectGroupType(dp) {
+    for (const t of ['float','int','string','bool']) {
+        if (dp && dp[t] && dp[t].length) return t;
+    }
+    return 'float';
+}
+
+// --- SAVE: FTP ----------------------------------------------------------------
 async function _saveFtp(id) {
     const cfg = {
         host:            _gv('field-host'),
@@ -674,7 +821,7 @@ async function _saveFtp(id) {
     await _putCfg(id, cfg, 'FTP settings saved');
 }
 
-// ─── SHARED SAVE HELPER ───────────────────────────────────────────────────────
+// --- SHARED SAVE HELPER -------------------------------------------------------
 async function _putCfg(id, cfg, msg) {
     try {
         await _api('PUT', `${API}/connections/${id}`, { config: cfg });
@@ -684,7 +831,7 @@ async function _putCfg(id, cfg, msg) {
     } catch { _toast('Save failed', 'error'); }
 }
 
-// ─── REMOVE MAPPING ───────────────────────────────────────────────────────────
+// --- REMOVE MAPPING -----------------------------------------------------------
 window._cloudRemoveMapping = async function (connId, mappingIdx) {
     const conn = _connections.find(c => c.id === connId);
     if (!conn) return;
@@ -699,7 +846,7 @@ window._cloudRemoveMapping = async function (connId, mappingIdx) {
     } catch { _toast('Remove failed', 'error'); }
 };
 
-// ─── REMOVE SINGLE TAG FROM GROUP MAPPING ────────────────────────────────────
+// --- REMOVE SINGLE TAG FROM GROUP MAPPING ------------------------------------
 window._cloudRemoveTagFromMapping = async function (connId, mappingIdx, tagName) {
     const conn = _connections.find(c => c.id === connId);
     if (!conn || !confirm(`Remove tag "${tagName}"?`)) return;
@@ -715,11 +862,11 @@ window._cloudRemoveTagFromMapping = async function (connId, mappingIdx, tagName)
     } catch { _toast('Remove failed', 'error'); }
 };
 
-// ─── ADD TAGS MODAL ───────────────────────────────────────────────────────────
+// --- ADD TAGS MODAL -----------------------------------------------------------
 async function _openTagsModal(conn) {
     _showM('addTagsModal');
     _el('tagsSelectedCount').textContent = '0';
-    _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Loading…</td></tr>';
+    _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Loading </td></tr>';
 
     // Inject alias + channel controls for creating a group
     if (!_el('modal-mapping-controls')) {
@@ -786,39 +933,49 @@ async function _openTagsModal(conn) {
             return; 
         }
 
-        // Build datapoints grouped by data type
-        const datapoints = {};
-        checked.forEach(cb => {
-            const dtype = cb.dataset.dtype || 'float';
-            if (!datapoints[dtype]) datapoints[dtype] = [];
-            datapoints[dtype].push(cb.dataset.tag);
-        });
-
         const alias   = _gv('modal-alias-input').trim();
         const channel = _gv('modal-channel-input').trim();
-        
-        // Create the mapping object
-        const newMapping = { datapoints };
-        if (alias) {
-            newMapping.alias = alias;  // This creates a GROUP
-        }
-        if (channel) {
-            newMapping.channel = channel;  // Channel override for the group/individual tags
-        }
-
         const existingMappings = (_connections.find(c => c.id === conn.id)?.config?.mappings) || [];
-        const updatedMappings  = [...existingMappings, newMapping];
+        let newMappings;
+
+        if (alias) {
+            // -- GROUP: all selected tags in one mapping, dtype from type-select per row --
+            const datapoints = {};
+            checked.forEach(cb => {
+                const dtype = cb.dataset.dtype || 'float';
+                if (!datapoints[dtype]) datapoints[dtype] = [];
+                datapoints[dtype].push(cb.dataset.tag);
+            });
+            const newMapping = { alias, datapoints };
+            if (channel) newMapping.channel = channel;
+            newMappings = [...existingMappings, newMapping];
+        } else {
+            // -- INDIVIDUAL: group by (channel, dtype) so tags sharing the same
+            //    channel and type land in ONE mapping entry, not one per tag.
+            const buckets = {};   // key "channel||dtype" ? { channel, dtype, names[] }
+            checked.forEach(cb => {
+                const dtype = cb.dataset.dtype || 'float';
+                const key   = channel + '||' + dtype;
+                if (!buckets[key]) buckets[key] = { channel, dtype, names: [] };
+                buckets[key].names.push(cb.dataset.tag);
+            });
+            const addedMappings = Object.values(buckets).map(({ channel: ch, dtype, names }) => {
+                const m = { datapoints: { [dtype]: names } };
+                if (ch) m.channel = ch;
+                return m;
+            });
+            newMappings = [...existingMappings, ...addedMappings];
+        }
 
         _setLoading(_el('tagsConfirm'), true);
         try {
-            await _api('PUT', `${API}/connections/${conn.id}`, { config: { mappings: updatedMappings } });
+            await _api('PUT', `${API}/connections/${conn.id}`, { config: { mappings: newMappings } });
             _hideM('addTagsModal');
             await _selectConnection(conn.id);
-            
             if (alias) {
                 _toast(`${checked.length} tag(s) added to group "${alias}"`, 'success');
             } else {
-                _toast(`${checked.length} tag(s) added individually`, 'success');
+                _toast(`${checked.length} tag(s) added as individual mappings`, 'success');
             }
         } catch { 
             _toast('Failed to add tags', 'error'); 
@@ -828,26 +985,43 @@ async function _openTagsModal(conn) {
         }
     };
 }
-
 function _renderTagsModal(tags) {
     const tbody = _el('tagsModalBody');
-    if (!tags.length) { tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400">No tags available</td></tr>'; return; }
+    if (!tags.length) { 
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">No tags available</td></tr>'; 
+        return; 
+    }
     tbody.innerHTML = tags.map(t => `
       <tr class="border-t border-slate-100 hover:bg-slate-50">
-        <td class="p-2"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" onchange="window._updateTagCount()"></td>
-        <td class="p-2 font-mono text-xs">${_esc(t.name)}</td>
-        <td class="p-2 text-xs text-slate-600">${_esc(t.device||'—')}</td>
-        <td class="p-2 text-xs text-slate-500">${_esc(t.unit||'—')}</td>
-        <td class="p-2"><span class="cc-badge ${t.source==='modbus'?'mqtt':'http'}">${_esc(t.source)}</span></td>
+        <td class="p-3"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" onchange="window._syncModalTagType(this); window._updateTagCount()"></td>
+        <td class="p-3 font-mono text-sm">${_esc(t.name)}</td>
+        <td class="p-3 text-sm text-slate-600">${_esc(t.device||' ')}</td>
+        <td class="p-3 text-sm text-slate-500">${_esc(t.unit||' ')}</td>
+        <td class="p-3">
+          <select class="compact-select text-xs modal-tag-type" data-tag="${_esc(t.name)}"
+                  onchange="this.closest('tr').querySelector('.modal-tag-cb').dataset.dtype = this.value">
+            <option value="int"    ${(t.dtype||'float')==='int'    ?'selected':''}>int</option>
+            <option value="float"  ${(t.dtype||'float')==='float'  ?'selected':''}>float</option>
+            <option value="string" ${(t.dtype||'float')==='string' ?'selected':''}>string</option>
+            <option value="bool"   ${(t.dtype||'float')==='bool'   ?'selected':''}>bool</option>
+          </select>
+        </td>
+        <td class="p-3"><span class="cc-badge ${t.source==='modbus'?'mqtt':'http'}">${_esc(t.source)}</span></td>
       </tr>`).join('');
 }
+
+window._syncModalTagType = function(cb) {
+    // Keep dtype in sync with the type-select on the same row
+    const sel = cb.closest('tr')?.querySelector('.modal-tag-type');
+    if (sel) cb.dataset.dtype = sel.value;
+};
 
 window._updateTagCount = function() {
     const n = document.querySelectorAll('.modal-tag-cb:checked').length;
     const el = _el('tagsSelectedCount'); if (el) el.textContent = n;
 };
 
-// ─── ADD CONNECTION MODAL ─────────────────────────────────────────────────────
+// --- ADD CONNECTION MODAL -----------------------------------------------------
 const _TYPES = {
     mqtt: { name:'MQTT Broker',   desc:'Standard IoT messaging protocol', icon:'fa-cloud',       color:'#3B82F6' },
     ftp:  { name:'FTP Server',    desc:'File transfer FTP/SFTP/FTPS',      icon:'fa-folder-open', color:'#10B981' },
@@ -927,11 +1101,11 @@ async function _handleCreate(e) {
     finally { _setLoading(btn, false); }
 }
 
-// ─── STATUS BAR + DIAGNOSTICS ─────────────────────────────────────────────────
+// --- STATUS BAR + DIAGNOSTICS -------------------------------------------------
 function _updateStatusBar(conn) {
     const s = conn?.statistics || {};
     _st('panelName',    conn ? _esc(conn.name) : 'No Connection Selected');
-    _st('panelDesc',    conn ? `${conn.type.toUpperCase()} — ${conn.enabled?'Active':'Disabled'} — ${(conn.config?.mappings||[]).reduce((a,m)=>a+_flattenDatapoints(m.datapoints||{}).length,0)} tag(s)` : 'Select a connection');
+    _st('panelDesc',    conn ? `${conn.type.toUpperCase()}   ${conn.enabled?'Active':'Disabled'}   ${(conn.config?.mappings||[]).reduce((a,m)=>a+_flattenDatapoints(m.datapoints||{}).length,0)} tag(s)` : 'Select a connection');
     _st('statMessages', (s.messages||0).toLocaleString());
     _st('statErrors',   (s.failed  ||0).toLocaleString());
     _st('statLastSent', s.lastActive||'Never');
@@ -968,7 +1142,7 @@ function _showEmpty() {
     const tog = _el('enabledToggle'); if (tog) { tog.checked = false; tog.disabled = true; }
 }
 
-// ─── PAGE LISTENERS ───────────────────────────────────────────────────────────
+// --- PAGE LISTENERS -----------------------------------------------------------
 function _bindPageListeners() {
     _el('addConnectionBtn')?.addEventListener('click', _openAddModal);
     _el('refreshBtn')?.addEventListener('click', async () => { await _loadConnections(); _toast('Refreshed','success'); });
@@ -1014,7 +1188,7 @@ function _bindPageListeners() {
     document.addEventListener('keydown', e => { if (e.key==='Escape') { _hideM('addConnectionModal'); _hideM('addTagsModal'); }});
 }
 
-// ─── UTILS ────────────────────────────────────────────────────────────────────
+// --- UTILS --------------------------------------------------------------------
 async function _api(method, url, body) {
     const opts = { method, headers: {'Content-Type':'application/json'} };
     if (body !== undefined) opts.body = JSON.stringify(body);
@@ -1036,7 +1210,7 @@ function _hideM(id)   { const e=_el(id); if (e) { e.style.display='none'; docume
 function _esc(s)      { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _setLoading(btn, on) {
     if (!btn) return;
-    if (on)  { btn._html=btn.innerHTML; btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i>Working…'; }
+    if (on)  { btn._html=btn.innerHTML; btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i>Working '; }
     else     { btn.disabled=false; btn.innerHTML=btn._html||btn.innerHTML; }
 }
 function _toast(msg, type='info') {

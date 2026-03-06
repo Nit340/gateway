@@ -247,6 +247,22 @@ def create_tables(cursor):
     ''')
 
     # -----------------------------------------------------------------------
+    # loadcell_device schema migrations (v2 additions)
+    #   publish_step_grams  -- min weight change before publishing (grams)
+    #   action_tare         -- override pipeline action name for tare
+    #   action_calibrate    -- override pipeline action name for calibrate
+    # -----------------------------------------------------------------------
+    for _col, _defn in [
+        ('publish_step_grams', 'REAL    DEFAULT 1.0'),
+        ('action_tare',        'TEXT    DEFAULT NULL'),
+        ('action_calibrate',   'TEXT    DEFAULT NULL'),
+    ]:
+        try:
+            cursor.execute('ALTER TABLE loadcell_device ADD COLUMN {} {}'.format(_col, _defn))
+        except Exception:
+            pass  # column already exists — safe to ignore
+
+    # -----------------------------------------------------------------------
     # Cloud integration
     # -----------------------------------------------------------------------
     cursor.execute('''

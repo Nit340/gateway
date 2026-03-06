@@ -215,10 +215,10 @@ def _build_network_status_snapshot():
         },
         # --- WLAN (wifi) ---
         # pipeline: network_status/wlan -> {"wlan":{"dynamic":{"net.wlan.bssid":...,"net.wlan.frequency":...,"net.wlan.ip":...,"net.wlan.ssid":...,"net.wlan.state":...}}}
-        # signal quality in dBm (signed) arrives as net.wlan.signal_quality
+        # signal quality in dBm (signed) arrives as net.wlan.signal
         "wlan": {
             "state":           _v("net.wlan.state",           0),
-            "signal_quality":  _v("net.wlan.signal_quality",  None),  # dBm signed
+            "signal_quality":  _v("net.wlan.signal",          None),  # dBm signed
             "ssid":            _v("net.wlan.ssid",            ""),
             "bssid":           _v("net.wlan.bssid",           ""),
             "mac":             _v("net.wlan.mac",             ""),
