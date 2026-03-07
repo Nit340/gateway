@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "timestamp": 1772848716.2320807,
-  "timestamp_str": "2026-03-07 07:28:36",
-  "source": "auto_send",
+  "timestamp": 1772847746.6444337,
+  "timestamp_str": "2026-03-07 07:12:26",
+  "source": "web_ui",
   "logging": [
     {
       "type": "console",

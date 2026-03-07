@@ -584,9 +584,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         print("[PIPELINE] CONFIG_RECEIVED: name='{}' version={}".format(
                             cfg.name, cfg.version))
                         if cfg.name == "loadcell_config":
-                            with pipeline_state["lock"]:
-                                pipeline_state["loadcell_config"] = cfg.value
-                                pipeline_state["loadcell_config_version"] = cfg.version
+                            _handle_received_loadcell_config(cfg)
 
             except Exception as e:
                 print("[PIPELINE] Event handler error: {}".format(e))
@@ -659,6 +657,164 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
             print("[PIPELINE] Thread exiting after crash: {}".format(crash_reason))
         else:
             print("[PIPELINE] Thread exiting")
+
+
+# ============================================================================
+# LOADCELL CONFIG -- RECEIVE FROM ANOTHER CLIENT
+# ============================================================================
+
+def _handle_received_loadcell_config(cfg):
+    """Validate, persist to DB, and save a loadcell_config received from
+    another pipeline client.
+
+    Steps:
+      1. Parse cfg.value as JSON
+      2. Validate load_cells[0].name matches a device in our DB -- reject if not
+      3. Extract raw_filters, weight_filters, levels + optional hardware fields
+      4. UPDATE loadcell_device row in DB
+      5. Save raw JSON to loadcell_configs/ for audit
+      6. Update in-memory pipeline_state
+    """
+    print("[LC-RX] Processing received loadcell_config v{}".format(cfg.version))
+
+    # 1. Parse
+    try:
+        received = json.loads(cfg.value)
+    except Exception as parse_err:
+        print("[LC-RX] REJECTED -- could not parse JSON: {}".format(parse_err))
+        return
+
+    load_cells = received.get("load_cells", [])
+    if not load_cells:
+        print("[LC-RX] REJECTED -- no load_cells array in received config")
+        return
+
+    received_name = load_cells[0].get("name", "").strip()
+    if not received_name:
+        print("[LC-RX] REJECTED -- load_cells[0].name is empty")
+        return
+
+    # 2. Validate device name against DB
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, name FROM loadcell_device WHERE name = ? LIMIT 1",
+            (received_name,)
+        )
+        row = cursor.fetchone()
+    except Exception as db_err:
+        print("[LC-RX] REJECTED -- DB error during validation: {}".format(db_err))
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return
+
+    if not row:
+        try:
+            cursor.execute("SELECT name FROM loadcell_device")
+            known = [r["name"] for r in cursor.fetchall()]
+        except Exception:
+            known = ["<db error>"]
+        conn.close()
+        print("[LC-RX] REJECTED -- received device '{}' not in DB. Known: {}".format(
+            received_name, known))
+        return
+
+    device_id   = row["id"]
+    device_name = row["name"]
+    print("[LC-RX] Device matched: '{}' (id={})".format(device_name, device_id))
+
+    # 3. Extract fields
+    lc             = load_cells[0]
+    filter_block   = lc.get("filter", {})
+    raw_filters    = [dict(f, enabled=True) for f in filter_block.get("raw", [])]
+    weight_filters = [dict(f, enabled=True) for f in filter_block.get("weight", [])]
+    levels_list    = lc.get("levels", {}).get("parameters", {}).get("ratios", [])
+    levels_out     = [dict(lv, enabled=True) for lv in levels_list]
+
+    dev_params       = lc.get("device", {}).get("parameters", {})
+    tare_offset      = lc.get("tare", {}).get("parameters", {}).get("offset_raw")
+    calib_params     = lc.get("calibration", {}).get("parameters", {})
+    known_weight     = calib_params.get("ref_weight", {}).get("value")
+    known_weight_raw = calib_params.get("ref_raw")
+    poll_ms          = dev_params.get("poll_ms")
+
+    ipc_params = {}
+    for ipc in received.get("ipc", []):
+        if ipc.get("type") == "pipeline":
+            ipc_params = ipc.get("parameters", {})
+            break
+    pipeline_server = ipc_params.get("server")
+    pipeline_port   = ipc_params.get("port")
+
+    log_level = None
+    for log in received.get("logging", []):
+        log_level = log.get("parameters", {}).get("level")
+        break
+
+    # 4. Persist to DB -- only write columns we actually received
+    fields = [
+        "raw_filters = ?",
+        "weight_filters = ?",
+        "levels = ?",
+    ]
+    values = [
+        json.dumps(raw_filters),
+        json.dumps(weight_filters),
+        json.dumps(levels_out),
+    ]
+    for col, val in [
+        ("tare_offset",      tare_offset),
+        ("known_weight",     known_weight),
+        ("known_weight_raw", known_weight_raw),
+        ("pipeline_server",  pipeline_server),
+        ("pipeline_port",    pipeline_port),
+        ("log_level",        log_level),
+        ("poll_ms",          poll_ms),
+    ]:
+        if val is not None:
+            fields.append("{} = ?".format(col))
+            values.append(val)
+
+    fields.append("updated_at = CURRENT_TIMESTAMP")
+    values.append(device_id)
+
+    try:
+        cursor.execute(
+            "UPDATE loadcell_device SET {} WHERE id = ?".format(", ".join(fields)),
+            values
+        )
+        conn.commit()
+        print("[LC-RX] DB updated for '{}' -- {} field(s) written".format(
+            device_name, len(fields) - 1))
+    except Exception as update_err:
+        print("[LC-RX] DB update error: {}".format(update_err))
+    finally:
+        conn.close()
+
+    # 5. Save to disk
+    try:
+        config_dir  = "loadcell_configs"
+        os.makedirs(config_dir, exist_ok=True)
+        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename    = "{}/loadcell_config_received_{}.json".format(config_dir, ts)
+        latest_file = "{}/loadcell_config_latest.json".format(config_dir)
+        for path in (filename, latest_file):
+            with open(path, 'w') as fh:
+                fh.write(cfg.value)
+        print("[LC-RX] Saved: {}".format(filename))
+    except Exception as save_err:
+        print("[LC-RX] Could not save to disk: {}".format(save_err))
+
+    # 6. Update in-memory state
+    with pipeline_state["lock"]:
+        pipeline_state["loadcell_config"]         = cfg.value
+        pipeline_state["loadcell_config_version"] = cfg.version
+
+    print("[LC-RX] Done -- loadcell_config v{} accepted".format(cfg.version))
 
 
 def start_pipeline_background(app=None):
@@ -1249,6 +1405,194 @@ async def pipeline_calibration_post_handler(request):
 # ============================================================================
 # LOADCELL -- FILTERS & LEVELS  ->  BUILD + SEND CONFIG
 # ============================================================================
+
+async def send_loadcell_config_now():
+    """Build and send loadcell config purely from DB (no HTTP request body).
+    Used by _do_auto_send. Returns a plain dict, not a web.Response.
+    """
+    print("\n" + "="*70)
+    print("[LC-CFG] Save Filters & Levels  ->  Build  ->  Send")
+    print("="*70)
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, name, device_path,
+                   poll_ms, resolution_bits, effective_bits, signed, gain, vref,
+                   raw_min, raw_max, capacity_min, capacity_max, unit,
+                   pipeline_server, pipeline_port, log_level,
+                   tare_offset, known_weight, known_weight_raw,
+                   raw_filters, weight_filters, levels
+            FROM loadcell_device LIMIT 1
+        ''')
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            msg = "No loadcell device configured"
+            print("[LC-CFG] " + msg)
+            return {"success": False, "error": msg}
+
+        r = dict(row)
+
+        def _parse_json_col(val):
+            if not val:
+                return []
+            if isinstance(val, list):
+                return val
+            try:
+                return json.loads(val)
+            except Exception:
+                return []
+
+        raw_filters    = _parse_json_col(r.get("raw_filters"))
+        weight_filters = _parse_json_col(r.get("weight_filters"))
+        levels         = _parse_json_col(r.get("levels"))
+
+        print("[LC-CFG] Device: {} ({})".format(r['name'], r['id']))
+
+        def _active(arr):
+            return [{"type": f["type"], "parameters": f["parameters"]}
+                    for f in arr if f.get("enabled", True)]
+
+        active_raw    = _active(raw_filters)
+        active_weight = _active(weight_filters)
+        active_levels = [{"name": lv["name"], "ratio": lv["ratio"]}
+                         for lv in levels if lv.get("enabled", True)]
+
+        new_version = get_next_pipeline_version("loadcell")
+
+        config = {
+            "version":       new_version,
+            "timestamp":     time.time(),
+            "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source":        "auto_send",
+            "logging": [{"type": "console", "parameters": {"level": r.get("log_level") or "info"}}],
+            "ipc": [{
+                "type": "pipeline", "enabled": True,
+                "parameters": {
+                    "server":       r.get("pipeline_server") or "127.0.0.1",
+                    "port":         r.get("pipeline_port") or 7000,
+                    "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
+                    "datapoints": [{"name": r["name"], "map": {
+                        "weight":        "{}.weight_kg".format(r["name"]),
+                        "raw":           "{}.raw".format(r["name"]),
+                        "unit":          "{}.unit".format(r["name"]),
+                        "known_weight":  "{}.known_weight_kg".format(r["name"]),
+                        "known_raw":     "{}.known_raw".format(r["name"]),
+                        "is_tared":      "{}.tared".format(r["name"]),
+                        "is_calibrated": "{}.calibrated".format(r["name"]),
+                        "capacity":      "{}.capacity".format(r["name"]),
+                    }}]
+                }
+            }],
+            "load_cells": [{
+                "name": r["name"],
+                "device": {
+                    "type": "sysfs_hx711",
+                    "parameters": {
+                        "poll_ms":         r.get("poll_ms") or 10,
+                        "channels":        [{"path": r.get("device_path") or ""}],
+                        "resolution_bits": r.get("resolution_bits") or 24,
+                        "effective_bits":  r.get("effective_bits") or 14,
+                        "signed":          bool(r.get("signed")),
+                        "gain":            r["gain"]    if r["gain"]    is not None else 1,
+                        "vref":            r["vref"]    if r["vref"]    is not None else 5,
+                        "raw_min":         r["raw_min"] if r["raw_min"] is not None else 0,
+                        "raw_max":         r["raw_max"] if r["raw_max"] is not None else 16383,
+                    }
+                },
+                "specifications": {"capacity": {
+                    "min": {"value": r.get("capacity_min") or 0,    "unit": r.get("unit") or "kg"},
+                    "max": {"value": r.get("capacity_max") or 1000, "unit": r.get("unit") or "kg"},
+                }},
+                "levels":      {"type": "ratio",        "parameters": {"ratios": active_levels}},
+                "tare":        {"type": "manual",        "parameters": {"offset_raw": r.get("tare_offset") or 0.0}},
+                "calibration": {"type": "single_point", "parameters": {
+                    "ref_weight": {"value": r.get("known_weight") or 0, "unit": r.get("unit") or "kg"},
+                    "ref_raw":    r.get("known_weight_raw") or 0.0,
+                }},
+                "filter": {"raw": active_raw, "weight": active_weight}
+            }]
+        }
+
+        config_json = json.dumps(config, indent=2)
+        print("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
+            new_version, len(active_raw), len(active_weight), len(active_levels)))
+
+        config_dir  = "loadcell_configs"
+        os.makedirs(config_dir, exist_ok=True)
+        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename    = "{}/loadcell_config_{}.json".format(config_dir, ts)
+        latest_file = "{}/loadcell_config_latest.json".format(config_dir)
+        for path in (filename, latest_file):
+            with open(path, 'w') as fh:
+                fh.write(config_json)
+        print("[LC-CFG] Saved: {}".format(filename))
+
+        pipeline_sent    = False
+        pipeline_message = "Queued as pending (not connected)"
+        target_service   = None
+
+        with pipeline_state["lock"]:
+            client    = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+
+        if connected and client:
+            target_service = _find_loadcell_service()
+            if target_service:
+                try:
+                    ok = client.publish_config(Config(
+                        name    = get_pipeline_config_name("loadcell"),
+                        value   = config_json,
+                        version = new_version,
+                        service = target_service,
+                    ))
+                    if ok:
+                        pipeline_sent    = True
+                        pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                        record_pipeline_send_success("loadcell", new_version, target_service, pipeline_message)
+                        with pipeline_state["lock"]:
+                            pipeline_state["loadcell_config"]         = config_json
+                            pipeline_state["loadcell_config_pending"] = None
+                    else:
+                        pipeline_message = "publish_config failed -- queued as pending"
+                        record_pipeline_send_failure("loadcell", pipeline_message)
+                        with pipeline_state["lock"]:
+                            pipeline_state["loadcell_config_pending"] = config_json
+                except Exception as exc:
+                    pipeline_message = "Error: {} -- queued as pending".format(exc)
+                    record_pipeline_send_failure("loadcell", pipeline_message)
+                    with pipeline_state["lock"]:
+                        pipeline_state["loadcell_config_pending"] = config_json
+            else:
+                pipeline_message = "Service '{}' not connected -- queued as pending".format(
+                    get_pipeline_service_name("loadcell") or "load_cell_service")
+                record_pipeline_send_failure("loadcell", pipeline_message)
+                with pipeline_state["lock"]:
+                    pipeline_state["loadcell_config_pending"] = config_json
+        else:
+            record_pipeline_send_failure("loadcell", pipeline_message)
+            with pipeline_state["lock"]:
+                pipeline_state["loadcell_config_pending"] = config_json
+        print("[LC-CFG] " + pipeline_message)
+
+        return {
+            "success":               True,
+            "pipeline_sent":         pipeline_sent,
+            "pipeline_message":      pipeline_message,
+            "target_service":        target_service,
+            "version":               new_version,
+            "file_saved":            filename,
+            "active_raw_filters":    len(active_raw),
+            "active_weight_filters": len(active_weight),
+            "active_levels":         len(active_levels),
+        }
+    except Exception as e:
+        logging.error("send_loadcell_config_now error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
 
 async def pipeline_filters_post_handler(request):
     """POST /api/pipeline/filters"""
@@ -1861,13 +2205,7 @@ async def _do_auto_send():
                 import json as _j
                 d = _j.loads(resp.body)
             elif cfg_type == "loadcell":
-                class _FakeReq: pass
-                resp = await pipeline_filters_post_handler(_FakeReq())
-                import json as _j
-                try:
-                    d = _j.loads(resp.body)
-                except Exception:
-                    d = {"success": False, "error": "no loadcell device configured"}
+                d = await send_loadcell_config_now()
             elif cfg_type == "iot_gateway":
                 d = await send_iot_gateway_config_now()
             elif cfg_type == "core":
