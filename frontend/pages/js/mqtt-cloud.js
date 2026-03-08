@@ -85,6 +85,18 @@ async function _loadForm(conn) {
     const ph = _el('formPlaceholder');
     const fc = _el('formContent');
     if (!fc) return;
+
+    // Remember which tab is currently active so we can restore it after reload
+    const activeTabBtn = fc.querySelector?.('.tab-button.active');
+    let _activeTabName = null;
+    if (activeTabBtn) {
+        const txt = activeTabBtn.textContent.trim().toLowerCase();
+        if      (txt.startsWith('connection')) _activeTabName = 'connection';
+        else if (txt.startsWith('channel') || txt.startsWith('topic')) _activeTabName = 'topics';
+        else if (txt.startsWith('tag'))        _activeTabName = 'publishing';
+        else if (txt.startsWith('advanced'))   _activeTabName = 'advanced';
+    }
+
     ph.style.display = 'none';
     fc.classList.remove('hidden');
     fc.innerHTML = '<div class="p-10 text-center"><i class="fa-solid fa-spinner fa-spin text-primary text-2xl"></i></div>';
@@ -113,6 +125,11 @@ async function _loadForm(conn) {
 
         // Wire Add Tags button
         _wireAddTagsBtn(conn);
+
+        // Restore the previously active tab (prevents flicker back to Connection tab)
+        if (_activeTabName && typeof switchMqttTab === 'function') {
+            switchMqttTab(_activeTabName);
+        }
 
     } catch {
         fc.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">

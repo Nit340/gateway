@@ -3,7 +3,7 @@ class Router {
         this.routes = {
             'general-configuration': 'general-configuration.html',
             'device-management': 'device-management.html',
-            'modbus-mapping': 'modbus-mapping.html',
+            'field-integration': 'modbus-mapping.html',
             'mqtt-cloud': 'mqtt-cloud.html',
             'ota-gateway': 'ota-gateway.html',
             'craneiq': 'craneiq.html',
@@ -25,7 +25,7 @@ class Router {
         this.pageTitles = {
             'general-configuration': 'General Configuration',
             'device-management': 'Device Management',
-            'modbus-mapping': 'Tag Mapping',
+            'field-integration': 'Field Integration',
             'mqtt-cloud': 'Cloud Integration',
             'ota-gateway': 'OTA Gateway & Recovery',
             'craneiq': 'CraneIQ Configuration',
@@ -46,7 +46,7 @@ class Router {
             'device-management': 'pages/js/device-management.js',
             'mqtt-cloud': 'pages/js/mqtt-cloud.js',
             'general-configuration': 'pages/js/general-config.js',
-            'modbus-mapping': 'pages/js/modbus-mapping.js',
+            'field-integration': 'pages/js/modbus-mapping.js',
             'ota-gateway': 'pages/js/ota-gateway.js',
             'data-retention': 'pages/js/data-retention.js',
             'logging': 'pages/js/loggar.js',
@@ -314,9 +314,9 @@ class Router {
                 }
                 break;
                 
-            case 'modbus-mapping':
+            case 'field-integration':
                 // Clear global flag
-                delete window.modbus_mapping_initialized;
+                delete window.field_integration_initialized;
                 
                 // Call cleanup if exists
                 if (typeof window.cleanupModbusMapping === 'function') {
@@ -513,12 +513,12 @@ class Router {
                     }
                     break;
                     
-                case 'modbus-mapping':
+                case 'field-integration':
                     if (typeof window.initializeModbusMapping === 'function') {
                         console.log('Initializing Modbus Mapping');
                         window.initializeModbusMapping();
                         this.initializedPages.add(page);
-                        window.modbus_mapping_initialized = true;
+                        window.field_integration_initialized = true;
                     } else {
                         console.warn('initializeModbusMapping function not found');
                     }
