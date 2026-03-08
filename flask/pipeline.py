@@ -167,6 +167,51 @@ from database import (
 from auth import ws_auth
 
 # ============================================================================
+# RATE LIMITING / FLOOD PROTECTION
+# ============================================================================
+
+# Minimum seconds between load_raw WebSocket broadcasts (prevents event-loop flood)
+_LOAD_RAW_MIN_INTERVAL = 0.05   # 50 ms  ? max 20 broadcasts/sec
+_last_load_raw_broadcast = 0.0
+
+# Maximum number of pending coroutines we'll schedule on the main loop at once.
+# If the queue is already this deep, new broadcasts are silently dropped.
+_MAX_PENDING_BROADCASTS = 10
+_pending_broadcast_count = 0
+_pending_broadcast_lock  = threading.Lock()
+
+# -- Flood kill guard --
+# If load_raw arrives faster than this, exit immediately instead of freezing.
+_LOAD_RAW_MAX_RATE   = 50        # events per second
+_LOAD_RAW_WINDOW     = 1.0       # sliding window (seconds)
+_load_raw_timestamps = []
+_load_raw_flood_lock = threading.Lock()
+
+def _check_load_raw_flood():
+    """Kill the process cleanly if load_raw is arriving too fast.
+    A clean exit lets systemd/supervisor restart the service rather than
+    leaving it frozen and unresponsive indefinitely.
+    """
+    import sys
+    now = time.time()
+    with _load_raw_flood_lock:
+        _load_raw_timestamps.append(now)
+        cutoff = now - _LOAD_RAW_WINDOW
+        while _load_raw_timestamps and _load_raw_timestamps[0] < cutoff:
+            _load_raw_timestamps.pop(0)
+        rate = len(_load_raw_timestamps)
+
+    if rate > _LOAD_RAW_MAX_RATE:
+        msg = (
+            "[PIPELINE] FATAL: load_raw flood detected -- "
+            "{} events/{:.1f}s exceeds limit of {}. "
+            "Exiting to prevent freeze.".format(rate, _LOAD_RAW_WINDOW, _LOAD_RAW_MAX_RATE)
+        )
+        print(msg, flush=True)
+        logging.critical(msg)
+        sys.exit(1)
+
+# ============================================================================
 # SHARED STATE
 # ============================================================================
 
@@ -210,22 +255,71 @@ pipeline_state = {
 # ============================================================================
 
 async def _broadcast_pipeline_msg(msg):
-    """Send a message string to all connected WebSocket clients."""
+    """Send a message string to all connected WebSocket clients.
+
+    Each send is wrapped in asyncio.wait_for so a frozen client cannot
+    stall the entire event loop.  Dead sockets are pruned automatically.
+    After the coroutine finishes it decrements the pending-broadcast counter
+    so the thread-side guard knows a slot is free.
+    """
+    global _pending_broadcast_count
     dead = set()
     clients = list(pipeline_state["ws_clients"])
-    if clients:
-        print("[PIPELINE] Broadcasting to {} WS clients".format(len(clients)))
     for ws in clients:
         if ws.closed:
             dead.add(ws)
             continue
         try:
-            await ws.send_str(msg)
+            await asyncio.wait_for(ws.send_str(msg), timeout=2.0)
+        except asyncio.TimeoutError:
+            print("[PIPELINE] WS send timed out -- dropping client")
+            dead.add(ws)
         except Exception as e:
             print("[PIPELINE] WS send failed: {}".format(e))
             dead.add(ws)
     for ws in dead:
         pipeline_state["ws_clients"].discard(ws)
+
+    # Release the slot so the thread-side guard allows new schedules
+    with _pending_broadcast_lock:
+        _pending_broadcast_count = max(0, _pending_broadcast_count - 1)
+
+
+def _schedule_broadcast(main_loop, msg):
+    """Thread-safe helper: schedule a broadcast only if the pipeline is not
+    already backed up.  Drops the message silently when the queue is full,
+    which is far safer than flooding the event loop and freezing the process.
+
+    For ``load_raw`` datapoints an additional time-based rate limit is applied
+    so high-frequency sensors cannot overwhelm WebSocket clients.
+    """
+    global _pending_broadcast_count, _last_load_raw_broadcast
+
+    if not main_loop or not main_loop.is_running():
+        return
+
+    # Rate-limit load_raw specifically (most frequent datapoint)
+    try:
+        parsed = json.loads(msg)
+        if parsed.get("datapoint") == "load_raw":
+            now = time.time()
+            if now - _last_load_raw_broadcast < _LOAD_RAW_MIN_INTERVAL:
+                return  # drop -- too soon
+            _last_load_raw_broadcast = now
+    except Exception:
+        pass
+
+    with _pending_broadcast_lock:
+        if _pending_broadcast_count >= _MAX_PENDING_BROADCASTS:
+            return  # drop -- event loop is backed up
+        _pending_broadcast_count += 1
+
+    try:
+        asyncio.run_coroutine_threadsafe(_broadcast_pipeline_msg(msg), main_loop)
+    except Exception as e:
+        print("[PIPELINE] Could not schedule broadcast: {}".format(e))
+        with _pending_broadcast_lock:
+            _pending_broadcast_count = max(0, _pending_broadcast_count - 1)
 
 
 def _find_modbus_service():
@@ -493,6 +587,11 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         with pipeline_state["lock"]:
                             pipeline_state[dp] = val
 
+                        # Kill the process if load_raw is arriving too fast
+                        # (prevents event-loop freeze from data floods)
+                        if dp == "load_raw":
+                            _check_load_raw_flood()
+
                         # -- Network-status datapoints ----------------------
                         _NET_SERVICES = {"network_status"}
                         if event.service_name in _NET_SERVICES or dp in (
@@ -504,14 +603,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                 if dp == "network_status":
                                     update_network_status_field("network_status", val)
                                     main_loop = pipeline_state.get("main_loop")
-                                    if main_loop and main_loop.is_running():
-                                        try:
-                                            asyncio.run_coroutine_threadsafe(
-                                                _broadcast_pipeline_msg(
-                                                    json.dumps({"datapoint": dp, "value": val})),
-                                                main_loop)
-                                        except Exception as e:
-                                            print("[PIPELINE] Broadcast error: {}".format(e))
+                                    _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": val}))
                                 else:
                                     if isinstance(val, str):
                                         try:
@@ -521,28 +613,14 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                             print("[PIPELINE] JSON parse error for {}: {}".format(dp, e))
                                             update_network_status_field(dp, val)
                                             main_loop = pipeline_state.get("main_loop")
-                                            if main_loop and main_loop.is_running():
-                                                try:
-                                                    asyncio.run_coroutine_threadsafe(
-                                                        _broadcast_pipeline_msg(
-                                                            json.dumps({"datapoint": dp, "value": val})),
-                                                        main_loop)
-                                                except Exception as e:
-                                                    print("[PIPELINE] Broadcast error: {}".format(e))
+                                            _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": val}))
                                     else:
                                         parsed = val
 
                                     if not isinstance(parsed, dict):
                                         update_network_status_field(dp, parsed)
                                         main_loop = pipeline_state.get("main_loop")
-                                        if main_loop and main_loop.is_running():
-                                            try:
-                                                asyncio.run_coroutine_threadsafe(
-                                                    _broadcast_pipeline_msg(
-                                                        json.dumps({"datapoint": dp, "value": parsed})),
-                                                    main_loop)
-                                            except Exception as e:
-                                                print("[PIPELINE] Broadcast error: {}".format(e))
+                                        _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": parsed}))
                                     else:
                                         for section, section_data in parsed.items():
                                             if isinstance(section_data, dict):
@@ -563,14 +641,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                 traceback.print_exc()
 
                         main_loop = pipeline_state.get("main_loop")
-                        if main_loop and main_loop.is_running():
-                            try:
-                                asyncio.run_coroutine_threadsafe(
-                                    _broadcast_pipeline_msg(
-                                        json.dumps({"datapoint": dp, "value": val})),
-                                    main_loop)
-                            except Exception as e:
-                                print("[PIPELINE] Broadcast error: {}".format(e))
+                        _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": val}))
 
                     except Exception as e:
                         print("[PIPELINE] Error reading dp '{}': {}".format(dp, e))
@@ -1464,7 +1535,8 @@ async def send_loadcell_config_now():
         new_version = get_next_pipeline_version("loadcell")
 
         config = {
-            "version":       new_version,
+            "version":       2,
+            "send_version":  new_version,
             "timestamp":     time.time(),
             "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "source":        "auto_send",
@@ -1656,7 +1728,8 @@ async def pipeline_filters_post_handler(request):
         new_version = get_next_pipeline_version("loadcell")
 
         config = {
-            "version":       new_version,
+            "version":       2,
+            "send_version":  new_version,
             "timestamp":     time.time(),
             "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "source":        "web_ui",
@@ -2069,7 +2142,9 @@ async def send_iot_gateway_config_now():
         return {"success": False, "error": "build failed: {}".format(e)}
 
     new_version = get_next_pipeline_version("iot_gateway")
-    config["version"] = new_version
+    # config["version"] is the schema/format version (2) set by build_iot_gateway_config()
+    # new_version is the pipeline send counter -- stored separately so schema version is preserved
+    config["send_version"] = new_version
     config_json = json.dumps(config, indent=2)
     print("[IOT-CFG] Built v{}: {} server(s), {} mapping(s)".format(
         new_version, len(config.get("servers", {})), len(config.get("mappings", []))))
@@ -2178,7 +2253,7 @@ async def pipeline_auto_send_handler(request):
 
 
 async def _do_auto_send():
-    """Core auto-send logic — reads enabled targets ordered by send_order from DB."""
+    """Core auto-send logic - reads enabled targets ordered by send_order from DB."""
     try:
         conn = sqlite3.connect(DB_FILE)
         conn.row_factory = sqlite3.Row

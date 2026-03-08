@@ -220,6 +220,13 @@ async def _available_tags(req):
         cur.execute('''SELECT ld.name,'',ld.device_id,COALESCE(lc.name,''),'loadcell'
                        FROM loadcell_datapoints ld LEFT JOIN loadcell_device lc ON lc.id=ld.device_id''')
         tags+=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4]} for r in cur.fetchall()]
+        # Include virtual datapoints
+        try:
+            cur.execute('''SELECT vd.name,COALESCE(vd.unit,''),vd.device_id,COALESCE(vdev.name,''),'virtual'
+                           FROM virtual_datapoints vd LEFT JOIN virtual_device vdev ON vdev.id=vd.device_id''')
+            tags+=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4],'dtype':'float'} for r in cur.fetchall()]
+        except Exception as e:
+            print('[MQTT] virtual_datapoints query error: {}'.format(e))
         db.close()
         return _ok({'tags':tags,'total':len(tags)})
     except Exception as e: return _err(str(e),500)
@@ -323,6 +330,9 @@ def build_iot_gateway_config():
         else:
             server_key = 'mqtt'
 
+        raw_pub = cfg.get('channels', {}).get('publish',   [])
+        raw_sub = cfg.get('channels', {}).get('subscribe', [])
+
         server_entry = {
             'enabled':       bool(enabled),
             'host':          cfg.get('host', '127.0.0.1'),
@@ -332,20 +342,23 @@ def build_iot_gateway_config():
             'username':      cfg.get('username', ''),
             'password':      cfg.get('password', ''),
             'keepalive_sec': int(cfg.get('keepalive_sec', 60)),
-            'channels':      cfg.get('channels', {'publish': [], 'subscribe': []}),
+            'channels': {
+                'publish':   [raw_pub[0]] if raw_pub else [],
+                'subscribe': [raw_sub[0]] if raw_sub else [],
+            },
         }
         if cfg.get('secure_token'):
             server_entry['secure_token'] = cfg['secure_token']
 
         servers[server_key] = server_entry
 
-        # Derive heartbeat channel from local broker's first publish channel
-        if server_key == 'mqtt':
-            pub = cfg.get('channels', {}).get('publish', [])
-            if pub:
-                heartbeat_channel = pub[0].get('name', 'default_publish')
+        # heartbeat.channel = the 'name' field of publish channel[0]
+        # e.g. {"topic":"default_pubtopic_cms","name":"receive",...} -> "receive"
+        # applies to whichever connection is configured (mqtt or mqtt_cloud)
+        if raw_pub:
+            heartbeat_channel = raw_pub[0].get('name', 'default_publish')
 
-        # Collect mappings â€” groups pass through as-is;
+        # Collect mappings — groups pass through as-is;
         # individual tags each become their own mapping entry.
         default_ch   = _get_default_channel_for_connection(cfg)
         raw_mappings = cfg.get('mappings', [])

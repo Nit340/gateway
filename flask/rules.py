@@ -247,6 +247,7 @@ def _build_combined_core_config(rules):
 
     # -- Assemble full config ----------------------------------------------
     core_config = {
+        'version':      2,
         'service_name': 'ilx_craneiq_core',
         'pipeline': {
             'server':                '127.0.0.1',
@@ -346,40 +347,41 @@ async def _build_and_send_core_config():
             'file_saved':  ts_file,
         }
 
-    # Send each service section as its own datapoint_update call
-    services_cfg = core_config.get('services', {})
-    send_results = {}
-    all_ok       = True
+    # Send the full config as a single publish_config call
+    from pipeline import get_pipeline_config_name, record_pipeline_send_success, record_pipeline_send_failure, get_next_pipeline_version
+    from pipeline import Config
 
-    for section_name, section_data in services_cfg.items():
-        section_json = json.dumps(section_data)
-        try:
-            rid = client.datapoint_update(core_svc, section_name, section_json)
-            ok  = (rid > 0)
-            print('[CORE-CFG] datapoint_update("{}", "{}") -> rid={} {}'.format(
-                core_svc, section_name, rid, 'OK' if ok else 'FAILED'))
-            send_results[section_name] = {'sent': ok, 'rid': rid}
-            if not ok:
-                all_ok = False
-        except Exception as e:
-            print('[CORE-CFG] Error sending "{}": {}'.format(section_name, e))
-            send_results[section_name] = {'sent': False, 'error': str(e)}
-            all_ok = False
-
-    if all_ok:
-        with pipeline_state['lock']:
-            pipeline_state['core_config']         = config_json
-            pipeline_state['core_config_pending'] = None
-    else:
+    new_version = get_next_pipeline_version('core')
+    try:
+        ok = client.publish_config(Config(
+            name    = get_pipeline_config_name('core'),
+            value   = config_json,
+            version = new_version,
+            service = core_svc,
+        ))
+        if ok:
+            record_pipeline_send_success('core', new_version, core_svc,
+                                         'Sent to {} (v{})'.format(core_svc, new_version))
+            with pipeline_state['lock']:
+                pipeline_state['core_config']         = config_json
+                pipeline_state['core_config_pending'] = None
+            print('[CORE-CFG] publish_config -> {} (v{}) OK'.format(core_svc, new_version))
+        else:
+            record_pipeline_send_failure('core', 'publish_config returned False')
+            with pipeline_state['lock']:
+                pipeline_state['core_config_pending'] = config_json
+            print('[CORE-CFG] publish_config -> {} FAILED -- queued as pending'.format(core_svc))
+    except Exception as e:
+        print('[CORE-CFG] publish_config error: {}'.format(e))
         with pipeline_state['lock']:
             pipeline_state['core_config_pending'] = config_json
+        ok = False
 
     return {
-        'sent':          all_ok,
-        'service':       core_svc,
-        'rules_count':   len(rules),
-        'sections_sent': send_results,
-        'file_saved':    ts_file,
+        'sent':        ok,
+        'service':     core_svc,
+        'rules_count': len(rules),
+        'file_saved':  ts_file,
     }
 
 
