@@ -212,6 +212,127 @@ def _check_load_raw_flood():
         sys.exit(1)
 
 # ============================================================================
+# DATAPOINT WHITELIST
+# ============================================================================
+# _dp_whitelist holds the exact datapoint names that may be broadcast.
+#
+# Rules:
+#   - _PERMANENT_WHITELIST entries (network/status) are always present.
+#   - Load-cell datapoints are only broadcast for explicitly whitelisted
+#     device names.  Add a name via add_whitelisted_device_name(name) --
+#     no auto-discovery from DB, no custom or unnamed devices.
+#   - The <name>_raw datapoint is the sole exception: it is only added when
+#     the UI Raw toggle is ON and removed when OFF.
+#   - Any datapoint NOT in the whitelist is silently dropped.
+
+_dp_whitelist = set()          # exact datapoint names allowed to broadcast
+_dp_whitelist_lock = threading.Lock()
+
+# Explicitly whitelisted device names (must be added by name; no auto-discover)
+_whitelisted_device_names = set()
+_whitelisted_names_lock = threading.Lock()
+
+# Track (config_type, version) pairs already successfully sent so that
+# SERVICE_ADDED replays on reconnect do not re-send the same config.
+_sent_versions = set()
+_sent_versions_lock = threading.Lock()
+
+
+def _mark_sent(config_type, version):
+    """Record that this config version was successfully sent."""
+    with _sent_versions_lock:
+        _sent_versions.add((config_type, version))
+
+
+def _clear_sent(config_type):
+    """Remove all sent records for config_type so a new pending version
+    will be flushed even if an old version of the same type was sent before.
+    """
+    with _sent_versions_lock:
+        stale = {k for k in _sent_versions if k[0] == config_type}
+        _sent_versions.difference_update(stale)
+
+
+# Network/status datapoints that are always allowed regardless of device
+_PERMANENT_WHITELIST = {"lan", "wlan", "lte", "network_status", "modbus_config"}
+
+# Suffixes appended to each whitelisted device name (excludes _raw, toggled separately)
+_DEVICE_DP_SUFFIXES = [
+    "_weight_kg",
+    "_unit",
+    "_known_weight_kg",
+    "_known_raw",
+    "_tared",
+    "_calibrated",
+    "_capacity",
+]
+
+
+def add_whitelisted_device_name(name):
+    """Explicitly whitelist a device name so its datapoints are broadcast.
+
+    Must be called with the exact device name string (e.g. "load").
+    No auto-discovery -- only names registered here are ever allowed.
+    Call rebuild_whitelist() afterwards to apply the change immediately.
+    """
+    name = name.strip()
+    if not name:
+        print("[WHITELIST] Refused to add empty device name")
+        return
+    with _whitelisted_names_lock:
+        _whitelisted_device_names.add(name)
+    print("[WHITELIST] Registered device name: '{}'".format(name))
+
+
+def rebuild_whitelist(include_raw=False):
+    """Rebuild _dp_whitelist from enabled devices in the DB.
+
+    Called once on startup and on every Raw toggle change, so the device
+    name is always fresh -- no restart needed after a device import/rename.
+    include_raw=True  -> also add <n>_raw for each enabled device
+    include_raw=False -> omit the raw datapoints
+    """
+    new_set = set(_PERMANENT_WHITELIST)
+
+    # Re-read enabled device names from DB on every call
+    db_names = set()
+    try:
+        import sqlite3 as _sq
+        _conn = _sq.connect(DB_FILE)
+        _conn.row_factory = _sq.Row
+        _cur = _conn.cursor()
+        _cur.execute("SELECT name FROM loadcell_device WHERE enabled = 1")
+        for _row in _cur.fetchall():
+            if _row["name"]:
+                db_names.add(_row["name"].strip())
+        _conn.close()
+    except Exception as _e:
+        print("[WHITELIST] DB read error: {}".format(_e))
+
+    # Merge DB names with any explicitly registered names
+    with _whitelisted_names_lock:
+        names = db_names | set(_whitelisted_device_names)
+
+    for device_name in names:
+        for suffix in _DEVICE_DP_SUFFIXES:
+            new_set.add("{}{}".format(device_name, suffix))
+        raw_dp = "{}_raw".format(device_name)
+        if include_raw:
+            new_set.add(raw_dp)
+            print("[WHITELIST] Raw ON  -> added '{}' to whitelist".format(raw_dp))
+        else:
+            print("[WHITELIST] Raw OFF -> '{}' not in whitelist".format(raw_dp))
+
+    if not names:
+        print("[WHITELIST] No device names found -- only permanent entries active")
+
+    with _dp_whitelist_lock:
+        _dp_whitelist.clear()
+        _dp_whitelist.update(new_set)
+
+    print("[WHITELIST] Active: {}".format(sorted(_dp_whitelist)))
+
+# ============================================================================
 # SHARED STATE
 # ============================================================================
 
@@ -244,6 +365,8 @@ pipeline_state = {
     "loadcell_config_pending":      None,
     "iot_gateway_config_pending":   None,
     "core_config_pending":          None,
+    # load_raw whitelist toggle (controlled via UI button)
+    "load_raw_enabled":             False,
     # crash / restart tracking
     "thread_crash_count":           0,
     "thread_last_crash_reason":     None,
@@ -297,6 +420,18 @@ def _schedule_broadcast(main_loop, msg):
 
     if not main_loop or not main_loop.is_running():
         return
+
+    # Apply datapoint whitelist -- drop anything not in the exact set
+    try:
+        parsed_msg = json.loads(msg)
+        dp_name = parsed_msg.get("datapoint", "")
+        if dp_name:
+            with _dp_whitelist_lock:
+                allowed = dp_name in _dp_whitelist
+            if not allowed:
+                return  # not whitelisted -- silently drop
+    except Exception:
+        pass
 
     # Rate-limit load_raw specifically (most frequent datapoint)
     try:
@@ -360,6 +495,178 @@ def _find_core_service():
     with pipeline_state["lock"]:
         services = pipeline_state["connected_services"]
     return configured if configured in services else None
+
+def _flush_pending_for_service(client, svc):
+    """Try to send any pending config for the given service name right now.
+
+    Called from SERVICE_ADDED (service just appeared).
+    Guards against duplicate sends using _sent_versions so that
+    reconnect-replayed SERVICE_ADDED events don't re-send the same config.
+    """
+    modbus_svc   = get_pipeline_service_name("modbus")
+    loadcell_svc = get_pipeline_service_name("loadcell")
+    iot_svc      = get_pipeline_service_name("iot_gateway")
+    core_svc     = get_pipeline_service_name("core")
+
+    # ---- Modbus ----
+    if svc == modbus_svc:
+        with pipeline_state["lock"]:
+            pending = pipeline_state.get("modbus_config_pending")
+            version = pipeline_state.get("config_version", 0)
+        if pending:
+            with _sent_versions_lock:
+                key = ("modbus", version)
+                already = key in _sent_versions
+            if already:
+                print("[PIPELINE] Modbus v{} already sent -- skip duplicate flush".format(version))
+                return
+            try:
+                rid = client.datapoint_update(svc, get_pipeline_config_name("modbus"), pending)
+                if rid > 0:
+                    print("[PIPELINE] Flushed pending modbus config to '{}' (rid={})".format(svc, rid))
+                    record_pipeline_send_success("modbus", version, svc, "flushed pending")
+                    with pipeline_state["lock"]:
+                        pipeline_state["modbus_config_pending"] = None
+                    _mark_sent(key[0], key[1])
+                else:
+                    print("[PIPELINE] Flush modbus failed (rid=0) -- stays pending")
+            except Exception as e:
+                print("[PIPELINE] Flush modbus error: {}".format(e))
+
+    # ---- Loadcell ----
+    if svc == loadcell_svc:
+        with pipeline_state["lock"]:
+            pending         = pipeline_state.get("loadcell_config_pending")
+            pending_version = pipeline_state.get("loadcell_config_version", 1)
+        if pending:
+            with _sent_versions_lock:
+                key = ("loadcell", pending_version)
+                already = key in _sent_versions
+            if already:
+                print("[PIPELINE] Loadcell v{} already sent -- skip duplicate flush".format(pending_version))
+                return
+            try:
+                ok = client.publish_config(Config(
+                    name    = get_pipeline_config_name("loadcell"),
+                    value   = pending,
+                    version = pending_version,
+                    service = svc,
+                ))
+                if ok:
+                    print("[PIPELINE] Flushed pending loadcell config to '{}' (v{})".format(svc, pending_version))
+                    record_pipeline_send_success("loadcell", pending_version, svc, "flushed pending")
+                    with pipeline_state["lock"]:
+                        pipeline_state["loadcell_config_pending"] = None
+                        pipeline_state["loadcell_config"]         = pending
+                    _mark_sent(key[0], key[1])
+                    # Request live data back
+                    try:
+                        cfg_parsed = json.loads(pending)
+                        for lc_entry in cfg_parsed.get("load_cells", []):
+                            dev_dp = lc_entry.get("name")
+                            if dev_dp:
+                                client.datapoint_update(svc, dev_dp, '{}')
+                                print("[PIPELINE] Requested live data for: '{}'".format(dev_dp))
+                    except Exception as pull_e:
+                        print("[PIPELINE] Live data request error: {}".format(pull_e))
+                    # Re-subscribe
+                    if hasattr(client, 'subscribe'):
+                        try:
+                            cfg = json.loads(pending)
+                            for ipc_entry in cfg.get("ipc", []):
+                                for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
+                                    for mapped_dp in (dp_entry.get("map") or {}).values():
+                                        try:
+                                            client.subscribe(mapped_dp)
+                                            print("[PIPELINE] Subscribed to '{}'".format(mapped_dp))
+                                        except Exception as sub_e:
+                                            print("[PIPELINE] Subscribe error '{}': {}".format(mapped_dp, sub_e))
+                        except Exception as parse_e:
+                            print("[PIPELINE] Re-subscribe parse error: {}".format(parse_e))
+                else:
+                    print("[PIPELINE] Flush loadcell failed -- stays pending")
+            except Exception as e:
+                print("[PIPELINE] Flush loadcell error: {}".format(e))
+
+    # ---- IoT Gateway ----
+    if svc == iot_svc:
+        with pipeline_state["lock"]:
+            pending         = pipeline_state.get("iot_gateway_config_pending")
+            pending_version = pipeline_state.get("iot_gateway_config_version", 1)
+        if pending:
+            with _sent_versions_lock:
+                key = ("iot_gateway", pending_version)
+                already = key in _sent_versions
+            if already:
+                print("[PIPELINE] IoT gateway v{} already sent -- skip duplicate flush".format(pending_version))
+                return
+            try:
+                ok = client.publish_config(Config(
+                    name    = get_pipeline_config_name("iot_gateway"),
+                    value   = pending,
+                    version = pending_version,
+                    service = svc,
+                ))
+                if ok:
+                    print("[PIPELINE] Flushed pending iot_gateway config to '{}' (v{})".format(svc, pending_version))
+                    record_pipeline_send_success("iot_gateway", pending_version, svc, "flushed pending")
+                    with pipeline_state["lock"]:
+                        pipeline_state["iot_gateway_config_pending"] = None
+                        pipeline_state["iot_gateway_config"]         = pending
+                    _mark_sent(key[0], key[1])
+                else:
+                    print("[PIPELINE] Flush iot_gateway failed -- stays pending")
+            except Exception as e:
+                print("[PIPELINE] Flush iot_gateway error: {}".format(e))
+
+    # ---- Core ----
+    if svc == core_svc:
+        with pipeline_state["lock"]:
+            pending         = pipeline_state.get("core_config_pending")
+            pending_version = pipeline_state.get("core_config_version", 1)
+        if pending:
+            with _sent_versions_lock:
+                key = ("core", pending_version)
+                already = key in _sent_versions
+            if already:
+                print("[PIPELINE] Core v{} already sent -- skip duplicate flush".format(pending_version))
+                return
+            try:
+                ok = client.publish_config(Config(
+                    name    = get_pipeline_config_name("core"),
+                    value   = pending,
+                    version = pending_version,
+                    service = svc,
+                ))
+                if ok:
+                    print("[PIPELINE] Flushed pending core config to '{}' (v{})".format(svc, pending_version))
+                    record_pipeline_send_success("core", pending_version, svc, "flushed pending")
+                    with pipeline_state["lock"]:
+                        pipeline_state["core_config_pending"] = None
+                        pipeline_state["core_config"]         = pending
+                        pipeline_state["core_config_version"] = pending_version
+                    _mark_sent(key[0], key[1])
+                else:
+                    print("[PIPELINE] Flush core failed -- stays pending")
+            except Exception as e:
+                print("[PIPELINE] Flush core error: {}".format(e))
+
+
+def _flush_all_pending():
+    """After storing any pending config, check all currently connected services
+    and flush immediately if the target service is already up.
+    Called from the async send helpers via asyncio.run_coroutine_threadsafe
+    or directly when we already have the client reference.
+    """
+    with pipeline_state["lock"]:
+        client    = pipeline_state.get("client")
+        connected = pipeline_state.get("connected", False)
+        services  = set(pipeline_state.get("connected_services", set()))
+    if not connected or not client:
+        return
+    for svc in services:
+        _flush_pending_for_service(client, svc)
+
 
 # ============================================================================
 # BACKGROUND PIPELINE THREAD
@@ -429,132 +736,14 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     with pipeline_state["lock"]:
                         pipeline_state["connected"] = False
 
-                # -- Service appeared -- dispatch any pending configs -------
+                # -- Service appeared -- flush any pending configs ----------
                 elif etype == EventType.SERVICE_ADDED:
                     svc = event.service_name
                     print("[PIPELINE] SERVICE_ADDED: '{}'".format(svc))
                     with pipeline_state["lock"]:
                         pipeline_state["connected_services"].add(svc)
-
-                    # Use DB-configured service names (no pattern matching)
-                    modbus_svc   = get_pipeline_service_name("modbus")
-                    loadcell_svc = get_pipeline_service_name("loadcell")
-                    iot_svc      = get_pipeline_service_name("iot_gateway")
-
-                    if svc == modbus_svc:
-                        print("[PIPELINE] Modbus service connected: '{}'".format(svc))
-                        with pipeline_state["lock"]:
-                            pending = pipeline_state.get("modbus_config_pending")
-                        if pending:
-                            try:
-                                rid = client.datapoint_update(svc, get_pipeline_config_name("modbus"), pending)
-                                if rid > 0:
-                                    print("[PIPELINE] Sent pending modbus config (rid={})".format(rid))
-                                    with pipeline_state["lock"]:
-                                        pipeline_state["modbus_config_pending"] = None
-                                else:
-                                    print("[PIPELINE] Pending modbus send failed (rid=0)")
-                            except Exception as e:
-                                print("[PIPELINE] Pending modbus send error: {}".format(e))
-
-                    if svc == loadcell_svc:
-                        print("[PIPELINE] Loadcell service connected: '{}'".format(svc))
-                        with pipeline_state["lock"]:
-                            pending = pipeline_state.get("loadcell_config_pending")
-                            last_config = pipeline_state.get("loadcell_config")
-                            pending_version = pipeline_state.get("loadcell_config_version", 1)
-                        if pending:
-                            try:
-                                cfg_obj = Config(
-                                    name=get_pipeline_config_name("loadcell"),
-                                    value=pending,
-                                    version=pending_version,
-                                    service=svc,
-                                )
-                                ok = client.publish_config(cfg_obj)
-                                if ok:
-                                    print("[PIPELINE] Sent pending loadcell config via publish_config (v{})".format(pending_version))
-                                    with pipeline_state["lock"]:
-                                        pipeline_state["loadcell_config_pending"] = None
-                                        pipeline_state["loadcell_config"] = pending
-                                    last_config = pending
-                                    # Request live datapoints back for each load cell device
-                                    try:
-                                        cfg_parsed = json.loads(pending)
-                                        for lc_entry in cfg_parsed.get("load_cells", []):
-                                            dev_dp = lc_entry.get("name")
-                                            if dev_dp:
-                                                client.datapoint_update(svc, dev_dp, '{}')
-                                                print("[PIPELINE] Requested live data for: '{}'".format(dev_dp))
-                                    except Exception as pull_e:
-                                        print("[PIPELINE] Live data request error: {}".format(pull_e))
-                                else:
-                                    print("[PIPELINE] Pending loadcell publish_config failed -- will retry on next connect")
-                            except Exception as e:
-                                print("[PIPELINE] Pending loadcell send error: {}".format(e))
-
-                        # Re-subscribe to all mapped receive datapoints from last known config
-                        config_to_use = last_config
-                        if config_to_use and hasattr(client, 'subscribe'):
-                            try:
-                                cfg = json.loads(config_to_use)
-                                for ipc_entry in cfg.get("ipc", []):
-                                    for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
-                                        for mapped_dp in (dp_entry.get("map") or {}).values():
-                                            try:
-                                                client.subscribe(mapped_dp)
-                                                print("[PIPELINE] Re-subscribed to receive: '{}'".format(mapped_dp))
-                                            except Exception as sub_e:
-                                                print("[PIPELINE] Re-subscribe error '{}': {}".format(mapped_dp, sub_e))
-                            except Exception as parse_e:
-                                print("[PIPELINE] Could not parse loadcell config for re-subscribe: {}".format(parse_e))
-
-                    if svc == iot_svc:
-                        print("[PIPELINE] IoT gateway service connected: '{}'".format(svc))
-                        with pipeline_state["lock"]:
-                            pending         = pipeline_state.get("iot_gateway_config_pending")
-                            pending_version = pipeline_state.get("iot_gateway_config_version", 1)
-                        if pending:
-                            try:
-                                ok = client.publish_config(Config(
-                                    name    = get_pipeline_config_name("iot_gateway"),
-                                    value   = pending,
-                                    version = pending_version,
-                                    service = svc,
-                                ))
-                                if ok:
-                                    print("[PIPELINE] Sent pending iot_gateway config via publish_config (v{})".format(pending_version))
-                                    with pipeline_state["lock"]:
-                                        pipeline_state["iot_gateway_config_pending"] = None
-                                        pipeline_state["iot_gateway_config"] = pending
-                                else:
-                                    print("[PIPELINE] Pending iot_gateway publish_config failed -- will retry on next connect")
-                            except Exception as e:
-                                print("[PIPELINE] Pending iot_gateway send error: {}".format(e))
-
-                    core_svc = get_pipeline_service_name("core")
-                    if svc == core_svc:
-                        print("[PIPELINE] Core service connected: '{}'".format(svc))
-                        with pipeline_state["lock"]:
-                            pending         = pipeline_state.get("core_config_pending")
-                            pending_version = pipeline_state.get("core_config_version", 1)
-                        if pending:
-                            try:
-                                ok = client.publish_config(Config(
-                                    name    = get_pipeline_config_name("core"),
-                                    value   = pending,
-                                    version = pending_version,
-                                    service = svc,
-                                ))
-                                if ok:
-                                    print("[PIPELINE] Sent pending core config via publish_config (v{})".format(pending_version))
-                                    with pipeline_state["lock"]:
-                                        pipeline_state["core_config_pending"] = None
-                                        pipeline_state["core_config"] = pending
-                                else:
-                                    print("[PIPELINE] Pending core config publish_config failed -- will retry on next connect")
-                            except Exception as e:
-                                print("[PIPELINE] Pending core config send error: {}".format(e))
+                    # Flush any config that was queued waiting for this service
+                    _flush_pending_for_service(client, svc)
 
                 # -- Service removed --------------------------------------
                 elif etype == EventType.SERVICE_REMOVED:
@@ -566,7 +755,12 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                 # -- Datapoint received -----------------------------------
                 elif etype == EventType.RECEIVE_DONE:
                     dp = event.datapoint_name
-                    print("[PIPELINE] RECEIVE_DONE: '{}' from '{}'".format(dp, event.service_name))
+                    with _dp_whitelist_lock:
+                        _dp_allowed = dp in _dp_whitelist
+                    if _dp_allowed:
+                        print("[PIPELINE] RECEIVE_DONE: '{}' from '{}'".format(dp, event.service_name))
+                    if not _dp_allowed:
+                        return  # not whitelisted -- skip read, store and broadcast
                     try:
                         dtype = client.get_datapoint_type(dp)
                         if dtype == DataType.STRING:
@@ -655,7 +849,16 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         print("[PIPELINE] CONFIG_RECEIVED: name='{}' version={}".format(
                             cfg.name, cfg.version))
                         if cfg.name == "loadcell_config":
-                            _handle_received_loadcell_config(cfg)
+                            # Skip if we already processed this exact version
+                            with _sent_versions_lock:
+                                rx_key = ("loadcell_rx", cfg.version)
+                                already_rx = rx_key in _sent_versions
+                            if already_rx:
+                                print("[LC-RX] Skipping duplicate CONFIG_RECEIVED v{}".format(cfg.version))
+                            else:
+                                with _sent_versions_lock:
+                                    _sent_versions.add(rx_key)
+                                _handle_received_loadcell_config(cfg)
 
             except Exception as e:
                 print("[PIPELINE] Event handler error: {}".format(e))
@@ -1625,29 +1828,38 @@ async def send_loadcell_config_now():
                         pipeline_sent    = True
                         pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
                         record_pipeline_send_success("loadcell", new_version, target_service, pipeline_message)
+                        _mark_sent("loadcell", new_version)
                         with pipeline_state["lock"]:
                             pipeline_state["loadcell_config"]         = config_json
                             pipeline_state["loadcell_config_pending"] = None
                     else:
                         pipeline_message = "publish_config failed -- queued as pending"
                         record_pipeline_send_failure("loadcell", pipeline_message)
+                        _clear_sent("loadcell")
                         with pipeline_state["lock"]:
                             pipeline_state["loadcell_config_pending"] = config_json
+                            pipeline_state["loadcell_config_version"] = new_version
                 except Exception as exc:
                     pipeline_message = "Error: {} -- queued as pending".format(exc)
                     record_pipeline_send_failure("loadcell", pipeline_message)
+                    _clear_sent("loadcell")
                     with pipeline_state["lock"]:
                         pipeline_state["loadcell_config_pending"] = config_json
+                        pipeline_state["loadcell_config_version"] = new_version
             else:
                 pipeline_message = "Service '{}' not connected -- queued as pending".format(
                     get_pipeline_service_name("loadcell") or "load_cell_service")
                 record_pipeline_send_failure("loadcell", pipeline_message)
+                _clear_sent("loadcell")
                 with pipeline_state["lock"]:
                     pipeline_state["loadcell_config_pending"] = config_json
+                    pipeline_state["loadcell_config_version"] = new_version
         else:
             record_pipeline_send_failure("loadcell", pipeline_message)
+            _clear_sent("loadcell")
             with pipeline_state["lock"]:
                 pipeline_state["loadcell_config_pending"] = config_json
+                pipeline_state["loadcell_config_version"] = new_version
         print("[LC-CFG] " + pipeline_message)
 
         return {
@@ -2115,7 +2327,8 @@ async def send_modbus_config_now():
     resp = await pipeline_save_modbus_config(_FakeRequest())
     import json as _json
     try:
-        return _json.loads(resp.body)
+        raw = resp.body
+        return _json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
     except Exception:
         return {"success": False, "error": "could not parse response"}
 
@@ -2278,7 +2491,8 @@ async def _do_auto_send():
                 class _FakeReq: pass
                 resp = await pipeline_save_modbus_config(_FakeReq())
                 import json as _j
-                d = _j.loads(resp.body)
+                raw = resp.body
+                d = _j.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
             elif cfg_type == "loadcell":
                 d = await send_loadcell_config_now()
             elif cfg_type == "iot_gateway":
@@ -2289,6 +2503,17 @@ async def _do_auto_send():
                 conn2.row_factory = sqlite3.Row
                 cur2 = conn2.cursor()
                 try:
+                    cur2.execute('''
+                        CREATE TABLE IF NOT EXISTS core_configs (
+                            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                            version      INTEGER NOT NULL,
+                            device_names TEXT,
+                            service_name TEXT,
+                            config_json  TEXT NOT NULL,
+                            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    conn2.commit()
                     cur2.execute(
                         "SELECT config_json, version FROM core_configs ORDER BY id DESC LIMIT 1"
                     )
@@ -2661,6 +2886,111 @@ async def pipeline_core_config_resend_handler(request):
         return web.json_response({"success": False, "error": str(e)}, status=500)
 
 # ============================================================================
+# WHITELIST API  -- GET /api/pipeline/whitelist
+#                   POST /api/pipeline/whitelist/device
+# ============================================================================
+
+async def pipeline_whitelist_get_handler(request):
+    """GET /api/pipeline/whitelist
+    Returns the whitelist split into three categories:
+      permanent   -- network/status entries, always active, never editable
+      device_names-- explicitly registered device names (e.g. ["load"])
+      named       -- expanded datapoints derived from those names
+      active      -- full current whitelist (all of the above merged)
+    """
+    with _dp_whitelist_lock:
+        active = sorted(_dp_whitelist)
+
+    with _whitelisted_names_lock:
+        device_names = sorted(_whitelisted_device_names)
+
+    # Build the named datapoints list from registered names + suffixes
+    named = []
+    with pipeline_state["lock"]:
+        include_raw = pipeline_state.get("load_raw_enabled", False)
+    for name in device_names:
+        for suffix in _DEVICE_DP_SUFFIXES:
+            named.append("{}{}".format(name, suffix))
+        if include_raw:
+            named.append("{}_raw".format(name))
+
+    return web.json_response({
+        "success":      True,
+        "permanent":    sorted(_PERMANENT_WHITELIST),
+        "device_names": device_names,
+        "named":        sorted(named),
+        "active":       active,
+    })
+
+
+async def pipeline_whitelist_device_handler(request):
+    """POST /api/pipeline/whitelist/device
+    Body: { "action": "add" | "remove", "name": "<device_name>" }
+    Adds or removes a device name from the whitelist and rebuilds immediately.
+    """
+    try:
+        body   = await request.json()
+        action = body.get("action", "").strip()
+        name   = (body.get("name") or "").strip()
+    except Exception:
+        return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+
+    if not name:
+        return web.json_response({"success": False, "error": "name required"}, status=400)
+    if action not in ("add", "remove"):
+        return web.json_response({"success": False, "error": "action must be add or remove"}, status=400)
+
+    with _whitelisted_names_lock:
+        if action == "add":
+            _whitelisted_device_names.add(name)
+            print("[WHITELIST] Device added via API: '{}'".format(name))
+        else:
+            _whitelisted_device_names.discard(name)
+            print("[WHITELIST] Device removed via API: '{}'".format(name))
+
+    with pipeline_state["lock"]:
+        include_raw = pipeline_state.get("load_raw_enabled", False)
+    rebuild_whitelist(include_raw=include_raw)
+
+    return web.json_response({"success": True, "action": action, "name": name})
+
+
+# ============================================================================
+# LOAD_RAW TOGGLE  -- POST /api/pipeline/load-raw-toggle
+# ============================================================================
+
+async def pipeline_load_raw_toggle_handler(request):
+    """POST /api/pipeline/load-raw-toggle
+    Body: { "enabled": true | false }
+    Adds or removes the exact raw datapoint for the current device
+    from the broadcast whitelist.
+    """
+    try:
+        body    = await request.json()
+        enabled = bool(body.get("enabled", False))
+    except Exception:
+        return web.json_response({"success": False, "error": "Invalid JSON"}, status=400)
+
+    with pipeline_state["lock"]:
+        pipeline_state["load_raw_enabled"] = enabled
+
+    # Rebuild whitelist -- this reads the real device name from DB and
+    # adds/removes the exact datapoint string (e.g. "load_raw")
+    rebuild_whitelist(include_raw=enabled)
+
+    state = "ON" if enabled else "OFF"
+    print("[PIPELINE] load_raw broadcast toggled: {}".format(state))
+    return web.json_response({"success": True, "load_raw_enabled": enabled})
+
+
+async def pipeline_load_raw_state_handler(request):
+    """GET /api/pipeline/load-raw-toggle -- return current toggle state."""
+    with pipeline_state["lock"]:
+        enabled = pipeline_state.get("load_raw_enabled", False)
+    return web.json_response({"load_raw_enabled": enabled})
+
+
+# ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================
 
@@ -2706,6 +3036,29 @@ def register_pipeline_routes(app):
     app.router.add_post('/api/pipeline/auto-send',       pipeline_auto_send_handler)
     app.router.add_post('/api/pipeline/auto-send/order', pipeline_save_send_order_handler)
     app.router.add_get ('/api/pipeline/send-log',        pipeline_send_log_handler)
+
+    # -- Whitelist ---------------------------------------------------------
+    app.router.add_get ('/api/pipeline/whitelist',        pipeline_whitelist_get_handler)
+    app.router.add_post('/api/pipeline/whitelist/device', pipeline_whitelist_device_handler)
+
+    # -- Load-raw toggle ---------------------------------------------------
+    app.router.add_get ('/api/pipeline/load-raw-toggle', pipeline_load_raw_state_handler)
+    app.router.add_post('/api/pipeline/load-raw-toggle', pipeline_load_raw_toggle_handler)
+
+    # Register whitelisted device names from DB (permanent devices only),
+    # then build the initial whitelist with raw OFF.
+    try:
+        import sqlite3 as _sq
+        _conn = _sq.connect(DB_FILE)
+        _conn.row_factory = _sq.Row
+        _cur = _conn.cursor()
+        _cur.execute("SELECT name FROM loadcell_device WHERE enabled = 1")
+        for _row in _cur.fetchall():
+            add_whitelisted_device_name(_row["name"])
+        _conn.close()
+    except Exception as _wl_err:
+        print("[WHITELIST] Could not seed device names from DB: {}".format(_wl_err))
+    rebuild_whitelist(include_raw=False)
 
     # Seed any missing pipeline_service_targets rows
     _seed_pipeline_targets()

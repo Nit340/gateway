@@ -1,0 +1,356 @@
+<!-- rules.html -->
+<!-- This is the main content only, to be loaded dynamically -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Rules Engine</h1>
+            <p class="text-slate-500 text-sm mt-1">Define conditions that trigger alerts when met.</p>
+        </div>
+        <!-- Empty div to maintain spacing -->
+        <div></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Column: Rules List -->
+        <div id="rules-list-section" class="lg:col-span-4 space-y-4">
+            <section class="bg-white rounded-xl shadow-sm border border-border p-6 h-[800px] flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-semibold text-slate-800 flex items-center">
+                        <i class="fa-regular fa-list-alt mr-2 text-primary"></i>
+                        Active Rules
+                    </h3>
+                    <div class="flex space-x-2">
+                        <button class="text-slate-400 hover:text-primary transition p-1.5 rounded hover:bg-slate-100" onclick="window.showFilterModal()" title="Filter">
+                            <i class="fa-solid fa-filter"></i>
+                        </button>
+                        <button class="text-slate-400 hover:text-primary transition p-1.5 rounded hover:bg-slate-100" onclick="window.toggleSortOrder()" title="Sort">
+                            <i class="fa-solid fa-sort" id="sort-icon"></i>
+                        </button>
+                        <button class="text-slate-400 hover:text-primary transition p-1.5 rounded hover:bg-slate-100" onclick="window.refreshRules()" title="Refresh">
+                            <i class="fa-solid fa-sync-alt" id="refresh-icon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="overflow-y-auto flex-1 space-y-2 pr-1" id="rules-list">
+                    <!-- Rule cards will be dynamically loaded -->
+                </div>
+                
+                <div class="pt-4 border-t border-border mt-4">
+                    <button class="w-full py-2 border border-dashed border-slate-300 rounded-lg text-slate-500 text-sm hover:border-primary hover:text-primary hover:bg-blue-50 transition flex items-center justify-center gap-2" onclick="window.showImportModal()">
+                        <i class="fa-solid fa-download"></i> Import Rules
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Right Column: Rule Editor Wizard -->
+        <div id="rule-editor-section" class="lg:col-span-8">
+            <section class="bg-white rounded-xl shadow-sm border border-border h-[800px] flex flex-col" id="rule-editor-card">
+                
+                <!-- Wizard Header - Only show when rule is selected/creating -->
+                <div class="p-6 border-b border-border" id="rule-editor-header" style="display: none;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-slate-900" id="rule-editor-title">Create New Rule</h2>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-semibold uppercase text-slate-400 tracking-wider">Rule Status</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="rule-status-toggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wizard Content -->
+                <div class="flex-1 overflow-y-auto p-6" id="wizard-content-container">
+                    <!-- Empty State - Shown when no rule is selected -->
+                    <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center">
+                        <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-ruler-combined text-3xl text-slate-400"></i>
+                        </div>
+                        <h3 class="text-lg font-semibold text-slate-800 mb-2">No Rule Selected</h3>
+                        <p class="text-sm text-slate-500 max-w-sm mb-6">Choose a rule from the list or create a new one to get started</p>
+                        
+                        <!-- Buttons in center right area of empty state -->
+                        <div class="flex gap-3">
+                            <button class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.createGroupRule()">
+                                <i class="fa-solid fa-layer-group"></i>
+                                Group Rule
+                            </button>
+                            <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors shadow-sm flex items-center gap-2" onclick="window.createEmergencyRule()">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                Emergency Rule
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Dynamic Content -->
+                    <div id="wizard-content" class="space-y-6" style="display: none;"></div>
+                </div>
+
+                <!-- Wizard Footer - ALWAYS VISIBLE - Triggers JSON pipeline -->
+                <div class="p-6 border-t border-border bg-slate-50 rounded-b-xl" id="wizard-footer">
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm text-slate-500">
+                            <span class="font-medium text-slate-700">Pipeline Status:</span> 
+                            <span id="pipeline-status" class="font-mono bg-white px-2 py-1 rounded border border-slate-200">Ready</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm" onclick="window.triggerJsonPipeline()" id="pipeline-trigger-button">
+                                <i class="fa-solid fa-gears mr-2"></i> Trigger JSON Pipeline
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-400 text-right">
+                        This button triggers the JSON configuration pipeline for all rules
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- Notification Container -->
+<div id="notification-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<!-- Modals Container -->
+<div id="rules-modals-container"></div>
+
+<!-- Page-specific styles - matching general-config theme -->
+<style>
+    /* Modal overlay - matching general-config */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+        display: none;
+    }
+    
+    .modal-overlay.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    /* Toggle switch - matching general-config */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #CBD5E1;
+        transition: 0.3s;
+        border-radius: 24px;
+    }
+    
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+    }
+    
+    .toggle-switch input:checked + .toggle-slider {
+        background-color: #2563EB;
+    }
+    
+    .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+    }
+    
+    /* Notification styles - matching general-config */
+    .notification-toast {
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    .notification-toast.fade-out {
+        animation: slideOut 0.3s ease-in forwards;
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    /* Custom scrollbar */
+    .overflow-y-auto::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .overflow-y-auto::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 10px;
+    }
+    
+    .overflow-y-auto::-webkit-scrollbar-thumb {
+        background: #94a3b8;
+        border-radius: 10px;
+    }
+
+    /* Group section styles - FIXED */
+    .group-section {
+        transition: all 0.2s ease;
+        border-width: 1px;
+        margin-bottom: 1rem;
+    }
+    
+    /* Make add buttons always visible */
+    .group-section .add-tag-btn {
+        opacity: 1 !important;
+        transition: all 0.2s ease;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .group-section .add-tag-btn:hover {
+        opacity: 1 !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    /* Ensure the add section is always visible */
+    .group-section .flex.gap-2.mb-3 {
+        display: flex !important;
+        visibility: visible !important;
+        margin-bottom: 0.75rem;
+    }
+    
+    /* Style for select dropdowns */
+    .group-section select {
+        background-color: white !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #1e293b !important;
+        padding: 0.5rem 0.75rem !important;
+        border-radius: 0.5rem !important;
+    }
+    
+    .group-section select:focus {
+        outline: none;
+        ring: 2px solid #3b82f6;
+        border-color: #3b82f6;
+    }
+    
+    /* Group-specific button colors - ensure visibility */
+    .group-section .bg-purple-600 {
+        background-color: #9333ea !important;
+    }
+    
+    .group-section .bg-cyan-600 {
+        background-color: #0891b2 !important;
+    }
+    
+    .group-section .bg-emerald-600 {
+        background-color: #059669 !important;
+    }
+    
+    .group-section .bg-purple-600:hover {
+        background-color: #7e22ce !important;
+    }
+    
+    .group-section .bg-cyan-600:hover {
+        background-color: #0e7490 !important;
+    }
+    
+    .group-section .bg-emerald-600:hover {
+        background-color: #047857 !important;
+    }
+    
+    /* Tag list item styles */
+    .tag-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: white;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .tag-item:hover {
+        border-color: #94a3b8;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .tag-item .tag-name {
+        font-family: monospace;
+        font-size: 0.875rem;
+        color: #334155;
+    }
+    
+    .tag-item .remove-tag {
+        color: #94a3b8;
+        transition: color 0.2s ease;
+    }
+    
+    .tag-item .remove-tag:hover {
+        color: #ef4444;
+    }
+
+    /* Emergency rule styles */
+    .border-red-200 .flex.gap-2 {
+        display: flex !important;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .border-red-200 .bg-red-600 {
+        background-color: #dc2626 !important;
+    }
+
+    .border-red-200 .bg-red-600:hover {
+        background-color: #b91c1c !important;
+    }
+
+    /* Save button styles */
+    .save-rule-btn {
+        transition: all 0.2s ease;
+    }
+    
+    .save-rule-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+</style>

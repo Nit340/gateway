@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Crane Monitor – Pipeline</title>
+<title>Crane Monitor   Pipeline</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
@@ -83,7 +83,7 @@
     <h1 class="text-base font-bold text-stone-800 flex-1">Pipeline Controller</h1>
     <div id="pipelineStatus" class="flex items-center gap-2 text-xs font-semibold text-stone-400">
       <span class="relative flex h-2 w-2"><span class="relative inline-flex rounded-full h-2 w-2 bg-stone-300"></span></span>
-      Checking…
+      Checking 
     </div>
     <button onclick="loadAll()" class="flex items-center gap-1 text-xs font-semibold text-orange-500 hover:underline">
       <span class="mat" style="font-size:15px;">refresh</span> Refresh
@@ -92,7 +92,7 @@
 
   <main class="flex-1 p-6 overflow-auto space-y-5">
 
-    <!-- AUTO-SEND CARD — ordered startup send -->
+    <!-- AUTO-SEND CARD   ordered startup send -->
     <div class="bg-white rounded-2xl border-2 border-orange-200 shadow-sm p-5">
       <div class="flex items-start gap-5">
         <div class="flex-1 min-w-0">
@@ -103,14 +103,14 @@
           </div>
           <p class="text-xs text-stone-400 mb-4">
             Enabled targets are sent <strong>in the numbered order</strong> on every backend start/restart.
-            Drag rows to reorder — saved to DB immediately.
+            Drag rows to reorder   saved to DB immediately.
           </p>
 
           <!-- Drag-to-reorder list -->
           <div id="sendOrderList" class="space-y-2 mb-3 select-none">
-            <span class="text-xs text-stone-300">Loading…</span>
+            <span class="text-xs text-stone-300">Loading </span>
           </div>
-          <div id="orderSaveStatus" class="hidden text-xs font-semibold text-green-600 mb-3">✓ Order saved to database</div>
+          <div id="orderSaveStatus" class="hidden text-xs font-semibold text-green-600 mb-3">? Order saved to database</div>
           <div id="autoSendResult" class="hidden rounded-xl p-3 space-y-1.5 text-xs font-mono" style="background:#fafaf9;border:1px solid #e7e5e4;"></div>
         </div>
 
@@ -126,7 +126,7 @@
     <!-- CONNECTION STATUS -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
       <div class="text-sm font-bold text-stone-700 mb-3">Connection Status</div>
-      <div id="statusBody" class="text-sm text-stone-500">Loading…</div>
+      <div id="statusBody" class="text-sm text-stone-500">Loading </div>
       <div id="servicesList" class="mt-3"></div>
     </div>
 
@@ -136,9 +136,9 @@
       <p class="text-xs text-stone-400 mb-5">
         Set the <strong>service name</strong> (from <code class="bg-stone-100 px-1 rounded">SERVICE_ADDED</code> events) and the
         <strong>config name</strong> (the key sent to the pipeline service, e.g. <code class="bg-stone-100 px-1 rounded">modbus_config</code>).
-        Both are stored in the database — nothing is hardcoded. Version numbers are also tracked per config in the DB.
+        Both are stored in the database   nothing is hardcoded. Version numbers are also tracked per config in the DB.
       </p>
-      <div id="targetsForm" class="space-y-0">Loading…</div>
+      <div id="targetsForm" class="space-y-0">Loading </div>
       <button onclick="saveTargets()"
         class="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white active:scale-95"
         style="background:#ea580c;box-shadow:0 4px 14px rgba(234,88,12,0.2);">
@@ -146,13 +146,13 @@
       </button>
     </div>
 
-    <!-- CONFIG MANAGER — dynamic tabs -->
+    <!-- CONFIG MANAGER   dynamic tabs -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
       <div class="text-sm font-bold text-stone-700 mb-1">Config Manager</div>
       <p class="text-xs text-stone-400 mb-4">Push configuration per service type. The config name used for each push is what you set above.</p>
 
       <div id="cfgTabBar" class="flex flex-wrap gap-2 mb-5 pb-4 border-b border-stone-100">
-        <span class="text-xs text-stone-300">Loading…</span>
+        <span class="text-xs text-stone-300">Loading </span>
       </div>
 
       <!-- MODBUS panel -->
@@ -180,7 +180,7 @@
             Select a device and push its filter &amp; calibration config to the loadcell pipeline service.
           </p>
           <div id="loadcellDeviceList" class="space-y-2 mb-4">
-            <span class="text-xs text-stone-300">Loading devices…</span>
+            <span class="text-xs text-stone-300">Loading devices </span>
           </div>
           <button onclick="pushLoadcellConfig()"
             class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
@@ -193,31 +193,31 @@
         <div>
           <div class="flex items-center gap-2 mb-3">
             <span class="mat" style="color:#f97316;font-size:18px;">download</span>
-            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Live Data — Received from Service</span>
+            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Live Data   Received from Service</span>
             <span id="lcWsStatus" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400">WS Disconnected</span>
           </div>
           <p class="text-xs text-stone-400 mb-4">Real-time values pushed back from the loadcell service via WebSocket.</p>
           <div id="lcLiveCards" class="grid grid-cols-2 gap-3 mb-4">
             <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
               <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Weight</div>
-              <div id="lc-weight" class="text-2xl font-extrabold text-stone-700">—</div>
-              <div id="lc-unit" class="text-xs text-stone-400 mt-0.5">—</div>
+              <div id="lc-weight" class="text-2xl font-extrabold text-stone-700"> </div>
+              <div id="lc-unit" class="text-xs text-stone-400 mt-0.5"> </div>
             </div>
             <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
               <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw ADC</div>
-              <div id="lc-raw" class="text-2xl font-extrabold text-stone-700">—</div>
+              <div id="lc-raw" class="text-2xl font-extrabold text-stone-700"> </div>
               <div class="text-xs text-stone-400 mt-0.5">raw counts</div>
             </div>
             <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
               <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Status</div>
               <div class="flex gap-2 mt-1 flex-wrap">
-                <span id="lc-tared" class="ver-badge ver-never">Tare: —</span>
-                <span id="lc-calibrated" class="ver-badge ver-never">Cal: —</span>
+                <span id="lc-tared" class="ver-badge ver-never">Tare:  </span>
+                <span id="lc-calibrated" class="ver-badge ver-never">Cal:  </span>
               </div>
             </div>
             <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
               <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Level</div>
-              <div id="lc-level" class="text-sm font-bold text-stone-500">—</div>
+              <div id="lc-level" class="text-sm font-bold text-stone-500"> </div>
               <div id="lc-level-bar" class="mt-2 h-2 rounded-full bg-stone-200 overflow-hidden">
                 <div id="lc-level-fill" class="h-full rounded-full transition-all" style="width:0%;background:#f97316;"></div>
               </div>
@@ -226,7 +226,7 @@
           <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw Datapoint Stream</div>
           <div id="lcStreamLog" class="rounded-xl p-3 font-mono text-xs text-stone-500 space-y-0.5 overflow-y-auto"
             style="background:#fafaf9;border:1px solid #e7e5e4;max-height:160px;">
-            <div class="text-stone-300">Waiting for data…</div>
+            <div class="text-stone-300">Waiting for data </div>
           </div>
           <button onclick="connectLcWs()" id="lcWsConnectBtn"
             class="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border border-stone-200 text-stone-500 hover:border-orange-300 hover:text-orange-500 transition-all">
@@ -248,7 +248,7 @@
         <div id="pushResult-iot_gateway" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
       </div>
 
-      <!-- CORE panel — NO file upload, just config name display + push/resend -->
+      <!-- CORE panel   NO file upload, just config name display + push/resend -->
       <div class="cfg-panel" id="panel-core">
         <div class="flex items-center gap-3 mb-4">
           <p class="text-xs text-stone-400">
@@ -261,7 +261,7 @@
         <!-- Upload history -->
         <div class="mb-6">
           <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Upload History</div>
-          <div id="coreConfigList" class="text-xs text-stone-300">Loading…</div>
+          <div id="coreConfigList" class="text-xs text-stone-300">Loading </div>
         </div>
 
         <div class="flex gap-3 flex-wrap">
@@ -280,7 +280,7 @@
       <div class="flex items-center gap-3 mb-4">
         <div class="text-sm font-bold text-stone-700">Send Version Log</div>
         <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-50 px-2 py-0.5 rounded-full">
-          Version increments on confirmed send only · stored in DB
+          Version increments on confirmed send only   stored in DB
         </span>
       </div>
       <div class="overflow-x-auto">
@@ -297,9 +297,77 @@
             </tr>
           </thead>
           <tbody id="sendLogRows">
-            <tr><td colspan="7" class="py-6 text-center text-stone-300">Loading…</td></tr>
+            <tr><td colspan="7" class="py-6 text-center text-stone-300">Loading </td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- WHITELIST MANAGER -->
+    <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+      <div class="flex items-center gap-3 mb-1">
+        <span class="mat" style="color:#f97316;font-size:22px;">filter_list</span>
+        <div class="text-sm font-bold text-stone-700">Broadcast Whitelist</div>
+        <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-50 px-2 py-0.5 rounded-full">
+          Only whitelisted datapoints reach the UI
+        </span>
+        <button onclick="loadWhitelist()" class="ml-auto flex items-center gap-1 text-xs font-semibold text-orange-400 hover:underline">
+          <span class="mat" style="font-size:14px;">refresh</span> Refresh
+        </button>
+      </div>
+      <p class="text-xs text-stone-400 mb-5">
+        <strong>Permanent</strong> entries are always active (network/status � cannot be removed).
+        Add a <strong>device name</strong> (e.g. <code class="bg-stone-100 px-1 rounded font-mono">load</code>) to whitelist all its datapoints.
+        Only named devices receive data � no auto-discovery.
+      </p>
+
+      <div class="grid grid-cols-2 gap-4 mb-5">
+        <!-- Permanent -->
+        <div class="rounded-xl border border-stone-100 p-3">
+          <div class="flex items-center gap-1.5 mb-2">
+            <span class="w-2 h-2 rounded-full bg-stone-400 flex-shrink-0"></span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-stone-400">Permanent</span>
+            <span class="ml-auto text-[9px] text-stone-300">always active</span>
+          </div>
+          <div id="wl-permanent" class="space-y-1">
+            <span class="text-xs text-stone-300">Loading�</span>
+          </div>
+        </div>
+
+        <!-- Named Devices -->
+        <div class="rounded-xl border border-orange-100 p-3" style="background:#fffaf7;">
+          <div class="flex items-center gap-1.5 mb-2">
+            <span class="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0"></span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-orange-400">Named Devices</span>
+            <span class="ml-auto text-[9px] text-stone-300">by name only</span>
+          </div>
+          <div id="wl-named" class="space-y-1 mb-3">
+            <span class="text-xs text-stone-300">None added</span>
+          </div>
+          <!-- Add device name -->
+          <div class="flex gap-1.5 mt-2">
+            <input id="wl-add-input" type="text" placeholder="device name, e.g. load"
+              class="flex-1 text-xs px-2 py-1.5 rounded-lg border border-orange-200 outline-none focus:border-orange-400 bg-white font-mono"
+              onkeydown="if(event.key==='Enter') addDeviceName()"/>
+            <button onclick="addDeviceName()"
+              class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white"
+              style="background:#f97316;">
+              <span class="mat" style="font-size:14px;">add</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active summary bar -->
+      <div class="rounded-xl border border-stone-100 p-3" style="background:#fafaf9;">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-green-600">Currently Active</span>
+          <span id="wl-count" class="ml-auto text-[10px] font-bold text-stone-300"></span>
+        </div>
+        <div id="wl-active" class="flex flex-wrap gap-1.5">
+          <span class="text-xs text-stone-300">Loading </span>
+        </div>
       </div>
     </div>
 
@@ -334,7 +402,7 @@
   function tabIcon(ct)   { return (TAB_META[ct] || {icon: 'settings'}).icon; }
   function defaultCfgName(ct) { return (TAB_META[ct] || {defaultConfigName: ct + '_config'}).defaultConfigName; }
 
-  // ── Pipeline status ──────────────────────────────────────────────────
+  // -- Pipeline status --------------------------------------------------
   async function loadStatus() {
     try {
       const d = await fetch('/api/pipeline/status').then(r => r.json());
@@ -351,7 +419,7 @@
           <div><span class="font-semibold text-stone-600">Pending loadcell:</span>
             ${d.has_pending_loadcell ? '<span class="text-orange-500 font-bold">Queued</span>' : 'None'}</div>
           <div><span class="font-semibold text-stone-600">Load raw:</span>
-            <span class="font-mono">${d.load_raw !== null && d.load_raw !== undefined ? d.load_raw : '—'}</span></div>
+            <span class="font-mono">${d.load_raw !== null && d.load_raw !== undefined ? d.load_raw : ' '}</span></div>
         </div>`;
       const svcs = d.services || [];
       document.getElementById('servicesList').innerHTML = svcs.length
@@ -363,12 +431,12 @@
     }
   }
 
-  // ── Targets + config names ───────────────────────────────────────────
+  // -- Targets + config names -------------------------------------------
   let targetsData = [];
   let activeTab   = null;
   let sendLogData = []; // cache for config_name lookup
 
-  // ── Send-order list state ────────────────────────────────────────────
+  // -- Send-order list state --------------------------------------------
   let _sendOrder = []; // array of config_type strings in current order
 
   function renderSendOrderList() {
@@ -377,7 +445,7 @@
     container.innerHTML = _sendOrder.map((ct, idx) => {
       const t        = targetsData.find(x => x.config_type === ct) || {};
       const enabled  = t.enabled ?? false;
-      const svcName  = t.service_name || '—';
+      const svcName  = t.service_name || ' ';
       const cfgName  = t.config_name  || defaultCfgName(ct);
       return `<div class="order-row ${enabled ? '' : 'disabled'}" draggable="true"
                    id="order-row-${ct}" data-ct="${ct}"
@@ -389,9 +457,9 @@
         <span class="mat" style="font-size:16px;color:${enabled?'#f97316':'#d4d4d4'};flex-shrink:0;">${tabIcon(ct)}</span>
         <div class="flex-1 min-w-0">
           <div class="text-xs font-bold text-stone-700">${tabLabel(ct)}</div>
-          <div class="text-[10px] text-stone-400 font-mono truncate">${svcName} · <span style="color:#f97316;">${cfgName}</span></div>
+          <div class="text-[10px] text-stone-400 font-mono truncate">${svcName}   <span style="color:#f97316;">${cfgName}</span></div>
         </div>
-        <label class="toggle flex-shrink-0" title="${enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}">
+        <label class="toggle flex-shrink-0" title="${enabled ? 'Enabled   click to disable' : 'Disabled   click to enable'}">
           <input type="checkbox" ${enabled ? 'checked' : ''}
             onchange="toggleOrderRowEnabled('${ct}', this.checked)" onclick="event.stopPropagation()"/>
           <span class="toggle-slider"></span>
@@ -401,7 +469,7 @@
     }).join('');
   }
 
-  // ── Drag-and-drop for order rows ─────────────────────────────────────
+  // -- Drag-and-drop for order rows -------------------------------------
   let _dragSrc = null;
   function onOrderDragStart(e) {
     _dragSrc = e.currentTarget.dataset.ct;
@@ -474,7 +542,7 @@
       const logByType = {};
       sendLogData.forEach(l => { logByType[l.config_type] = l; });
 
-      // ── Build ordered list from DB send_order ──
+      // -- Build ordered list from DB send_order --
       const sorted = [...targetsData].sort((a, b) => (a.send_order || 0) - (b.send_order || 0));
       // Include any types not yet in DB
       const sortedTypes = sorted.map(t => t.config_type);
@@ -482,7 +550,7 @@
       _sendOrder = sortedTypes;
       renderSendOrderList();
 
-      // ── Service + config names form ──
+      // -- Service + config names form --
       document.getElementById('targetsForm').innerHTML = `
         <div class="rounded-xl overflow-hidden border border-stone-100">
           <table class="w-full text-xs">
@@ -501,7 +569,7 @@
                 const log = logByType[ct] || {};
                 const ver = log.last_version > 0
                   ? `<span class="ver-badge ver-ok">v${log.last_version}</span>`
-                  : `<span class="ver-badge ver-never">—</span>`;
+                  : `<span class="ver-badge ver-never"> </span>`;
                 const cfgName = t.config_name || defaultCfgName(ct);
                 return `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-stone-50/50'}" style="border-bottom:1px solid #f5f5f4;">
                   <td class="py-3 px-4">
@@ -609,35 +677,35 @@
     }
   }
 
-  // ── Send Now (manual trigger, same logic as startup) ──────────────────
+  // -- Send Now (manual trigger, same logic as startup) ------------------
   async function doAutoSend() {
     const btn = document.getElementById('autoSendBtn');
     const res = document.getElementById('autoSendResult');
     btn.disabled = true; btn.style.opacity = '0.65';
     btn.classList.remove('pulse-btn');
     res.classList.remove('hidden');
-    res.innerHTML = '<span class="text-stone-400">⏳ Sending in order…</span>';
+    res.innerHTML = '<span class="text-stone-400">? Sending in order </span>';
     try {
       const d = await fetch('/api/pipeline/auto-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       const results = d.results || [];
       if (!results.length) {
-        res.innerHTML = '<span style="color:#d97706;">⚠ No enabled targets. Enable at least one in the list above.</span>';
+        res.innerHTML = '<span style="color:#d97706;">? No enabled targets. Enable at least one in the list above.</span>';
       } else {
         res.innerHTML = results.map(r => {
-          const icon  = r.pipeline_sent ? '✓' : (r.success ? '⏳' : '✗');
+          const icon  = r.pipeline_sent ? '?' : (r.success ? '?' : '?');
           const color = r.pipeline_sent ? '#15803d' : (r.success ? '#d97706' : '#dc2626');
           return `<div style="color:${color};">
             <span style="color:#aaa;margin-right:4px;">#${r.send_order||'?'}</span>
             ${icon} <strong>${tabLabel(r.config_type).toUpperCase()}</strong>` +
-            ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v' + r.version : ''}` +
-            ` — ${r.message || ''}</div>`;
+            ` ? <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v' + r.version : ''}` +
+            `   ${r.message || ''}</div>`;
         }).join('');
         toast(d.auto_sent ? 'Sent!' : 'Queued (service not yet connected)');
       }
     } catch (e) {
-      res.innerHTML = `<span style="color:#dc2626;">✗ Error: ${e.message}</span>`;
+      res.innerHTML = `<span style="color:#dc2626;">? Error: ${e.message}</span>`;
       toast('Send failed', false);
     } finally {
       btn.disabled = false; btn.style.opacity = '1';
@@ -646,7 +714,7 @@
     }
   }
 
-  // ── Generic push (modbus / iot_gateway) ──────────────────────────────
+  // -- Generic push (modbus / iot_gateway) ------------------------------
   const PUSH_EP = {
     modbus: '/api/pipeline/modbus-config/save',
     iot:    '/api/pipeline/iot-gateway-config/send',
@@ -657,23 +725,23 @@
     const el = document.getElementById('pushResult-' + panelKey);
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
-    el.textContent = 'Sending…';
+    el.textContent = 'Sending ';
     try {
       const d = await fetch(PUSH_EP[type], {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
         (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (d.success ? '✓ ' : '✗ ') +
+      el.textContent = (d.success ? '? ' : '? ') +
         (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
       loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '✗ Network error: ' + e.message;
+      el.textContent = '? Network error: ' + e.message;
     }
   }
 
-  // ── Loadcell devices ─────────────────────────────────────────────────
+  // -- Loadcell devices -------------------------------------------------
   let loadcellDevices  = [];
   let selectedLoadcellId = null;
   let lcDevicesLoaded  = false;
@@ -705,10 +773,10 @@
         <div class="flex-1 min-w-0">
           <div class="text-sm font-bold text-stone-800">${dev.name}</div>
           <div class="text-xs text-stone-400 mt-0.5">
-            Path: <span class="font-mono">${dev.device_path || '—'}</span> &nbsp;·&nbsp;
-            Capacity: ${dev.capacity_min ?? 0}–${dev.capacity_max ?? '?'} ${dev.unit || 'kg'} &nbsp;·&nbsp;
-            Tare: ${dev.tare_offset ?? '—'} &nbsp;·&nbsp;
-            Poll: ${dev.poll_ms ?? '—'} ms
+            Path: <span class="font-mono">${dev.device_path || ' '}</span> &nbsp; &nbsp;
+            Capacity: ${dev.capacity_min ?? 0} ${dev.capacity_max ?? '?'} ${dev.unit || 'kg'} &nbsp; &nbsp;
+            Tare: ${dev.tare_offset ?? ' '} &nbsp; &nbsp;
+            Poll: ${dev.poll_ms ?? ' '} ms
           </div>
         </div>
         <span class="text-[10px] font-mono text-stone-300 flex-shrink-0">id:${dev.id}</span>
@@ -725,7 +793,7 @@
     const el = document.getElementById('pushResult-loadcell');
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
-    el.textContent = 'Building & sending…';
+    el.textContent = 'Building & sending ';
     try {
       const dev = loadcellDevices.find(d => d.id === selectedLoadcellId);
       const d = await fetch('/api/pipeline/filters', {
@@ -740,16 +808,16 @@
       }).then(r => r.json());
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
         (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (d.success ? '✓ ' : '✗ ') +
+      el.textContent = (d.success ? '? ' : '? ') +
         (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
       loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '✗ Network error: ' + e.message;
+      el.textContent = '? Network error: ' + e.message;
     }
   }
 
-  // ── Loadcell WebSocket ───────────────────────────────────────────────
+  // -- Loadcell WebSocket -----------------------------------------------
   let lcWs = null;
 
   function connectLcWs() {
@@ -785,12 +853,12 @@
 
   function handleLcDatapoint(dp, val) {
     if (!dp) return;
-    if (dp === 'load_raw') { document.getElementById('lc-raw').textContent = val ?? '—'; return; }
+    if (dp === 'load_raw') { document.getElementById('lc-raw').textContent = val ?? ' '; return; }
     if (dp.endsWith('.weight_kg') || dp.endsWith('.weight')) {
       const v = parseFloat(val);
       document.getElementById('lc-weight').textContent = isNaN(v) ? val : v.toFixed(3);
     } else if (dp.endsWith('.unit')) {
-      document.getElementById('lc-unit').textContent = val || '—';
+      document.getElementById('lc-unit').textContent = val || ' ';
     } else if (dp.endsWith('.tared')) {
       const el = document.getElementById('lc-tared');
       el.textContent = 'Tare: ' + (val ? 'Yes' : 'No');
@@ -800,7 +868,7 @@
       el.textContent = 'Cal: ' + (val ? 'Yes' : 'No');
       el.className = 'ver-badge ' + (val ? 'ver-ok' : 'ver-never');
     } else if (dp.endsWith('.raw')) {
-      document.getElementById('lc-raw').textContent = val ?? '—';
+      document.getElementById('lc-raw').textContent = val ?? ' ';
     } else if (dp.endsWith('.capacity')) {
       window._lcCapacity = parseFloat(val) || null;
     }
@@ -818,14 +886,14 @@
     const ts  = new Date().toLocaleTimeString();
     const line = document.createElement('div');
     line.className = 'text-stone-400';
-    const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? '—');
+    const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? ' ');
     line.innerHTML = `<span class="text-stone-300">${ts}</span> <span class="text-orange-400">${dp}</span> = <span class="text-stone-600">${displayVal}</span>`;
-    if (log.firstChild?.textContent === 'Waiting for data…') log.innerHTML = '';
+    if (log.firstChild?.textContent === 'Waiting for data ') log.innerHTML = '';
     log.insertBefore(line, log.firstChild);
     while (log.children.length > 60) log.removeChild(log.lastChild);
   }
 
-  // ── Core config history ──────────────────────────────────────────────
+  // -- Core config history ----------------------------------------------
   async function loadCoreConfigs() {
     const container = document.getElementById('coreConfigList');
     try {
@@ -850,9 +918,9 @@
                   <span class="ver-badge ver-ok">v${c.version}</span>
                   ${i === 0 ? '<span class="ver-badge ver-queue ml-1">latest</span>' : ''}
                 </td>
-                <td class="py-2 px-3 font-mono">${(c.device_names || []).join(', ') || '—'}</td>
-                <td class="py-2 px-3 text-stone-400">${c.service_name || '—'}</td>
-                <td class="py-2 px-3 text-stone-400">${c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</td>
+                <td class="py-2 px-3 font-mono">${(c.device_names || []).join(', ') || ' '}</td>
+                <td class="py-2 px-3 text-stone-400">${c.service_name || ' '}</td>
+                <td class="py-2 px-3 text-stone-400">${c.created_at ? new Date(c.created_at).toLocaleString() : ' '}</td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -866,23 +934,23 @@
     const el = document.getElementById('pushResult-core');
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
-    el.textContent = 'Resending latest config…';
+    el.textContent = 'Resending latest config ';
     try {
       const d = await fetch('/api/pipeline/core-config/resend', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
         (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (d.success ? '✓ ' : '✗ ') +
+      el.textContent = (d.success ? '? ' : '? ') +
         (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
       loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '✗ Network error: ' + e.message;
+      el.textContent = '? Network error: ' + e.message;
     }
   }
 
-  // ── Version log ──────────────────────────────────────────────────────
+  // -- Version log ------------------------------------------------------
   async function loadSendLog() {
     try {
       const [d, tgtD] = await Promise.all([
@@ -904,9 +972,9 @@
                     l.last_status === 'failed'  ? 'ver-fail' : 'ver-queue';
         const ver = l.last_version > 0
           ? `<span class="ver-badge ver-ok">v${l.last_version}</span>`
-          : '<span class="ver-badge ver-never">—</span>';
-        const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : '—';
-        const msg = (l.last_message || '').slice(0, 60) + ((l.last_message||'').length > 60 ? '…' : '');
+          : '<span class="ver-badge ver-never"> </span>';
+        const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : ' ';
+        const msg = (l.last_message || '').slice(0, 60) + ((l.last_message||'').length > 60 ? ' ' : '');
         const tgt = tgtMap[l.config_type] || {};
         const cfgName = tgt.config_name || defaultCfgName(l.config_type);
         return `<tr class="border-b border-stone-50 hover:bg-stone-50">
@@ -914,9 +982,9 @@
           <td class="py-2.5 pr-4 font-mono text-orange-500">${cfgName}</td>
           <td class="py-2.5 pr-4">${ver}</td>
           <td class="py-2.5 pr-4"><span class="ver-badge ${sc}">${l.last_status}</span></td>
-          <td class="py-2.5 pr-4 font-mono text-stone-500">${l.last_service || '—'}</td>
+          <td class="py-2.5 pr-4 font-mono text-stone-500">${l.last_service || ' '}</td>
           <td class="py-2.5 pr-4 text-stone-400 whitespace-nowrap">${ts}</td>
-          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message||'').replace(/"/g,'&quot;')}">${msg||'—'}</td>
+          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message||'').replace(/"/g,'&quot;')}">${msg||' '}</td>
         </tr>`;
       }).join('');
     } catch (e) {
@@ -929,8 +997,119 @@
     await Promise.all([loadStatus(), loadTargets(), loadSendLog()]);
   }
 
+  // -- Whitelist Manager ------------------------------------------------
+  async async async function loadWhitelist() {
+    try {
+      const d = await fetch('/api/pipeline/whitelist').then(r => r.json());
+      if (!d.success) return;
+
+      // Permanent
+      document.getElementById('wl-permanent').innerHTML = (d.permanent || []).length
+        ? d.permanent.map(e => wlChip(e, 'stone', false)).join('')
+        : '<span class="text-xs text-stone-300">�</span>';
+
+      // Named devices panel
+      const namedEl = document.getElementById('wl-named');
+      const names = d.device_names || [];
+      if (names.length) {
+        namedEl.innerHTML = names.map(name => {
+          const dps = (d.named || []).filter(dp => dp.startsWith(name + '_'));
+          return `<div class="mb-2">
+            <div class="flex items-center gap-1 mb-1">
+              <span class="text-[11px] font-bold font-mono text-orange-700 bg-orange-50 px-2 py-0.5 rounded-lg">${name}</span>
+              <button onclick="removeDeviceName('${name}')" class="opacity-40 hover:opacity-100 ml-auto" title="Remove device">
+                <span class="mat" style="font-size:13px;line-height:1;">close</span>
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-1 pl-1">
+              ${dps.map(dp => wlChip(dp, 'orange', false)).join('')}
+            </div>
+          </div>`;
+        }).join('');
+      } else {
+        namedEl.innerHTML = '<span class="text-xs text-stone-300">No devices added yet</span>';
+      }
+
+      // Active summary
+      document.getElementById('wl-count').textContent = (d.active || []).length + ' entries';
+      document.getElementById('wl-active').innerHTML = (d.active || []).length
+        ? d.active.map(e => `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full" style="background:#dcfce7;color:#15803d;">${e}</span>`).join('')
+        : '<span class="text-xs text-stone-300">�</span>';
+
+    } catch (e) { console.warn('Whitelist load error:', e); }
+  }
+
+
+  function wlChip(entry, color, removable) {
+    const colors = {
+      stone: 'background:#f5f5f4;color:#78716c;',
+      orange: 'background:#fff7ed;color:#c2410c;',
+      blue:   'background:#eff6ff;color:#1d4ed8;',
+    };
+    const removeBtn = removable
+      ? `<button onclick="removeCustomEntry('${entry}')" class="ml-1 opacity-50 hover:opacity-100" title="Remove">
+           <span class="mat" style="font-size:12px;line-height:1;">close</span>
+         </button>`
+      : '';
+    return `<div class="flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded-lg" style="${colors[color]||colors.stone}">
+      <span>${entry}</span>${removeBtn}
+    </div>`;
+  }
+
+  async function addDeviceName() {
+    const input = document.getElementById('wl-add-input');
+    const name = (input.value || '').trim();
+    if (!name) return;
+    try {
+      const d = await fetch('/api/pipeline/whitelist/device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', name })
+      }).then(r => r.json());
+      if (d.success) {
+        input.value = '';
+        toast('Added device "' + name + '" to whitelist');
+        loadWhitelist();
+      } else {
+        toast(d.error || 'Failed', false);
+      }
+    } catch (e) { toast('Error: ' + e.message, false); }
+  }
+
+  async function removeDeviceName(name) {
+    try {
+      const d = await fetch('/api/pipeline/whitelist/device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', name })
+      }).then(r => r.json());
+      if (d.success) {
+        toast('Removed device "' + name + '"');
+        loadWhitelist();
+      } else {
+        toast(d.error || 'Failed', false);
+      }
+    } catch (e) { toast('Error: ' + e.message, false); }
+  }
+
+  // Legacy stub kept so any stale references don�t throw
+  async function addCustomEntry() { addDeviceName(); }
+  async function removeCustomEntry(entry) {
+    try {
+      const d = await fetch('/api/pipeline/whitelist/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', entry })
+      }).then(r => r.json());
+      if (d.success) {
+        toast('Removed "' + entry + '"');
+        loadWhitelist();
+      } else {
+        toast(d.error || 'Failed', false);
+      }
+    } catch (e) { toast('Error: ' + e.message, false); }
+  }
+
   loadAll();
-  setInterval(() => { loadStatus(); loadSendLog(); }, 8000);
-</script>
-</body>
-</html>
+  loadWhitelist();
+  setInte

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Management Test</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        primaryHover: '#2563EB'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50">
+
+    <!-- Container for the template -->
+    <div id="app-container"></div>
+
+    <!-- Load the JavaScript FIRST -->
+    <script src="device-management.js"></script>
+    
+    <script>
+        console.log('%c=== DEVICE MANAGEMENT LOADER ===', 'color: blue; font-size: 14px; font-weight: bold');
+        
+        // Load HTML template
+        fetch('device-management.html')
+            .then(response => {
+                console.log('HTML fetch response:', response.status);
+                return response.text();
+            })
+            .then(html => {
+                console.log('HTML loaded, length:', html.length);
+                document.getElementById('app-container').innerHTML = html;
+                
+                console.log('Checking for initializeDeviceManagement...');
+                console.log('Function exists?', typeof window.initializeDeviceManagement);
+                console.log('deviceManagementLoaded?', window.deviceManagementLoaded);
+                
+                // Call initialization
+                if (typeof window.initializeDeviceManagement === 'function') {
+                    console.log('%cCalling window.initializeDeviceManagement()', 'color: green; font-weight: bold');
+                    window.initializeDeviceManagement();
+                    
+                    // Verify buttons after init
+                    setTimeout(() => {
+                        const addBtn = document.getElementById('addDeviceBtn');
+                        const refreshBtn = document.getElementById('refreshBtn');
+                        const exportBtn = document.getElementById('exportBtn');
+                        
+                        console.log('%c=== BUTTON VERIFICATION ===', 'color: purple; font-size: 14px; font-weight: bold');
+                        console.log('Add Device Button:', addBtn ? '✓ Found' : '✗ Not found');
+                        console.log('  - Has listener?', addBtn?.hasListener);
+                        console.log('Refresh Button:', refreshBtn ? '✓ Found' : '✗ Not found');
+                        console.log('  - Has listener?', refreshBtn?.hasListener);
+                        console.log('Export Button:', exportBtn ? '✓ Found' : '✗ Not found');
+                        console.log('  - Has listener?', exportBtn?.hasListener);
+                        
+                        // Test clicking Add Device
+                        if (addBtn) {
+                            console.log('%cTry clicking the "Add Device" button now', 'color: orange; font-size: 12px');
+                        }
+                    }, 500);
+                } else {
+                    console.error('initializeDeviceManagement function NOT FOUND!');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading device management:', error);
+                document.getElementById('app-container').innerHTML = `
+                    <div class="p-8 text-red-600">
+                        <h2 class="text-xl font-bold mb-2">Error Loading</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            });
+    </script>
+</body>
+</html>

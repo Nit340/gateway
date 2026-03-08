@@ -59,8 +59,13 @@ ADMIN_UI_DIR = os.path.join(os.path.dirname(__file__), 'admin_ui')
 
 def _html(filename):
     path = os.path.join(ADMIN_UI_DIR, filename)
-    with open(path, 'r', encoding='utf-8') as f:
-        return web.Response(text=f.read(), content_type='text/html')
+    with open(path, 'rb') as f:
+        raw = f.read()
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError:
+        text = raw.decode('windows-1252')
+    return web.Response(text=text, content_type='text/html', charset='utf-8')
 
 async def admin_login_page(request):
     return _html('login.html')
@@ -396,7 +401,11 @@ async def start_background_tasks(app):
             try:
                 result = await _do_auto_send()
                 import json as _j
-                body   = _j.loads(result.body) if hasattr(result, "body") else result
+                if hasattr(result, "body"):
+                    raw = result.body
+                    body = _j.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+                else:
+                    body = result
                 sent   = body.get("auto_sent", False)
                 count  = body.get("targets_attempted", 0)
                 print("[MAIN] Startup auto-send complete: {} target(s), sent={}".format(count, sent))

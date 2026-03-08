@@ -1,0 +1,151 @@
+<div class="space-y-6">
+    <div class="form-section">
+        <h5 class="form-section-title">AWS Configuration</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">AWS IoT Endpoint</label>
+                <input type="text" id="field-endpoint" 
+                       class="w-full compact-input"
+                       placeholder="a3qj7x...iot.region.amazonaws.com"
+                       required>
+                <p class="help-text">From AWS IoT Console → Settings → Custom endpoint</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">AWS Region</label>
+                <select id="field-region" class="w-full compact-select" required>
+                    <option value="us-east-1" selected>us-east-1 (N. Virginia)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                    <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Thing Name</label>
+                <input type="text" id="field-thingName" 
+                       class="w-full compact-input"
+                       value="crane-gateway-01"
+                       placeholder="Enter AWS IoT thing name"
+                       required>
+                <p class="help-text">Name of the IoT Thing in AWS IoT Core</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Client ID</label>
+                <input type="text" id="field-clientId" 
+                       class="w-full compact-input"
+                       value="aws-iot-client-01"
+                       placeholder="Enter MQTT client ID">
+                <p class="help-text">MQTT client identifier (defaults to thing name if empty)</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">MQTT Settings</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">QoS Level</label>
+                <select id="field-qos" class="w-full compact-select">
+                    <option value="0">0 - At most once</option>
+                    <option value="1" selected>1 - At least once</option>
+                </select>
+                <p class="help-text">AWS IoT supports QoS 0 and 1 only</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Keep Alive</label>
+                <div class="flex items-center gap-2">
+                    <input type="number" id="field-keepAlive" 
+                           class="w-full compact-input"
+                           value="30"
+                           min="5"
+                           max="1200">
+                    <span class="text-xs text-slate-500">seconds</span>
+                </div>
+                <p class="help-text">AWS maximum is 1200 seconds (20 minutes)</p>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Clean Session</span>
+                    <p class="help-text">Start with clean MQTT session</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-cleanSession" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Security Certificates</h5>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Device Certificate</label>
+                <div class="file-upload">
+                    <input type="file" id="field-deviceCertificate" accept=".pem,.crt,.cer" class="hidden" onchange="handleFileUpload(this, 'field-deviceCertificate')">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="document.getElementById('field-deviceCertificate').click()">
+                        <i class="fa-solid fa-upload mr-1"></i>Upload Certificate
+                    </button>
+                    <span id="field-deviceCertificate-name" class="file-name"></span>
+                </div>
+                <p class="help-text">Upload device certificate file (.pem, .crt)</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Private Key</label>
+                <div class="file-upload">
+                    <input type="file" id="field-privateKey" accept=".pem,.key" class="hidden" onchange="handleFileUpload(this, 'field-privateKey')">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="document.getElementById('field-privateKey').click()">
+                        <i class="fa-solid fa-upload mr-1"></i>Upload Private Key
+                    </button>
+                    <span id="field-privateKey-name" class="file-name"></span>
+                </div>
+                <p class="help-text">Upload private key file (.pem, .key)</p>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Root CA Certificate</label>
+                <div class="file-upload">
+                    <input type="file" id="field-rootCA" accept=".pem,.crt" class="hidden" onchange="handleFileUpload(this, 'field-rootCA')">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" onclick="document.getElementById('field-rootCA').click()">
+                        <i class="fa-solid fa-upload mr-1"></i>Upload Root CA
+                    </button>
+                    <span id="field-rootCA-name" class="file-name"></span>
+                </div>
+                <p class="help-text">Upload AWS root CA certificate (optional - uses Amazon default if not provided)</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-section">
+        <h5 class="form-section-title">Device Shadow</h5>
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-medium text-slate-700">Enable Shadow Updates</span>
+                    <p class="help-text">Sync device state with AWS IoT Device Shadow</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="field-shadowUpdate" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Shadow Update Interval</label>
+                <select id="field-shadowInterval" class="w-full compact-select">
+                    <option value="10">10 seconds</option>
+                    <option value="30">30 seconds</option>
+                    <option value="60" selected>1 minute</option>
+                    <option value="300">5 minutes</option>
+                </select>
+                <p class="help-text">How often to update device shadow</p>
+            </div>
+        </div>
+    </div>
+</div>
