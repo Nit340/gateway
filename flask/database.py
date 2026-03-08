@@ -121,10 +121,11 @@ def create_tables(cursor):
     # Modbus device
     # -----------------------------------------------------------------------
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS modbus_device (
+        CREATE TABLE IF NOT EXISTS vfd_device (
             id                  TEXT    PRIMARY KEY,
             name                TEXT    NOT NULL,
-            device_type         TEXT    NOT NULL CHECK(device_type IN ('tcp', 'rtu')),
+            protocol_type       TEXT    NOT NULL DEFAULT 'rtu' CHECK(protocol_type IN ('tcp', 'rtu')),
+            device_type         TEXT    NOT NULL DEFAULT 'vfd' CHECK(device_type IN ('vfd')),
             group_id            INTEGER,
             service_id          INTEGER,
 
@@ -201,7 +202,7 @@ def create_tables(cursor):
     # Modbus datapoints
     # -----------------------------------------------------------------------
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS modbus_datapoints (
+        CREATE TABLE IF NOT EXISTS vfd_datapoints (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id        TEXT    NOT NULL,
             name             TEXT    NOT NULL,
@@ -225,7 +226,7 @@ def create_tables(cursor):
             created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, slave_id, name),
-            FOREIGN KEY (device_id) REFERENCES modbus_device(id) ON DELETE CASCADE,
+            FOREIGN KEY (device_id) REFERENCES vfd_device(id) ON DELETE CASCADE,
             FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE SET NULL
         )
     ''')
@@ -389,11 +390,21 @@ def create_tables(cursor):
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id TEXT    NOT NULL REFERENCES virtual_device(id) ON DELETE CASCADE,
             name      TEXT    NOT NULL,
-            unit      TEXT    DEFAULT \'\',
+            unit      TEXT    DEFAULT '',
             UNIQUE(device_id, name)
         )
     ''')
 
+    # -----------------------------------------------------------------------
+    # WebUI Page Restrictions (per-user access control)
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS webui_user_page_restrictions (
+            user_id    INTEGER NOT NULL REFERENCES webui_users(id) ON DELETE CASCADE,
+            page_key   TEXT    NOT NULL,
+            PRIMARY KEY (user_id, page_key)
+        )
+    ''')
 
 
 def _migrate_existing_db(cursor):
@@ -499,6 +510,16 @@ def _migrate_existing_db(cursor):
         print("[DB] Migration: created rules table")
 
 
+    # vfd_device: add protocol_type and device_type columns if missing (VFD rename migration)
+    cursor.execute("PRAGMA table_info(vfd_device)")
+    vfd_cols = {r[1] for r in cursor.fetchall()}
+    if 'protocol_type' not in vfd_cols:
+        cursor.execute("ALTER TABLE vfd_device ADD COLUMN protocol_type TEXT NOT NULL DEFAULT 'rtu'")
+        print("[DB] Migration: added vfd_device.protocol_type")
+    if 'device_type' not in vfd_cols:
+        cursor.execute("ALTER TABLE vfd_device ADD COLUMN device_type TEXT NOT NULL DEFAULT 'vfd'")
+        print("[DB] Migration: added vfd_device.device_type")
+
     # virtual_device / virtual_datapoints: ensure tables exist on older DBs
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='virtual_device'")
     if not cursor.fetchone():
@@ -521,6 +542,18 @@ def _migrate_existing_db(cursor):
             )
         ''')
         print("[DB] Migration: created virtual_device and virtual_datapoints tables")
+
+    # webui_user_page_restrictions: ensure table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='webui_user_page_restrictions'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE webui_user_page_restrictions (
+                user_id  INTEGER NOT NULL,
+                page_key TEXT    NOT NULL,
+                PRIMARY KEY (user_id, page_key)
+            )
+        """)
+        print("[DB] Migration: created webui_user_page_restrictions table")
 
 
 def _hash_password(plain):
@@ -979,7 +1012,7 @@ def delete_tag_group(group_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('UPDATE modbus_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
+        cursor.execute('UPDATE vfd_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
         cursor.execute('DELETE FROM tag_groups WHERE id = ?', (group_id,))
         conn.commit()
         conn.close()
@@ -1029,9 +1062,9 @@ def get_database_stats():
         cursor = conn.cursor()
         stats = {}
         for label, table in [
-            ('modbus_devices',      'modbus_device'),
+            ('vfd_devices',      'vfd_device'),
             ('loadcell_devices',    'loadcell_device'),
-            ('modbus_datapoints',   'modbus_datapoints'),
+            ('vfd_datapoints',   'vfd_datapoints'),
             ('loadcell_datapoints', 'loadcell_datapoints'),
             ('groups',              'tag_groups'),
             ('admin_users',         'admin_users'),
@@ -1040,8 +1073,8 @@ def get_database_stats():
             cursor.execute('SELECT COUNT(*) FROM {}'.format(table))
             stats[label] = cursor.fetchone()[0]
         conn.close()
-        stats['total_devices']    = stats['modbus_devices'] + stats['loadcell_devices']
-        stats['total_datapoints'] = stats['modbus_datapoints'] + stats['loadcell_datapoints']
+        stats['total_devices']    = stats['vfd_devices'] + stats['loadcell_devices']
+        stats['total_datapoints'] = stats['vfd_datapoints'] + stats['loadcell_datapoints']
         return stats
     except Exception as e:
         print("Error getting stats: {}".format(e))
@@ -1279,7 +1312,7 @@ def get_all_modbus_tags():
         conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute('SELECT name FROM modbus_datapoints WHERE enabled=1 ORDER BY name')
+        cur.execute('SELECT name FROM vfd_datapoints WHERE enabled=1 ORDER BY name')
         tags = [row['name'] for row in cur.fetchall()]
         conn.close()
         return tags
@@ -1300,3 +1333,84 @@ if __name__ == '__main__':
         print("{}: {}".format(k, v))
 else:
     init_database()
+
+
+# ---------------------------------------------------------------------------
+# WebUI Page Restrictions — per-user access control
+# ---------------------------------------------------------------------------
+
+# Master list of all pages in layout.html  (page_key, human label, sort_order)
+WEBUI_PAGES = [
+    ('general-configuration', 'General Configuration',    1),
+    ('device-management',     'Device Management',         2),
+    ('field-integration',     'Field Integration',         3),
+    ('mqtt-cloud',            'MQTT / Cloud',              4),
+    ('ota-gateway',           'OTA Gateway',               5),
+    ('craneiq',               'CraneIQ',                   6),
+    ('data-retention',        'Data Retention',            7),
+    ('logging',               'Logging',                   8),
+    ('diagnostics',           'Diagnostics',               9),
+    ('security',              'Security',                 10),
+    ('license',               'License',                  11),
+    ('automation',            'Automation',               12),
+    ('alerts',                'Alerts',                   13),
+    ('rules',                 'Rules',                    14),
+    ('backup',                'Backup',                   15),
+    ('notification',          'Notification',             16),
+]
+
+ALL_PAGE_KEYS = [p[0] for p in WEBUI_PAGES]
+
+
+def get_all_pages():
+    """Return the master list of pages as dicts."""
+    return [{'page_key': k, 'label': l, 'sort_order': o} for k, l, o in WEBUI_PAGES]
+
+
+def get_user_page_restrictions(user_id):
+    """Return list of page_key strings that are HIDDEN for this user."""
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        cur.execute(
+            'SELECT page_key FROM webui_user_page_restrictions WHERE user_id=?',
+            (user_id,)
+        )
+        keys = [r[0] for r in cur.fetchall()]
+        conn.close()
+        return keys
+    except Exception as e:
+        print('get_user_page_restrictions error: {}'.format(e))
+        return []
+
+
+def set_user_page_restriction(user_id, page_key, hidden):
+    """Add or remove a page restriction for a user. hidden=True means blocked."""
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor()
+        if hidden:
+            cur.execute(
+                'INSERT OR IGNORE INTO webui_user_page_restrictions (user_id, page_key) VALUES (?, ?)',
+                (user_id, page_key)
+            )
+        else:
+            cur.execute(
+                'DELETE FROM webui_user_page_restrictions WHERE user_id=? AND page_key=?',
+                (user_id, page_key)
+            )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print('set_user_page_restriction error: {}'.format(e))
+        return False
+
+
+def get_pages_for_user(user_id):
+    """Return list of {page_key, label, visible} for all pages for this user."""
+    hidden = set(get_user_page_restrictions(user_id))
+    return [
+        {'page_key': k, 'label': l, 'sort_order': o, 'visible': k not in hidden}
+        for k, l, o in WEBUI_PAGES
+    ]

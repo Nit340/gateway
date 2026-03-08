@@ -340,7 +340,7 @@
         if (filteredDevices.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="px-6 py-8 text-center text-slate-500">
+                    <td colspan="8" class="px-6 py-8 text-center text-slate-500">
                         <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
                         <p>${searchTerm ? 'No devices match your search' : 'No devices found'}</p>
                     </td>
@@ -357,14 +357,21 @@
             row.id = `device-${device.id}`;
             
             const deviceTypeBadge = getDeviceTypeBadge(device);
+            const protocolBadge = getProtocolBadge(device);
             const address = getDeviceAddress(device);
             
             row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-xs font-mono text-slate-500">${escapeHtml(device.id)}</div>
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm font-medium text-slate-900">${escapeHtml(device.name)}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     ${deviceTypeBadge}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    ${protocolBadge}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-slate-700 font-mono text-xs">${escapeHtml(address)}</div>
@@ -378,6 +385,9 @@
                     <button class="text-blue-600 hover:text-blue-800 mr-3" onclick="window.deviceManagement.editDevice('${device.id}')" title="Edit">
                         <i class="fa-solid fa-edit"></i>
                     </button>
+                    <button class="text-amber-600 hover:text-amber-800 mr-3" onclick="window.deviceManagement.duplicateDeviceFromTable('${device.id}')" title="Duplicate">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
                     <button class="text-red-600 hover:text-red-800" onclick="window.deviceManagement.deleteDevice('${device.id}')" title="Delete">
                         <i class="fa-solid fa-trash"></i>
                     </button>
@@ -389,9 +399,9 @@
     }
 
     function getDeviceAddress(device) {
-        if (device.protocol === 'modbus-tcp') {
+        if (device.protocol === 'vfd-tcp') {
             return `${device.address || 'Not configured'}`;
-        } else if (device.protocol === 'modbus-rtu') {
+        } else if (device.protocol === 'vfd-rtu') {
             return device.address || 'Not configured';
         } else if (device.protocol === 'loadcell') {
             return device.address || 'Not configured';
@@ -400,17 +410,13 @@
     }
 
     function getDeviceTypeBadge(device) {
+        const protocol = (device.protocol || '').toLowerCase();
         let badgeClass = 'device-type-badge ';
         let typeText = '';
         
-        const protocol = (device.protocol || '').toLowerCase();
-        
-        if (protocol === 'modbus-tcp' || protocol === 'tcp') {
+        if (protocol === 'vfd-tcp' || protocol === 'vfd-rtu' || protocol === 'tcp' || protocol === 'rtu') {
             badgeClass += 'type-modbus-tcp';
-            typeText = 'Modbus TCP';
-        } else if (protocol === 'modbus-rtu' || protocol === 'rtu') {
-            badgeClass += 'type-modbus-rtu';
-            typeText = 'Modbus RTU';
+            typeText = 'VFD';
         } else if (protocol === 'loadcell') {
             badgeClass += 'type-loadcell';
             typeText = 'Loadcell';
@@ -423,6 +429,31 @@
         }
         
         return `<span class="${badgeClass}">${typeText}</span>`;
+    }
+
+    function getProtocolBadge(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+        let badgeClass = 'device-type-badge ';
+        let protoText = '';
+        
+        if (protocol === 'vfd-tcp' || protocol === 'tcp') {
+            badgeClass += 'type-modbus-tcp';
+            protoText = 'Modbus TCP';
+        } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
+            badgeClass += 'type-modbus-rtu';
+            protoText = 'Modbus RTU';
+        } else if (protocol === 'loadcell') {
+            badgeClass += 'type-loadcell';
+            protoText = 'SysFS / IIO';
+        } else if (protocol === 'virtual') {
+            badgeClass += 'type-virtual';
+            protoText = '—';
+        } else {
+            badgeClass += 'type-modbus-tcp';
+            protoText = device.protocol || '—';
+        }
+        
+        return `<span class="${badgeClass}">${protoText}</span>`;
     }
 
     function getStatusBadge(device) {
@@ -464,18 +495,18 @@
         const protocol = (device.protocol || '').toLowerCase();
         let typeStyle = { bg: 'bg-slate-100', text: 'text-slate-700', label: device.type || 'Unknown' };
         
-        if (protocol === 'modbus-tcp' || protocol === 'tcp') {
-            typeStyle = { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Modbus TCP' };
-        } else if (protocol === 'modbus-rtu' || protocol === 'rtu') {
-            typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'Modbus RTU' };
+        if (protocol === 'vfd-tcp' || protocol === 'tcp') {
+            typeStyle = { bg: 'bg-blue-50', text: 'text-blue-700', label: 'VFD', proto: 'Modbus TCP' };
+        } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
+            typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'VFD', proto: 'Modbus RTU' };
         } else if (protocol === 'loadcell') {
-            typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell' };
+            typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell', proto: 'SysFS / IIO' };
         } else if (protocol === 'virtual') {
-            typeStyle = { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Virtual Device' };
+            typeStyle = { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Virtual', proto: '—' };
         }
         
         const config = device.config || {};
-        const isTCP = protocol === 'modbus-tcp' || protocol === 'tcp';
+        const isTCP = protocol === 'vfd-tcp' || protocol === 'tcp';
         
         let detailsHtml = `
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -495,6 +526,10 @@
                                     <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeStyle.bg} ${typeStyle.text}">${typeStyle.label}</span></div>
                                 </div>
                                 <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
+                                    <div class="text-sm text-slate-700">${typeStyle.proto || escapeHtml(device.protocol || '—')}</div>
+                                </div>
+                                <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Status</div>
                                     <div class="flex items-center gap-1.5">
                                         <span class="w-2 h-2 rounded-full ${statusStyle.dot}"></span>
@@ -508,10 +543,6 @@
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Last Polled</div>
                                     <div class="text-sm text-slate-700">${escapeHtml(device.lastPoll || 'Never')}</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
-                                    <div class="text-sm text-slate-700">${escapeHtml(device.protocol || 'Unknown')}</div>
                                 </div>
                             </div>
                         </div>
@@ -554,7 +585,7 @@
                                     <div class="text-sm text-slate-700">${config.polling_interval_ms || 300}</div>
                                 </div>
             `;
-        } else if (protocol === 'modbus-rtu') {
+        } else if (protocol === 'vfd-rtu') {
             detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Serial Port</div>
@@ -723,10 +754,10 @@
             
             document.getElementById('deviceNameInput').value = '';
             
-            const firstRadio = panel.querySelector('input[name="device-type"][value="modbus-rtu"]');
+            const firstRadio = panel.querySelector('input[name="device-type"][value="vfd"]');
             if (firstRadio) {
                 firstRadio.checked = true;
-                switchDeviceType('modbus-rtu');
+                switchDeviceType('vfd');
             }
         }
     }
@@ -741,10 +772,24 @@
 
     function switchDeviceType(type) {
         const panel = document.getElementById('addDevicePanel');
+
+        // Show/hide protocol sub-section (only visible for VFD)
+        const protocolSection = document.getElementById('protocolSelectionSection');
+        if (protocolSection) {
+            protocolSection.style.display = (type === 'vfd') ? '' : 'none';
+        }
+
+        // Resolve VFD -> actual modbus protocol from nested radio
+        let resolvedType = type;
+        if (type === 'vfd') {
+            const vfdProto = panel.querySelector('input[name="vfd-protocol"]:checked');
+            resolvedType = vfdProto ? vfdProto.value : 'vfd-rtu';
+        }
+
         const configs = (panel || document).querySelectorAll('.protocol-config');
         configs.forEach(config => config.classList.remove('active'));
         
-        const selectedConfig = document.getElementById(`${type}-config`);
+        const selectedConfig = document.getElementById(`${resolvedType}-config`);
         if (selectedConfig) {
             selectedConfig.classList.add('active');
         }
@@ -763,7 +808,7 @@
             }
             
             const panel = document.getElementById('addDevicePanel');
-            const deviceType = document.querySelector('#addDevicePanel input[name="device-type"]:checked')?.value;
+            let deviceType = document.querySelector('#addDevicePanel input[name="device-type"]:checked')?.value;
             if (!deviceType) {
                 showNotification('Please select a device type', 'error');
                 isSaving = false;
@@ -775,9 +820,16 @@
                 config: {}
             };
             
-            if (deviceType === 'modbus-rtu') {
-                requestData.type = 'modbus';
-                requestData.protocol = 'modbus-rtu';
+            // Resolve VFD -> actual protocol
+            if (deviceType === 'vfd') {
+                const vfdProto = document.querySelector('#addDevicePanel input[name="vfd-protocol"]:checked')?.value;
+                deviceType = vfdProto || 'vfd-rtu';
+            }
+
+            if (deviceType === 'vfd-rtu') {
+                requestData.type = 'vfd';
+                requestData.protocol = 'vfd-rtu';
+                requestData.protocol_type = 'rtu';
                 requestData.device_type = 'rtu';
                 requestData.config = {
                     serial_port: document.getElementById('serialPort')?.value || '/dev/ttymxc5',
@@ -790,9 +842,10 @@
                     max_retries: parseInt(document.getElementById('maxRetries')?.value) || 2,
                     polling_interval_ms: parseInt(document.getElementById('pollingInterval')?.value) || 300
                 };
-            } else if (deviceType === 'modbus-tcp') {
-                requestData.type = 'modbus';
-                requestData.protocol = 'modbus-tcp';
+            } else if (deviceType === 'vfd-tcp') {
+                requestData.type = 'vfd';
+                requestData.protocol = 'vfd-tcp';
+                requestData.protocol_type = 'tcp';
                 requestData.device_type = 'tcp';
                 requestData.config = {
                     ip_address: document.getElementById('modbusTcpIp')?.value || '192.168.1.100',
@@ -930,16 +983,16 @@
                 
                 document.getElementById('deviceNameInput').value = device.name || '';
                 
-                let deviceTypeValue = 'modbus-rtu';
+                let deviceTypeValue = 'vfd-rtu';
                 const protocol = device.protocol || '';
                 
                 console.log('Editing device:', device);
                 console.log('Protocol:', protocol);
                 
-                if (protocol === 'modbus-tcp' || protocol === 'tcp') {
-                    deviceTypeValue = 'modbus-tcp';
-                } else if (protocol === 'modbus-rtu' || protocol === 'rtu') {
-                    deviceTypeValue = 'modbus-rtu';
+                if (protocol === 'vfd-tcp' || protocol === 'tcp') {
+                    deviceTypeValue = 'vfd';
+                } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
+                    deviceTypeValue = 'vfd';
                 } else if (protocol === 'loadcell') {
                     deviceTypeValue = 'loadcell';
                 } else if (protocol === 'virtual') {
@@ -951,13 +1004,27 @@
                 const deviceTypeRadio = document.querySelector(`input[name="device-type"][value="${deviceTypeValue}"]`);
                 if (deviceTypeRadio) {
                     deviceTypeRadio.checked = true;
+                    // For VFD: set the protocol sub-radio based on actual device protocol
+                    if (deviceTypeValue === 'vfd') {
+                        const vfdProtoVal = (protocol === 'vfd-tcp' || protocol === 'tcp') ? 'vfd-tcp' : 'vfd-rtu';
+                        const vfdProtoRadio = panel.querySelector('input[name="vfd-protocol"][value="' + vfdProtoVal + '"]');
+                        if (vfdProtoRadio) vfdProtoRadio.checked = true;
+                        // Wire vfd-protocol radios
+                        panel.querySelectorAll('input[name="vfd-protocol"]').forEach(function(r) {
+                            r.addEventListener('change', function() { switchDeviceType('vfd'); });
+                        });
+                    }
                     switchDeviceType(deviceTypeValue);
                 }
                 
                 setTimeout(() => {
                     const config = device.config || {};
                     
-                    if (deviceTypeValue === 'modbus-rtu') {
+                    if (deviceTypeValue === 'vfd') {
+                        const vfdR = document.querySelector('#addDevicePanel input[name="vfd-protocol"]:checked');
+                        deviceTypeValue = vfdR ? vfdR.value : 'vfd-rtu';
+                    }
+                    if (deviceTypeValue === 'vfd-rtu') {
                         if (document.getElementById('serialPort')) 
                             document.getElementById('serialPort').value = config.serial_port || '/dev/ttymxc5';
                         if (document.getElementById('baudRate')) 
@@ -976,7 +1043,7 @@
                             document.getElementById('maxRetries').value = config.max_retries || 2;
                         if (document.getElementById('pollingInterval')) 
                             document.getElementById('pollingInterval').value = config.polling_interval_ms || 300;
-                    } else if (deviceTypeValue === 'modbus-tcp') {
+                    } else if (deviceTypeValue === 'vfd-tcp') {
                         if (document.getElementById('modbusTcpIp')) 
                             document.getElementById('modbusTcpIp').value = config.ip_address || '192.168.1.100';
                         if (document.getElementById('modbusTcpPort')) 
@@ -1024,9 +1091,11 @@
         },
 
         deleteDevice: async function(deviceId) {
-            if (!confirm('Are you sure you want to delete this device?\n\nThis will also delete all associated datapoints/tags.\n\nThis action cannot be undone.')) {
-                return;
-            }
+            const device = devices.find(d => String(d.id) === String(deviceId));
+            const deviceName = device ? device.name : 'this device';
+            
+            const confirmed = await showDeleteConfirmModal(deviceName);
+            if (!confirmed) return;
             
             try {
                 const response = await fetch(`/api/devices/${deviceId}`, {
@@ -1037,6 +1106,11 @@
                 
                 if (response.ok && result.success) {
                     showNotification('Device and associated datapoints deleted successfully', 'success');
+                    const section = document.getElementById('section-details');
+                    if (section && currentViewingDeviceId === deviceId) {
+                        section.style.display = 'none';
+                        currentViewingDeviceId = null;
+                    }
                     await refreshData();
                 } else {
                     showNotification('Failed to delete device: ' + (result.message || result.error), 'error');
@@ -1047,8 +1121,101 @@
             }
         },
 
+        duplicateDeviceFromTable: async function(deviceId) {
+            const device = devices.find(d => String(d.id) === String(deviceId));
+            const deviceName = device ? device.name : 'this device';
+            const confirmed = await showDuplicateDeviceConfirmModal(deviceName);
+            if (!confirmed) return;
+            await duplicateDevice(deviceId);
+        },
+
         refreshData: refreshData
     };
+
+    // ==================== CONFIRMATION MODALS ====================
+    function showDeleteConfirmModal(deviceName) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;';
+            overlay.innerHTML = `
+                <div style="background:white;border-radius:12px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                        <div style="width:40px;height:40px;background:#FEF2F2;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fa-solid fa-trash" style="color:#EF4444;font-size:16px;"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:16px;font-weight:600;color:#1E293B;">Delete Device</h3>
+                            <p style="margin:2px 0 0;font-size:13px;color:#64748B;">${escapeHtml(deviceName)}</p>
+                        </div>
+                    </div>
+                    <p style="font-size:14px;color:#374151;margin:0 0 12px;">Are you sure you want to delete this device? This will also permanently delete <strong>all associated tags</strong>.</p>
+                    <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:12px;margin-bottom:20px;display:flex;align-items:flex-start;gap:8px;">
+                        <i class="fa-solid fa-triangle-exclamation" style="color:#D97706;margin-top:2px;flex-shrink:0;"></i>
+                        <p style="margin:0;font-size:13px;color:#92400E;"><strong>No backup detected.</strong> If you haven't exported your configuration, there is no way to recover this device and its tags after deletion. Consider exporting first.</p>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button id="dmDeleteCancelBtn" style="padding:9px 18px;background:white;border:1px solid #CBD5E1;border-radius:8px;font-size:14px;font-weight:500;color:#475569;cursor:pointer;">Cancel</button>
+                        <button id="dmDeleteConfirmBtn" style="padding:9px 18px;background:#EF4444;border:none;border-radius:8px;font-size:14px;font-weight:500;color:white;cursor:pointer;">Yes, Delete</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.querySelector('#dmDeleteCancelBtn').onclick = () => { document.body.removeChild(overlay); resolve(false); };
+            overlay.querySelector('#dmDeleteConfirmBtn').onclick = () => { document.body.removeChild(overlay); resolve(true); };
+            overlay.onclick = (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } };
+        });
+    }
+
+    function showDuplicateDeviceConfirmModal(deviceName) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;';
+            overlay.innerHTML = `
+                <div style="background:white;border-radius:12px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                        <div style="width:40px;height:40px;background:#EFF6FF;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fa-solid fa-copy" style="color:#3B82F6;font-size:16px;"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin:0;font-size:16px;font-weight:600;color:#1E293B;">Duplicate Device</h3>
+                            <p style="margin:2px 0 0;font-size:13px;color:#64748B;">${escapeHtml(deviceName)}</p>
+                        </div>
+                    </div>
+                    <p style="font-size:14px;color:#374151;margin:0 0 16px;">By performing this action, the device will be duplicated along with <strong>all its associated tags</strong>. The new device and all its tags will be named with a <code style="background:#F1F5F9;padding:1px 5px;border-radius:4px;">-001</code> suffix.</p>
+                    <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:12px;margin-bottom:20px;display:flex;align-items:flex-start;gap:8px;">
+                        <i class="fa-solid fa-circle-info" style="color:#16A34A;margin-top:2px;flex-shrink:0;"></i>
+                        <p style="margin:0;font-size:13px;color:#166534;">Example: <strong>${escapeHtml(deviceName)}</strong> → <strong>${escapeHtml(deviceName)}-001</strong>, and each tag will also get the <code style="background:#DCFCE7;padding:1px 4px;border-radius:3px;">-001</code> suffix.</p>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;">
+                        <button id="dmDupCancelBtn" style="padding:9px 18px;background:white;border:1px solid #CBD5E1;border-radius:8px;font-size:14px;font-weight:500;color:#475569;cursor:pointer;">Cancel</button>
+                        <button id="dmDupConfirmBtn" style="padding:9px 18px;background:#3B82F6;border:none;border-radius:8px;font-size:14px;font-weight:500;color:white;cursor:pointer;">Duplicate Device &amp; Tags</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.querySelector('#dmDupCancelBtn').onclick = () => { document.body.removeChild(overlay); resolve(false); };
+            overlay.querySelector('#dmDupConfirmBtn').onclick = () => { document.body.removeChild(overlay); resolve(true); };
+            overlay.onclick = (e) => { if (e.target === overlay) { document.body.removeChild(overlay); resolve(false); } };
+        });
+    }
+
+    async function duplicateDevice(deviceId) {
+        try {
+            showNotification('Duplicating device and tags...', 'info');
+            const response = await fetch(`/api/devices/${deviceId}/duplicate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showNotification('Device duplicated successfully with all tags (-001 suffix)', 'success');
+                await refreshData();
+            } else {
+                showNotification('Failed to duplicate device: ' + (result.message || result.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            console.error('Error duplicating device:', error);
+            showNotification('Error duplicating device: ' + error.message, 'error');
+        }
+    }
 
     // ==================== IMPORT / EXPORT ====================
     async function exportDevices() {
@@ -1414,6 +1581,14 @@
         }
         
         const addDevicePanel = document.getElementById('addDevicePanel');
+        // Wire vfd-protocol radios to update config panel
+        document.querySelectorAll('#addDevicePanel input[name="vfd-protocol"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                const dt = document.querySelector('#addDevicePanel input[name="device-type"]:checked')?.value;
+                if (dt === 'vfd') switchDeviceType('vfd');
+            });
+        });
+
         document.querySelectorAll('#addDevicePanel input[name="device-type"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 switchDeviceType(this.value);
@@ -1444,12 +1619,16 @@
         
         const deleteFromViewBtn = document.getElementById('deleteFromViewBtn');
         if (deleteFromViewBtn) {
-            deleteFromViewBtn.addEventListener('click', function() {
+            deleteFromViewBtn.addEventListener('click', async function() {
                 if (currentViewingDeviceId) {
-                    if (confirm('Are you sure you want to delete this device?')) {
+                    const device = devices.find(d => String(d.id) === String(currentViewingDeviceId));
+                    const deviceName = device ? device.name : 'this device';
+                    const confirmed = await showDeleteConfirmModal(deviceName);
+                    if (confirmed) {
+                        const idToDelete = currentViewingDeviceId;
                         closeInlineView();
                         setTimeout(() => {
-                            window.deviceManagement.deleteDevice(currentViewingDeviceId);
+                            window.deviceManagement.deleteDevice(idToDelete);
                         }, 300);
                     }
                 }
@@ -1458,9 +1637,14 @@
         
         const duplicateDeviceBtn = document.getElementById('duplicateDeviceBtn');
         if (duplicateDeviceBtn) {
-            duplicateDeviceBtn.addEventListener('click', function() {
+            duplicateDeviceBtn.addEventListener('click', async function() {
                 if (currentViewingDeviceId) {
-                    duplicateDevice(currentViewingDeviceId);
+                    const device = devices.find(d => String(d.id) === String(currentViewingDeviceId));
+                    const deviceName = device ? device.name : 'this device';
+                    const confirmed = await showDuplicateDeviceConfirmModal(deviceName);
+                    if (confirmed) {
+                        await duplicateDevice(currentViewingDeviceId);
+                    }
                 }
             });
         }

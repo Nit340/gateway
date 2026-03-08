@@ -1,11 +1,11 @@
 {
   "version": 2,
   "system": {
-    "wifi_ssid": "Univa-Guest",
-    "wifi_password": "654654654"
+    "wifi_ssid": "",
+    "wifi_password": ""
   },
   "heartbeat": {
-    "interval_sec": 3,
+    "interval_sec": 30,
     "channel": "send"
   },
   "servers": {
@@ -32,39 +32,6 @@
       }
     }
   },
-  "mappings": [
-    {
-      "channel": "send",
-      "datapoints": {
-        "int": [
-          "hoist_current"
-        ]
-      }
-    },
-    {
-      "channel": "send",
-      "datapoints": {
-        "int": [
-          "hoist_voltage"
-        ]
-      }
-    },
-    {
-      "channel": "send",
-      "datapoints": {
-        "string": [
-          "capacity"
-        ]
-      }
-    },
-    {
-      "channel": "send",
-      "datapoints": {
-        "float": [
-          "load_weight"
-        ]
-      }
-    }
-  ],
+  "mappings": [],
   "send_version": 1
 }

@@ -385,13 +385,15 @@ if (typeof window.rulesLoaded === 'undefined') {
     }
 
     // ========== WINDOW ACTIONS ==========
-    window.selectRule = function(id) {
+    window.selectRule = async function(id) {
+        if (!availableTags.length) await loadTags();
         selectedRuleId = id;
         renderRulesList();
         renderRuleEditor(id);
     };
 
-    window.createGroupRule = function() {
+    window.createGroupRule = async function() {
+        if (!availableTags.length) await loadTags();
         selectedRuleId = null;
         resetGroupData();
         currentRelayTag = '';
@@ -411,7 +413,8 @@ if (typeof window.rulesLoaded === 'undefined') {
         }
     };
 
-    window.createEmergencyRule = function() {
+    window.createEmergencyRule = async function() {
+        if (!availableTags.length) await loadTags();
         selectedRuleId = null;
         resetGroupData();
         currentRelayTag = '';

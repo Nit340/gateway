@@ -231,10 +231,7 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Set auth cookie - works across all paths unlike sessionStorage
-                    document.cookie = 'gw_auth=true; path=/; SameSite=Strict';
-                    document.cookie = 'gw_user=' + (data.username || username) + '; path=/; SameSite=Strict';
-                    window.location.replace('/general-configuration');
+                    window.location.replace('/layout.html');
                 } else {
                     errMsg.textContent = data.error || 'Invalid username or password.';
                     banner.classList.add('show');

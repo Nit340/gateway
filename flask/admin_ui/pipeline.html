@@ -69,6 +69,7 @@
     <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
     <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
     <a href="/admin/users"    class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
+    <a href="/admin/access-control" class="sidebar-link"><span class="mat">shield_lock</span> Access Control</a>
   </nav>
   <div class="px-3 py-4 border-t" style="border-color:#fed7aa;">
     <button onclick="logout()" class="sidebar-link w-full text-left" style="color:#a8a29e;">
@@ -172,8 +173,8 @@
       <div class="cfg-panel" id="panel-loadcell">
         <div class="mb-6 pb-6 border-b border-stone-100">
           <div class="flex items-center gap-2 mb-3">
-            <span class="mat" style="color:#f97316;font-size:18px;">upload</span>
-            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Send Config</span>
+            <span class="mat" style="color:#f97316;font-size:18px;">scale</span>
+            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Push Config</span>
             <span class="cfg-name-pill ml-auto" id="cname-pill-loadcell"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-loadcell">loadcell_config</span></span>
           </div>
           <p class="text-xs text-stone-400 mb-4">
@@ -316,9 +317,9 @@
         </button>
       </div>
       <p class="text-xs text-stone-400 mb-5">
-        <strong>Permanent</strong> entries are always active (network/status — cannot be removed).
+        <strong>Permanent</strong> entries are always active (network/status ï¿½ cannot be removed).
         Add a <strong>device name</strong> (e.g. <code class="bg-stone-100 px-1 rounded font-mono">load</code>) to whitelist all its datapoints.
-        Only named devices receive data — no auto-discovery.
+        Only named devices receive data ï¿½ no auto-discovery.
       </p>
 
       <div class="grid grid-cols-2 gap-4 mb-5">
@@ -330,7 +331,7 @@
             <span class="ml-auto text-[9px] text-stone-300">always active</span>
           </div>
           <div id="wl-permanent" class="space-y-1">
-            <span class="text-xs text-stone-300">Loading…</span>
+            <span class="text-xs text-stone-300">Loadingï¿½</span>
           </div>
         </div>
 
@@ -998,7 +999,7 @@
   }
 
   // -- Whitelist Manager ------------------------------------------------
-  async async async function loadWhitelist() {
+  async function loadWhitelist() {
     try {
       const d = await fetch('/api/pipeline/whitelist').then(r => r.json());
       if (!d.success) return;
@@ -1006,7 +1007,7 @@
       // Permanent
       document.getElementById('wl-permanent').innerHTML = (d.permanent || []).length
         ? d.permanent.map(e => wlChip(e, 'stone', false)).join('')
-        : '<span class="text-xs text-stone-300">—</span>';
+        : '<span class="text-xs text-stone-300">ï¿½</span>';
 
       // Named devices panel
       const namedEl = document.getElementById('wl-named');
@@ -1034,7 +1035,7 @@
       document.getElementById('wl-count').textContent = (d.active || []).length + ' entries';
       document.getElementById('wl-active').innerHTML = (d.active || []).length
         ? d.active.map(e => `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full" style="background:#dcfce7;color:#15803d;">${e}</span>`).join('')
-        : '<span class="text-xs text-stone-300">—</span>';
+        : '<span class="text-xs text-stone-300">ï¿½</span>';
 
     } catch (e) { console.warn('Whitelist load error:', e); }
   }
@@ -1092,7 +1093,7 @@
     } catch (e) { toast('Error: ' + e.message, false); }
   }
 
-  // Legacy stub kept so any stale references don’t throw
+  // Legacy stub kept so any stale references donï¿½t throw
   async function addCustomEntry() { addDeviceName(); }
   async function removeCustomEntry(entry) {
     try {
@@ -1111,5 +1112,4 @@
   }
 
   loadAll();
-  loadWhitelist();
-  setInte
+  loadWhitelist()

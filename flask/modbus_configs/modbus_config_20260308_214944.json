@@ -1,7 +1,7 @@
 {
   "connections": [
     {
-      "id": "tests",
+      "id": "test",
       "type": "rtu",
       "device": "/dev/ttymxc5",
       "baud": 9600,
@@ -17,26 +17,10 @@
   "assets": [
     {
       "name": "hoist_current",
-      "connection_id": "tests",
+      "connection_id": "test",
       "slaveId": 1,
       "registerType": "holding",
-      "address": 464,
-      "registerCount": 1,
-      "dataType": "uint16",
-      "scale": 1.0,
-      "offset": 0.0,
-      "byteOrder": "big",
-      "wordOrder": "big",
-      "retryCount": 1,
-      "timeoutMs": 100,
-      "writable": false
-    },
-    {
-      "name": "hoist_voltage",
-      "connection_id": "tests",
-      "slaveId": 1,
-      "registerType": "holding",
-      "address": 5665,
+      "address": 456,
       "registerCount": 1,
       "dataType": "uint16",
       "scale": 1.0,
@@ -49,8 +33,8 @@
     }
   ],
   "version": 1,
-  "timestamp": 1772994500.5745049,
-  "timestamp_str": "2026-03-08 23:58:20",
+  "timestamp": 1772986784.8646297,
+  "timestamp_str": "2026-03-08 21:49:44",
   "source": "web_ui",
-  "tag_count": 2
+  "tag_count": 1
 }

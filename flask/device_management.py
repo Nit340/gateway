@@ -37,25 +37,25 @@ async def get_all_devices(request):
         
         devices = []
         
-        # Get Modbus devices
+        # Get VFD devices
         cursor.execute('''
-            SELECT m.id, m.name, m.device_type, m.ip_address, m.port, m.serial_port,
+            SELECT m.id, m.name, m.protocol_type, m.device_type, m.ip_address, m.port, m.serial_port,
                    m.enabled, s.name as service_name
-            FROM modbus_device m
+            FROM vfd_device m
             LEFT JOIN services s ON m.service_id = s.id
             ORDER BY m.id
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_type, ip, port, serial_port, enabled, service_name = row
+            device_id, name, protocol_type, device_type, ip, port, serial_port, enabled, service_name = row
             
             # Determine address display
-            if device_type == 'tcp':
+            if protocol_type == 'tcp':
                 address = "{}:{}".format(ip, port) if ip else "Not configured"
-                protocol = "modbus-tcp"
+                protocol = "vfd-tcp"
             else:  # rtu
                 address = serial_port or "Not configured"
-                protocol = "modbus-rtu"
+                protocol = "vfd-rtu"
             
             # Get or initialize real-time status
             if device_id not in device_status_tracker:
@@ -66,7 +66,9 @@ async def get_all_devices(request):
             devices.append({
                 'id': device_id,
                 'name': name,
-                'type': 'Modbus',
+                'type': 'VFD',
+                'device_type': device_type,     # always 'vfd'
+                'protocol_type': protocol_type, # 'rtu' or 'tcp'
                 'protocol': protocol,
                 'address': address,
                 'status': status['status'],
@@ -151,14 +153,14 @@ async def get_device_details(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Try Modbus first
+        # Try VFD first
         cursor.execute('''
-            SELECT m.id, m.name, m.device_type,
+            SELECT m.id, m.name, m.protocol_type, m.device_type,
                    m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
                    m.ip_address, m.port,
                    m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
                    m.enabled, s.name as service_name
-            FROM modbus_device m
+            FROM vfd_device m
             LEFT JOIN services s ON m.service_id = s.id
             WHERE m.id = ?
         ''', (device_id,))
@@ -166,8 +168,8 @@ async def get_device_details(request):
         row = cursor.fetchone()
         
         if row:
-            # It's a Modbus device
-            (dev_id, name, device_type, response_timeout_ms, byte_timeout_ms,
+            # It's a VFD device
+            (dev_id, name, protocol_type, device_type, response_timeout_ms, byte_timeout_ms,
              max_retries, polling_interval_ms, ip_address, port, serial_port, 
              baud_rate, parity, data_bits, stop_bits, enabled, service_name) = row
             
@@ -180,8 +182,9 @@ async def get_device_details(request):
             details = {
                 'id': dev_id,
                 'name': name,
-                'type': 'Modbus',
-                'device_type': device_type,
+                'type': 'VFD',
+                'device_type': device_type,       # always 'vfd'
+                'protocol_type': protocol_type,   # 'rtu' or 'tcp'
                 'service': service_name,
                 'enabled': bool(enabled),
                 'status': status['status'],
@@ -194,17 +197,19 @@ async def get_device_details(request):
                 }
             }
             
-            if device_type == 'tcp':
+            if protocol_type == 'tcp':
                 details['config']['ip_address'] = ip_address
                 details['config']['port'] = port
-                details['protocol'] = 'modbus-tcp'
+                details['protocol'] = 'vfd-tcp'
+                details['protocol_type'] = 'tcp'
             else:  # rtu
                 details['config']['serial_port'] = serial_port
                 details['config']['baud_rate'] = baud_rate
                 details['config']['parity'] = parity
                 details['config']['data_bits'] = data_bits
                 details['config']['stop_bits'] = stop_bits
-                details['protocol'] = 'modbus-rtu'
+                details['protocol'] = 'vfd-rtu'
+                details['protocol_type'] = 'rtu'
             
             conn.close()
             return web.json_response(details)
@@ -362,7 +367,7 @@ async def add_device(request):
                     continue
             device_id = 'VD{}'.format(max_num + 1)
         else:  # modbus
-            cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
+            cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
             
             max_num = 0
@@ -374,7 +379,7 @@ async def add_device(request):
                 except ValueError:
                     continue
             
-            device_id = 'MB{}'.format(max_num + 1)
+            device_id = 'VF{}'.format(max_num + 1)
         
         # Get service_id
         service_name = 'loadcell' if device_type == 'loadcell' else 'modbus'
@@ -437,19 +442,22 @@ async def add_device(request):
                 VALUES (?, 'capacity', '')
             ''', (device_id,))
             
-        else:  # Modbus (TCP or RTU)
+        else:  # VFD (TCP or RTU)
             config = data.get('config', {})
             
-            # Determine device_type from protocol
+            # Determine protocol_type: check explicit field first, then protocol string, then config
+            explicit_pt = data.get('protocol_type', '').lower()
             protocol_lower = protocol.lower()
-            if 'tcp' in protocol_lower:
-                modbus_type = 'tcp'
+            if explicit_pt in ('tcp', 'rtu'):
+                protocol_type = explicit_pt
+            elif 'tcp' in protocol_lower:
+                protocol_type = 'tcp'
             elif 'rtu' in protocol_lower:
-                modbus_type = 'rtu'
+                protocol_type = 'rtu'
             else:
-                modbus_type = 'tcp' if config.get('ip_address') else 'rtu'
+                protocol_type = 'tcp' if config.get('ip_address') else 'rtu'
             
-            print("Creating Modbus device - Protocol: '{}', Type: '{}'".format(protocol, modbus_type))
+            print("Creating VFD device - Protocol: '{}', Type: '{}'".format(protocol, protocol_type))
             
             # Set default values matching your specified format
             response_timeout_ms = config.get('response_timeout_ms', 100)
@@ -458,29 +466,30 @@ async def add_device(request):
             polling_interval_ms = config.get('polling_interval_ms', 300)
             
             cursor.execute('''
-                INSERT INTO modbus_device (
-                    id, name, device_type, service_id,
+                INSERT INTO vfd_device (
+                    id, name, protocol_type, device_type, service_id,
                     response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                     ip_address, port,
                     serial_port, baud_rate, parity, data_bits, stop_bits
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
-                data.get('name', 'Modbus Device'),
-                modbus_type,
+                data.get('name', 'VFD Device'),
+                protocol_type,
+                'vfd',
                 service_id,
                 response_timeout_ms,
                 byte_timeout_ms,
                 max_retries,
                 polling_interval_ms,
-                config.get('ip_address') if modbus_type == 'tcp' else None,
-                config.get('port', 502) if modbus_type == 'tcp' else None,
-                config.get('serial_port', '/dev/ttymxc5') if modbus_type == 'rtu' else None,
-                config.get('baud_rate', 9600) if modbus_type == 'rtu' else None,
-                config.get('parity', 'N') if modbus_type == 'rtu' else None,
-                config.get('data_bits', 8) if modbus_type == 'rtu' else None,
-                config.get('stop_bits', 1) if modbus_type == 'rtu' else None
+                config.get('ip_address') if protocol_type == 'tcp' else None,
+                config.get('port', 502) if protocol_type == 'tcp' else None,
+                config.get('serial_port', '/dev/ttymxc5') if protocol_type == 'rtu' else None,
+                config.get('baud_rate', 9600) if protocol_type == 'rtu' else None,
+                config.get('parity', 'N') if protocol_type == 'rtu' else None,
+                config.get('data_bits', 8) if protocol_type == 'rtu' else None,
+                config.get('stop_bits', 1) if protocol_type == 'rtu' else None
             ))
         
         conn.commit()
@@ -516,16 +525,16 @@ async def update_device(request):
         cursor = conn.cursor()
         
         # Check if it's Modbus or Loadcell
-        cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (device_id,))
+        cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (device_id,))
         is_modbus = cursor.fetchone() is not None
         
         if is_modbus:
             # Update Modbus device
             config = data.get('config', {})
-            device_type = data.get('device_type', 'tcp')
+            protocol_type = data.get('protocol_type', data.get('device_type', 'rtu'))
             
-            update_fields = ['name = ?', 'device_type = ?']
-            values = [data.get('name'), device_type]
+            update_fields = ['name = ?', 'protocol_type = ?']
+            values = [data.get('name'), protocol_type]
             
             # Common fields - using new column names
             if 'response_timeout_ms' in config:
@@ -542,7 +551,7 @@ async def update_device(request):
                 values.append(config['polling_interval_ms'])
             
             # TCP specific
-            if device_type == 'tcp':
+            if protocol_type == 'tcp':
                 if 'ip_address' in config:
                     update_fields.append('ip_address = ?')
                     values.append(config['ip_address'])
@@ -551,7 +560,7 @@ async def update_device(request):
                     values.append(config['port'])
             
             # RTU specific
-            if device_type == 'rtu':
+            if protocol_type == 'rtu':
                 if 'serial_port' in config:
                     update_fields.append('serial_port = ?')
                     values.append(config['serial_port'])
@@ -571,7 +580,7 @@ async def update_device(request):
             values.append(device_id)
             
             query = '''
-                UPDATE modbus_device 
+                UPDATE vfd_device 
                 SET {fields}, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             '''.format(fields=', '.join(update_fields))
@@ -639,7 +648,7 @@ async def delete_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('DELETE FROM modbus_device WHERE id = ?', (device_id,))
+        cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
         cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
         cursor.execute('DELETE FROM virtual_device WHERE id = ?', (device_id,))
         
@@ -696,7 +705,7 @@ async def disable_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('UPDATE modbus_device SET enabled = ? WHERE id = ?', (enabled, device_id))
+        cursor.execute('UPDATE vfd_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         cursor.execute('UPDATE loadcell_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         cursor.execute('UPDATE virtual_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         
@@ -730,18 +739,18 @@ async def duplicate_device(request):
         cursor = conn.cursor()
         
         # Check if it's a Modbus device
-        cursor.execute('SELECT * FROM modbus_device WHERE id = ?', (device_id,))
+        cursor.execute('SELECT * FROM vfd_device WHERE id = ?', (device_id,))
         modbus_row = cursor.fetchone()
         
         if modbus_row:
             # Get column names
-            cursor.execute('PRAGMA table_info(modbus_device)')
+            cursor.execute('PRAGMA table_info(vfd_device)')
             columns = [col[1] for col in cursor.fetchall()]
             
             old_device = dict(zip(columns, modbus_row))
             
             # Generate new device ID
-            cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
+            cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
             
             max_num = 0
@@ -753,13 +762,13 @@ async def duplicate_device(request):
                 except ValueError:
                     continue
             
-            new_device_id = 'MB{}'.format(max_num + 1)
+            new_device_id = 'VF{}'.format(max_num + 1)
             
             # Generate new device name with -001 suffix
             base_name = old_device['name']
             base_name_clean = re.sub(r'-\d+$', '', base_name)
             
-            cursor.execute('SELECT name FROM modbus_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
+            cursor.execute('SELECT name FROM vfd_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
             existing_names = [row[0] for row in cursor.fetchall()]
             
             counter = 1
@@ -778,15 +787,17 @@ async def duplicate_device(request):
             
             # Insert new device
             cursor.execute('''
-                INSERT INTO modbus_device (
-                    id, name, device_type, service_id,
+                INSERT INTO vfd_device (
+                    id, name, protocol_type, device_type, service_id,
                     response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                     ip_address, port, serial_port, baud_rate, parity,
                     data_bits, stop_bits, enabled
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                new_device_id, new_name, old_device['device_type'],
+                new_device_id, new_name,
+                old_device.get('protocol_type', 'rtu'),
+                'vfd',
                 old_device['service_id'],
                 old_device['response_timeout_ms'],
                 old_device['byte_timeout_ms'],
@@ -802,14 +813,14 @@ async def duplicate_device(request):
             cursor.execute('''
                 SELECT name, slave_id, register_address, register_type, data_type,
                        byte_order, word_order, scale_factor, offset, unit, description
-                FROM modbus_datapoints
+                FROM vfd_datapoints
                 WHERE device_id = ?
             ''', (device_id,))
             
             datapoints = cursor.fetchall()
             for dp in datapoints:
                 cursor.execute('''
-                    INSERT INTO modbus_datapoints (
+                    INSERT INTO vfd_datapoints (
                         device_id, name, slave_id, register_address, register_type, data_type,
                         byte_order, word_order, scale_factor, offset, unit, description
                     )
@@ -939,27 +950,27 @@ async def export_devices_csv(request):
             'Device Path', 'Channel', 'Capacity', 'Unit', 'Enabled'
         ])
         
-        # Export Modbus devices
+        # Export VFD devices
         cursor.execute('''
-            SELECT m.id, m.name, m.device_type,
+            SELECT m.id, m.name, m.protocol_type,
                    m.ip_address, m.port, m.serial_port,
                    m.baud_rate, m.data_bits, m.parity, m.stop_bits,
                    m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
                    m.enabled
-            FROM modbus_device m
+            FROM vfd_device m
             ORDER BY m.id
         ''')
         
         for row in cursor.fetchall():
-            (device_id, name, device_type, ip, port, serial,
+            (device_id, name, protocol_type, ip, port, serial,
              baud, data_bits, parity, stop_bits,
              resp_timeout, byte_timeout, max_retries, polling_interval,
              enabled) = row
             
-            protocol = 'modbus-tcp' if device_type == 'tcp' else 'modbus-rtu'
+            protocol = 'vfd-tcp' if protocol_type == 'tcp' else 'vfd-rtu'
             
             writer.writerow([
-                device_id, name, 'Modbus', protocol,
+                device_id, name, 'VFD', protocol,
                 ip or '', port or '', serial or '',
                 baud or '', data_bits or '', parity or '', stop_bits or '',
                 resp_timeout or '', byte_timeout or '', max_retries or '', polling_interval or '',
@@ -1042,7 +1053,7 @@ async def import_devices_csv(request):
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
                 else:
-                    cursor.execute('SELECT id, name FROM modbus_device WHERE name = ?', (name,))
+                    cursor.execute('SELECT id, name FROM vfd_device WHERE name = ?', (name,))
                 
                 existing = cursor.fetchone()
                 
@@ -1094,7 +1105,7 @@ async def import_devices_csv(request):
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id FROM loadcell_device WHERE name = ?', (name,))
                 else:
-                    cursor.execute('SELECT id FROM modbus_device WHERE name = ?', (name,))
+                    cursor.execute('SELECT id FROM vfd_device WHERE name = ?', (name,))
                 
                 existing_device = cursor.fetchone()
                 
@@ -1108,8 +1119,8 @@ async def import_devices_csv(request):
                             cursor.execute('DELETE FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
                             cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
                         else:
-                            cursor.execute('DELETE FROM modbus_datapoints WHERE device_id = ?', (device_id,))
-                            cursor.execute('DELETE FROM modbus_device WHERE id = ?', (device_id,))
+                            cursor.execute('DELETE FROM vfd_datapoints WHERE device_id = ?', (device_id,))
+                            cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
                         
                         remove_device_status(device_id)
                         replaced_count += 1
@@ -1166,7 +1177,7 @@ async def import_devices_csv(request):
                     initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                     
                 else:
-                    cursor.execute('SELECT id FROM modbus_device WHERE id LIKE "MB%" ORDER BY id')
+                    cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
                     max_num = 0
                     for existing_id in existing_ids:
@@ -1176,9 +1187,10 @@ async def import_devices_csv(request):
                                 max_num = num
                         except ValueError:
                             continue
-                    device_id = 'MB{}'.format(max_num + 1)
+                    device_id = 'VF{}'.format(max_num + 1)
                     
-                    modbus_type = 'tcp' if 'tcp' in protocol else 'rtu'
+                    protocol_type = 'tcp' if 'tcp' in protocol else 'rtu'
+                    modbus_type = protocol_type
                     enabled = row.get('Enabled', '1').strip() == '1'
                     
                     # Get timeout values with defaults
@@ -1187,19 +1199,19 @@ async def import_devices_csv(request):
                     max_retries = int(row.get('Max Retries', '2') or '2')
                     polling_interval = int(row.get('Polling Interval (ms)', '300') or '300')
                     
-                    if modbus_type == 'tcp':
+                    if protocol_type == 'tcp':
                         ip_address = row.get('IP Address', '').strip()
                         port = int(row.get('Port', '502') or '502')
                         
                         cursor.execute('''
-                            INSERT INTO modbus_device (
-                                id, name, device_type, service_id,
+                            INSERT INTO vfd_device (
+                                id, name, protocol_type, device_type, service_id,
                                 response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                                 ip_address, port, enabled
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
-                            device_id, name, modbus_type, service_id,
+                            device_id, name, protocol_type, 'vfd', service_id,
                             resp_timeout, byte_timeout, max_retries, polling_interval,
                             ip_address, port, enabled
                         ))
@@ -1211,14 +1223,14 @@ async def import_devices_csv(request):
                         stop_bits = int(row.get('Stop Bits', '1') or '1')
                         
                         cursor.execute('''
-                            INSERT INTO modbus_device (
-                                id, name, device_type, service_id,
+                            INSERT INTO vfd_device (
+                                id, name, protocol_type, device_type, service_id,
                                 response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                                 serial_port, baud_rate, parity, data_bits, stop_bits, enabled
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
-                            device_id, name, modbus_type, service_id,
+                            device_id, name, protocol_type, 'vfd', service_id,
                             resp_timeout, byte_timeout, max_retries, polling_interval,
                             serial_port, baud_rate, parity, data_bits, stop_bits, enabled
                         ))
@@ -1328,7 +1340,7 @@ async def get_device_datapoints(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (device_id,))
+        cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (device_id,))
         is_modbus = cursor.fetchone() is not None
         
         datapoints = []
@@ -1337,7 +1349,7 @@ async def get_device_datapoints(request):
             cursor.execute('''
                 SELECT id, name, register_address, register_type, data_type,
                        byte_order, word_order, scale_factor, offset, unit, description
-                FROM modbus_datapoints
+                FROM vfd_datapoints
                 WHERE device_id = ?
                 ORDER BY name
             ''', (device_id,))
@@ -1355,7 +1367,7 @@ async def get_device_datapoints(request):
                     'offset': row[8],
                     'unit': row[9],
                     'description': row[10],
-                    'type': 'Modbus'
+                    'type': 'VFD'
                 })
         else:
             cursor.execute('''

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Crane Monitor – Access Control</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
+  .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; font-size:13px; font-weight:600; color:#78716c; text-decoration:none; transition:all .15s; cursor:pointer; }
+  .sidebar-link:hover { background:#fff7ed; color:#ea580c; }
+  .sidebar-link.active { background:#ea580c; color:white; }
+  .sidebar-link.active .mat { color:white; }
+  .sidebar-link:hover .mat { color:#ea580c; }
+  .toggle { position:relative; display:inline-block; width:40px; height:22px; flex-shrink:0; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-slider { position:absolute; cursor:pointer; inset:0; background:#d4d4d4; border-radius:22px; transition:.2s; }
+  .toggle-slider:before { content:""; position:absolute; width:16px; height:16px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; }
+  .toggle input:checked + .toggle-slider { background:#ea580c; }
+  .toggle input:checked + .toggle-slider:before { transform:translateX(18px); }
+  .user-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; transition:all .15s; border:1.5px solid transparent; }
+  .user-card:hover { background:#fff7ed; border-color:#fed7aa; }
+  .user-card.selected { background:#fff7ed; border-color:#f97316; }
+  .user-avatar { width:32px; height:32px; border-radius:8px; background:#f97316; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:13px; font-weight:800; color:white; }
+  ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
+</style>
+</head>
+<body class="bg-stone-50 min-h-screen flex">
+
+<!-- Admin Sidebar -->
+<aside class="w-60 min-h-screen flex flex-col flex-shrink-0" style="background:#fffaf7;border-right:1.5px solid #fed7aa;">
+  <div class="px-5 py-6 flex items-center gap-3 border-b" style="border-color:#fed7aa;">
+    <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background:#f97316;">
+      <span class="mat text-white" style="font-size:22px;">precision_manufacturing</span>
+    </div>
+    <div>
+      <div class="text-sm font-extrabold text-stone-800">Crane Monitor</div>
+      <div class="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Admin Panel</div>
+    </div>
+  </div>
+  <nav class="flex-1 px-3 py-5 space-y-1">
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mb-3">Main</div>
+    <a href="/admin"          class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
+    <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
+    <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
+    <a href="/admin/users"          class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
+    <a href="/admin/access-control" class="sidebar-link active"><span class="mat">shield_lock</span> Access Control</a>
+  </nav>
+  <div class="px-3 py-4 border-t" style="border-color:#fed7aa;">
+    <button onclick="logout()" class="sidebar-link w-full text-left" style="color:#a8a29e;">
+      <span class="mat">logout</span> Logout
+    </button>
+  </div>
+</aside>
+
+<!-- Main area -->
+<div class="flex-1 flex flex-col min-w-0 min-h-screen">
+  <header class="h-14 bg-white border-b border-stone-100 flex items-center px-6 gap-4 flex-shrink-0">
+    <h1 class="text-base font-bold text-stone-800 flex-1">WebUI Access Control</h1>
+    <div id="saveStatus" class="hidden text-xs font-semibold text-green-600 flex items-center gap-1">
+      <span class="mat" style="font-size:15px;">check_circle</span> Saved
+    </div>
+  </header>
+
+  <div class="flex-1 flex min-h-0">
+
+    <!-- Left: user list -->
+    <div class="w-64 flex-shrink-0 border-r border-stone-100 bg-white flex flex-col">
+      <div class="px-4 pt-4 pb-2">
+        <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 mb-2">Operator Accounts</div>
+        <p class="text-[11px] text-stone-400 leading-relaxed">Select a user to configure which WebUI pages they can access.</p>
+      </div>
+      <div id="userList" class="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+        <div class="text-xs text-stone-300 text-center py-6">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Right: page toggles -->
+    <div class="flex-1 overflow-auto p-6">
+
+      <div id="noUserState" class="flex flex-col items-center justify-center h-64 text-center">
+        <span class="mat text-stone-200" style="font-size:52px;">person_search</span>
+        <div class="text-sm font-semibold text-stone-400 mt-3">Select a user on the left</div>
+        <div class="text-xs text-stone-300 mt-1">to manage their page access</div>
+      </div>
+
+      <div id="userPagesPanel" class="hidden max-w-xl space-y-4">
+        <!-- User header -->
+        <div class="flex items-center gap-3 mb-1">
+          <div id="selectedAvatar" class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-extrabold text-sm" style="background:#f97316;"></div>
+          <div>
+            <div id="selectedName" class="text-sm font-bold text-stone-800"></div>
+            <div id="selectedUsername" class="text-xs text-stone-400 font-mono"></div>
+          </div>
+          <div class="ml-auto flex gap-2">
+            <button onclick="setAllPages(true)"
+              class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-stone-200 text-stone-600 hover:border-orange-300 hover:text-orange-600 transition-all">
+              <span class="mat" style="font-size:13px;">visibility</span> Allow All
+            </button>
+            <button onclick="setAllPages(false)"
+              class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-stone-200 text-stone-600 hover:border-red-300 hover:text-red-500 transition-all">
+              <span class="mat" style="font-size:13px;">visibility_off</span> Block All
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 text-xs text-orange-700 leading-relaxed">
+          <strong>Blocked</strong> pages are hidden from this user's sidebar. Section headings (e.g. "Configuration") are automatically removed if all their pages are blocked.
+        </div>
+
+        <div class="bg-white rounded-2xl border border-stone-100 shadow-sm" id="pageToggles">
+          <div class="py-8 text-center text-stone-300 text-sm">Loading…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-bold text-white z-50"></div>
+
+<script>
+  async function logout() { await fetch('/admin/logout'); window.location.href = '/admin/login'; }
+
+  function toast(msg, ok=true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-bold text-white z-50 '+(ok?'bg-green-500':'bg-red-500');
+    t.classList.remove('hidden');
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>t.classList.add('hidden'), 3000);
+  }
+
+  function showSaved() {
+    const el = document.getElementById('saveStatus');
+    el.classList.remove('hidden');
+    clearTimeout(el._t);
+    el._t = setTimeout(()=>el.classList.add('hidden'), 2000);
+  }
+
+  let users = [];
+  let selectedUserId = null;
+  let currentPages = [];
+
+  async function loadUsers() {
+    try {
+      const d = await fetch('/api/admin/users/webui').then(r=>r.json());
+      users = d.users || [];
+      renderUserList();
+    } catch(e) {
+      document.getElementById('userList').innerHTML =
+        '<div class="text-xs text-red-400 text-center py-4">Error: '+e.message+'</div>';
+    }
+  }
+
+  function renderUserList() {
+    const container = document.getElementById('userList');
+    if (!users.length) {
+      container.innerHTML = '<div class="text-xs text-stone-300 text-center py-4 leading-relaxed">No operator accounts found.<br>Add users in the <a href="/admin/users" class="text-orange-400 underline">Users</a> page.</div>';
+      return;
+    }
+    container.innerHTML = users.map(u => {
+      const initials = (u.display_name || u.username).slice(0,2).toUpperCase();
+      const dot = u.enabled
+        ? '<span class="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 mt-0.5"></span>'
+        : '<span class="w-1.5 h-1.5 rounded-full bg-stone-300 flex-shrink-0 mt-0.5"></span>';
+      return `<div class="user-card ${selectedUserId===u.id?'selected':''}" id="user-card-${u.id}" onclick="selectUser(${u.id})">
+        <div class="user-avatar">${initials}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-bold text-stone-800 truncate">${u.display_name||u.username}</div>
+          <div class="text-[10px] text-stone-400 font-mono truncate">@${u.username}</div>
+        </div>${dot}</div>`;
+    }).join('');
+  }
+
+  async function selectUser(userId) {
+    selectedUserId = userId;
+    document.querySelectorAll('.user-card').forEach(c=>c.classList.remove('selected'));
+    document.getElementById('user-card-'+userId)?.classList.add('selected');
+    const user = users.find(u=>u.id===userId);
+    if (!user) return;
+    const initials = (user.display_name||user.username).slice(0,2).toUpperCase();
+    document.getElementById('selectedAvatar').textContent = initials;
+    document.getElementById('selectedName').textContent = user.display_name||user.username;
+    document.getElementById('selectedUsername').textContent = '@'+user.username;
+    document.getElementById('noUserState').classList.add('hidden');
+    document.getElementById('userPagesPanel').classList.remove('hidden');
+    document.getElementById('pageToggles').innerHTML = '<div class="py-6 text-center text-stone-300 text-xs">Loading…</div>';
+    try {
+      const d = await fetch('/api/admin/webui-pages?user_id='+userId).then(r=>r.json());
+      currentPages = d.pages || [];
+      renderPageToggles();
+    } catch(e) {
+      document.getElementById('pageToggles').innerHTML =
+        '<div class="py-4 text-center text-red-400 text-xs">Error: '+e.message+'</div>';
+    }
+  }
+
+  function renderPageToggles() {
+    const container = document.getElementById('pageToggles');
+    if (!currentPages.length) {
+      container.innerHTML = '<div class="py-6 text-center text-stone-300 text-sm">No pages configured</div>';
+      return;
+    }
+    container.innerHTML = currentPages.map(p => `
+      <div class="flex items-center gap-4 px-4 py-3.5 hover:bg-stone-50 first:rounded-t-2xl last:rounded-b-2xl transition-colors border-b border-stone-50 last:border-0">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold text-stone-800">${p.label}</div>
+          <div class="text-[11px] text-stone-400 font-mono mt-0.5">${p.page_key}</div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="text-[11px] font-bold ${p.visible?'text-green-600':'text-red-400'}" id="lbl-${p.page_key}">
+            ${p.visible?'Allowed':'Blocked'}
+          </span>
+          <label class="toggle">
+            <input type="checkbox" id="tog-${p.page_key}" ${p.visible?'checked':''}
+              onchange="togglePage('${p.page_key}', this.checked)"/>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>`).join('');
+  }
+
+  async function togglePage(pageKey, visible) {
+    const lbl = document.getElementById('lbl-'+pageKey);
+    if (lbl) { lbl.textContent = visible?'Allowed':'Blocked'; lbl.className='text-[11px] font-bold '+(visible?'text-green-600':'text-red-400'); }
+    const p = currentPages.find(x=>x.page_key===pageKey);
+    if (p) p.visible = visible;
+    try {
+      const d = await fetch('/api/admin/webui-pages', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({user_id: selectedUserId, page_key: pageKey, hidden: !visible})
+      }).then(r=>r.json());
+      if (d.success) { showSaved(); }
+      else {
+        toast('Save failed: '+(d.error||''), false);
+        const tog = document.getElementById('tog-'+pageKey);
+        if (tog) tog.checked = !visible;
+        if (p) p.visible = !visible;
+        if (lbl) { lbl.textContent = !visible?'Allowed':'Blocked'; lbl.className='text-[11px] font-bold '+(!visible?'text-green-600':'text-red-400'); }
+      }
+    } catch(e) { toast('Network error: '+e.message, false); }
+  }
+
+  async function setAllPages(visible) {
+    if (!selectedUserId) return;
+    if (!confirm('Are you sure you want to '+(visible?'allow':'block')+' all pages for this user?')) return;
+    for (const p of currentPages) {
+      if (p.visible !== visible) {
+        const tog = document.getElementById('tog-'+p.page_key);
+        if (tog) tog.checked = visible;
+        await togglePage(p.page_key, visible);
+        await new Promise(r=>setTimeout(r,20));
+      }
+    }
+    toast(visible?'All pages allowed':'All pages blocked');
+  }
+
+  loadUsers();
+</script>
+</body>
+</html>

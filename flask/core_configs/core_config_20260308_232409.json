@@ -40,7 +40,7 @@
     },
     "loadcell": {
       "service_name": "load_cell_service",
-      "datapoint_name": "load_weight",
+      "datapoint_name": "LoadCell",
       "unit_datapoint_name": "load_unit"
     },
     "emergency_output": {

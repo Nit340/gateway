@@ -212,14 +212,21 @@ async def _remove_tag(req):
     except Exception as e: return _err(str(e),500)
 
 async def _available_tags(req):
+    # Maps vfd_datapoints.data_type -> simplified dtype for the frontend
+    def _map_dtype(data_type):
+        dt = (data_type or '').lower()
+        if 'bool' in dt:   return 'bool'
+        if 'float' in dt:  return 'float'
+        if 'int' in dt:    return 'int'
+        return 'float'
     try:
         db=get_db_connection(); cur=db.cursor()
-        cur.execute('''SELECT md.name,COALESCE(md.unit,''),md.device_id,COALESCE(dev.name,''),'modbus'
-                       FROM modbus_datapoints md LEFT JOIN modbus_device dev ON dev.id=md.device_id WHERE md.enabled=1''')
-        tags=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4]} for r in cur.fetchall()]
+        cur.execute('''SELECT md.name,COALESCE(md.unit,''),md.device_id,COALESCE(dev.name,''),'modbus',COALESCE(md.data_type,'float32')
+                       FROM vfd_datapoints md LEFT JOIN vfd_device dev ON dev.id=md.device_id WHERE md.enabled=1''')
+        tags=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4],'dtype':_map_dtype(r[5])} for r in cur.fetchall()]
         cur.execute('''SELECT ld.name,'',ld.device_id,COALESCE(lc.name,''),'loadcell'
                        FROM loadcell_datapoints ld LEFT JOIN loadcell_device lc ON lc.id=ld.device_id''')
-        tags+=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4]} for r in cur.fetchall()]
+        tags+=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4],'dtype':'float'} for r in cur.fetchall()]
         # Include virtual datapoints
         try:
             cur.execute('''SELECT vd.name,COALESCE(vd.unit,''),vd.device_id,COALESCE(vdev.name,''),'virtual'
@@ -358,7 +365,7 @@ def build_iot_gateway_config():
         if raw_pub:
             heartbeat_channel = raw_pub[0].get('name', 'default_publish')
 
-        # Collect mappings — groups pass through as-is;
+        # Collect mappings ï¿½ groups pass through as-is;
         # individual tags each become their own mapping entry.
         default_ch   = _get_default_channel_for_connection(cfg)
         raw_mappings = cfg.get('mappings', [])

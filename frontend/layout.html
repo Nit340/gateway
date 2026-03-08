@@ -281,14 +281,22 @@
 </head>
 <body>
     <script>
-        // Auth guard - check cookie (works across all paths)
-        function getCookie(name) {
-            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-            return match ? match[2] : null;
-        }
-        if (getCookie('gw_auth') !== 'true') {
-            window.location.replace('/login.html');
-        }
+        // Auth guard - always verify with server on every load.
+        // If backend restarted, WEBUI_SESSIONS is cleared and this returns 401 -> login.
+        (async function () {
+            try {
+                const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
+                if (!res.ok) {
+                    // Clear stale cookies and force login
+                    document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    window.location.replace('/login.html');
+                }
+            } catch (e) {
+                // Cannot reach server - redirect to login
+                window.location.replace('/login.html');
+            }
+        })();
     </script>
     <!-- Loading Indicator -->
     <div class="loading-indicator" id="loadingIndicator">
@@ -582,6 +590,46 @@
         }
 
         window.handleLogout = handleLogout;
+
+        // --- Per-user Access Control: hide pages + section titles ---
+        (async function applyPageVisibility() {
+            try {
+                const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const hidden = data.hidden_pages || [];
+                if (!hidden.length) return;
+
+                hidden.forEach(pageKey => {
+                    document.querySelectorAll('[data-page="' + pageKey + '"]').forEach(el => {
+                        const li = el.closest('li');
+                        (li || el).style.display = 'none';
+                    });
+                });
+
+                // Hide section titles (.nav-section) if ALL their nav-link children are hidden
+                document.querySelectorAll('.nav-section').forEach(section => {
+                    const links = section.querySelectorAll('a.nav-link, .nav-link');
+                    const allHidden = Array.from(links).every(l => l.style.display === 'none');
+                    if (allHidden) section.style.display = 'none';
+                });
+
+                // If active page is now hidden, navigate to first visible page
+                const activeLink = document.querySelector('.nav-link.active');
+                if (activeLink) {
+                    const activePage = activeLink.getAttribute('data-page');
+                    if (hidden.includes(activePage)) {
+                        const firstVisible = document.querySelector('.nav-link:not([style*="display: none"]):not([style*="display:none"])');
+                        if (firstVisible && window.router) {
+                            const targetPage = firstVisible.getAttribute('data-page');
+                            if (targetPage) window.router.navigate(targetPage);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Silently ignore — page visibility is best-effort
+            }
+        })();
     </script>
 </body>
 </html>

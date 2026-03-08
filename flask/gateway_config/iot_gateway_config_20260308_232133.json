@@ -1,11 +1,11 @@
 {
   "version": 2,
   "system": {
-    "wifi_ssid": "Univa-Guest",
-    "wifi_password": "654654654"
+    "wifi_ssid": "",
+    "wifi_password": ""
   },
   "heartbeat": {
-    "interval_sec": 3,
+    "interval_sec": 30,
     "channel": "send"
   },
   "servers": {
@@ -52,7 +52,7 @@
     {
       "channel": "send",
       "datapoints": {
-        "string": [
+        "float": [
           "capacity"
         ]
       }

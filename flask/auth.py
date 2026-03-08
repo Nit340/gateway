@@ -33,6 +33,5 @@ async def auth_status_handler(request):
 # ---------------------------------------------------------------------------
 def register_auth_routes(app):
     """Register all auth routes onto an aiohttp Application."""
-    app.router.add_post('/api/auth/login',  login_handler)
-    app.router.add_post('/api/auth/logout', logout_handler)
-    app.router.add_get ('/api/auth/status', auth_status_handler)
+    # login and logout are registered in main.py with single-session enforcement
+    app.router.add_get('/api/auth/status', auth_status_handler)

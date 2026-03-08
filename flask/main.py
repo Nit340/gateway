@@ -16,6 +16,7 @@ from database import (
     get_all_webui_users, create_webui_user, update_webui_user, delete_webui_user,
     get_all_pipeline_service_targets, set_pipeline_service_name,
     get_all_pipeline_send_logs, get_enabled_pipeline_targets,
+    get_all_pages, get_user_page_restrictions, set_user_page_restriction, get_pages_for_user,
 )
 from general import register_general_config_routes
 from device_management import (
@@ -39,8 +40,13 @@ from pipeline import (
     PIPELINE_AVAILABLE, send_modbus_config_now,
 )
 
-ADMIN_SESSIONS = {}
+ADMIN_SESSIONS = {}           # token -> username
+ADMIN_USER_TOKENS = {}        # username -> token  (enforces one session per user)
 _SESSION_COOKIE = 'gw_admin_session'
+
+WEBUI_SESSIONS = {}           # token -> username
+WEBUI_USER_TOKENS = {}        # username -> token  (enforces one session per user)
+_WEBUI_SESSION_COOKIE = 'gw_webui_session'
 
 def _get_admin_session(request):
     token = request.cookies.get(_SESSION_COOKIE)
@@ -82,7 +88,18 @@ async def admin_login_post(request):
         return web.json_response({'success': False, 'error': 'Invalid credentials'}, status=401)
 
     token = binascii.hexlify(os.urandom(32)).decode()
+
+    # If this user already has an active session, reject the new login attempt.
+    # The first session (Window A) stays alive and untouched.
+    existing_token = ADMIN_USER_TOKENS.get(user['username'])
+    if existing_token and existing_token in ADMIN_SESSIONS:
+        return web.json_response(
+            {'success': False, 'error': 'This account is already logged in. Please log out from the other window first.'},
+            status=409
+        )
+
     ADMIN_SESSIONS[token] = user['username']
+    ADMIN_USER_TOKENS[user['username']] = token
     resp = web.json_response({'success': True, 'username': user['username'], 'role': user['role']})
     resp.set_cookie(_SESSION_COOKIE, token, httponly=True, path='/')
     return resp
@@ -90,10 +107,19 @@ async def admin_login_post(request):
 async def admin_logout(request):
     token = request.cookies.get(_SESSION_COOKIE)
     if token:
-        ADMIN_SESSIONS.pop(token, None)
+        username = ADMIN_SESSIONS.pop(token, None)
+        if username and ADMIN_USER_TOKENS.get(username) == token:
+            ADMIN_USER_TOKENS.pop(username, None)
     resp = web.HTTPFound('/admin/login')
     resp.del_cookie(_SESSION_COOKIE, path='/')
     return resp
+
+async def admin_session_check(request):
+    """GET /api/admin/session-check -- returns 200 if session is valid, 401 if kicked out."""
+    token = request.cookies.get(_SESSION_COOKIE)
+    if not token or token not in ADMIN_SESSIONS:
+        return web.json_response({'valid': False, 'reason': 'session_expired'}, status=401)
+    return web.json_response({'valid': True})
 
 async def admin_root(request):
     _require_admin(request)
@@ -110,6 +136,39 @@ async def admin_database_page(request):
 async def admin_users_page(request):
     _require_admin(request)
     return _html('users.html')
+
+async def admin_access_control_page(request):
+    _require_admin(request)
+    return _html('access-control.html')
+
+async def api_webui_pages_get(request):
+    """GET /api/admin/webui-pages?user_id=N -- get all pages + restriction status for a user"""
+    _require_admin(request)
+    user_id = request.rel_url.query.get('user_id')
+    if not user_id:
+        # No user selected: return master page list with no restrictions
+        return web.json_response({'pages': get_all_pages(), 'users': []})
+    try:
+        pages = get_pages_for_user(int(user_id))
+        return web.json_response({'pages': pages})
+    except Exception as e:
+        return web.json_response({'error': str(e)}, status=500)
+
+async def api_webui_page_restriction_put(request):
+    """PUT /api/admin/webui-pages -- set hidden flag for one page for one user"""
+    _require_admin(request)
+    try:
+        body     = await request.json()
+        user_id  = body.get('user_id')
+        page_key = body.get('page_key', '').strip()
+        hidden   = bool(body.get('hidden', False))
+        if not user_id or not page_key:
+            return web.json_response({'success': False, 'error': 'user_id and page_key required'}, status=400)
+        ok = set_user_page_restriction(int(user_id), page_key, hidden)
+        return web.json_response({'success': ok})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
 
 async def api_pipeline_send_log(request):
     _require_admin(request)
@@ -312,7 +371,60 @@ async def webui_login_api(request):
     user = verify_webui_user(username, password)
     if not user:
         return web.json_response({'success': False, 'error': 'Invalid username or password.'}, status=401)
-    return web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name']})
+
+    # Block second login -- Window A stays alive, Window B gets rejected
+    existing_token = WEBUI_USER_TOKENS.get(user['username'])
+    if existing_token and existing_token in WEBUI_SESSIONS:
+        return web.json_response(
+            {'success': False, 'error': 'This account is already logged in from another window. Please log out there first.'},
+            status=409
+        )
+
+    token = binascii.hexlify(os.urandom(32)).decode()
+    WEBUI_SESSIONS[token] = user['username']
+    WEBUI_USER_TOKENS[user['username']] = token
+
+    resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name']})
+    resp.set_cookie('gw_webui_session', token, httponly=True, path='/')
+    return resp
+
+async def webui_logout_api(request):
+    """POST /api/auth/logout -- clears webui session so the user can log in again."""
+    token = request.cookies.get('gw_webui_session')
+    if token:
+        username = WEBUI_SESSIONS.pop(token, None)
+        if username and WEBUI_USER_TOKENS.get(username) == token:
+            WEBUI_USER_TOKENS.pop(username, None)
+    resp = web.json_response({'success': True})
+    resp.del_cookie('gw_webui_session', path='/')
+    resp.del_cookie('gw_auth', path='/')
+    resp.del_cookie('gw_user', path='/')
+    return resp
+
+async def webui_session_status(request):
+    """GET /api/auth/status -- returns 200 if session valid, 401 if not.
+    Also returns hidden_pages list so layout.html can restrict the sidebar per user."""
+    token = request.cookies.get('gw_webui_session')
+    if not token or token not in WEBUI_SESSIONS:
+        return web.json_response({'authenticated': False}, status=401)
+    username = WEBUI_SESSIONS[token]
+    # Look up user_id to fetch per-user page restrictions
+    try:
+        from database import get_db_connection as _gdc
+        conn = _gdc()
+        cur  = conn.cursor()
+        cur.execute('SELECT id FROM webui_users WHERE username=?', (username,))
+        row = cur.fetchone()
+        conn.close()
+        user_id = row[0] if row else None
+        hidden_pages = get_user_page_restrictions(user_id) if user_id else []
+    except Exception:
+        hidden_pages = []
+    return web.json_response({
+        'authenticated': True,
+        'username': username,
+        'hidden_pages': hidden_pages,
+    })
 
 async def database_viewer_handler(request):
     try:
@@ -451,11 +563,15 @@ def create_app():
     app.router.add_get('/admin/login', admin_login_page)
     app.router.add_post('/admin/login', admin_login_post)
     app.router.add_get('/admin/logout', admin_logout)
+    app.router.add_get('/api/admin/session-check', admin_session_check)
     app.router.add_get('/admin', admin_root)
     app.router.add_get('/admin/', admin_root)
     app.router.add_get('/admin/pipeline', admin_pipeline_page)
     app.router.add_get('/admin/database', admin_database_page)
     app.router.add_get('/admin/users', admin_users_page)
+    app.router.add_get('/admin/access-control', admin_access_control_page)
+    app.router.add_get('/api/admin/webui-pages', api_webui_pages_get)
+    app.router.add_put('/api/admin/webui-pages', api_webui_page_restriction_put)
 
     WEBUI_LOGIN_FILE = os.path.join(os.path.dirname(__file__), 'login.html')
     async def webui_login_page(request):
@@ -486,14 +602,8 @@ def create_app():
     app.router.add_put('/api/admin/users/webui/{id}', api_webui_user_put)
     app.router.add_delete('/api/admin/users/webui/{id}', api_webui_user_delete)
 
-    # NOTE: /api/auth/login is registered here for the webui AND again
-    # inside register_auth_routes below.  The second registration wins in
-    # aiohttp so webui_login_api is effectively replaced by login_handler
-    # from auth.py.  Both do the same job so this is harmless, but if you
-    # want webui_login_api (database-backed) to be the active handler,
-    # move this line AFTER register_auth_routes or remove the duplicate
-    # inside register_auth_routes.
-    app.router.add_post('/api/auth/login', webui_login_api)
+    # /api/auth/login is registered AFTER register_auth_routes so our
+    # single-session webui_login_api handler wins over auth.py's version.
 
     app.router.add_get('/api/admin/db-path', api_db_path_get)
     app.router.add_put('/api/admin/db-path', api_db_path_put)
@@ -501,6 +611,10 @@ def create_app():
     register_general_config_routes(app)
 
     register_auth_routes(app)
+    # Override auth.py login/logout/status with our single-session enforcing handlers
+    app.router.add_post('/api/auth/login', webui_login_api)
+    app.router.add_post('/api/auth/logout', webui_logout_api)
+    app.router.add_get('/api/auth/status', webui_session_status)
     register_cloud_routes(app)
     register_rules_routes(app)
 

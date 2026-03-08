@@ -40,13 +40,13 @@ async def get_all_datapoints(request):
                 dg.name as group_name, 
                 md."group" as tag_group,
                 m.name as device_name, 
-                m.device_type,
+                m.protocol_type,
                 md.writable, 
                 md.retry_count, 
                 md.timeout_ms, 
                 md.register_count
-            FROM modbus_datapoints md
-            JOIN modbus_device m ON md.device_id = m.id
+            FROM vfd_datapoints md
+            JOIN vfd_device m ON md.device_id = m.id
             LEFT JOIN tag_groups dg ON md.group_id = dg.id
             ORDER BY md.device_id, md.slave_id, md.name
         ''')
@@ -60,7 +60,7 @@ async def get_all_datapoints(request):
                 'id': r['id'],
                 'device_id': r['device_id'],
                 'device_name': r['device_name'],
-                'device_type': "Modbus {}".format(r['device_type'].upper() if r['device_type'] else ''),
+                'device_type': "VFD ({})".format(r['protocol_type'].upper() if r['protocol_type'] else 'RTU'),
                 'tag_name': r['name'],
                 'name': r['name'],
                 'register_address': r['register_address'],
@@ -189,14 +189,14 @@ async def add_modbus_datapoint(request):
         cursor = conn.cursor()
         
         # Validate device exists
-        cursor.execute('SELECT id FROM modbus_device WHERE id = ?', (data.get('device_id'),))
+        cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (data.get('device_id'),))
         if not cursor.fetchone():
             conn.close()
             return web.json_response({'error': 'Device not found'}, status=404)
         
         # Check if tag name already exists for this device+slave
         cursor.execute('''
-            SELECT id FROM modbus_datapoints 
+            SELECT id FROM vfd_datapoints 
             WHERE device_id = ? AND slave_id = ? AND name = ?
         ''', (data.get('device_id'), data.get('slave_id', 1), data.get('tag_name')))
         
@@ -218,7 +218,7 @@ async def add_modbus_datapoint(request):
                 group_id = grp[0]
 
         cursor.execute('''
-            INSERT INTO modbus_datapoints (
+            INSERT INTO vfd_datapoints (
                 device_id, name, slave_id, group_id, "group", register_address, register_type, data_type,
                 byte_order, word_order, scale_factor, offset, unit, description, enabled,
                 writable, retry_count, timeout_ms, register_count
@@ -278,7 +278,7 @@ async def update_modbus_datapoint(request):
         cursor = conn.cursor()
         
         # Check if tag exists
-        cursor.execute('SELECT id FROM modbus_datapoints WHERE id = ?', (tag_id,))
+        cursor.execute('SELECT id FROM vfd_datapoints WHERE id = ?', (tag_id,))
         if not cursor.fetchone():
             conn.close()
             return web.json_response({'error': 'Tag not found'}, status=404)
@@ -333,7 +333,7 @@ async def update_modbus_datapoint(request):
         values.append(tag_id)
         
         query = '''
-            UPDATE modbus_datapoints 
+            UPDATE vfd_datapoints 
             SET {fields}, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         '''.format(fields=', '.join(update_fields))
@@ -380,7 +380,7 @@ async def delete_datapoint(request):
             
             cursor.execute('DELETE FROM loadcell_datapoints WHERE id = ?', (tag_id,))
         else:
-            cursor.execute('DELETE FROM modbus_datapoints WHERE id = ?', (tag_id,))
+            cursor.execute('DELETE FROM vfd_datapoints WHERE id = ?', (tag_id,))
         
         conn.commit()
         conn.close()
@@ -407,19 +407,20 @@ async def get_available_devices(request):
         
         devices = []
         
-        # Get Modbus devices
+        # Get VFD devices
         cursor.execute('''
-            SELECT id, name, device_type FROM modbus_device 
+            SELECT id, name, protocol_type FROM vfd_device 
             WHERE enabled = 1 
             ORDER BY name
         ''')
         
         for row in cursor.fetchall():
+            pt = row[2] or 'rtu'
             devices.append({
                 'id': row[0],
                 'name': row[1],
-                'type': "Modbus {}".format(row[2].upper()),
-                'protocol': "modbus-{}".format(row[2])
+                'type': "VFD ({})".format(pt.upper()),
+                'protocol': "vfd-{}".format(pt)
             })
         
         # Get Loadcell devices
@@ -435,6 +436,21 @@ async def get_available_devices(request):
                 'name': row[1],
                 'type': 'Loadcell',
                 'protocol': 'loadcell'
+            })
+
+        # Get Virtual devices
+        cursor.execute('''
+            SELECT id, name FROM virtual_device 
+            WHERE enabled = 1 
+            ORDER BY name
+        ''')
+        
+        for row in cursor.fetchall():
+            devices.append({
+                'id': row[0],
+                'name': row[1],
+                'type': 'Virtual',
+                'protocol': 'virtual'
             })
         
         conn.close()
@@ -453,7 +469,7 @@ async def get_protocol_form(request):
     try:
         protocol = request.match_info['protocol']
         
-        if protocol in ['modbus-tcp', 'modbus-rtu']:
+        if protocol in ['vfd-tcp', 'vfd-rtu', 'modbus-tcp', 'modbus-rtu']:
             form_schema = {
                 'protocol': protocol,
                 'fields': [
@@ -672,7 +688,7 @@ async def get_all_tag_groups(request):
         cursor = conn.cursor()
         cursor.execute('''
             SELECT id, name, color, description,
-                   (SELECT COUNT(*) FROM modbus_datapoints WHERE group_id = dg.id) as tag_count
+                   (SELECT COUNT(*) FROM vfd_datapoints WHERE group_id = dg.id) as tag_count
             FROM tag_groups dg
             ORDER BY name
         ''')
@@ -752,7 +768,7 @@ async def delete_tag_group(request):
         group_id = request.match_info['group_id']
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute('UPDATE modbus_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
+        cursor.execute('UPDATE vfd_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
         cursor.execute('DELETE FROM tag_groups WHERE id = ?', (group_id,))
         conn.commit()
         conn.close()
@@ -771,7 +787,7 @@ async def assign_tags_to_group(request):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         for tag_id in tag_ids:
-            cursor.execute('UPDATE modbus_datapoints SET group_id = ? WHERE id = ?', (group_id, tag_id))
+            cursor.execute('UPDATE vfd_datapoints SET group_id = ? WHERE id = ?', (group_id, tag_id))
         conn.commit()
         conn.close()
         return web.json_response({'success': True, 'message': '{} tag(s) assigned'.format(len(tag_ids))})

@@ -6,11 +6,20 @@
 </head>
 <body>
     <script>
-        if (document.cookie.indexOf('gw_auth=true') !== -1) {
-            window.location.replace('/layout.html');
-        } else {
-            window.location.replace('/login.html');
-        }
+        // Always verify with server - never trust cookie alone.
+        // If backend restarted, session is gone and user must log in again.
+        (async function () {
+            try {
+                const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
+                if (res.ok) {
+                    window.location.replace('/layout.html');
+                } else {
+                    window.location.replace('/login.html');
+                }
+            } catch (e) {
+                window.location.replace('/login.html');
+            }
+        })();
     </script>
 </body>
 </html>

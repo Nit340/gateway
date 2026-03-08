@@ -121,7 +121,7 @@
 #    |
 #    v
 #  pipeline_save_modbus_config()
-#    |  1. Reads modbus_datapoints JOIN modbus_device (enabled only)
+#    |  1. Reads vfd_datapoints JOIN vfd_device (enabled only)
 #    |  2. Builds {connections:[...], assets:[...], version, timestamp}
 #    |  3. Saves to modbus_configs/
 #    |  4. client.datapoint_update(<modbus_service>, "modbus_config", json)
@@ -2159,13 +2159,13 @@ async def pipeline_save_modbus_config(request):
                 md.byte_order, md.word_order, md.scale_factor, md.offset,
                 md.unit, md.writable, md.retry_count, md.timeout_ms,
                 md.register_count, md."group" as tag_group,
-                m.name as device_name, m.device_type,
+                m.name as device_name, m.protocol_type,
                 m.ip_address, m.port,
                 m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
                 m.response_timeout_ms, m.byte_timeout_ms, m.max_retries,
                 m.polling_interval_ms
-            FROM modbus_datapoints md
-            JOIN modbus_device m ON md.device_id = m.id
+            FROM vfd_datapoints md
+            JOIN vfd_device m ON md.device_id = m.id
             WHERE md.enabled = 1
             ORDER BY md.device_id, md.slave_id
         ''')
@@ -2183,7 +2183,7 @@ async def pipeline_save_modbus_config(request):
             r      = dict(row)
             dev_id = r['device_id']
             name   = r['device_name'] or str(dev_id)
-            dtype  = r['device_type'] or 'tcp'
+            dtype  = r['protocol_type'] or 'tcp'
 
             if dev_id not in connection_map:
                 if dtype in ('tcp', 'modbus-tcp'):

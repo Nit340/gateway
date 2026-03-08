@@ -31,15 +31,13 @@
                 <select class="text-sm px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="groupFilter">
                     <option value="">All Groups</option>
                 </select>
-                <button class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center" id="addMappingBtn">
-                    <i class="fa-solid fa-plus mr-2 text-sm"></i> Add Tag
-                </button>
             </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full compact-table">
                 <thead class="bg-slate-50 border-b border-border">
                     <tr>
+                        <th class="text-left" style="width:48px;">#</th>
                         <th class="text-left">Device</th>
                         <th class="text-left">Protocol</th>
                         <th class="text-left">Tag Name</th>
@@ -55,6 +53,15 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border" id="mappingTableBody"></tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="13" class="p-3 bg-slate-50 border-t border-border">
+                            <button id="addMappingBtn" class="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-primary hover:text-primaryHover hover:bg-blue-50 rounded-lg transition-colors border border-dashed border-primary/40 hover:border-primary">
+                                <i class="fa-solid fa-plus text-xs"></i> Add New Tag
+                            </button>
+                        </td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
         <div class="p-4 border-t border-border bg-slate-50 text-sm text-slate-500">

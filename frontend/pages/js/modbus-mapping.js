@@ -13,7 +13,7 @@ let _editingTagId       = null;
 // Pagination variables
 let _groups = [];
 let _browserCurrentPage = 1;
-let _browserPageSize = 12;
+let _browserPageSize = 6;
 let _browserTotalPages = 1;
 let _selectedGroupColor = 'blue';
 
@@ -202,7 +202,7 @@ function _renderTagsTable() {
         } else {
             tr.innerHTML = `
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
-                <td><span class="protocol-badge ${tag.device_type === 'tcp' ? 'modbus-tcp' : 'modbus-rtu'}">${_esc(deviceType)}</span></td>
+                <td><span class="protocol-badge ${tag.device_type === 'tcp' ? 'vfd-tcp' : 'vfd-rtu'}">${_esc(deviceType)}</span></td>
                 <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
                 <td class="text-slate-600 text-xs text-center">${slaveId}</td>
                 <td class="text-slate-600 font-mono text-xs">${address}</td>
@@ -297,10 +297,10 @@ function _renderTagsBrowser() {
         const timeoutMs = tag.timeout_ms || tag.timeoutMs || 100;
         const registerCount = tag.register_count || tag.registerCount || 1;
         
-        let badgeClass = 'modbus-tcp';
+        let badgeClass = 'vfd-tcp';
         if (isVirtual) badgeClass = 'virtual';
         else if (isLC) badgeClass = 'loadcell';
-        else if (tag.device_type === 'rtu') badgeClass = 'modbus-rtu';
+        else if (tag.device_type === 'rtu') badgeClass = 'vfd-rtu';
         
         let html = `
             <div class="tag-card-header">
@@ -391,17 +391,18 @@ function _renderTagsBrowser() {
 // ─── PAGINATION CONTROLS ────────────────────────────────────────────────────
 
 function _renderPaginationControls(totalItems = 0) {
+    // Find or create the pagination container right after tagsList
     let paginationContainer = document.getElementById('browserPagination');
-    const browserSection = document.getElementById('tagsList')?.parentElement;
-    
-    if (!browserSection) return;
-    
     if (!paginationContainer) {
+        const tagsListEl = document.getElementById('tagsList');
+        if (!tagsListEl) return;
         paginationContainer = document.createElement('div');
         paginationContainer.id = 'browserPagination';
-        paginationContainer.className = 'flex items-center justify-between mt-6 pt-4 border-t border-slate-200';
-        browserSection.appendChild(paginationContainer);
+        // Insert immediately after tagsList inside the same p-6 div
+        tagsListEl.insertAdjacentElement('afterend', paginationContainer);
     }
+
+    paginationContainer.className = 'flex items-center justify-between mt-6 pt-4 border-t border-slate-200';
 
     if (totalItems === 0) {
         paginationContainer.innerHTML = '';
@@ -409,30 +410,37 @@ function _renderPaginationControls(totalItems = 0) {
     }
 
     const startItem = (_browserCurrentPage - 1) * _browserPageSize + 1;
-    const endItem = Math.min(_browserCurrentPage * _browserPageSize, totalItems);
+    const endItem   = Math.min(_browserCurrentPage * _browserPageSize, totalItems);
+    const prevDis   = _browserCurrentPage <= 1;
+    const nextDis   = _browserCurrentPage >= _browserTotalPages;
 
     paginationContainer.innerHTML = `
         <div class="text-sm text-slate-500">
-            Showing <span class="font-medium text-slate-900">${startItem}-${endItem}</span> of <span class="font-medium text-slate-900">${totalItems}</span> tags
+            Showing <span class="font-medium text-slate-900">${startItem}–${endItem}</span>
+            of <span class="font-medium text-slate-900">${totalItems}</span> tags
         </div>
-        <div class="flex items-center space-x-2">
-            <button 
-                class="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors ${_browserCurrentPage === 1 ? 'opacity-50 cursor-not-allowed' : ''}"
-                ${_browserCurrentPage === 1 ? 'disabled' : ''}
-                onclick="changeBrowserPage(${_browserCurrentPage - 1})">
+        <div class="flex items-center gap-2">
+            <button id="_pgPrev"
+                class="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors${prevDis ? ' opacity-40 cursor-not-allowed' : ''}"
+                ${prevDis ? 'disabled' : ''}>
                 <i class="fa-solid fa-chevron-left text-xs"></i>
             </button>
-            <span class="text-sm text-slate-600 px-3">
-                Page ${_browserCurrentPage} of ${_browserTotalPages}
-            </span>
-            <button 
-                class="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors ${_browserCurrentPage === _browserTotalPages ? 'opacity-50 cursor-not-allowed' : ''}"
-                ${_browserCurrentPage === _browserTotalPages ? 'disabled' : ''}
-                onclick="changeBrowserPage(${_browserCurrentPage + 1})">
+            <span class="text-sm text-slate-600 px-2">Page ${_browserCurrentPage} of ${_browserTotalPages}</span>
+            <button id="_pgNext"
+                class="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors${nextDis ? ' opacity-40 cursor-not-allowed' : ''}"
+                ${nextDis ? 'disabled' : ''}>
                 <i class="fa-solid fa-chevron-right text-xs"></i>
             </button>
         </div>
     `;
+
+    // Bind with real listeners — avoids the IIFE global scope problem entirely
+    paginationContainer.querySelector('#_pgPrev')?.addEventListener('click', function() {
+        if (_browserCurrentPage > 1) { _browserCurrentPage--; _renderTagsBrowser(); }
+    });
+    paginationContainer.querySelector('#_pgNext')?.addEventListener('click', function() {
+        if (_browserCurrentPage < _browserTotalPages) { _browserCurrentPage++; _renderTagsBrowser(); }
+    });
 }
 
 // ─── PAGE CHANGE FUNCTION ───────────────────────────────────────────────────
@@ -719,8 +727,11 @@ function _proceedToTagForm() {
         return;
     }
     const proto = _selectedDeviceData.protocol;
+    const isVFD = proto === 'vfd-tcp' || proto === 'vfd-rtu' ||
+                  proto === 'modbus-tcp' || proto === 'modbus-rtu' ||
+                  (proto && (proto.includes('tcp') || proto.includes('rtu')));
 
-    if (proto === 'modbus-tcp' || proto === 'modbus-rtu') {
+    if (isVFD) {
         document.getElementById('modbusCtxDevice').textContent = _selectedDeviceData.name;
         document.getElementById('modbusCtxProtocol').textContent = _pLabel(proto);
         _clearModbusForm('mb');
@@ -1143,18 +1154,20 @@ function _setLoading(btn, loading) {
 function _pLabel(p) {
     if (!p) return '—';
     const labels = {
-        'modbus-tcp': 'Modbus TCP',
-        'modbus-rtu': 'Modbus RTU',
-        'loadcell': 'Load Cell',
-        'virtual': 'Virtual'
+        'vfd-tcp':   'VFD (TCP)',
+        'vfd-rtu':   'VFD (RTU)',
+        'modbus-tcp': 'VFD (TCP)',
+        'modbus-rtu': 'VFD (RTU)',
+        'loadcell':  'Load Cell',
+        'virtual':   'Virtual'
     };
-    return labels[p] || p.toUpperCase();
+    return labels[p] || (p.includes('tcp') ? 'VFD (TCP)' : p.includes('rtu') ? 'VFD (RTU)' : p.toUpperCase());
 }
 
 function _pBadge(p) {
     if (!p) return '';
-    if (p === 'modbus-tcp') return 'modbus-tcp';
-    if (p === 'modbus-rtu') return 'modbus-rtu';
+    if (p === 'vfd-tcp' || p === 'modbus-tcp' || p.includes('tcp')) return 'vfd-tcp';
+    if (p === 'vfd-rtu' || p === 'modbus-rtu' || p.includes('rtu')) return 'vfd-rtu';
     if (p === 'virtual') return 'virtual';
     return 'loadcell';
 }
