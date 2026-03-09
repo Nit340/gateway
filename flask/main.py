@@ -23,7 +23,7 @@ from device_management import (
     get_all_devices, get_device_details, add_device, update_device,
     delete_device, test_device, disable_device, duplicate_device,
     export_devices_csv, import_devices_csv, download_csv_template,
-    get_device_datapoints, update_device_status_api,
+    get_device_datapoints, update_device_status_api, get_port_config_api,
 )
 from tag_mapping import (
     get_all_datapoints, add_modbus_datapoint, update_modbus_datapoint,
@@ -630,6 +630,7 @@ def create_app():
     app.router.add_post('/api/devices/import/csv', import_devices_csv)
     app.router.add_get('/api/devices/template/csv', download_csv_template)
     app.router.add_post('/api/devices/{device_id}/status', update_device_status_api)
+    app.router.add_get('/api/port-config', get_port_config_api)
 
     app.router.add_get('/api/tag-groups', get_all_tag_groups)
     app.router.add_post('/api/tag-groups', add_tag_group)

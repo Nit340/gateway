@@ -81,7 +81,7 @@ if (typeof window.rulesLoaded === 'undefined') {
         try {
             const res  = await fetch('/api/rules/tags');
             const data = await res.json();
-            if (data.success) availableTags = data.tags || [];
+            if (data.success) availableTags = data.tags || [];  // [{name, device_name}]
         } catch(e) {
             console.warn('[Rules] Failed to load tags:', e);
         }
@@ -118,7 +118,9 @@ if (typeof window.rulesLoaded === 'undefined') {
         if (!availableTags.length) return '<option value="">No tags found</option>';
         return '<option value="">Select tag...</option>' +
             availableTags.map(function(t) {
-                return '<option value="' + t + '"' + (t === selectedVal ? ' selected' : '') + '>' + t + '</option>';
+                var name  = typeof t === 'object' ? t.name : t;
+                var label = typeof t === 'object' ? t.device_name + ' - ' + t.name : t;
+                return '<option value="' + name + '"' + (name === selectedVal ? ' selected' : '') + '>' + label + '</option>';
             }).join('');
     }
 
@@ -385,15 +387,13 @@ if (typeof window.rulesLoaded === 'undefined') {
     }
 
     // ========== WINDOW ACTIONS ==========
-    window.selectRule = async function(id) {
-        if (!availableTags.length) await loadTags();
+    window.selectRule = function(id) {
         selectedRuleId = id;
         renderRulesList();
         renderRuleEditor(id);
     };
 
-    window.createGroupRule = async function() {
-        if (!availableTags.length) await loadTags();
+    window.createGroupRule = function() {
         selectedRuleId = null;
         resetGroupData();
         currentRelayTag = '';
@@ -413,8 +413,7 @@ if (typeof window.rulesLoaded === 'undefined') {
         }
     };
 
-    window.createEmergencyRule = async function() {
-        if (!availableTags.length) await loadTags();
+    window.createEmergencyRule = function() {
         selectedRuleId = null;
         resetGroupData();
         currentRelayTag = '';

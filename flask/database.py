@@ -406,6 +406,24 @@ def create_tables(cursor):
         )
     ''')
 
+    # -----------------------------------------------------------------------
+    # Port / Path configuration
+    #   device_type : 'modbus' | 'loadcell'
+    #   port_number : 1-based index shown in the UI (Port 1, Port 2, …)
+    #   port_value  : actual system path stored in vfd_device.serial_port
+    #                 or loadcell_device.device_path
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS port_config (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_type TEXT    NOT NULL CHECK(device_type IN ('modbus', 'loadcell')),
+            port_number INTEGER NOT NULL,
+            label       TEXT    NOT NULL,
+            port_value  TEXT    NOT NULL,
+            UNIQUE(device_type, port_number)
+        )
+    ''')
+
 
 def _migrate_existing_db(cursor):
     """Safe additive migrations for DBs created before schema updates.
@@ -555,6 +573,31 @@ def _migrate_existing_db(cursor):
         """)
         print("[DB] Migration: created webui_user_page_restrictions table")
 
+    # port_config: ensure table exists on older DBs
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='port_config'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE port_config (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_type TEXT    NOT NULL CHECK(device_type IN ('modbus', 'loadcell')),
+                port_number INTEGER NOT NULL,
+                label       TEXT    NOT NULL,
+                port_value  TEXT    NOT NULL,
+                UNIQUE(device_type, port_number)
+            )
+        ''')
+        for device_type, port_number, label, port_value in [
+            ('modbus',   1, 'Port 1', '/dev/ttymxc5'),
+            ('modbus',   2, 'Port 2', '/dev/ttymxc2'),
+            ('loadcell', 1, 'Path 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+            ('loadcell', 2, 'Path 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
+        ]:
+            cursor.execute(
+                'INSERT OR IGNORE INTO port_config (device_type, port_number, label, port_value) VALUES (?, ?, ?, ?)',
+                (device_type, port_number, label, port_value)
+            )
+        print("[DB] Migration: created port_config table with default entries")
+
 
 def _hash_password(plain):
     return hashlib.sha256(plain.encode()).hexdigest()
@@ -602,6 +645,18 @@ def insert_default_data(cursor):
         cursor.execute(
             'INSERT OR IGNORE INTO pipeline_send_log (config_type, last_version, last_status) VALUES (?, 0, "never")',
             (cfg_type,)
+        )
+
+    # Default port/path configuration
+    for device_type, port_number, label, port_value in [
+        ('modbus',   1, 'Port 1', '/dev/ttymxc5'),
+        ('modbus',   2, 'Port 2', '/dev/ttymxc2'),
+        ('loadcell', 1, 'Path 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+        ('loadcell', 2, 'Path 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
+    ]:
+        cursor.execute(
+            'INSERT OR IGNORE INTO port_config (device_type, port_number, label, port_value) VALUES (?, ?, ?, ?)',
+            (device_type, port_number, label, port_value)
         )
 
 
@@ -1414,3 +1469,51 @@ def get_pages_for_user(user_id):
         {'page_key': k, 'label': l, 'sort_order': o, 'visible': k not in hidden}
         for k, l, o in WEBUI_PAGES
     ]
+
+# ---------------------------------------------------------------------------
+# Port / Path configuration helpers
+# ---------------------------------------------------------------------------
+
+def get_port_config(device_type=None):
+    """Return port_config rows, optionally filtered by device_type ('modbus' or 'loadcell')."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if device_type:
+            cursor.execute(
+                'SELECT id, device_type, port_number, label, port_value '
+                'FROM port_config WHERE device_type=? ORDER BY port_number',
+                (device_type,)
+            )
+        else:
+            cursor.execute(
+                'SELECT id, device_type, port_number, label, port_value '
+                'FROM port_config ORDER BY device_type, port_number'
+            )
+        rows = cursor.fetchall()
+        conn.close()
+        return [
+            {'id': r[0], 'device_type': r[1], 'port_number': r[2],
+             'label': r[3], 'port_value': r[4]}
+            for r in rows
+        ]
+    except Exception as e:
+        print('[DB] get_port_config error: {}'.format(e))
+        return []
+
+
+def get_port_label(device_type, port_value):
+    """Return the UI label (e.g. 'Port 1') for a given actual port value."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT label FROM port_config WHERE device_type=? AND port_value=?',
+            (device_type, port_value)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else port_value
+    except Exception as e:
+        print('[DB] get_port_label error: {}'.format(e))
+        return port_value

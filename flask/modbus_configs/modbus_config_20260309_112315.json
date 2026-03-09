@@ -1,0 +1,40 @@
+{
+  "connections": [
+    {
+      "id": "LOADCELL",
+      "type": "rtu",
+      "device": "/dev/ttymxc5",
+      "baud": 9600,
+      "parity": "N",
+      "dataBits": 8,
+      "stopBits": 1,
+      "responseTimeoutMs": 100,
+      "byteTimeoutMs": 100,
+      "maxRetries": 2,
+      "pollingIntervalMs": 300
+    }
+  ],
+  "assets": [
+    {
+      "name": "Hoist_current",
+      "connection_id": "LOADCELL",
+      "slaveId": 1,
+      "registerType": "holding",
+      "address": 5675,
+      "registerCount": 1,
+      "dataType": "uint16",
+      "scale": 1.0,
+      "offset": 0.0,
+      "byteOrder": "big",
+      "wordOrder": "big",
+      "retryCount": 1,
+      "timeoutMs": 100,
+      "writable": false
+    }
+  ],
+  "version": 1,
+  "timestamp": 1773035595.319499,
+  "timestamp_str": "2026-03-09 11:23:15",
+  "source": "web_ui",
+  "tag_count": 1
+}

@@ -19,6 +19,8 @@
     let isSaving = false;
     let currentViewingDeviceId = null;
     let currentViewingDevice = null;
+    // Port/path config loaded from backend (port_config table)
+    let portConfig = { modbus: [], loadcell: [] };
     let eventListenersBoundToNode = null;
     let isRefreshing = false;
 
@@ -255,11 +257,43 @@
     async function initApp() {
         console.log('Initializing Device Management...');
 
+        await loadPortConfig();
         await loadDevices();
         renderDevicesTable();
         setupEventListeners();
 
         console.log('Device Management initialized successfully');
+    }
+
+    async function loadPortConfig() {
+        try {
+            const res = await fetch('/api/port-config');
+            const data = await res.json();
+            if (data.success && data.ports) {
+                portConfig.modbus   = data.ports.filter(p => p.device_type === 'modbus');
+                portConfig.loadcell = data.ports.filter(p => p.device_type === 'loadcell');
+                populatePortDropdowns();
+            }
+        } catch (e) {
+            console.warn('Could not load port config from backend, using defaults:', e);
+        }
+    }
+
+    function populatePortDropdowns() {
+        // Modbus RTU serial port dropdown
+        const serialPortEl = document.getElementById('serialPort');
+        if (serialPortEl && portConfig.modbus.length) {
+            serialPortEl.innerHTML = portConfig.modbus.map(p =>
+                `<option value="${p.port_value}">${p.label}</option>`
+            ).join('');
+        }
+        // Loadcell device path dropdown
+        const devicePathEl = document.getElementById('devicePath');
+        if (devicePathEl && portConfig.loadcell.length) {
+            devicePathEl.innerHTML = portConfig.loadcell.map(p =>
+                `<option value="${p.port_value}">${p.label}</option>`
+            ).join('');
+        }
     }
 
     // ==================== DATA LOADING ====================
@@ -400,11 +434,13 @@
 
     function getDeviceAddress(device) {
         if (device.protocol === 'vfd-tcp') {
-            return `${device.address || 'Not configured'}`;
+            return device.address || 'Not configured';
         } else if (device.protocol === 'vfd-rtu') {
-            return device.address || 'Not configured';
+            const entry = portConfig.modbus.find(p => p.port_value === (device.config?.serial_port || device.address));
+            return entry ? entry.label : (device.config?.serial_port === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
         } else if (device.protocol === 'loadcell') {
-            return device.address || 'Not configured';
+            const entry = portConfig.loadcell.find(p => p.port_value === (device.config?.device_path || device.address));
+            return entry ? entry.label : (device.config?.device_path === '/sys/bus/iio/devices/iio:device1/in_voltage0_raw' ? 'Path 2' : 'Path 1');
         }
         return device.address || 'Not configured';
     }
@@ -444,7 +480,7 @@
             protoText = 'Modbus RTU';
         } else if (protocol === 'loadcell') {
             badgeClass += 'type-loadcell';
-            protoText = 'SysFS / IIO';
+            protoText = '—';
         } else if (protocol === 'virtual') {
             badgeClass += 'type-virtual';
             protoText = '—';
@@ -525,10 +561,10 @@
                                     <div class="text-xs text-slate-500 mb-0.5">Device Type</div>
                                     <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeStyle.bg} ${typeStyle.text}">${typeStyle.label}</span></div>
                                 </div>
-                                <div>
+                                ${protocol !== 'loadcell' ? `<div>
                                     <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
                                     <div class="text-sm text-slate-700">${typeStyle.proto || escapeHtml(device.protocol || '—')}</div>
-                                </div>
+                                </div>` : ''}
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Status</div>
                                     <div class="flex items-center gap-1.5">
@@ -586,10 +622,12 @@
                                 </div>
             `;
         } else if (protocol === 'vfd-rtu') {
+            const rtuPortEntry = portConfig.modbus.find(p => p.port_value === config.serial_port);
+            const rtuPortLabel = rtuPortEntry ? rtuPortEntry.label : (config.serial_port === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
             detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Serial Port</div>
-                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.serial_port || device.address || '/dev/ttymxc5')}</div>
+                                    <div class="text-sm font-mono text-slate-700">${rtuPortLabel}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Baud Rate</div>
@@ -625,10 +663,12 @@
                                 </div>
             `;
         } else if (protocol === 'loadcell') {
+            const lcPathEntry = portConfig.loadcell.find(p => p.port_value === config.device_path);
+            const lcPathLabel = lcPathEntry ? lcPathEntry.label : (config.device_path === '/sys/bus/iio/devices/iio:device1/in_voltage0_raw' ? 'Path 2' : 'Path 1');
             detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">SysFS Path</div>
-                                    <div class="text-sm font-mono text-slate-700">${escapeHtml(config.device_path || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw')}</div>
+                                    <div class="text-sm font-mono text-slate-700">${lcPathLabel}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Poll Interval (ms)</div>
@@ -751,9 +791,35 @@
         const panel = document.getElementById('addDevicePanel');
         if (panel) {
             panel.classList.add('active');
-            
+            populatePortDropdowns();
             document.getElementById('deviceNameInput').value = '';
-            
+
+            // Enforce max-1 for loadcell and virtual
+            const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
+            const virtualCount  = devices.filter(d => d.protocol === 'virtual').length;
+
+            const lcRadio = panel.querySelector('input[name="device-type"][value="loadcell"]');
+            const lcLabel = lcRadio ? lcRadio.closest('label') : null;
+            if (lcRadio) {
+                lcRadio.disabled = loadcellCount >= 1;
+                if (lcLabel) {
+                    lcLabel.title = loadcellCount >= 1 ? 'Only 1 Loadcell device is allowed' : '';
+                    lcLabel.style.opacity = loadcellCount >= 1 ? '0.45' : '';
+                    lcLabel.style.cursor  = loadcellCount >= 1 ? 'not-allowed' : '';
+                }
+            }
+
+            const vdRadio = panel.querySelector('input[name="device-type"][value="virtual"]');
+            const vdLabel = vdRadio ? vdRadio.closest('label') : null;
+            if (vdRadio) {
+                vdRadio.disabled = virtualCount >= 1;
+                if (vdLabel) {
+                    vdLabel.title = virtualCount >= 1 ? 'Only 1 Virtual device is allowed' : '';
+                    vdLabel.style.opacity = virtualCount >= 1 ? '0.45' : '';
+                    vdLabel.style.cursor  = virtualCount >= 1 ? 'not-allowed' : '';
+                }
+            }
+
             const firstRadio = panel.querySelector('input[name="device-type"][value="vfd"]');
             if (firstRadio) {
                 firstRadio.checked = true;
@@ -788,8 +854,16 @@
 
         const configs = (panel || document).querySelectorAll('.protocol-config');
         configs.forEach(config => config.classList.remove('active'));
-        
-        const selectedConfig = document.getElementById(`${resolvedType}-config`);
+
+        // Map resolved type to the actual config div ID
+        const configIdMap = {
+            'vfd-rtu':   'modbus-rtu-config',
+            'vfd-tcp':   'modbus-tcp-config',
+            'loadcell':  'loadcell-config',
+            'virtual':   'virtual-config',
+        };
+        const configDivId = configIdMap[resolvedType] || (resolvedType + '-config');
+        const selectedConfig = document.getElementById(configDivId);
         if (selectedConfig) {
             selectedConfig.classList.add('active');
         }
@@ -815,6 +889,26 @@
                 return;
             }
             
+            // Enforce max-1 for loadcell and virtual (only on add, not edit)
+            if (!selectedDeviceId) {
+                if (deviceType === 'loadcell') {
+                    const existing = devices.filter(d => d.protocol === 'loadcell').length;
+                    if (existing >= 1) {
+                        showNotification('Only 1 Loadcell device is allowed. Delete the existing one first.', 'error');
+                        isSaving = false;
+                        return;
+                    }
+                }
+                if (deviceType === 'virtual') {
+                    const existing = devices.filter(d => d.protocol === 'virtual').length;
+                    if (existing >= 1) {
+                        showNotification('Only 1 Virtual device is allowed. Delete the existing one first.', 'error');
+                        isSaving = false;
+                        return;
+                    }
+                }
+            }
+
             let requestData = {
                 name: deviceName,
                 config: {}
@@ -832,7 +926,7 @@
                 requestData.protocol_type = 'rtu';
                 requestData.device_type = 'rtu';
                 requestData.config = {
-                    serial_port: document.getElementById('serialPort')?.value || '/dev/ttymxc5',
+                    serial_port: document.getElementById('serialPort')?.value || (portConfig.modbus[0]?.port_value ?? '/dev/ttymxc5'),
                     baud_rate: parseInt(document.getElementById('baudRate')?.value) || 9600,
                     data_bits: parseInt(document.getElementById('dataBits')?.value) || 8,
                     parity: document.getElementById('parity')?.value || 'N',
@@ -860,7 +954,7 @@
                 requestData.protocol = 'loadcell';
                 requestData.config = {
                     // Device connection
-                    device_path: document.getElementById('devicePath')?.value || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+                    device_path: document.getElementById('devicePath')?.value || (portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
                     poll_ms: parseInt(document.getElementById('lcPollMs')?.value) || 10,
                     // ADC hardware parameters
                     resolution_bits: parseInt(document.getElementById('lcResolutionBits')?.value) || 24,
@@ -1025,8 +1119,8 @@
                         deviceTypeValue = vfdR ? vfdR.value : 'vfd-rtu';
                     }
                     if (deviceTypeValue === 'vfd-rtu') {
-                        if (document.getElementById('serialPort')) 
-                            document.getElementById('serialPort').value = config.serial_port || '/dev/ttymxc5';
+                        if (document.getElementById('serialPort'))
+                            document.getElementById('serialPort').value = config.serial_port || (portConfig.modbus[0]?.port_value ?? '/dev/ttymxc5');
                         if (document.getElementById('baudRate')) 
                             document.getElementById('baudRate').value = config.baud_rate || 9600;
                         if (document.getElementById('dataBits')) 
@@ -1058,7 +1152,7 @@
                             document.getElementById('tcpPollingInterval').value = config.polling_interval_ms || 300;
                     } else if (deviceTypeValue === 'loadcell') {
                         if (document.getElementById('devicePath'))
-                            document.getElementById('devicePath').value = config.device_path || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                            document.getElementById('devicePath').value = config.device_path || (portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw');
                         if (document.getElementById('lcPollMs'))
                             document.getElementById('lcPollMs').value = config.poll_ms || 10;
                         if (document.getElementById('lcResolutionBits'))

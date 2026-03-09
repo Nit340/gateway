@@ -11,7 +11,7 @@ from datetime import datetime
 from aiohttp import web
 
 from general import device_status_tracker
-from database import DB_FILE, get_service_by_name
+from database import DB_FILE, get_service_by_name, get_port_config
 from general import initialize_device_status, remove_device_status, update_device_status
 
 # ============================================================================
@@ -74,7 +74,12 @@ async def get_all_devices(request):
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'enabled': bool(enabled),
-                'service': service_name
+                'service': service_name,
+                'config': {
+                    'serial_port': serial_port if protocol_type == 'rtu' else None,
+                    'ip_address':  ip          if protocol_type == 'tcp' else None,
+                    'port':        port        if protocol_type == 'tcp' else None,
+                }
             })
         
         # Get Loadcell devices
@@ -104,7 +109,10 @@ async def get_all_devices(request):
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'enabled': bool(enabled),
-                'service': service_name
+                'service': service_name,
+                'config': {
+                    'device_path': device_path,
+                }
             })
         
         # Get Virtual devices
@@ -340,7 +348,26 @@ async def add_device(request):
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
+        # Enforce max-1 for loadcell and virtual
+        if device_type == 'loadcell':
+            cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+            if cursor.fetchone()[0] >= 1:
+                conn.close()
+                return web.json_response({
+                    'success': False,
+                    'error': 'Only 1 Loadcell device is allowed. Delete the existing one first.'
+                }, status=400)
+
+        if device_type == 'virtual':
+            cursor.execute('SELECT COUNT(*) FROM virtual_device')
+            if cursor.fetchone()[0] >= 1:
+                conn.close()
+                return web.json_response({
+                    'success': False,
+                    'error': 'Only 1 Virtual device is allowed. Delete the existing one first.'
+                }, status=400)
+
         # Generate device ID with unique prefix
         if device_type == 'loadcell':
             cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
@@ -524,11 +551,22 @@ async def update_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if it's Modbus or Loadcell
+        # Check device type
         cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (device_id,))
         is_modbus = cursor.fetchone() is not None
+
+        cursor.execute('SELECT id FROM virtual_device WHERE id = ?', (device_id,))
+        is_virtual = cursor.fetchone() is not None
         
-        if is_modbus:
+        if is_virtual:
+            # Update Virtual device — only name is editable
+            new_name = data.get('name', '').strip()
+            if not new_name:
+                conn.close()
+                return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
+            cursor.execute('UPDATE virtual_device SET name = ? WHERE id = ?', (new_name, device_id))
+
+        elif is_modbus:
             # Update Modbus device
             config = data.get('config', {})
             protocol_type = data.get('protocol_type', data.get('device_type', 'rtu'))
@@ -588,7 +626,7 @@ async def update_device(request):
             cursor.execute(query, values)
         
         else:
-            # Update Loadcell device
+            # Update Loadcell device (fallback — not modbus, not virtual)
             config = data.get('config', {})
             
             update_fields = ['name = ?']
@@ -1052,6 +1090,8 @@ async def import_devices_csv(request):
                 
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
+                elif device_type.lower() == 'virtual':
+                    cursor.execute('SELECT id, name FROM virtual_device WHERE name = ?', (name,))
                 else:
                     cursor.execute('SELECT id, name FROM vfd_device WHERE name = ?', (name,))
                 
@@ -1090,7 +1130,16 @@ async def import_devices_csv(request):
         replaced_count = 0
         skipped_count = 0
         errors = []
-        
+
+        # Pre-count existing loadcell and virtual devices for limit enforcement
+        cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+        existing_loadcell_count = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM virtual_device')
+        existing_virtual_count = cursor.fetchone()[0]
+        # Track how many we're adding in this import (new ones only, not replacements)
+        import_loadcell_added = 0
+        import_virtual_added = 0
+
         csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
         
         for row_num, row in enumerate(csv_reader, start=2):
@@ -1104,24 +1153,25 @@ async def import_devices_csv(request):
                 
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id FROM loadcell_device WHERE name = ?', (name,))
+                elif device_type.lower() == 'virtual':
+                    cursor.execute('SELECT id FROM virtual_device WHERE name = ?', (name,))
                 else:
                     cursor.execute('SELECT id FROM vfd_device WHERE name = ?', (name,))
                 
                 existing_device = cursor.fetchone()
                 
                 if existing_device:
+                    # Loadcell and Virtual are always skipped on import — never replaced
+                    if device_type.lower() in ('loadcell', 'virtual'):
+                        skipped_count += 1
+                        continue
                     if skip_existing:
                         skipped_count += 1
                         continue
                     elif replace_existing:
                         device_id = existing_device[0]
-                        if device_type.lower() == 'loadcell':
-                            cursor.execute('DELETE FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
-                            cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
-                        else:
-                            cursor.execute('DELETE FROM vfd_datapoints WHERE device_id = ?', (device_id,))
-                            cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
-                        
+                        cursor.execute('DELETE FROM vfd_datapoints WHERE device_id = ?', (device_id,))
+                        cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
                         remove_device_status(device_id)
                         replaced_count += 1
                     else:
@@ -1130,7 +1180,21 @@ async def import_devices_csv(request):
                 
                 service_name = 'loadcell' if device_type.lower() == 'loadcell' else 'modbus'
                 service_id = get_service_by_name(service_name)
-                
+
+                # Enforce max-1 for loadcell (new inserts only, not replacements)
+                if device_type.lower() == 'loadcell' and not existing_device:
+                    if (existing_loadcell_count + import_loadcell_added) >= 1:
+                        errors.append("Row {}: Skipped '{}' — only 1 Loadcell device allowed".format(row_num, name))
+                        skipped_count += 1
+                        continue
+
+                # Enforce max-1 for virtual (new inserts only, not replacements)
+                if device_type.lower() == 'virtual' and not existing_device:
+                    if (existing_virtual_count + import_virtual_added) >= 1:
+                        errors.append("Row {}: Skipped '{}' — only 1 Virtual device allowed".format(row_num, name))
+                        skipped_count += 1
+                        continue
+
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
                     existing_lc_ids = [r[0] for r in cursor.fetchall()]
@@ -1175,7 +1239,34 @@ async def import_devices_csv(request):
                     )
                     
                     initialize_device_status(device_id, 'Online' if enabled else 'Offline')
+                    if not existing_device:
+                        import_loadcell_added += 1
                     
+                elif device_type.lower() == 'virtual':
+                    cursor.execute('SELECT id FROM virtual_device WHERE id LIKE "VD%" ORDER BY id')
+                    existing_vd_ids = [r[0] for r in cursor.fetchall()]
+                    vd_max = 0
+                    for eid in existing_vd_ids:
+                        try:
+                            vd_max = max(vd_max, int(eid[2:]))
+                        except ValueError:
+                            pass
+                    device_id = 'VD{}'.format(vd_max + 1)
+                    enabled = row.get('Enabled', '1').strip() == '1'
+
+                    cursor.execute(
+                        'INSERT INTO virtual_device (id, name, enabled) VALUES (?, ?, ?)',
+                        (device_id, name, 1 if enabled else 0)
+                    )
+                    for tag_name in ('lan', 'wlan', 'lte'):
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO virtual_datapoints (device_id, name, unit) VALUES (?, ?, '')",
+                            (device_id, tag_name)
+                        )
+                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
+                    if not existing_device:
+                        import_virtual_added += 1
+
                 else:
                     cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
@@ -1345,7 +1436,15 @@ async def get_device_datapoints(request):
         
         datapoints = []
         
-        if is_modbus:
+        if is_virtual:
+            # Update Virtual device — only name is editable
+            new_name = data.get('name', '').strip()
+            if not new_name:
+                conn.close()
+                return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
+            cursor.execute('UPDATE virtual_device SET name = ? WHERE id = ?', (new_name, device_id))
+
+        elif is_modbus:
             cursor.execute('''
                 SELECT id, name, register_address, register_type, data_type,
                        byte_order, word_order, scale_factor, offset, unit, description
@@ -1415,4 +1514,19 @@ async def update_device_status_api(request):
         
     except Exception as e:
         print("Error updating device status: {}".format(e))
+        return web.json_response({'error': str(e)}, status=500)
+# ============================================================================
+# PORT / PATH CONFIGURATION
+# ============================================================================
+
+async def get_port_config_api(request):
+    """GET /api/port-config  — return all port/path entries from port_config table.
+    Optionally filter by ?type=modbus or ?type=loadcell
+    """
+    try:
+        device_type = request.rel_url.query.get('type', None)
+        rows = get_port_config(device_type)
+        return web.json_response({'success': True, 'ports': rows})
+    except Exception as e:
+        print('Error getting port config: {}'.format(e))
         return web.json_response({'error': str(e)}, status=500)

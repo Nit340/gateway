@@ -58,10 +58,9 @@ async function _loadData() {
         _populateGroupDropdowns();
 
         _renderTagsTable();
-        _renderTagsBrowser();
+        _renderTagsBrowser();   // already calls _renderPaginationControls internally
         _updateDropdownFilters();
         _renderGroupsPanel();
-        _renderPaginationControls();
     } catch (err) {
         console.error('Failed to load data:', err);
         _toast('Failed to load data', 'error');

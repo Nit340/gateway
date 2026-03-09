@@ -41,13 +41,13 @@
             <label class="block text-sm font-medium text-slate-700 mb-2">Protocol</label>
             <div class="grid grid-cols-2 gap-3">
                 <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="vfd-protocol" value="modbus-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                    <input type="radio" name="vfd-protocol" value="vfd-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
                     <div class="ml-3">
                         <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
                     </div>
                 </label>
                 <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="vfd-protocol" value="modbus-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                    <input type="radio" name="vfd-protocol" value="vfd-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                     <div class="ml-3">
                         <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
                     </div>
@@ -75,7 +75,10 @@
                     
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
-                        <input type="text" value="/dev/ttymxc5" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="serialPort">
+                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="serialPort">
+                            <option value="/dev/ttymxc5">Port 1</option>
+                            <option value="/dev/ttymxc2">Port 2</option>
+                        </select>
                     </div>
                     
                     <div class="grid grid-cols-2 gap-4">
@@ -185,8 +188,10 @@
                     <!-- SysFS Device Path -->
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">SysFS Path <span class="text-red-500">*</span></label>
-                        <input type="text" value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw"
-                            class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="devicePath">
+                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePath">
+                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Path 1</option>
+                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Path 2</option>
+                        </select>
                         <p class="text-xs text-slate-400 mt-1">IIO sysfs channel path (sysfs_hx711)</p>
                     </div>
 

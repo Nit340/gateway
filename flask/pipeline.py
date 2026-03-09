@@ -1726,6 +1726,15 @@ async def send_loadcell_config_now():
 
         print("[LC-CFG] Device: {} ({})".format(r['name'], r['id']))
 
+        # Guard: do not auto-send if calibration ref_weight is 0.
+        # Wait for a loadcell config received from another pipeline client first.
+        known_weight = r.get("known_weight") or 0
+        if not known_weight or float(known_weight) == 0.0:
+            msg = ("Skipping auto-send: ref_weight is 0 -- "
+                   "waiting for loadcell config from another pipeline client before sending.")
+            print("[LC-CFG] " + msg)
+            return {"success": False, "skipped": True, "error": msg}
+
         def _active(arr):
             return [{"type": f["type"], "parameters": f["parameters"]}
                     for f in arr if f.get("enabled", True)]
@@ -1750,16 +1759,6 @@ async def send_loadcell_config_now():
                     "server":       r.get("pipeline_server") or "127.0.0.1",
                     "port":         r.get("pipeline_port") or 7000,
                     "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
-                    "datapoints": [{"name": r["name"], "map": {
-                        "weight":        "{}.weight_kg".format(r["name"]),
-                        "raw":           "{}.raw".format(r["name"]),
-                        "unit":          "{}.unit".format(r["name"]),
-                        "known_weight":  "{}.known_weight_kg".format(r["name"]),
-                        "known_raw":     "{}.known_raw".format(r["name"]),
-                        "is_tared":      "{}.tared".format(r["name"]),
-                        "is_calibrated": "{}.calibrated".format(r["name"]),
-                        "capacity":      "{}.capacity".format(r["name"]),
-                    }}]
                 }
             }],
             "load_cells": [{
@@ -1956,19 +1955,6 @@ async def pipeline_filters_post_handler(request):
                     "server":       r.get("pipeline_server") or "127.0.0.1",
                     "port":         r.get("pipeline_port") or 7000,
                     "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
-                    "datapoints": [{
-                        "name": r["name"],
-                        "map": {
-                            "weight":        "{}.weight_kg".format(r["name"]),
-                            "raw":           "{}.raw".format(r["name"]),
-                            "unit":          "{}.unit".format(r["name"]),
-                            "known_weight":  "{}.known_weight_kg".format(r["name"]),
-                            "known_raw":     "{}.known_raw".format(r["name"]),
-                            "is_tared":      "{}.tared".format(r["name"]),
-                            "is_calibrated": "{}.calibrated".format(r["name"]),
-                            "capacity":      "{}.capacity".format(r["name"]),
-                        }
-                    }]
                 }
             }],
             "load_cells": [{

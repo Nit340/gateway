@@ -22,8 +22,14 @@ async def rules_tags_handler(request):
     try:
         conn = get_db()
         cur  = conn.cursor()
-        cur.execute('SELECT name FROM vfd_datapoints WHERE enabled=1 ORDER BY name')
-        tags = [row['name'] for row in cur.fetchall()]
+        cur.execute('''
+            SELECT dp.name,
+                   COALESCE(d.name, dp.device_id) AS device_name
+            FROM vfd_datapoints dp
+            LEFT JOIN vfd_device d ON d.id = dp.device_id
+            WHERE dp.enabled=1 ORDER BY dp.name
+        ''')
+        tags = [{'name': r['name'], 'device_name': r['device_name']} for r in cur.fetchall()]
         conn.close()
         return web.json_response({'success': True, 'tags': tags})
     except Exception as e:
@@ -219,11 +225,19 @@ def _build_combined_core_config(rules):
 
     modbus_groups = list(merged.values())
 
-    # -- Loadcell datapoint names: always use the fixed protocol defaults --
-    # loadcell_device.name is the device display label, NOT the datapoint name.
-    # The load_cell_service always publishes under 'load_weight' / 'load_unit'.
+    # -- Loadcell datapoint names from loadcell_device DB -----------------
     lc_datapoint_name      = 'load_weight'
     lc_unit_datapoint_name = 'load_unit'
+    try:
+        conn = get_db()
+        cur  = conn.cursor()
+        cur.execute('SELECT name FROM loadcell_device WHERE enabled=1 ORDER BY id LIMIT 1')
+        row = cur.fetchone()
+        if row:
+            lc_datapoint_name = row['name']
+        conn.close()
+    except Exception:
+        pass
 
     # -- Emergency output from first enabled emergency rule ----------------
     emergency_output = None
