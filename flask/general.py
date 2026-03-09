@@ -12,10 +12,26 @@ from auth import ws_auth
 # MODELS (from models.py)
 # ============================================================================
 
+# Active timezone - updated whenever user syncs or saves config
+active_timezone = 'Asia/Kolkata'
+
+def get_now():
+    """Return current datetime in the active_timezone."""
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo(active_timezone)
+    except Exception:
+        try:
+            import pytz
+            tz = pytz.timezone(active_timezone)
+        except Exception:
+            tz = None
+    return datetime.datetime.now(tz) if tz else datetime.datetime.now()
+
 # In-memory real-time state with previous values for comparison
 realtime_state = {
-    'current_date':        datetime.datetime.now().strftime('%Y-%m-%d'),
-    'current_time':        datetime.datetime.now().strftime('%H:%M'),
+    'current_date':        get_now().strftime('%Y-%m-%d'),
+    'current_time':        get_now().strftime('%H:%M'),
     'wifi_signal_strength': 3   # 0-4 scale
 }
 
@@ -435,9 +451,10 @@ async def periodic_updates():
     """Update real-time state only when changes occur."""
     while True:
         try:
-            # Update time
-            new_date = datetime.datetime.now().strftime('%Y-%m-%d')
-            new_time = datetime.datetime.now().strftime('%H:%M')
+            # Update time using active timezone
+            now      = get_now()
+            new_date = now.strftime('%Y-%m-%d')
+            new_time = now.strftime('%H:%M')
             
             date_changed = new_date != previous_state['current_date']
             time_changed = new_time != previous_state['current_time']
@@ -485,7 +502,99 @@ def update_wifi_signal_strength(strength):
 # CONFIGURATION HANDLERS (original from general_config.py)
 # ============================================================================
 
-async def get_config_handler(request):
+async def sync_time_handler(request):
+    """POST /api/sync-time
+    Accepts optional JSON body with timezone, ntp_server, date_format, time_format.
+    Applies the timezone, optionally triggers NTP sync, and returns the current
+    date/time formatted according to the selected options.
+    """
+    user = ws_auth(request)
+    if user is None:
+        return web.json_response({'success': False, 'error': 'Unauthorized'}, status=401)
+
+    # Parse request body (may be empty)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    timezone    = body.get('timezone',    'UTC')
+    ntp_server  = body.get('ntp_server',  'pool.ntp.org')
+    date_format = body.get('date_format', 'DD/MM/YYYY')
+    time_format = body.get('time_format', '24-hour')
+
+    # Store as active timezone so periodic_updates uses it from now on
+    global active_timezone
+    active_timezone = timezone
+
+    # --- Attempt real NTP sync if ntpdate / chronyc is available ---
+    sync_method = 'system_clock'
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['ntpdate', '-u', ntp_server],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            sync_method = 'ntp'
+        else:
+            # Fall back to chronyc
+            result2 = subprocess.run(
+                ['chronyc', 'makestep'],
+                capture_output=True, text=True, timeout=10
+            )
+            if result2.returncode == 0:
+                sync_method = 'chrony'
+    except Exception:
+        pass  # NTP tool not available - use system clock
+
+    # Get current time in the requested timezone via get_now()
+    now = get_now()
+
+    # Format date according to date_format preference
+    if date_format == 'MM/DD/YYYY':
+        formatted_date = now.strftime('%m/%d/%Y')
+        iso_date       = now.strftime('%Y-%m-%d')   # for the input[type=date] value
+    elif date_format == 'YYYY-MM-DD':
+        formatted_date = now.strftime('%Y-%m-%d')
+        iso_date       = formatted_date
+    else:  # DD/MM/YYYY (default)
+        formatted_date = now.strftime('%d/%m/%Y')
+        iso_date       = now.strftime('%Y-%m-%d')
+
+    # Format time according to time_format preference
+    if time_format == '12-hour':
+        formatted_time = now.strftime('%I:%M %p')
+        input_time     = now.strftime('%I:%M')
+    else:  # 24-hour (default)
+        formatted_time = now.strftime('%H:%M')
+        input_time     = formatted_time
+
+    # Update realtime_state so WS broadcast is consistent
+    realtime_state['current_date'] = iso_date
+    realtime_state['current_time'] = input_time
+    previous_state['current_date'] = iso_date
+    previous_state['current_time'] = input_time
+
+    # Broadcast updated time to all connected general WS clients
+    if connected_websockets:
+        await broadcast_to_clients({
+            'type':         'time_update',
+            'current_date': iso_date,
+            'current_time': input_time,
+        })
+
+    return web.json_response({
+        'success':        True,
+        'current_date':   iso_date,       # YYYY-MM-DD  (for <input type="date">)
+        'current_time':   input_time,     # HH:MM or HH:MM  (for <input type="time">)
+        'formatted_date': formatted_date, # human-readable per date_format
+        'formatted_time': formatted_time, # human-readable per time_format
+        'timezone':       timezone,
+        'ntp_server':     ntp_server,
+        'sync_method':    sync_method,
+        'message':        'Time synchronized successfully',
+    })
     """GET /api/general-configuration"""
     config = get_general_configuration()
     
@@ -497,6 +606,21 @@ async def get_config_handler(request):
             'wifi_signal_strength': realtime_state.get('wifi_signal_strength', 3)
         }
     
+    return web.json_response(config)
+
+
+async def get_config_handler(request):
+    """GET /api/general-configuration"""
+    config = get_general_configuration()
+
+    # Add real-time data to response
+    if isinstance(config, dict):
+        config['_realtime'] = {
+            'current_date': realtime_state['current_date'],
+            'current_time': realtime_state['current_time'],
+            'wifi_signal_strength': realtime_state.get('wifi_signal_strength', 3)
+        }
+
     return web.json_response(config)
 
 
@@ -517,6 +641,15 @@ async def put_config_handler(request):
     except Exception as e:
         print("Error in PUT handler: {}".format(e))
         return web.json_response({'success': False, 'message': str(e)}, status=400)
+
+    # Update active timezone so periodic_updates reflects new setting immediately
+    global active_timezone
+    try:
+        saved_tz = (data.get('date_time') or {}).get('timezone')
+        if saved_tz:
+            active_timezone = saved_tz
+    except Exception:
+        pass
 
     if not success:
         return web.json_response(
@@ -546,6 +679,16 @@ async def put_config_handler(request):
 async def start_background_tasks(app):
     """Start background tasks for the general config module."""
     print("[GENERAL-CONFIG] Starting background tasks...")
+    # Load saved timezone from DB so periodic_updates starts with correct tz
+    global active_timezone
+    try:
+        cfg = get_general_configuration()
+        saved_tz = (cfg.get('date_time') or {}).get('timezone')
+        if saved_tz:
+            active_timezone = saved_tz
+            print("[GENERAL-CONFIG] Loaded timezone: {}".format(active_timezone))
+    except Exception as e:
+        print("[GENERAL-CONFIG] Could not load timezone from DB: {}".format(e))
     # Stash the running event loop so pipeline thread callbacks can reach it.
     _main_loop_ref["loop"] = asyncio.get_event_loop()
     app['general_config_periodic'] = asyncio.ensure_future(periodic_updates())
@@ -573,6 +716,9 @@ def register_general_config_routes(app):
     app.router.add_get('/api/general-configuration', get_config_handler)
     app.router.add_put('/api/general-configuration', put_config_handler)
     
+    # Time sync endpoint
+    app.router.add_post('/api/sync-time', sync_time_handler)
+
     # WiFi scan endpoint
     app.router.add_post('/api/wifi-scan', wifi_scan_handler)
     

@@ -279,10 +279,7 @@
                     </label>
                     <select name="timezone" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
                         <option value="Asia/Kolkata">Asia/Kolkata (GMT+05:30)</option>
-                        <option value="UTC">UTC (GMT+00:00)</option>
-                        <option value="America/New_York">America/New_York (GMT-05:00)</option>
-                        <option value="Europe/London">Europe/London (GMT+00:00)</option>
-                        <option value="Asia/Singapore">Asia/Singapore (GMT+08:00)</option>
+                  
                     </select>
                 </div>
                 
@@ -292,10 +289,7 @@
                         NTP Server <span class="text-red-500">*</span>
                     </label>
                     <select name="ntp-server" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                        <option value="pool.ntp.org">pool.ntp.org</option>
                         <option value="time.google.com">time.google.com</option>
-                        <option value="time.windows.com">time.windows.com</option>
-                        <option value="time.apple.com">time.apple.com</option>
                     </select>
                 </div>
                 
@@ -303,14 +297,15 @@
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-slate-700 mb-1">Set Time Manually (Fallback)</label>
                     <div class="flex items-center space-x-4">
-                        <input type="date" name="date" value="2025-03-12" 
-                            class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                        <input type="text" name="date" value="12/03/2025" placeholder="DD/MM/YYYY"
+                            class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary font-mono w-36">
                         <input type="time" name="time" value="14:53" 
                             class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                         <button type="button" class="sync-time-btn text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors">
                             <i class="fa-solid fa-rotate mr-2"></i> Sync Now
                         </button>
                     </div>
+
                 </div>
                 
                 <!-- Date Format -->
@@ -332,17 +327,7 @@
                     </select>
                 </div>
                 
-                <!-- Language -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Language</label>
-                    <select name="language" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                        <option value="en">English</option>
-                        <option value="hi">????? (Hindi)</option>
-                        <option value="es">Espa ol (Spanish)</option>
-                        <option value="fr">Fran ais (French)</option>
-                        <option value="de">Deutsch (German)</option>
-                    </select>
-                </div>
+
             </div>
         </section>
 
@@ -565,6 +550,6 @@
 </div>
 
 <!-- Toast Container -->
-<div id="gc-toast-container" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2"></div>
+<div id="gc-toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2"></div>
 
 <!-- REMOVED the inline script that was causing double initialization

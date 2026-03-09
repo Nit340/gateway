@@ -176,7 +176,15 @@ async def api_pipeline_send_log(request):
 
 async def api_pipeline_targets_get(request):
     _require_admin(request)
-    return web.json_response({'targets': get_all_pipeline_service_targets()})
+    DEFAULT_ORDER = ['modbus', 'loadcell', 'iot_gateway', 'core']
+    targets = get_all_pipeline_service_targets()
+    for t in targets:
+        if not t.get('send_order'):
+            try:
+                t['send_order'] = DEFAULT_ORDER.index(t['config_type']) + 1
+            except ValueError:
+                t['send_order'] = 99
+    return web.json_response({'targets': targets})
 
 async def api_pipeline_targets_put(request):
     _require_admin(request)

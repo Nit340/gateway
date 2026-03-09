@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "system": {
+    "wifi_ssid": "",
+    "wifi_password": ""
+  },
+  "heartbeat": {
+    "interval_sec": 30,
+    "channel": "default_publish"
+  },
+  "servers": {},
+  "mappings": [],
+  "send_version": 1
+}

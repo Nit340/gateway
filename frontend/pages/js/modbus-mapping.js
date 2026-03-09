@@ -130,7 +130,7 @@ function _renderTagsTable() {
     if (count) count.textContent = rows.length;
 
     if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-12 text-slate-400">
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center py-12 text-slate-400">
             <i class="fa-solid fa-tags text-3xl mb-3 block"></i>
             <p class="text-sm">No tags yet. Click <strong>Add Tag</strong> to get started.</p>
         </td></tr>`;
@@ -138,7 +138,7 @@ function _renderTagsTable() {
     }
 
     tbody.innerHTML = '';
-    rows.forEach(tag => {
+    rows.forEach((tag, rowIndex) => {
         // Determine if it's a load cell tag (check protocol or type)
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
         const isVirtual = tag.protocol === 'virtual' || tag.type === 'virtual';
@@ -168,6 +168,7 @@ function _renderTagsTable() {
 
         if (isVirtual) {
             tr.innerHTML = `
+                <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
                 <td><span class="protocol-badge virtual">Virtual</span></td>
                 <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
@@ -178,10 +179,10 @@ function _renderTagsTable() {
                 <td class="text-slate-300">—</td>
                 <td class="text-slate-300">—</td>
                 <td class="text-slate-300">—</td>
-                <td><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">Enabled</span></td>
                 <td class="text-right whitespace-nowrap text-slate-300">—</td>`;
         } else if (isLC) {
             tr.innerHTML = `
+                <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
                 <td><span class="protocol-badge loadcell">Load Cell</span></td>
                 <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
@@ -192,7 +193,6 @@ function _renderTagsTable() {
                 <td class="text-slate-600 text-xs">${_esc(unit)}</td>
                 <td class="text-slate-300">—</td>
                 <td class="text-slate-300">—</td>
-                <td><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Enabled</span></td>
                 <td class="text-right whitespace-nowrap">
                     <button class="text-slate-400 hover:text-slate-600 mr-2" onclick="editTag(${tag.id}, 'loadcell')" title="Edit Unit Only">
                         <i class="fa-solid fa-pencil text-sm"></i>
@@ -200,8 +200,9 @@ function _renderTagsTable() {
                 </td>`;
         } else {
             tr.innerHTML = `
+                <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
-                <td><span class="protocol-badge ${tag.device_type === 'tcp' ? 'vfd-tcp' : 'vfd-rtu'}">${_esc(deviceType)}</span></td>
+                <td><span class="protocol-badge ${tag.protocol_type === 'tcp' ? 'vfd-tcp' : 'vfd-rtu'}">${_esc(deviceType)}</span></td>
                 <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
                 <td class="text-slate-600 text-xs text-center">${slaveId}</td>
                 <td class="text-slate-600 font-mono text-xs">${address}</td>
@@ -210,7 +211,6 @@ function _renderTagsTable() {
                 <td class="text-slate-600 text-xs">${_esc(unit)}</td>
                 <td class="text-slate-600 text-xs">${_esc(groupName)}</td>
                 <td><span class="writable-badge ${writable}">${writable ? 'Yes' : 'No'}</span></td>
-                <td><span class="px-2 py-0.5 rounded-full text-xs font-medium ${enabled ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}">${enabled ? 'Enabled' : 'Disabled'}</span></td>
                 <td class="text-right whitespace-nowrap">
                     <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, 'modbus')" title="Edit">
                         <i class="fa-solid fa-pencil text-sm"></i>

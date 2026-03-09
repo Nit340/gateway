@@ -61,11 +61,7 @@
 #    |       }]
 #    |     }
 #    |
-#    |  STEP 4 -- Save to disk
-#    |     loadcell_configs/loadcell_config_YYYYMMDD_HHMMSS.json
-#    |     loadcell_configs/loadcell_config_latest.json
-#    |
-#    |  STEP 5 -- Send via pipeline CONFIG channel
+#    |  STEP 4 -- Send via pipeline CONFIG channel
 #    |     client.publish_config(Config(name="loadcell_config",
 #    |                                  value=config_json,
 #    |                                  version=new_version,
@@ -123,8 +119,7 @@
 #  pipeline_save_modbus_config()
 #    |  1. Reads vfd_datapoints JOIN vfd_device (enabled only)
 #    |  2. Builds {connections:[...], assets:[...], version, timestamp}
-#    |  3. Saves to modbus_configs/
-#    |  4. client.datapoint_update(<modbus_service>, "modbus_config", json)
+#    |  3. client.datapoint_update(<modbus_service>, "modbus_config", json)
 #    |     Pending if not connected -> sent on SERVICE_ADDED
 #    v
 #  PipelineClient  ->  modbus service
@@ -256,15 +251,15 @@ def _clear_sent(config_type):
 # Network/status datapoints that are always allowed regardless of device
 _PERMANENT_WHITELIST = {"lan", "wlan", "lte", "network_status", "modbus_config"}
 
-# Suffixes appended to each whitelisted device name (excludes _raw, toggled separately)
+# Suffixes appended to each whitelisted device name (excludes .raw, toggled separately)
 _DEVICE_DP_SUFFIXES = [
-    "_weight_kg",
-    "_unit",
-    "_known_weight_kg",
-    "_known_raw",
-    "_tared",
-    "_calibrated",
-    "_capacity",
+    ".weight_kg",
+    ".unit",
+    ".known_weight_kg",
+    ".known_raw",
+    ".tared",
+    ".calibrated",
+    ".capacity",
 ]
 
 
@@ -315,8 +310,8 @@ def rebuild_whitelist(include_raw=False):
 
     for device_name in names:
         for suffix in _DEVICE_DP_SUFFIXES:
-            new_set.add("{}{}".format(device_name, suffix))
-        raw_dp = "{}_raw".format(device_name)
+            new_set.add("loadcells.{}{}".format(device_name, suffix))
+        raw_dp = "loadcells.{}.raw".format(device_name)
         if include_raw:
             new_set.add(raw_dp)
             print("[WHITELIST] Raw ON  -> added '{}' to whitelist".format(raw_dp))
@@ -339,7 +334,8 @@ def rebuild_whitelist(include_raw=False):
 pipeline_state = {
     "client":                      None,
     "connected":                    False,
-    "load_raw":                     None,
+    "loadcell_raw":                 None,   # current value of loadcells.<device>.raw
+    "loadcell_raw_dp":              None,   # full datapoint name e.g. "loadcells.MyScale.raw"
     "modbus_config":                None,
     "loadcell_config":              None,
     "iot_gateway_config":           None,
@@ -433,10 +429,11 @@ def _schedule_broadcast(main_loop, msg):
     except Exception:
         pass
 
-    # Rate-limit load_raw specifically (most frequent datapoint)
+    # Rate-limit loadcells raw datapoints specifically (most frequent datapoint)
     try:
         parsed = json.loads(msg)
-        if parsed.get("datapoint") == "load_raw":
+        dp_check = parsed.get("datapoint", "")
+        if dp_check.startswith("loadcells.") and dp_check.endswith(".raw"):
             now = time.time()
             if now - _last_load_raw_broadcast < _LOAD_RAW_MIN_INTERVAL:
                 return  # drop -- too soon
@@ -780,10 +777,14 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
 
                         with pipeline_state["lock"]:
                             pipeline_state[dp] = val
+                            # Track the canonical raw value under a stable key
+                            if dp.startswith("loadcells.") and dp.endswith(".raw"):
+                                pipeline_state["loadcell_raw"]    = val
+                                pipeline_state["loadcell_raw_dp"] = dp
 
-                        # Kill the process if load_raw is arriving too fast
+                        # Kill the process if a raw datapoint is arriving too fast
                         # (prevents event-loop freeze from data floods)
-                        if dp == "load_raw":
+                        if dp.startswith("loadcells.") and dp.endswith(".raw"):
                             _check_load_raw_flood()
 
                         # -- Network-status datapoints ----------------------
@@ -946,8 +947,7 @@ def _handle_received_loadcell_config(cfg):
       2. Validate load_cells[0].name matches a device in our DB -- reject if not
       3. Extract raw_filters, weight_filters, levels + optional hardware fields
       4. UPDATE loadcell_device row in DB
-      5. Save raw JSON to loadcell_configs/ for audit
-      6. Update in-memory pipeline_state
+      5. Update in-memory pipeline_state
     """
     print("[LC-RX] Processing received loadcell_config v{}".format(cfg.version))
 
@@ -1069,21 +1069,7 @@ def _handle_received_loadcell_config(cfg):
     finally:
         conn.close()
 
-    # 5. Save to disk
-    try:
-        config_dir  = "loadcell_configs"
-        os.makedirs(config_dir, exist_ok=True)
-        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename    = "{}/loadcell_config_received_{}.json".format(config_dir, ts)
-        latest_file = "{}/loadcell_config_latest.json".format(config_dir)
-        for path in (filename, latest_file):
-            with open(path, 'w') as fh:
-                fh.write(cfg.value)
-        print("[LC-RX] Saved: {}".format(filename))
-    except Exception as save_err:
-        print("[LC-RX] Could not save to disk: {}".format(save_err))
-
-    # 6. Update in-memory state
+    # 5. Update in-memory state
     with pipeline_state["lock"]:
         pipeline_state["loadcell_config"]         = cfg.value
         pipeline_state["loadcell_config_version"] = cfg.version
@@ -1203,7 +1189,8 @@ async def pipeline_disconnect_handler(request):
                 pass
         pipeline_state["client"]                     = None
         pipeline_state["connected"]                  = False
-        pipeline_state["load_raw"]                   = None
+        pipeline_state["loadcell_raw"]                = None
+        pipeline_state["loadcell_raw_dp"]             = None
         pipeline_state["modbus_config"]              = None
         pipeline_state["loadcell_config"]            = None
         pipeline_state["iot_gateway_config"]         = None
@@ -1249,7 +1236,7 @@ async def pipeline_status_handler(request):
         thread = pipeline_state.get("background_thread")
         return web.json_response({
             "connected":               pipeline_state["connected"],
-            "load_raw":                pipeline_state["load_raw"],
+            "load_raw":                pipeline_state["loadcell_raw"],
             "services":                list(pipeline_state["connected_services"]),
             "modbus_service":          _find_modbus_service(),
             "loadcell_service":        _find_loadcell_service(),
@@ -1352,8 +1339,9 @@ async def pipeline_loadraw_ws_handler(request):
     print("[PIPELINE] WS client connected (total={})".format(len(pipeline_state["ws_clients"])))
 
     with pipeline_state["lock"]:
-        raw  = pipeline_state["load_raw"]
-        mcfg = pipeline_state["modbus_config"]
+        raw    = pipeline_state["loadcell_raw"]
+        raw_dp = pipeline_state["loadcell_raw_dp"]
+        mcfg   = pipeline_state["modbus_config"]
 
     async def _send(payload):
         try:
@@ -1361,10 +1349,10 @@ async def pipeline_loadraw_ws_handler(request):
         except Exception:
             pass
 
-    # Push current load_raw value immediately on connect so the UI doesn't
+    # Push current raw value immediately on connect so the UI doesn't
     # have to wait for the next update tick.
-    if raw is not None:
-        await _send({"datapoint": "load_raw", "value": raw})
+    if raw is not None and raw_dp is not None:
+        await _send({"datapoint": raw_dp, "value": raw})
 
     # Modbus config summary is still useful for the live dashboard.
     if mcfg is not None:
@@ -1795,16 +1783,6 @@ async def send_loadcell_config_now():
         print("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
             new_version, len(active_raw), len(active_weight), len(active_levels)))
 
-        config_dir  = "loadcell_configs"
-        os.makedirs(config_dir, exist_ok=True)
-        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename    = "{}/loadcell_config_{}.json".format(config_dir, ts)
-        latest_file = "{}/loadcell_config_latest.json".format(config_dir)
-        for path in (filename, latest_file):
-            with open(path, 'w') as fh:
-                fh.write(config_json)
-        print("[LC-CFG] Saved: {}".format(filename))
-
         pipeline_sent    = False
         pipeline_message = "Queued as pending (not connected)"
         target_service   = None
@@ -1867,7 +1845,6 @@ async def send_loadcell_config_now():
             "pipeline_message":      pipeline_message,
             "target_service":        target_service,
             "version":               new_version,
-            "file_saved":            filename,
             "active_raw_filters":    len(active_raw),
             "active_weight_filters": len(active_weight),
             "active_levels":         len(active_levels),
@@ -2008,16 +1985,6 @@ async def pipeline_filters_post_handler(request):
         print("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
             new_version, len(active_raw), len(active_weight), len(active_levels)))
 
-        config_dir  = "loadcell_configs"
-        os.makedirs(config_dir, exist_ok=True)
-        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename    = "{}/loadcell_config_{}.json".format(config_dir, ts)
-        latest_file = "{}/loadcell_config_latest.json".format(config_dir)
-        for path in (filename, latest_file):
-            with open(path, 'w') as fh:
-                fh.write(config_json)
-        print("[LC-CFG] Saved: {}".format(filename))
-
         pipeline_sent    = False
         pipeline_message = "Not sent -- pipeline not connected"
         target_service   = None
@@ -2060,14 +2027,14 @@ async def pipeline_filters_post_handler(request):
 
                         device_name = r["name"]
                         mapped_datapoints = [
-                            "{}.weight_kg".format(device_name),
-                            "{}.raw".format(device_name),
-                            "{}.unit".format(device_name),
-                            "{}.known_weight_kg".format(device_name),
-                            "{}.known_raw".format(device_name),
-                            "{}.tared".format(device_name),
-                            "{}.calibrated".format(device_name),
-                            "{}.capacity".format(device_name),
+                            "loadcells.{}.weight_kg".format(device_name),
+                            "loadcells.{}.raw".format(device_name),
+                            "loadcells.{}.unit".format(device_name),
+                            "loadcells.{}.known_weight_kg".format(device_name),
+                            "loadcells.{}.known_raw".format(device_name),
+                            "loadcells.{}.tared".format(device_name),
+                            "loadcells.{}.calibrated".format(device_name),
+                            "loadcells.{}.capacity".format(device_name),
                         ]
                         if hasattr(client, 'subscribe'):
                             for dp in mapped_datapoints:
@@ -2108,8 +2075,6 @@ async def pipeline_filters_post_handler(request):
             "pipeline_message":      pipeline_message,
             "target_service":        target_service,
             "version":               new_version,
-            "file_saved":            filename,
-            "file_latest":           latest_file,
             "active_raw_filters":    len(active_raw),
             "active_weight_filters": len(active_weight),
             "active_levels":         len(active_levels),
@@ -2233,16 +2198,6 @@ async def pipeline_save_modbus_config(request):
         print("[MODBUS-CFG] Built v{}: {} connections, {} assets".format(
             new_version, len(connection_map), len(assets)))
 
-        config_dir = "modbus_configs"
-        os.makedirs(config_dir, exist_ok=True)
-        ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename    = "{}/modbus_config_{}.json".format(config_dir, ts)
-        latest_file = "{}/modbus_config_latest.json".format(config_dir)
-        for path in (filename, latest_file):
-            with open(path, 'w') as fh:
-                fh.write(config_json)
-        print("[MODBUS-CFG] Saved: {}".format(filename))
-
         pipeline_sent    = False
         pipeline_message = "Not sent -- pipeline not connected"
         target_service   = None
@@ -2293,8 +2248,6 @@ async def pipeline_save_modbus_config(request):
             "pipeline_message": pipeline_message,
             "target_service":   target_service,
             "version":          new_version,
-            "file_saved":       filename,
-            "file_latest":      latest_file,
             "connections":      len(connection_map),
             "assets":           len(assets),
         })
@@ -2347,16 +2300,6 @@ async def send_iot_gateway_config_now():
     config_json = json.dumps(config, indent=2)
     print("[IOT-CFG] Built v{}: {} server(s), {} mapping(s)".format(
         new_version, len(config.get("servers", {})), len(config.get("mappings", []))))
-
-    config_dir  = "gateway_config"
-    os.makedirs(config_dir, exist_ok=True)
-    ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename    = "{}/iot_gateway_config_{}.json".format(config_dir, ts)
-    latest_file = "{}/iot_gateway_config_latest.json".format(config_dir)
-    for path in (filename, latest_file):
-        with open(path, 'w') as fh:
-            fh.write(config_json)
-    print("[IOT-CFG] Saved: {}".format(filename))
 
     pipeline_sent    = False
     pipeline_message = "Not sent -- pipeline not connected"
@@ -2419,8 +2362,6 @@ async def send_iot_gateway_config_now():
         "pipeline_message": pipeline_message,
         "target_service":   target_service,
         "version":          new_version,
-        "file_saved":       filename,
-        "file_latest":      latest_file,
     }
 
 
@@ -2671,15 +2612,6 @@ async def pipeline_core_config_upload_handler(request):
         logging.error("[CORE-CFG] DB persist error: %s", db_err)
         return web.json_response({"success": False, "error": "DB error: {}".format(db_err)}, status=500)
 
-    config_dir  = "core_configs"
-    os.makedirs(config_dir, exist_ok=True)
-    ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename    = "{}/core_config_{}.json".format(config_dir, ts)
-    latest_file = "{}/core_config_latest.json".format(config_dir)
-    for path in (filename, latest_file):
-        with open(path, 'w') as fh:
-            fh.write(config_json)
-
     pipeline_sent    = False
     pipeline_message = "Not sent -- pipeline not connected"
     target_service   = None
@@ -2740,8 +2672,6 @@ async def pipeline_core_config_upload_handler(request):
         "version":                new_version,
         "device_names":           device_names,
         "service_name_in_config": service_name_in_cfg,
-        "file_saved":             filename,
-        "file_latest":            latest_file,
     })
 
 

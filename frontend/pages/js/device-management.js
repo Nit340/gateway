@@ -23,6 +23,7 @@
     let portConfig = { modbus: [], loadcell: [] };
     let eventListenersBoundToNode = null;
     let isRefreshing = false;
+    let pipelineStatus = { modbus_service: null, loadcell_service: null, services: [] };
 
     // ==================== STYLES ====================
     function addDeviceManagementStyles() {
@@ -261,6 +262,7 @@
         await loadDevices();
         renderDevicesTable();
         setupEventListeners();
+        startStatusPolling();
 
         console.log('Device Management initialized successfully');
     }
@@ -352,8 +354,127 @@
 
     window.cleanupDeviceManagement = function() {
         eventListenersBoundToNode = null;
+        if (_statusPollInterval) { clearInterval(_statusPollInterval); _statusPollInterval = null; }
         console.log('? Device Management cleaned up');
     };
+
+    // ==================== SERVICE STATUS POLLING ====================
+    // In-memory store: { modbus: Date|null, loadcell: Date|null, virtual: Date|null }
+    const lastConnectedAt = { modbus: null, loadcell: null, virtual: null };
+    let _statusPollInterval = null;
+
+    function startStatusPolling() {
+        fetchAndApplyPipelineStatus();
+        _statusPollInterval = setInterval(fetchAndApplyPipelineStatus, 5000);
+        // Refresh "X ago" text every 30s without re-fetching
+        setInterval(applyStatusToTable, 30000);
+    }
+
+    async function fetchAndApplyPipelineStatus() {
+        try {
+            const res = await fetch('/api/pipeline/status');
+            const data = await res.json();
+            const prev = {
+                modbus:   !!pipelineStatus.modbus_service,
+                loadcell: !!pipelineStatus.loadcell_service,
+                virtual:  pipelineStatus.services.includes('network_status'),
+            };
+            pipelineStatus = {
+                modbus_service:   data.modbus_service   || null,
+                loadcell_service: data.loadcell_service || null,
+                services:         data.services         || [],
+            };
+            const now = new Date();
+            // Record timestamp whenever a service comes Online (or stays Online)
+            if (pipelineStatus.modbus_service)                              lastConnectedAt.modbus   = now;
+            if (pipelineStatus.loadcell_service)                            lastConnectedAt.loadcell = now;
+            if (pipelineStatus.services.includes('network_status'))         lastConnectedAt.virtual  = now;
+        } catch (e) {
+            // keep last known state on error
+        }
+        applyStatusToTable();
+    }
+
+    function getDeviceOnlineStatus(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+        if (protocol === 'vfd-rtu' || protocol === 'vfd-tcp' ||
+            protocol === 'rtu'     || protocol === 'tcp') {
+            return pipelineStatus.modbus_service ? 'Online' : 'Offline';
+        }
+        if (protocol === 'loadcell') {
+            return pipelineStatus.loadcell_service ? 'Online' : 'Offline';
+        }
+        if (protocol === 'virtual') {
+            return pipelineStatus.services.includes('network_status') ? 'Online' : 'Offline';
+        }
+        return 'Offline';
+    }
+
+    function getServiceGroup(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+        if (protocol === 'vfd-rtu' || protocol === 'vfd-tcp' ||
+            protocol === 'rtu'     || protocol === 'tcp')   return 'modbus';
+        if (protocol === 'loadcell')                        return 'loadcell';
+        if (protocol === 'virtual')                         return 'virtual';
+        return null;
+    }
+
+    function formatTimeAgo(date) {
+        if (!date) return null;
+        const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+        if (secs < 5)   return 'just now';
+        if (secs < 60)  return `${secs}s ago`;
+        const mins = Math.floor(secs / 60);
+        if (mins < 60)  return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs  < 24)  return `${hrs}h ago`;
+        return `${Math.floor(hrs / 24)}d ago`;
+    }
+
+    function buildLastPollHtml(device) {
+        const status = getDeviceOnlineStatus(device);
+        if (status === 'Online') {
+            return `<div class="flex items-center gap-1.5">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-ping opacity-75"></span>
+                <span class="text-xs font-medium text-green-600">Live</span>
+            </div>`;
+        }
+        const group = getServiceGroup(device);
+        const lastSeen = group ? lastConnectedAt[group] : null;
+        const ago = formatTimeAgo(lastSeen);
+        if (ago) {
+            return `<span class="text-xs text-slate-400">Last: ${ago}</span>`;
+        }
+        return `<span class="text-xs text-slate-400">—</span>`;
+    }
+
+    function buildStatusBadgeHtml(status) {
+        if (status === 'Online') {
+            return `<div class="flex items-center gap-1.5">
+                <span class="status-dot status-online"></span>
+                <span class="text-sm text-slate-700">Online</span>
+            </div>`;
+        }
+        return `<div class="flex items-center gap-1.5">
+            <span class="status-dot status-offline"></span>
+            <span class="text-sm text-slate-700">Offline</span>
+        </div>`;
+    }
+
+    function applyStatusToTable() {
+        devices.forEach(device => {
+            const row = document.getElementById(`device-${device.id}`);
+            if (!row) return;
+            const statusCell = row.querySelector('.device-status-cell');
+            if (statusCell) {
+                statusCell.innerHTML = buildStatusBadgeHtml(getDeviceOnlineStatus(device));
+            }
+            const pollCell = row.querySelector('.device-poll-cell');
+            if (pollCell) {
+                pollCell.innerHTML = buildLastPollHtml(device);
+            }
+        });
+    }
 
     // ==================== RENDERING ====================
     function renderDevicesTable() {
@@ -430,6 +551,9 @@
             
             tbody.appendChild(row);
         });
+
+        // Apply live service status to all rows immediately
+        applyStatusToTable();
     }
 
     function getDeviceAddress(device) {
@@ -493,23 +617,8 @@
     }
 
     function getStatusBadge(device) {
-        const status = device.status || 'Offline';
-        let dotClass = 'status-dot ';
-        
-        if (status === 'Online') {
-            dotClass += 'status-online';
-        } else if (status === 'Warning') {
-            dotClass += 'status-warning';
-        } else {
-            dotClass += 'status-offline';
-        }
-        
-        return `
-            <div class="flex items-center gap-1.5">
-                <span class="${dotClass}"></span>
-                <span class="text-sm text-slate-700">${status}</span>
-            </div>
-        `;
+        const status = getDeviceOnlineStatus(device);
+        return buildStatusBadgeHtml(status);
     }
 
     // ==================== VIEW DEVICE DETAILS ====================
@@ -519,14 +628,10 @@
         
         console.log('Rendering device details:', device);
         
-        const statusConfig = {
-            'Online': { dot: 'bg-green-500', bg: 'bg-green-50', text: 'text-green-700', label: 'Online' },
-            'Warning': { dot: 'bg-yellow-500', bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Warning' },
-            'Offline': { dot: 'bg-red-500', bg: 'bg-red-50', text: 'text-red-700', label: 'Offline' }
-        };
-        
-        const status = device.status || 'Offline';
-        const statusStyle = statusConfig[status] || statusConfig['Offline'];
+        const status = getDeviceOnlineStatus(device);
+        const statusStyle = status === 'Online'
+            ? { dot: 'bg-green-500', bg: 'bg-green-50', text: 'text-green-700', label: 'Online' }
+            : { dot: 'bg-red-500',   bg: 'bg-red-50',   text: 'text-red-700',   label: 'Offline' };
         
         const protocol = (device.protocol || '').toLowerCase();
         let typeStyle = { bg: 'bg-slate-100', text: 'text-slate-700', label: device.type || 'Unknown' };

@@ -226,15 +226,8 @@ console.log('general-config.js loaded');
         mergeInto(_cache.wlan, data.wlan || {});
         mergeInto(_cache.lte,  data.lte  || {});
 
-        // Auto-switch tab to the active interface
-        var eth0     = _cache.lan.eth0 || {};
-        var wlan     = _cache.wlan;
-        var lte      = _cache.lte;
-        var lteHasHW = lte.power !== undefined ? isUp(lte.power) : false;
-
-        if      (isUp(wlan.state))                  { setNetworkMode('wifi');     setRadioValue('[name="network-mode"]','wifi'); }
-        else if (isUp(eth0.state))                  { setNetworkMode('ethernet'); setRadioValue('[name="network-mode"]','ethernet'); }
-        else if (isUp(lte.state) || lteHasHW)       { setNetworkMode('lte');      setRadioValue('[name="network-mode"]','lte'); }
+        // Do NOT auto-switch tabs - stay on whichever tab the user is on.
+        // Just update the values in the background.
 
         // Render each interface
         renderEthernet();
@@ -386,8 +379,8 @@ console.log('general-config.js loaded');
             try {
                 var d = JSON.parse(ev.data);
                 if (d.type==='time_update') {
-                    setInputValue('[name="date"]', d.current_date);
-                    setInputValue('[name="time"]', d.current_time);
+                    setInputValue('[name="date"]', d.formatted_date || formatDate(d.current_date));
+                    setInputValue('[name="time"]', d.formatted_time || formatTime(d.current_time));
                 }
             } catch(e) {}
         };
@@ -399,15 +392,55 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
-    // NOTIFICATIONS
+    // DATE / TIME FORMATTERS  (always Asia/Kolkata)
     // =========================================================================
+    var IST = 'Asia/Kolkata';
+
+    var formatDate = function (isoDate, fmt) {
+        if (!isoDate) return '';
+        // Parse ISO date safely
+        var parts = isoDate.split('-');
+        if (parts.length !== 3) return isoDate;
+        // Build a date at noon IST to avoid any UTC-day-shift issues
+        var d = new Date(parts[0] + '-' + parts[1] + '-' + parts[2] + 'T12:00:00+05:30');
+        fmt = fmt || getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+        var dd = String(d.toLocaleDateString('en-IN', {day:'2-digit',   timeZone: IST})).padStart(2,'0');
+        var mm = String(d.toLocaleDateString('en-IN', {month:'2-digit', timeZone: IST})).padStart(2,'0');
+        var yyyy = d.toLocaleDateString('en-IN', {year:'numeric', timeZone: IST});
+        if (fmt === 'MM/DD/YYYY') return mm + '/' + dd + '/' + yyyy;
+        if (fmt === 'YYYY-MM-DD') return yyyy + '-' + mm + '-' + dd;
+        return dd + '/' + mm + '/' + yyyy; // DD/MM/YYYY default
+    };
+
+    var formatTime = function (hhmm, fmt) {
+        if (!hhmm) return '';
+        fmt = fmt || getSelectValue('[name="time-format"]') || '24-hour';
+        var parts = hhmm.split(':');
+        var h = parseInt(parts[0]), min = parts[1] || '00';
+        if (fmt === '12-hour') {
+            var ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return h + ':' + min + ' ' + ampm;
+        }
+        return String(h).padStart(2,'0') + ':' + min;
+    };
+
+    // Get current IST date+time strings from the browser
+    var getISTNow = function () {
+        var now = new Date();
+        var dateStr = now.toLocaleDateString('en-CA', { timeZone: IST }); // YYYY-MM-DD
+        var timeStr = now.toLocaleTimeString('en-GB', { timeZone: IST, hour: '2-digit', minute: '2-digit', hour12: false });
+        return { date: dateStr, time: timeStr };
+    };
+
+
     var showNotification = function (msg, type) {
         type = type||'success';
         var c = el('gc-toast-container');
         if (!c) {
             c = document.createElement('div');
             c.id = 'gc-toast-container';
-            c.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
+            c.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2';
             document.body.appendChild(c);
         }
         var n = document.createElement('div');
@@ -440,11 +473,10 @@ console.log('general-config.js loaded');
                 asset_id:        getInputValue('[name="asset-id"]')        || 'CRN-CT-12'
             },
             date_time: {
-                timezone:    getSelectValue('[name="timezone"]')    || 'Asia/Kolkata',
-                ntp_server:  getSelectValue('[name="ntp-server"]')  || 'pool.ntp.org',
+                timezone:    IST,
+                ntp_server:  getSelectValue('[name="ntp-server"]')  || 'time.google.com',
                 date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
-                time_format: getSelectValue('[name="time-format"]') || '24-hour',
-                language:    getSelectValue('[name="language"]')    || 'en'
+                time_format: getSelectValue('[name="time-format"]') || '24-hour'
             },
             network: {
                 mode: getRadioValue('[name="network-mode"]') || 'wifi',
@@ -542,9 +574,12 @@ console.log('general-config.js loaded');
             .then(function (r) { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
             .then(function (cfg) {
                 populateFormWithConfig(cfg);
-                var now = new Date();
-                setInputValue('[name="date"]', now.toISOString().slice(0,10));
-                setInputValue('[name="time"]', now.toTimeString().slice(0,5));
+                // Only set date/time from _realtime if server provides it,
+                // otherwise leave as-is (WS time_update will keep it current)
+                if (cfg._realtime) {
+                    if (cfg._realtime.current_date) setInputValue('[name="date"]', formatDate(cfg._realtime.current_date));
+                    if (cfg._realtime.current_time) setInputValue('[name="time"]', formatTime(cfg._realtime.current_time));
+                }
                 resolve(cfg);
             }).catch(reject);
         });
@@ -566,7 +601,6 @@ console.log('general-config.js loaded');
             setSelectValue('[name="ntp-server"]',  cfg.date_time.ntp_server);
             setSelectValue('[name="date-format"]', cfg.date_time.date_format);
             setSelectValue('[name="time-format"]', cfg.date_time.time_format);
-            setSelectValue('[name="language"]',    cfg.date_time.language);
         }
         if (cfg.network) {
             var n=cfg.network, w=n.wifi||{}, e=n.ethernet||{}, c=n.cellular||{};
@@ -612,15 +646,44 @@ console.log('general-config.js loaded');
             syncBtn.parentNode.replaceChild(nsy, syncBtn);
             nsy.addEventListener('click', function () {
                 var orig=this.innerHTML; this.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>'; this.disabled=true;
-                var now=new Date();
-                setInputValue('[name="date"]', now.toISOString().slice(0,10));
-                setInputValue('[name="time"]', now.toTimeString().slice(0,5));
-                fetch('/api/sync-time',{method:'POST',credentials:'same-origin'})
-                .then(function(){showNotification('Time synchronized','success');})
-                .catch(function(){showNotification('Time synchronized locally','info');})
+                var payload = {
+                    timezone:    IST,
+                    ntp_server:  getSelectValue('[name="ntp-server"]')  || 'time.google.com',
+                    date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
+                    time_format: getSelectValue('[name="time-format"]') || '24-hour'
+                };
+                fetch('/api/sync-time', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                })
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+                    var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
+                    var displayDate = data.formatted_date || formatDate(data.current_date, fmt);
+                    var displayTime = data.formatted_time || formatTime(data.current_time, tfmt);
+                    setInputValue('[name="date"]', displayDate);
+                    setInputValue('[name="time"]', displayTime);
+                    showNotification('Time synchronized — ' + displayDate + ' ' + displayTime + ' (Asia/Kolkata)', 'success');
+                })
+                .catch(function(){
+                    // Server unreachable — use browser IST time directly
+                    var ist     = getISTNow();
+                    var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+                    var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
+                    var displayDate = formatDate(ist.date, fmt);
+                    var displayTime = formatTime(ist.time, tfmt);
+                    setInputValue('[name="date"]', displayDate);
+                    setInputValue('[name="time"]', displayTime);
+                    showNotification('Time set from browser — ' + displayDate + ' ' + displayTime + ' (Asia/Kolkata)', 'warning');
+                })
                 .then(function(){ nsy.innerHTML=orig; nsy.disabled=false; });
             });
         }
+
+
     };
     // =========================================================================
     // INIT

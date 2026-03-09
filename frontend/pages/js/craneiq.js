@@ -11,6 +11,7 @@
     var currentRaw = null;
     var capturedZero = null;
     var selectedDevice = null;   // the one LC device loaded from DB
+    var rawDatapoint = null;     // e.g. "loadcells.MyScale.raw"
 
     function el(id) { return document.getElementById(id); }
 
@@ -28,6 +29,7 @@
                 return;
             }
             selectedDevice = devices[0];
+            rawDatapoint = 'loadcells.' + selectedDevice.name + '.raw';
             var lbl = el('lc-device-label');
             if (lbl) lbl.textContent = selectedDevice.name;
             // Populate filter fields from saved device data
@@ -510,8 +512,9 @@
             fetch('/api/pipeline/status')
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
-                    if (d.load_raw !== null && d.load_raw !== undefined && currentRaw === null) {
-                        updateRawDisplay(d.load_raw);
+                    var rawKey = rawDatapoint || 'load_raw';
+                    if (d[rawKey] !== null && d[rawKey] !== undefined && currentRaw === null) {
+                        updateRawDisplay(d[rawKey]);
                     }
                 })
                 .catch(function() {});
@@ -519,7 +522,7 @@
         pipelineWs.onmessage = function(evt) {
             try {
                 var msg = JSON.parse(evt.data);
-                if (msg.datapoint === 'load_raw') {
+                if (msg.datapoint === (rawDatapoint || 'load_raw')) {
                     updateRawDisplay(msg.value);
                 }
             } catch(e) {}
@@ -619,6 +622,7 @@
         currentRaw = null;
         capturedZero = null;
         selectedDevice = null;
+        rawDatapoint = null;
         setConnectionUI(false);
         loadDevice();
         initStaticUI();
