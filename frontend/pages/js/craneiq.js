@@ -10,6 +10,7 @@
     var connected = false;
     var currentRaw = null;
     var capturedZero = null;
+    var capturedWeightRaw = null;   // raw value snapshotted when user places known weight
     var selectedDevice = null;   // the one LC device loaded from DB
     var rawDatapoint = null;     // e.g. "loadcells.MyScale.raw"
 
@@ -459,6 +460,7 @@
         connected = false;
         currentRaw = null;
         capturedZero = null;
+        capturedWeightRaw = null;
         setConnectionUI(false);
     }
 
@@ -576,6 +578,15 @@
         if (s)  s.textContent  = 'Zero captured: ' + capturedZero.toFixed(2);
     };
 
+    window.captureWeightRaw = function() {
+        var s = el('cal-status');
+        if (currentRaw === null) { if (s) s.textContent = 'No raw value yet.'; return; }
+        capturedWeightRaw = currentRaw;
+        var wr = el('cal-weight-raw-display');
+        if (wr) wr.textContent = capturedWeightRaw.toFixed(2);
+        if (s)  s.textContent  = 'Weight raw captured: ' + capturedWeightRaw.toFixed(2);
+    };
+
     window.saveCalibration = function() {
         var s = el('cal-status');
         if (!selectedDevice) { if (s) s.textContent = 'No device.'; return; }
@@ -585,7 +596,13 @@
         var knownWeight = wi ? parseFloat(wi.value) : NaN;
         if (isNaN(knownWeight)) { if (s) s.textContent = 'Enter a valid known weight.'; return; }
 
-        var knownWeightRaw = currentRaw !== null ? currentRaw : (selectedDevice.known_weight_raw || 0);
+        // Use explicitly captured weight raw -- fall back to current live raw, then DB value.
+        // capturedWeightRaw is set by the "Capture Weight Raw" button when user places the known
+        // weight on the scale, ensuring the correct raw value is stored even if the live stream
+        // fluctuates before the user clicks Save.
+        var knownWeightRaw = capturedWeightRaw !== null
+            ? capturedWeightRaw
+            : (currentRaw !== null ? currentRaw : (selectedDevice.known_weight_raw || 0));
         if (s) s.textContent = 'Saving...';
 
         fetch('/api/pipeline/calibration', {
@@ -607,6 +624,7 @@
                 selectedDevice.tare_offset      = capturedZero;
                 selectedDevice.known_weight     = knownWeight;
                 selectedDevice.known_weight_raw = knownWeightRaw;
+                capturedWeightRaw = null;   // reset for next calibration session
                 setTimeout(window.closeCalibrationModal, 1200);
             } else {
                 if (s) s.textContent = 'Error: ' + (data.error || 'unknown');
@@ -621,6 +639,7 @@
         pipelineWs = null;
         currentRaw = null;
         capturedZero = null;
+        capturedWeightRaw = null;
         selectedDevice = null;
         rawDatapoint = null;
         setConnectionUI(false);

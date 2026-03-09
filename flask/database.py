@@ -261,7 +261,7 @@ def create_tables(cursor):
         try:
             cursor.execute('ALTER TABLE loadcell_device ADD COLUMN {} {}'.format(_col, _defn))
         except Exception:
-            pass  # column already exists ï¿½ safe to ignore
+            pass  # column already exists   safe to ignore
 
     # -----------------------------------------------------------------------
     # Cloud integration
@@ -409,7 +409,7 @@ def create_tables(cursor):
     # -----------------------------------------------------------------------
     # Port / Path configuration
     #   device_type : 'modbus' | 'loadcell'
-    #   port_number : 1-based index shown in the UI (Port 1, Port 2, â€¦)
+    #   port_number : 1-based index shown in the UI (Port 1, Port 2, …)
     #   port_value  : actual system path stored in vfd_device.serial_port
     #                 or loadcell_device.device_path
     # -----------------------------------------------------------------------
@@ -441,8 +441,8 @@ def _migrate_existing_db(cursor):
         defaults = {
             'modbus':      'modbus_config',
             'loadcell':    'loadcell_config',
-            'iot_gateway': 'iot_gateway_config',
-            'core':        'core_config',
+            'iot_gateway': 'gateway_config',
+            'core':        'iq_core',
         }
         for cfg_type, cfg_name in defaults.items():
             cursor.execute(
@@ -622,18 +622,18 @@ def insert_default_data(cursor):
         ('admin', _hash_password('admin123'), 'admin')
     )
 
-    # Default WebUI user  (operator / operator123)
+    # Default WebUI user
     cursor.execute(
         'INSERT OR IGNORE INTO webui_users (username, password, display_name) VALUES (?, ?, ?)',
-        ('operator', _hash_password('operator123'), 'Crane Operator')
+        ('admin', _hash_password('admin'), 'Crane Operator')
     )
 
     # Default pipeline service targets
     for cfg_type, svc_name, cfg_name, desc in [
-        ('modbus',      'modbus_service',      'modbus_config',       'Modbus pipeline service name'),
-        ('loadcell',    'load_cell_service',   'loadcell_config',     'Load-cell pipeline service name'),
-        ('iot_gateway', 'iot_gateway_service', 'iot_gateway_config',  'IoT gateway pipeline service name'),
-        ('core',        'core_service',        'core_config',         'Core config pipeline service name'),
+        ('modbus',      'modbus_service',   'modbus_config',    'Modbus pipeline service name'),
+        ('loadcell',    'load_cell_service','loadcell_config',  'Load-cell pipeline service name'),
+        ('iot_gateway', 'iot-gateway',      'gateway_config',   'IoT gateway pipeline service name'),
+        ('core',        'ilx_craneiq_core',  'core_config',          'Core config pipeline service name'),
     ]:
         cursor.execute(
             'INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, config_name, description, enabled) VALUES (?, ?, ?, ?, 1)',
@@ -750,8 +750,8 @@ def get_pipeline_config_name(config_type):
     _defaults = {
         'modbus':      'modbus_config',
         'loadcell':    'loadcell_config',
-        'iot_gateway': 'iot_gateway_config',
-        'core':        'core_config',
+        'iot_gateway': 'gateway_config',
+        'core':        'iq_core',
     }
     try:
         conn = get_db_connection()
@@ -1391,7 +1391,7 @@ else:
 
 
 # ---------------------------------------------------------------------------
-# WebUI Page Restrictions â€” per-user access control
+# WebUI Page Restrictions — per-user access control
 # ---------------------------------------------------------------------------
 
 # Master list of all pages in layout.html  (page_key, human label, sort_order)

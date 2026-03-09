@@ -413,7 +413,7 @@ async def add_device(request):
         service_id = get_service_by_name(service_name)
         
         if device_type == 'virtual':
-            # Add Virtual device — no service needed
+            # Add Virtual device - no service needed
             cursor.execute('''
                 INSERT INTO virtual_device (id, name, enabled)
                 VALUES (?, ?, 1)
@@ -429,7 +429,13 @@ async def add_device(request):
         elif device_type == 'loadcell':
             # Add Loadcell device
             config = data.get('config', {})
-            
+            device_name = data.get('name', 'Loadcell Device')
+
+            # Build tag prefix from device name: e.g. "load" -> load.weight, load.capacity, load.unit
+            tag_prefix   = device_name.strip().lower().replace(' ', '_')
+            tag_weight   = 'loadcells.{}.weight'.format(tag_prefix)
+            tag_capacity = 'loadcells.{}.capacity'.format(tag_prefix)
+
             cursor.execute('''
                 INSERT INTO loadcell_device (
                     id, name, service_id, device_path,
@@ -441,7 +447,7 @@ async def add_device(request):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
-                data.get('name', 'Loadcell Device'),
+                device_name,
                 service_id,
                 config.get('device_path', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
                 config.get('poll_ms', 10),
@@ -455,19 +461,22 @@ async def add_device(request):
                 config.get('capacity_min', 0),
                 config.get('capacity_max', 1000),
                 config.get('unit', 'kg'),
-                'load_weight',
-                'capacity'
+                tag_weight,
+                tag_capacity
             ))
-            
-            # Automatically create 'load_weight' and 'capacity' datapoints
+
+            # Automatically create datapoints prefixed with device name:
+            #   <name>.weight  (no unit - live reading)
+            #   <name>.capacity (unit: kg - max capacity)
+            #   <name>.unit    (no unit - unit label string)
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                VALUES (?, 'load_weight', '')
-            ''', (device_id,))
+                VALUES (?, ?, '')
+            ''', (device_id, tag_weight))
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                VALUES (?, 'capacity', '')
-            ''', (device_id,))
+                VALUES (?, ?, 'kg')
+            ''', (device_id, tag_capacity))
             
         else:  # VFD (TCP or RTU)
             config = data.get('config', {})
@@ -559,7 +568,7 @@ async def update_device(request):
         is_virtual = cursor.fetchone() is not None
         
         if is_virtual:
-            # Update Virtual device — only name is editable
+            # Update Virtual device - only name is editable
             new_name = data.get('name', '').strip()
             if not new_name:
                 conn.close()
@@ -626,7 +635,7 @@ async def update_device(request):
             cursor.execute(query, values)
         
         else:
-            # Update Loadcell device (fallback — not modbus, not virtual)
+            # Update Loadcell device (fallback - not modbus, not virtual)
             config = data.get('config', {})
             
             update_fields = ['name = ?']
@@ -913,7 +922,12 @@ async def duplicate_device(request):
                         numbers.append(int(match.group(1)))
                 counter = (max(numbers) + 1) if numbers else 1
                 new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
-                
+
+                # Build tag prefix for the duplicated device
+                new_tag_prefix   = new_name.strip().lower().replace(' ', '_')
+                new_tag_weight   = 'loadcells.{}.weight'.format(new_tag_prefix)
+                new_tag_capacity = 'loadcells.{}.capacity'.format(new_tag_prefix)
+
                 cursor.execute('''
                     INSERT INTO loadcell_device (
                         id, name, service_id, device_path,
@@ -929,8 +943,8 @@ async def duplicate_device(request):
                     old_device.get('signed'), old_device.get('gain'), old_device.get('vref'),
                     old_device.get('raw_min'), old_device.get('raw_max'),
                     old_device.get('capacity_min'), old_device.get('capacity_max'),
-                    old_device.get('unit'), old_device.get('load_name', 'load_weight'),
-                    old_device.get('capacity_name', 'capacity'), old_device.get('enabled', 1)
+                    old_device.get('unit'), new_tag_weight,
+                    new_tag_capacity, old_device.get('enabled', 1)
                 ))
                 
                 # Duplicate loadcell datapoints
@@ -1161,7 +1175,7 @@ async def import_devices_csv(request):
                 existing_device = cursor.fetchone()
                 
                 if existing_device:
-                    # Loadcell and Virtual are always skipped on import — never replaced
+                    # Loadcell and Virtual are always skipped on import - never replaced
                     if device_type.lower() in ('loadcell', 'virtual'):
                         skipped_count += 1
                         continue
@@ -1184,14 +1198,14 @@ async def import_devices_csv(request):
                 # Enforce max-1 for loadcell (new inserts only, not replacements)
                 if device_type.lower() == 'loadcell' and not existing_device:
                     if (existing_loadcell_count + import_loadcell_added) >= 1:
-                        errors.append("Row {}: Skipped '{}' — only 1 Loadcell device allowed".format(row_num, name))
+                        errors.append("Row {}: Skipped '{}' - only 1 Loadcell device allowed".format(row_num, name))
                         skipped_count += 1
                         continue
 
                 # Enforce max-1 for virtual (new inserts only, not replacements)
                 if device_type.lower() == 'virtual' and not existing_device:
                     if (existing_virtual_count + import_virtual_added) >= 1:
-                        errors.append("Row {}: Skipped '{}' — only 1 Virtual device allowed".format(row_num, name))
+                        errors.append("Row {}: Skipped '{}' - only 1 Virtual device allowed".format(row_num, name))
                         skipped_count += 1
                         continue
 
@@ -1205,13 +1219,18 @@ async def import_devices_csv(request):
                         except ValueError:
                             pass
                     device_id = 'LC{}'.format(lc_max + 1)
-                    
+
                     device_path = row.get('Device Path', '/dev/spidev0.0').strip()
                     capacity = float(row.get('Capacity', '40000'))
                     unit = row.get('Unit', 'g').strip() or 'g'
                     channel = int(row.get('Channel', '0') or '0')
                     enabled = row.get('Enabled', '1').strip() == '1'
-                    
+
+                    # Build tag prefix from device name
+                    tag_prefix   = name.strip().lower().replace(' ', '_')
+                    tag_weight   = 'loadcells.{}.weight'.format(tag_prefix)
+                    tag_capacity = 'loadcells.{}.capacity'.format(tag_prefix)
+
                     cursor.execute('''
                         INSERT INTO loadcell_device (
                             id, name, service_id, device_path,
@@ -1226,16 +1245,16 @@ async def import_devices_csv(request):
                         10, 24, 14, 0, 1, 5,
                         0, 16383,
                         0, capacity, unit,
-                        'load_weight', 'capacity', enabled
+                        tag_weight, tag_capacity, enabled
                     ))
-                    
+
                     cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'load_weight', '')",
-                        (device_id,)
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, '')",
+                        (device_id, tag_weight)
                     )
                     cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, 'capacity', '')",
-                        (device_id,)
+                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, 'kg')",
+                        (device_id, tag_capacity)
                     )
                     
                     initialize_device_status(device_id, 'Online' if enabled else 'Offline')
@@ -1437,7 +1456,7 @@ async def get_device_datapoints(request):
         datapoints = []
         
         if is_virtual:
-            # Update Virtual device — only name is editable
+            # Update Virtual device - only name is editable
             new_name = data.get('name', '').strip()
             if not new_name:
                 conn.close()
@@ -1520,7 +1539,7 @@ async def update_device_status_api(request):
 # ============================================================================
 
 async def get_port_config_api(request):
-    """GET /api/port-config  — return all port/path entries from port_config table.
+    """GET /api/port-config  - return all port/path entries from port_config table.
     Optionally filter by ?type=modbus or ?type=loadcell
     """
     try:

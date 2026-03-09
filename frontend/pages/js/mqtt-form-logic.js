@@ -1,4 +1,4 @@
-// mqtt-form-logic.js  â€” UI-only logic for mqtt-form.html
+// mqtt-form-logic.js  — UI-only logic for mqtt-form.html
 // Schema-aligned to ilx_iot_gateway config with simplified connection settings
 'use strict';
 
@@ -111,6 +111,12 @@ function toggleAllTags() {
 }
 
 function removeSelectedMqttTags() {
+    // Delegate to the real async implementation wired by mqtt-cloud.js
+    if (typeof window.removeSelectedTags === 'function') {
+        window.removeSelectedTags();
+        return;
+    }
+    // Fallback: DOM-only removal (used when cloud.js is not loaded)
     const sel = document.querySelectorAll('.tag-select:checked');
     if (!sel.length) { 
         alert('Select tags to remove.'); 
@@ -180,7 +186,7 @@ function showAddTagModal() {
     }
 }
 
-// Save stubs â€” overridden by mqtt-cloud.js _wireFormSaves()
+// Save stubs — overridden by mqtt-cloud.js _wireFormSaves()
 function saveMqttConnectionSettings() { 
     if (typeof window.mqttFormLogic?.saveMqttConnectionSettings === 'function') {
         window.mqttFormLogic.saveMqttConnectionSettings();

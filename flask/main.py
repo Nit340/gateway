@@ -506,6 +506,24 @@ async def start_background_tasks(app):
         print("[MAIN] Starting pipeline background thread...")
         start_pipeline_background(app)
 
+        async def _pipeline_watchdog():
+            """Restart the pipeline thread automatically if it crashes or exits."""
+            import asyncio as _asyncio
+            from pipeline import pipeline_state as _ps, start_pipeline_background as _spb
+            while True:
+                await _asyncio.sleep(5)
+                with _ps["lock"]:
+                    should_run = _ps.get("should_run", True)
+                    thread = _ps.get("background_thread")
+                if not should_run:
+                    # Intentional shutdown -- stop watching
+                    break
+                if thread is None or not thread.is_alive():
+                    print("[MAIN] Watchdog: pipeline thread is dead -- restarting...")
+                    _spb(app)
+
+        app["pipeline_watchdog"] = asyncio.ensure_future(_pipeline_watchdog())
+
         async def _startup_auto_send():
             from pipeline import pipeline_state, _do_auto_send
             print("[MAIN] Startup auto-send: waiting for pipeline connection (max 30 s)...")
@@ -518,6 +536,43 @@ async def start_background_tasks(app):
                 connected = pipeline_state["connected"]
             print("[MAIN] Startup auto-send: pipeline {} -- running ordered send".format(
                 "connected" if connected else "not connected (will queue)"))
+
+            # On every startup, push the unit ("kg") for every enabled load cell
+            # to load_cell_service so the service always has the correct unit set.
+            if connected:
+                try:
+                    from pipeline import pipeline_state as _ps
+                    from database import get_db_connection as _gdc
+                    from database import get_pipeline_service_name
+
+                    _conn = _gdc()
+                    _cur  = _conn.cursor()
+                    _cur.execute("SELECT name, unit FROM loadcell_device WHERE enabled = 1")
+                    _lc_rows = _cur.fetchall()
+                    _conn.close()
+
+                    _lc_svc = get_pipeline_service_name("loadcell")
+                    _client  = _ps.get("client")
+
+                    if _client and _lc_svc:
+                        for _row in _lc_rows:
+                            _dev_name = _row[0]
+                            _unit     = _row[1] if _row[1] else "kg"
+                            _dp_name  = "loadcells.{}.unit".format(_dev_name)
+                            try:
+                                _rid = _client.datapoint_update(_lc_svc, _dp_name, _unit)
+                                if _rid:
+                                    print("[MAIN] Startup unit update sent: '{}' = '{}' (req_id={})".format(
+                                        _dp_name, _unit, _rid))
+                                else:
+                                    print("[MAIN] Startup unit update FAILED (not connected?): '{}'".format(_dp_name))
+                            except Exception as _ue:
+                                print("[MAIN] Startup unit update error for '{}': {}".format(_dp_name, _ue))
+                    else:
+                        print("[MAIN] Startup unit update skipped -- client={} lc_svc={}".format(
+                            bool(_client), _lc_svc))
+                except Exception as _e:
+                    print("[MAIN] Startup unit update error: {}".format(_e))
             try:
                 result = await _do_auto_send()
                 import json as _j
@@ -541,12 +596,14 @@ async def start_background_tasks(app):
 
 async def cleanup_background_tasks(app):
     print("[MAIN] Cleaning up background tasks...")
-    if 'startup_auto_send' in app:
-        app['startup_auto_send'].cancel()
-        try:
-            await app['startup_auto_send']
-        except (asyncio.CancelledError, Exception):
-            pass
+    for key in ('startup_auto_send', 'pipeline_watchdog'):
+        task = app.get(key)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     if PIPELINE_AVAILABLE:
         try:

@@ -344,11 +344,11 @@ function _renderMappingsTable(conn) {
                                     data-conn="${_esc(conn.id)}" data-group-idx="${idx}"
                                     onchange="window._updateGroupChannel('${_esc(conn.id)}', ${idx}, this.value)">
                                 <option value="">  default channel  </option>
-                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label="↑ Publish">` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>↑ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label="? Publish">` : ''}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="↓ Subscribe">` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>↓ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="? Subscribe">` : ''}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
                                 ${currentChannel && !pubChannelOptions.find(c => c.name === currentChannel)
                                     ? `<option value="${_esc(currentChannel)}" selected>${_esc(currentChannel)}</option>` : ''}
@@ -450,11 +450,11 @@ function _renderMappingsTable(conn) {
                     <select class="compact-select text-xs tag-channel" data-mapping-idx="${item.mappingIdx}"
                             onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
                         <option value="">  default  </option>
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label="↑ Publish">` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>↑ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label="? Publish">` : ''}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="↓ Subscribe">` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>↓ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="? Subscribe">` : ''}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
                         ${item.channel && !pubChannelOptionsInd.find(c => c.name === item.channel)
                             ? `<option value="${_esc(item.channel)}" selected>${_esc(item.channel)}</option>` : ''}
@@ -597,48 +597,88 @@ window.toggleAllIndividual = function() {
 };
 
 // Remove selected tags (both from groups and individuals)
-window.removeSelectedTags = function() {
+window.removeSelectedTags = async function() {
     const selected = document.querySelectorAll('.tag-select:checked');
     if (!selected.length) {
         _toast('No tags selected', 'error');
         return;
     }
-    
+
     if (!confirm(`Remove ${selected.length} selected tag(s)?`)) return;
-    
-    // Group selected tags by mapping
-    const toRemove = {
-        groups: new Set(),
-        individuals: []
-    };
-    
-    selected.forEach(cb => {
-        const groupIdx = cb.dataset.group;
-        const tagName = cb.dataset.tag;
-        
-        if (groupIdx !== undefined && !tagName) {
-            // Group header checkbox
-            toRemove.groups.add(parseInt(groupIdx));
-        } else if (groupIdx !== undefined && tagName) {
-            // Tag within a group
-            toRemove.individuals.push({
-                type: 'group',
-                groupIdx: parseInt(groupIdx),
-                tagName
+
+    if (!_selectedId) { _toast('No connection selected', 'error'); return; }
+    const conn = _connections.find(c => c.id === _selectedId);
+    if (!conn) { _toast('Connection not found', 'error'); return; }
+
+    // Find the Remove Selected button for loading state
+    const removeBtn = document.querySelector('button[onclick*="removeSelectedTags"]');
+    _setLoading(removeBtn, true);
+
+    try {
+        // Deep-clone mappings so we can mutate safely
+        let mappings = JSON.parse(JSON.stringify(conn.config?.mappings || []));
+        const groups = mappings.filter(m => m.alias);
+
+        // Collect what to remove, keyed by visual group index or individual tag name
+        const groupsToDelete   = new Set();   // visual group indices (whole group removal)
+        const groupTagsToStrip = {};          // visual group index -> Set of tag names
+        const individualTags   = new Set();   // tag names for individual mappings
+
+        selected.forEach(cb => {
+            const rawGroup = cb.dataset.group;
+            const tagName  = cb.dataset.tag;
+
+            if (rawGroup !== undefined && !tagName) {
+                // Group-header checkbox ? remove entire group
+                groupsToDelete.add(parseInt(rawGroup));
+            } else if (rawGroup !== undefined && tagName) {
+                // Individual tag row inside a group
+                const gi = parseInt(rawGroup);
+                if (!groupTagsToStrip[gi]) groupTagsToStrip[gi] = new Set();
+                groupTagsToStrip[gi].add(tagName);
+            } else if (tagName) {
+                // Row in the individual tags table
+                individualTags.add(tagName);
+            }
+        });
+
+        // 1. Process groups
+        const updatedGroups = groups.map((mapping, visIdx) => {
+            if (groupsToDelete.has(visIdx)) return null; // mark for full removal
+
+            if (groupTagsToStrip[visIdx]) {
+                const toStrip = groupTagsToStrip[visIdx];
+                const dp = mapping.datapoints || {};
+                ['bool', 'int', 'float', 'string'].forEach(dtype => {
+                    if (dp[dtype]) dp[dtype] = dp[dtype].filter(n => !toStrip.has(n));
+                });
+                mapping.datapoints = dp;
+            }
+            return mapping;
+        }).filter(Boolean);
+
+        // 2. Process individual mappings � remove entries whose single tag is in the set
+        const updatedIndividuals = mappings
+            .filter(m => !m.alias)
+            .filter(m => {
+                const pts = _flattenDatapoints(m.datapoints || {});
+                // Remove mapping if ALL its tags are in the individual removal set
+                return !pts.every(p => individualTags.has(p.name));
             });
-        } else if (tagName) {
-            // Individual tag
-            toRemove.individuals.push({
-                type: 'individual',
-                tagName
-            });
-        }
-    });
-    
-    // This would need to be implemented with actual API calls
-    // For now, show what would be removed
-    console.log('Would remove:', toRemove);
-    _toast('Remove selected tags - implement API call', 'warning');
+
+        const newMappings = [...updatedGroups, ...updatedIndividuals];
+
+        await _api('PUT', `${API}/connections/${_selectedId}`, { config: { mappings: newMappings } });
+        conn.config.mappings = newMappings;
+
+        await _selectConnection(_selectedId);
+        _toast(`${selected.length} tag(s) removed`, 'success');
+    } catch (err) {
+        console.error('removeSelectedTags error:', err);
+        _toast('Failed to remove tags', 'error');
+    } finally {
+        _setLoading(removeBtn, false);
+    }
 };
 
 // Update the _updateTagCount function to handle the new structure
@@ -703,10 +743,10 @@ function _wireAddTagsBtn(conn) {
     // Add all the new methods
     Object.assign(window.mqttFormLogic, {
         showAddTagModal: openFn,
-        collapseAllGroups: window.collapseAllGroups || function() {},
-        expandAllGroups: window.expandAllGroups || function() {},
-        toggleAllIndividual: window.toggleAllIndividual || function() {},
-        removeSelectedTags: window.removeSelectedTags || function() {}
+        collapseAllGroups:    window.collapseAllGroups    || function() {},
+        expandAllGroups:      window.expandAllGroups      || function() {},
+        toggleAllIndividual:  window.toggleAllIndividual  || function() {},
+        removeSelectedTags:   () => window.removeSelectedTags(),
     });
 
     window.removeKeyValueItem = btn => btn.closest('.key-value-item')?.remove();
@@ -1023,13 +1063,13 @@ function _renderTagsModal(tags) {
             ? (isVirtual
                 ? `<span class="inline-flex items-center gap-1"><i class="fa-solid fa-microchip text-violet-400 text-xs"></i>${_esc(t.device)}</span>`
                 : _esc(t.device))
-            : (isVirtual ? '<span class="text-violet-400 italic text-xs">virtual</span>' : '—');
+            : (isVirtual ? '<span class="text-violet-400 italic text-xs">virtual</span>' : '�');
         return `
       <tr class="border-t border-slate-100 hover:bg-slate-50${isVirtual ? ' bg-violet-50/30' : ''}">
         <td class="p-3"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" onchange="window._syncModalTagType(this); window._updateTagCount()"></td>
         <td class="p-3 font-mono text-sm">${_esc(t.name)}</td>
         <td class="p-3 text-sm text-slate-600">${deviceDisplay}</td>
-        <td class="p-3 text-sm text-slate-500">${_esc(t.unit||'—')}</td>
+        <td class="p-3 text-sm text-slate-500">${_esc(t.unit||'�')}</td>
         <td class="p-3">
           <select class="compact-select text-xs modal-tag-type" data-tag="${_esc(t.name)}"
                   onchange="this.closest('tr').querySelector('.modal-tag-cb').dataset.dtype = this.value">
@@ -1147,14 +1187,7 @@ function _updateStatusBar(conn) {
 }
 
 function _updateDiagnostics(conn) {
-    const s = conn?.statistics || {};
-    const el = _el('diagStatus');
-    if (el) { el.className = 'cc-status '+(conn?.enabled?'online':'offline'); el.textContent = conn?.enabled?'Connected':'Disconnected'; }
-    _st('diagLastMsg', s.lastActive||'Never');
-    _st('diagSent',    (s.messages||0).toLocaleString());
-    _st('diagRecv',    Math.floor((s.ok||0)*0.98).toLocaleString());
-    _st('diagError',   s.failed > 0 ? s.failed+' errors' : 'None');
-    _st('diagLatency', (s.latency||0)+' ms');
+    // Diagnostics panel removed from UI � no-op kept to avoid call-site errors
 }
 
 function _showActionButtons(conn) {

@@ -1012,7 +1012,12 @@ def _handle_received_loadcell_config(cfg):
     dev_params       = lc.get("device", {}).get("parameters", {})
     tare_offset      = lc.get("tare", {}).get("parameters", {}).get("offset_raw")
     calib_params     = lc.get("calibration", {}).get("parameters", {})
-    known_weight     = calib_params.get("ref_weight", {}).get("value")
+    _rw_d            = calib_params.get("ref_weight", {})
+    _rw_unit         = _rw_d.get("unit", "kg") if isinstance(_rw_d, dict) else "kg"
+    _rw_value        = _rw_d.get("value", 0.0) if isinstance(_rw_d, dict) else float(_rw_d or 0)
+    known_weight, _  = _normalise_to_kg(_rw_value, _rw_unit)
+    if known_weight != _rw_value:
+        print("[LC-RX] Normalised known_weight {} {} -> {} kg".format(_rw_value, _rw_unit, known_weight))
     known_weight_raw = calib_params.get("ref_raw")
     poll_ms          = dev_params.get("poll_ms")
 
@@ -1088,10 +1093,10 @@ def start_pipeline_background(app=None):
         if existing and existing.is_alive():
             print("[PIPELINE] Background thread already running")
             return
+        # Thread is dead or never started -- reset run flag and start fresh
         pipeline_state["should_run"]                 = True
-        pipeline_state["modbus_config_pending"]      = None
-        pipeline_state["loadcell_config_pending"]    = None
-        pipeline_state["iot_gateway_config_pending"] = None
+        pipeline_state["connected"]                  = False
+        pipeline_state["connected_services"]         = set()
 
     # Capture the main event loop so the thread can schedule coroutines
     try:
@@ -1425,6 +1430,35 @@ async def pipeline_loadcell_devices_handler(request):
 # LOADCELL -- JSON IMPORT  (POST /api/pipeline/loadcell-config/import)
 # ============================================================================
 
+# ============================================================================
+# UNIT NORMALISATION HELPER
+# ============================================================================
+
+def _normalise_to_kg(value, unit):
+    """Convert a weight value to kg and return (value_kg, 'kg').
+
+    Handles common variants:
+      g / gram / grams   -> divide by 1000
+      t / tonne / tonnes -> multiply by 1000
+      lb / lbs / pound   -> multiply by 0.453592
+      kg / kilogram etc  -> no change
+    If the unit is unrecognised, the value is returned unchanged with unit 'kg'
+    (safe default -- caller should log a warning if needed).
+    """
+    if not unit:
+        return float(value), "kg"
+    u = unit.strip().lower()
+    v = float(value)
+    if u in ("g", "gram", "grams"):
+        return v / 1000.0, "kg"
+    if u in ("t", "tonne", "tonnes", "metric ton", "metric tons"):
+        return v * 1000.0, "kg"
+    if u in ("lb", "lbs", "pound", "pounds"):
+        return v * 0.453592, "kg"
+    # kg / kilogram / kilograms / kgs / anything else -> treat as kg
+    return v, "kg"
+
+
 async def pipeline_loadcell_import_handler(request):
     """POST /api/pipeline/loadcell-config/import
 
@@ -1480,17 +1514,30 @@ async def pipeline_loadcell_import_handler(request):
             cap       = specs.get("capacity") or {}
             cap_min_d = cap.get("min") or {}
             cap_max_d = cap.get("max") or {}
-            capacity_min = cap_min_d.get("value", 0)
-            capacity_max = cap_max_d.get("value", 1000)
-            unit         = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
+
+            # Normalise capacity to kg regardless of what unit the imported JSON uses
+            raw_unit     = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
+            capacity_min, unit = _normalise_to_kg(cap_min_d.get("value", 0),    raw_unit)
+            capacity_max, _    = _normalise_to_kg(cap_max_d.get("value", 1000), raw_unit)
+            # unit is always "kg" after normalisation
 
             tare_params  = (lc.get("tare") or {}).get("parameters") or {}
             tare_offset  = tare_params.get("offset_raw", tare_params.get("offset", 0.0))
 
-            cal_params       = (lc.get("calibration") or {}).get("parameters") or {}
-            ref_weight_d     = cal_params.get("ref_weight") or {}
-            known_weight     = ref_weight_d.get("value", 0.0) if isinstance(ref_weight_d, dict) else float(ref_weight_d or 0)
+            cal_params   = (lc.get("calibration") or {}).get("parameters") or {}
+            ref_weight_d = cal_params.get("ref_weight") or {}
+            # Normalise known_weight to kg using the unit declared inside ref_weight
+            _rw_unit     = ref_weight_d.get("unit", raw_unit) if isinstance(ref_weight_d, dict) else raw_unit
+            _rw_value    = ref_weight_d.get("value", 0.0)     if isinstance(ref_weight_d, dict) else float(ref_weight_d or 0)
+            known_weight, _ = _normalise_to_kg(_rw_value, _rw_unit)
             known_weight_raw = cal_params.get("ref_raw", 0.0)
+            if known_weight != _rw_value:
+                print("[LC-IMPORT] Normalised known_weight {} {} -> {} kg".format(
+                    _rw_value, _rw_unit, known_weight))
+            if raw_unit.lower().strip() not in ("kg", "kilogram", "kilograms", "kgs"):
+                print("[LC-IMPORT] Normalised capacity {}/{} {} -> {}/{} kg".format(
+                    cap_min_d.get("value", 0), cap_max_d.get("value", 1000), raw_unit,
+                    capacity_min, capacity_max))
 
             filters_d      = lc.get("filter") or {}
             raw_filters    = json.dumps(filters_d.get("raw",    []))
@@ -1984,6 +2031,13 @@ async def pipeline_filters_post_handler(request):
         config_json = json.dumps(config, indent=2)
         print("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
             new_version, len(active_raw), len(active_weight), len(active_levels)))
+
+        # Warn if known_weight_raw is 0 while known_weight is set -- calibration likely
+        # not performed yet or the raw was not captured before saving.
+        _kw  = r.get("known_weight") or 0
+        _kwr = r.get("known_weight_raw") or 0.0
+        if float(_kw) != 0.0 and float(_kwr) == 0.0:
+            print("[LC-CFG] WARNING: known_weight={} but known_weight_raw=0 -- "                  "calibration raw value missing! ref_raw will be 0 in sent config.".format(_kw))
 
         pipeline_sent    = False
         pipeline_message = "Not sent -- pipeline not connected"

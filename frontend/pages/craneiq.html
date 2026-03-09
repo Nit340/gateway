@@ -298,8 +298,12 @@
                             <div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Known Weight (kg)</div>
                             <input id="cal-weight-input" type="number" placeholder="e.g. 1000"
                                 class="w-full text-xl font-bold text-slate-900 border-none bg-transparent outline-none mb-2 p-0">
-                            <div class="text-xs text-slate-400">Raw at this weight:</div>
-                            <div class="text-sm font-semibold text-slate-600" id="cal-weight-raw-display">-- (use current raw)</div>
+                            <div class="text-xs text-slate-400 mb-1">Raw at this weight:</div>
+                            <div class="text-sm font-semibold text-slate-700 mb-3" id="cal-weight-raw-display">--</div>
+                            <button onclick="captureWeightRaw()"
+                                class="w-full py-2 text-sm font-semibold border border-slate-300 rounded-lg bg-white text-slate-600 hover:bg-slate-100 transition-colors">
+                                Capture Weight Raw
+                            </button>
                         </div>
                     </div>
 
