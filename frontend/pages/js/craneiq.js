@@ -42,7 +42,7 @@
     // ============================================================
     // DYNAMIC FILTER BUILDER
     // Filters are stored as ordered arrays. UI renders cards in
-    // DOM order � that order IS the processing order in the JSON.
+    // DOM order  that order IS the processing order in the JSON.
     // Drag-to-reorder uses HTML5 drag-and-drop.
     // ============================================================
 
@@ -96,7 +96,7 @@
                     '</div>';
             case 'LowPass':
                 return '<div class="grid grid-cols-2 gap-2">' +
-                    '<div><label class="block text-xs text-slate-500 mb-0.5">Alpha (0�1) <span class="text-slate-400 italic">or</span></label>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Alpha (01) <span class="text-slate-400 italic">or</span></label>' +
                     '<input type="number" step="0.01" min="0.01" max="0.99" ' + inp + ' data-param="alpha" value="' + (params.alpha !== undefined ? params.alpha : 0.1) + '"></div>' +
                     '<div><label class="block text-xs text-slate-500 mb-0.5">Cutoff Freq (Hz) <span class="text-slate-400 italic">optional</span></label>' +
                     '<input type="number" step="0.1" min="0" ' + inp + ' data-param="cutoff_frequency" value="' + (params.cutoff_frequency !== undefined ? params.cutoff_frequency : '') + '" placeholder="leave blank to use alpha"></div>' +
@@ -112,7 +112,7 @@
                 return '<div class="grid grid-cols-2 gap-2">' +
                     '<div><label class="block text-xs text-slate-500 mb-0.5">Step Size</label>' +
                     '<input type="number" step="0.1" min="0.01" ' + inp + ' data-param="step_size" value="' + (params.step_size || 10.0) + '"></div>' +
-                    '<div><label class="block text-xs text-slate-500 mb-0.5">Hysteresis Margin (0�1)</label>' +
+                    '<div><label class="block text-xs text-slate-500 mb-0.5">Hysteresis Margin (01)</label>' +
                     '<input type="number" step="0.01" min="0" max="1" ' + inp + ' data-param="hysteresis_margin" value="' + (params.hysteresis_margin !== undefined ? params.hysteresis_margin : 0.75) + '"></div>' +
                     '</div>';
             default:
@@ -201,7 +201,7 @@
         return card;
     }
 
-    // Refresh [raw[0]], [raw[1]] � index badges in a list container
+    // Refresh [raw[0]], [raw[1]]  index badges in a list container
     function _refreshFilterBadges(list) {
         if (!list) return;
         var cards = list.querySelectorAll('.lc-filter-card');
@@ -267,7 +267,7 @@
             card.querySelectorAll('[data-param]').forEach(function(inp) {
                 var key = inp.dataset.param;
                 var raw = inp.value.trim();
-                // LowPass: cutoff_frequency is optional � omit from JSON if blank
+                // LowPass: cutoff_frequency is optional  omit from JSON if blank
                 if (raw === '') return;
                 var val = parseFloat(raw);
                 if (isNaN(val)) return;
@@ -291,7 +291,7 @@
         if (rawList)    rawList.innerHTML    = '';
         if (weightList) weightList.innerHTML = '';
 
-        // Render raw filters in order � every entry gets its own card
+        // Render raw filters in order  every entry gets its own card
         rawFilters.forEach(function(f) {
             _appendFilter('lc-raw-filter-list', f.type, f.parameters, f.enabled !== false);
         });
@@ -314,7 +314,7 @@
         });
     }
 
-    // ---- Build filter arrays from UI � DOM order IS processing order ----
+    // ---- Build filter arrays from UI  DOM order IS processing order ----
     function buildFiltersFromUI() {
         var rawFilters    = _readFilterList('lc-raw-filter-list');
         var weightFilters = _readFilterList('lc-weight-filter-list');
@@ -341,7 +341,15 @@
             return;
         }
         var s = document.getElementById('lc-filter-status');
-        if (s) s.textContent = 'Saving...';
+        var saveBtn = document.getElementById('lc-save-filters-btn');
+
+        // Update button to show "Send to Pipeline"
+        var origBtnHTML = saveBtn ? saveBtn.innerHTML : null;
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sending to Pipeline…';
+        }
+        if (s) s.textContent = 'Saving…';
 
         var built = buildFiltersFromUI();
 
@@ -364,26 +372,50 @@
 
                 if (data.pipeline_sent) {
                     if (s) {
-                        s.textContent = '? Saved & sent to pipeline (' + (data.target_service || 'service') + ')';
+                        s.textContent = '✓ Configured — sent to pipeline (' + (data.target_service || 'service') + ')';
                         s.style.color = '#16a34a';
                     }
-                } else {
-                    // Saved to DB but pipeline not connected � config is queued as pending
-                    var msg = '? Saved';
-                    if (data.pipeline_message && data.pipeline_message.indexOf('pending') !== -1) {
-                        msg += ' � queued for pipeline (connect to send)';
-                    } else if (data.pipeline_message) {
-                        msg += ' � pipeline: ' + data.pipeline_message;
+                    if (saveBtn) {
+                        saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Sent to Pipeline';
+                        saveBtn.style.background = '#16a34a';
+                        saveBtn.style.color = 'white';
                     }
-                    if (s) { s.textContent = msg; s.style.color = '#d97706'; }
+                } else {
+                    // Saved to DB but pipeline not connected — config is queued
+                    var isQueued = data.pipeline_message && data.pipeline_message.indexOf('pending') !== -1;
+                    if (s) {
+                        s.textContent = isQueued
+                            ? '⏳ Queued — will configure Load Cell when pipeline is available'
+                            : '✓ Saved' + (data.pipeline_message ? ' — ' + data.pipeline_message : '');
+                        s.style.color = isQueued ? '#d97706' : '#16a34a';
+                    }
+                    if (saveBtn) {
+                        saveBtn.innerHTML = isQueued
+                            ? '<i class="fa-solid fa-clock mr-1"></i> Queued'
+                            : '<i class="fa-solid fa-check mr-1"></i> Saved';
+                    }
                 }
             } else {
-                if (s) { s.textContent = '? Error: ' + (data.error || 'unknown'); s.style.color = '#dc2626'; }
+                if (s) { s.textContent = '✗ Error: ' + (data.error || 'unknown'); s.style.color = '#dc2626'; }
+                if (saveBtn) saveBtn.innerHTML = origBtnHTML || 'Configure Load Cell';
             }
-            setTimeout(function() { if (s) { s.textContent = ''; s.style.color = ''; } }, 5000);
+            // Restore button after delay
+            setTimeout(function() {
+                if (s) { s.textContent = ''; s.style.color = ''; }
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = origBtnHTML || 'Configure Load Cell';
+                    saveBtn.style.background = '';
+                    saveBtn.style.color = '';
+                }
+            }, 5000);
         })
         .catch(function(e) {
-            if (s) { s.textContent = '? ' + e.message; s.style.color = '#dc2626'; }
+            if (s) { s.textContent = '✗ ' + e.message; s.style.color = '#dc2626'; }
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = origBtnHTML || 'Configure Load Cell';
+            }
         });
     };
 

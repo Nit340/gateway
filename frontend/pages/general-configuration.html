@@ -263,24 +263,26 @@
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-slate-800 flex items-center">
                     <i class="fa-regular fa-clock mr-2 text-primary"></i> 
-                    <span class="mr-2">Date, Time & Localization</span>
+                    <span class="mr-2">Date, Time &amp; Localization</span>
                     <span class="text-xs font-normal text-slate-500">SECTION B</span>
                 </h2>
                 <div class="badge-success">
                     Ensures correct event sequencing
                 </div>
             </div>
+
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Timezone -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">
-                        Timezone <span class="text-red-500">*</span>
+                        Active Timezone <span class="text-red-500">*</span>
                     </label>
-                    <select name="timezone" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                        <option value="Asia/Kolkata">Asia/Kolkata (GMT+05:30)</option>
-                  
+                    <select name="timezone" id="timezone-select" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                        <option value="Asia/Kolkata">IST Asia/Kolkata (GMT+05:30)</option>
+                        <option value="GMT">GMT Greenwich Mean Time (UTC+00:00)</option>
                     </select>
+                    <p class="text-xs text-slate-500 mt-1">Controls which timezone the date/time inputs below reflect</p>
                 </div>
                 
                 <!-- NTP Server -->
@@ -292,22 +294,7 @@
                         <option value="time.google.com">time.google.com</option>
                     </select>
                 </div>
-                
-                <!-- Manual Time -->
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Set Time Manually (Fallback)</label>
-                    <div class="flex items-center space-x-4">
-                        <input type="text" name="date" value="12/03/2025" placeholder="DD/MM/YYYY"
-                            class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary font-mono w-36">
-                        <input type="time" name="time" value="14:53" 
-                            class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
-                        <button type="button" class="sync-time-btn text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors">
-                            <i class="fa-solid fa-rotate mr-2"></i> Sync Now
-                        </button>
-                    </div>
 
-                </div>
-                
                 <!-- Date Format -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Date Format</label>
@@ -326,8 +313,23 @@
                         <option value="12-hour">12-Hour (2:30 PM)</option>
                     </select>
                 </div>
-                
 
+                <!-- Manual Time: inputs auto-update from selected timezone + format -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Set Time Manually (Fallback)
+                    </label>
+                    <div class="flex items-center flex-wrap gap-3">
+                        <input type="text" name="date" placeholder="DD/MM/YYYY"
+                            class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary font-mono w-36">
+                        <input type="text" name="time" placeholder="HH:MM"
+                            class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary font-mono w-28">
+                        <button type="button" class="sync-time-btn text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors">
+                            <i class="fa-solid fa-rotate mr-2"></i> Sync Now
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1">Showing current time in <strong id="manual-tz-hint">IST (UTC+05:30)</strong>  updates live with timezone &amp; format selection</p>
+                </div>
             </div>
         </section>
 

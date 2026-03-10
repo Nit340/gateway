@@ -59,6 +59,8 @@ class CommandCode(IntEnum):
     PUBLISH_CONFIG = 0x000F       # Publish a configuration entry to the central service
     CONFIG_UPDATE = 0x0010        # Config update broadcast from server to all clients
     PUBLISH_NOTIFICATION = 0x0011 # Publish/broadcast a notification to all connected services
+    DUPLICATE_SERVICE_NAME = 0x0012 # Server notifies client that its service name is already in use
+    DELETE_ACTION = 0x0013          # Server broadcasts action removal when a publisher disconnects
 
 
 # Constants for the binary protocol

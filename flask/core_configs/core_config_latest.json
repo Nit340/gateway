@@ -11,15 +11,7 @@
   "services": {
     "modbus": {
       "service_name": "modbus_service",
-      "groups": [
-        {
-          "datapoint": "hoist_group",
-          "name": "hoist_group",
-          "members": [
-            "Hoist_voltage"
-          ]
-        }
-      ]
+      "groups": []
     },
     "loadcell": {
       "service_name": "load_cell_service",

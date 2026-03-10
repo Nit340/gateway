@@ -1,4 +1,4 @@
-// mqtt-form-logic.js  — UI-only logic for mqtt-form.html
+// mqtt-form-logic.js  â€” UI-only logic for mqtt-form.html
 // Schema-aligned to ilx_iot_gateway config with simplified connection settings
 'use strict';
 
@@ -186,7 +186,7 @@ function showAddTagModal() {
     }
 }
 
-// Save stubs — overridden by mqtt-cloud.js _wireFormSaves()
+// Save stubs â€” overridden by mqtt-cloud.js _wireFormSaves()
 function saveMqttConnectionSettings() { 
     if (typeof window.mqttFormLogic?.saveMqttConnectionSettings === 'function') {
         window.mqttFormLogic.saveMqttConnectionSettings();

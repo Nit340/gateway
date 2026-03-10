@@ -6,18 +6,19 @@
 </head>
 <body>
     <script>
-        // Always verify with server - never trust cookie alone.
-        // If backend restarted, session is gone and user must log in again.
         (async function () {
+            // Preserve any query params (e.g. ?expired=1) when bouncing to login
+            const params = window.location.search;
             try {
                 const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
                 if (res.ok) {
+                    // Valid session — go straight to app, skip login
                     window.location.replace('/layout.html');
                 } else {
-                    window.location.replace('/login.html');
+                    window.location.replace('/login.html' + params);
                 }
             } catch (e) {
-                window.location.replace('/login.html');
+                window.location.replace('/login.html' + params);
             }
         })();
     </script>

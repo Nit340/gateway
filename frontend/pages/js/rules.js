@@ -309,7 +309,7 @@ if (typeof window.rulesLoaded === 'undefined') {
                 '</button>' +
               '</div>' +
               
-              <!-- Display selected relay tag -->
+             
               '<div id="relay-tag-display" class="mt-3">' +
                 (relayVal ? '<div class="tag-item"><span class="tag-name"><i class="fa-solid fa-tag text-xs text-slate-400 mr-2"></i>' + relayVal + '</span>' +
                 '<button type="button" class="remove-tag" onclick="window.removeRelayTag()">' +
@@ -616,7 +616,7 @@ if (typeof window.rulesLoaded === 'undefined') {
         console.log('[Rules] Saving to server:', ruleData);
         
         try {
-            showNotification('Saving rule...', 'info');
+            showNotification('Applying the rules…', 'info');
             
             var res = await fetch('/api/rules/save', {
                 method: 'POST',
@@ -627,7 +627,7 @@ if (typeof window.rulesLoaded === 'undefined') {
             var data = await res.json();
             
             if (!data.success) { 
-                showNotification('Save failed: ' + (data.error || 'unknown'), 'error'); 
+                showNotification('Failed to apply rules: ' + (data.error || 'unknown'), 'error'); 
                 return false; 
             }
             
@@ -639,7 +639,7 @@ if (typeof window.rulesLoaded === 'undefined') {
             renderRulesList();
             renderRuleEditor(ruleData.id);
             
-            showNotification('Rule saved successfully', 'success');
+            showNotification('✓ Rules applied successfully', 'success');
             return true;
             
         } catch(e) {
@@ -651,13 +651,13 @@ if (typeof window.rulesLoaded === 'undefined') {
 
     // ========== JSON PIPELINE TRIGGER ==========
     window.triggerJsonPipeline = async function() {
-        console.log('[Rules] Triggering JSON Pipeline');
+        console.log(' Applying the Rules');
         
         var statusEl = document.getElementById('pipeline-status');
         if (statusEl) statusEl.textContent = 'Running...';
         
         try {
-            showNotification('Triggering JSON pipeline...', 'info');
+            showNotification('Applying the Rules', 'info');
             
             // This is the endpoint that triggers the JSON pipeline
             var res = await fetch('/api/rules/pipeline/trigger', {
@@ -673,16 +673,16 @@ if (typeof window.rulesLoaded === 'undefined') {
             
             if (data.success) {
                 if (statusEl) statusEl.textContent = 'Completed';
-                showNotification('JSON pipeline triggered successfully', 'success');
+                showNotification('Rule Applied successfully', 'success');
             } else {
                 if (statusEl) statusEl.textContent = 'Failed';
-                showNotification('Pipeline trigger failed: ' + (data.error || 'unknown'), 'error');
+                showNotification('Rule implementation failed: ' + (data.error || 'unknown'), 'error');
             }
             
         } catch(e) {
             console.error('[Rules] Pipeline error:', e);
             if (statusEl) statusEl.textContent = 'Error';
-            showNotification('Could not trigger pipeline', 'error');
+            showNotification('Could not Apply Rule', 'error');
         }
         
         // Reset status after 5 seconds
@@ -694,7 +694,7 @@ if (typeof window.rulesLoaded === 'undefined') {
     window.testRule = function() { 
         showNotification('Testing rule...', 'info'); 
         setTimeout(function() { 
-            showNotification('Test alert triggered!', 'success'); 
+            showNotification('Test Rule Applied', 'success'); 
         }, 1500); 
     };
     

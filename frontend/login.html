@@ -140,6 +140,12 @@
             <p style="font-size: 13px; color: #64748B; margin: 0;">Sign in to your account</p>
         </div>
 
+        <!-- Session Expired Banner -->
+        <div class="error-banner" id="expiredBanner" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E;">
+            <i class="fa-solid fa-clock-rotate-left" style="flex-shrink:0;color:#D97706;"></i>
+            <span>Your session has expired. Please sign in again.</span>
+        </div>
+
         <!-- Error Banner -->
         <div class="error-banner" id="errorBanner">
             <i class="fa-solid fa-circle-exclamation" style="flex-shrink:0;"></i>
@@ -194,6 +200,21 @@
     </div>
 
     <script>
+        // ── Auto-check: if already logged in, skip login ──────────
+        (async function () {
+            try {
+                const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
+                if (res.ok) {
+                    window.location.replace('/layout.html');
+                }
+            } catch (e) { /* server unreachable, stay on login */ }
+        })();
+
+        // ── Show "session expired" banner if coming from app ───────
+        if (new URLSearchParams(window.location.search).get('expired') === '1') {
+            document.getElementById('expiredBanner').classList.add('show');
+        }
+
         async function handleLogin(e) {
             e.preventDefault();
 
@@ -205,6 +226,7 @@
 
             // Clear previous errors
             banner.classList.remove('show');
+            document.getElementById('expiredBanner').classList.remove('show');
             document.getElementById('username').classList.remove('error');
             document.getElementById('password').classList.remove('error');
 
@@ -254,6 +276,7 @@
             document.getElementById(id).addEventListener('input', () => {
                 document.getElementById(id).classList.remove('error');
                 document.getElementById('errorBanner').classList.remove('show');
+                document.getElementById('expiredBanner').classList.remove('show');
             });
         });
     </script>

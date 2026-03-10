@@ -17,6 +17,7 @@ from database import (
     get_all_pipeline_service_targets, set_pipeline_service_name,
     get_all_pipeline_send_logs, get_enabled_pipeline_targets,
     get_all_pages, get_user_page_restrictions, set_user_page_restriction, get_pages_for_user,
+    get_webui_user_max_sessions, set_webui_user_max_sessions,
 )
 from general import register_general_config_routes
 from device_management import (
@@ -44,8 +45,8 @@ ADMIN_SESSIONS = {}           # token -> username
 ADMIN_USER_TOKENS = {}        # username -> token  (enforces one session per user)
 _SESSION_COOKIE = 'gw_admin_session'
 
-WEBUI_SESSIONS = {}           # token -> username
-WEBUI_USER_TOKENS = {}        # username -> token  (enforces one session per user)
+WEBUI_SESSIONS = {}           # token -> {username, logged_in_at, token}
+WEBUI_USER_TOKENS = {}        # username -> [token, ...]  (enforces max_sessions per user)
 _WEBUI_SESSION_COOKIE = 'gw_webui_session'
 
 def _get_admin_session(request):
@@ -380,29 +381,39 @@ async def webui_login_api(request):
     if not user:
         return web.json_response({'success': False, 'error': 'Invalid username or password.'}, status=401)
 
-    # Block second login -- Window A stays alive, Window B gets rejected
-    existing_token = WEBUI_USER_TOKENS.get(user['username'])
-    if existing_token and existing_token in WEBUI_SESSIONS:
+    # Enforce per-user session limit stored in database
+    import datetime as _dt
+    max_sessions = get_webui_user_max_sessions(user['id'])
+    active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
+    if len(active_tokens) >= max_sessions:
         return web.json_response(
-            {'success': False, 'error': 'This account is already logged in from another window. Please log out there first.'},
+            {'success': False, 'error': f"Maximum concurrent sessions reached ({max_sessions}). Please log out from another window first, or ask an admin to increase your session limit."},
             status=409
         )
 
     token = binascii.hexlify(os.urandom(32)).decode()
-    WEBUI_SESSIONS[token] = user['username']
-    WEBUI_USER_TOKENS[user['username']] = token
+    WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.utcnow().isoformat(), 'token': token}
+    if user['username'] not in WEBUI_USER_TOKENS:
+        WEBUI_USER_TOKENS[user['username']] = []
+    WEBUI_USER_TOKENS[user['username']].append(token)
 
     resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name']})
-    resp.set_cookie('gw_webui_session', token, httponly=True, path='/')
+    resp.set_cookie('gw_webui_session', token, httponly=True, path='/', max_age=30*24*3600)
     return resp
 
 async def webui_logout_api(request):
     """POST /api/auth/logout -- clears webui session so the user can log in again."""
     token = request.cookies.get('gw_webui_session')
     if token:
-        username = WEBUI_SESSIONS.pop(token, None)
-        if username and WEBUI_USER_TOKENS.get(username) == token:
-            WEBUI_USER_TOKENS.pop(username, None)
+        info = WEBUI_SESSIONS.pop(token, None)
+        username = info['username'] if isinstance(info, dict) else info
+        if username and username in WEBUI_USER_TOKENS:
+            try:
+                WEBUI_USER_TOKENS[username].remove(token)
+            except ValueError:
+                pass
+            if not WEBUI_USER_TOKENS[username]:
+                del WEBUI_USER_TOKENS[username]
     resp = web.json_response({'success': True})
     resp.del_cookie('gw_webui_session', path='/')
     resp.del_cookie('gw_auth', path='/')
@@ -415,7 +426,8 @@ async def webui_session_status(request):
     token = request.cookies.get('gw_webui_session')
     if not token or token not in WEBUI_SESSIONS:
         return web.json_response({'authenticated': False}, status=401)
-    username = WEBUI_SESSIONS[token]
+    _sess = WEBUI_SESSIONS[token]
+    username = _sess['username'] if isinstance(_sess, dict) else _sess
     # Look up user_id to fetch per-user page restrictions
     try:
         from database import get_db_connection as _gdc
@@ -614,6 +626,68 @@ async def cleanup_background_tasks(app):
             print("[MAIN] Error stopping pipeline: {}".format(e))
     print("[MAIN] Cleanup complete")
 
+
+async def api_webui_sessions_get(request):
+    """GET /api/admin/webui-sessions -- list all active webui sessions."""
+    _require_admin(request)
+    import datetime as _dt
+    sessions = []
+    for token, info in list(WEBUI_SESSIONS.items()):
+        username = info['username'] if isinstance(info, dict) else info
+        logged_in_at = info.get('logged_in_at', '') if isinstance(info, dict) else ''
+        sessions.append({'token_prefix': token[:8], 'token': token, 'username': username, 'logged_in_at': logged_in_at})
+    try:
+        from database import get_db_connection as _gdc2
+        conn = _gdc2()
+        cur = conn.cursor()
+        cur.execute('SELECT id, username, display_name, max_sessions FROM webui_users')
+        user_rows = {r[1]: {'id': r[0], 'display_name': r[2], 'max_sessions': r[3] or 1} for r in cur.fetchall()}
+        conn.close()
+    except Exception:
+        user_rows = {}
+    result = []
+    for s in sessions:
+        u = user_rows.get(s['username'], {})
+        result.append({**s, 'user_id': u.get('id'), 'display_name': u.get('display_name', s['username']), 'max_sessions': u.get('max_sessions', 1)})
+    return web.json_response({'sessions': result})
+
+
+async def api_webui_session_kill(request):
+    """DELETE /api/admin/webui-sessions/{token} -- force-logout a specific session."""
+    _require_admin(request)
+    token = request.match_info['token']
+    info = WEBUI_SESSIONS.pop(token, None)
+    if info is None:
+        return web.json_response({'success': False, 'error': 'Session not found'}, status=404)
+    username = info['username'] if isinstance(info, dict) else info
+    if username and username in WEBUI_USER_TOKENS:
+        try:
+            WEBUI_USER_TOKENS[username].remove(token)
+        except ValueError:
+            pass
+        if not WEBUI_USER_TOKENS[username]:
+            del WEBUI_USER_TOKENS[username]
+    return web.json_response({'success': True})
+
+
+async def api_webui_user_max_sessions_put(request):
+    """PUT /api/admin/users/webui/{id}/max-sessions -- update session limit for a webui user."""
+    _require_admin(request)
+    user_id = request.match_info['id']
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        max_s = max(1, int(body.get('max_sessions', 1)))
+    except (TypeError, ValueError):
+        max_s = 1
+    ok = set_webui_user_max_sessions(int(user_id), max_s)
+    if ok:
+        return web.json_response({'success': True, 'max_sessions': max_s})
+    return web.json_response({'success': False, 'error': 'Failed to update'}, status=500)
+
+
 def create_app():
     # -------------------------------------------------------------------
     # FIX: pass auth_middleware to web.Application so it runs on every
@@ -666,6 +740,9 @@ def create_app():
     app.router.add_post('/api/admin/users/webui', api_webui_users_post)
     app.router.add_put('/api/admin/users/webui/{id}', api_webui_user_put)
     app.router.add_delete('/api/admin/users/webui/{id}', api_webui_user_delete)
+    app.router.add_put('/api/admin/users/webui/{id}/max-sessions', api_webui_user_max_sessions_put)
+    app.router.add_get('/api/admin/webui-sessions', api_webui_sessions_get)
+    app.router.add_delete('/api/admin/webui-sessions/{token}', api_webui_session_kill)
 
     # /api/auth/login is registered AFTER register_auth_routes so our
     # single-session webui_login_api handler wins over auth.py's version.
@@ -675,11 +752,32 @@ def create_app():
 
     register_general_config_routes(app)
 
-    register_auth_routes(app)
-    # Override auth.py login/logout/status with our single-session enforcing handlers
+    # Register our session handlers FIRST so they win over auth.py's versions
     app.router.add_post('/api/auth/login', webui_login_api)
     app.router.add_post('/api/auth/logout', webui_logout_api)
     app.router.add_get('/api/auth/status', webui_session_status)
+    # Patch register_auth_routes: temporarily wrap add_route/add_get/add_post
+    # so duplicate registrations from auth.py are silently skipped
+    _owned = {'/api/auth/login', '/api/auth/logout', '/api/auth/status'}
+    _orig_add_route = app.router.add_route
+    _orig_add_get   = app.router.add_get
+    _orig_add_post  = app.router.add_post
+    def _safe_add_route(method, path, handler, **kw):
+        if path in _owned: return
+        return _orig_add_route(method, path, handler, **kw)
+    def _safe_add_get(path, handler, **kw):
+        if path in _owned: return
+        return _orig_add_get(path, handler, **kw)
+    def _safe_add_post(path, handler, **kw):
+        if path in _owned: return
+        return _orig_add_post(path, handler, **kw)
+    app.router.add_route = _safe_add_route
+    app.router.add_get   = _safe_add_get
+    app.router.add_post  = _safe_add_post
+    register_auth_routes(app)
+    app.router.add_route = _orig_add_route  # restore
+    app.router.add_get   = _orig_add_get
+    app.router.add_post  = _orig_add_post
     register_cloud_routes(app)
     register_rules_routes(app)
 

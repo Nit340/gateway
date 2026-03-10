@@ -801,7 +801,7 @@
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Raw Range</div>
-                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} � ${config.raw_max ?? 16383}</div>
+                                    <div class="text-sm text-slate-700">${config.raw_min ?? 0} to ${config.raw_max ?? 16383}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Capacity Min</div>
@@ -1868,7 +1868,8 @@
 
     function showNotification(message, type = 'info', duration = 3000) {
         const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 z-50 max-w-sm animate-fade-in';
+        notification.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[9999] max-w-sm animate-fade-in';
+        notification.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;max-width:420px;width:max-content;';
         
         let bgColor = 'bg-blue-500';
         let icon = 'fa-info-circle';

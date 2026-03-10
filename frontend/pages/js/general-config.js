@@ -380,7 +380,10 @@ console.log('general-config.js loaded');
                 var d = JSON.parse(ev.data);
                 if (d.type==='time_update') {
                     setInputValue('[name="date"]', d.formatted_date || formatDate(d.current_date));
-                    setInputValue('[name="time"]', d.formatted_time || formatTime(d.current_time));
+                    // Always store 24h in the input; use display label for 12h preference
+                    var raw24 = formatTime(d.current_time || (d.formatted_time||'').replace(/\s*(AM|PM)$/i,''));
+                    setInputValue('[name="time"]', raw24);
+                    updateTimeDisplayLabel(raw24);
                 }
             } catch(e) {}
         };
@@ -392,31 +395,53 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
-    // DATE / TIME FORMATTERS  (always Asia/Kolkata)
+    // DATE / TIME FORMATTERS  (respects selected timezone)
     // =========================================================================
-    var IST = 'Asia/Kolkata';
+    // Returns the IANA timezone string currently selected in the UI.
+    // Falls back to Asia/Kolkata so behaviour is unchanged when no selection exists.
+    var getActiveTimezone = function () {
+        return getSelectValue('[name="timezone"]') || 'Asia/Kolkata';
+    };
+
+    // Legacy alias kept so all existing call-sites that reference IST still work.
+    // Each use re-evaluates at call-time so it picks up live UI changes.
+    var IST = 'Asia/Kolkata'; // initial default  overridden below via property
 
     var formatDate = function (isoDate, fmt) {
         if (!isoDate) return '';
+        var tz = getActiveTimezone();
         // Parse ISO date safely
         var parts = isoDate.split('-');
         if (parts.length !== 3) return isoDate;
-        // Build a date at noon IST to avoid any UTC-day-shift issues
-        var d = new Date(parts[0] + '-' + parts[1] + '-' + parts[2] + 'T12:00:00+05:30');
+        // Build a date at noon in the active timezone to avoid UTC-day-shift issues
+        var offsetStr = tz === 'GMT' ? '+00:00' : '+05:30'; // IST default
+        var d = new Date(parts[0] + '-' + parts[1] + '-' + parts[2] + 'T12:00:00' + offsetStr);
         fmt = fmt || getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
-        var dd = String(d.toLocaleDateString('en-IN', {day:'2-digit',   timeZone: IST})).padStart(2,'0');
-        var mm = String(d.toLocaleDateString('en-IN', {month:'2-digit', timeZone: IST})).padStart(2,'0');
-        var yyyy = d.toLocaleDateString('en-IN', {year:'numeric', timeZone: IST});
+        var dd   = String(d.toLocaleDateString('en-IN', {day:'2-digit',   timeZone: tz})).padStart(2,'0');
+        var mm   = String(d.toLocaleDateString('en-IN', {month:'2-digit', timeZone: tz})).padStart(2,'0');
+        var yyyy = d.toLocaleDateString('en-IN', {year:'numeric', timeZone: tz});
         if (fmt === 'MM/DD/YYYY') return mm + '/' + dd + '/' + yyyy;
         if (fmt === 'YYYY-MM-DD') return yyyy + '-' + mm + '-' + dd;
         return dd + '/' + mm + '/' + yyyy; // DD/MM/YYYY default
     };
 
-    var formatTime = function (hhmm, fmt) {
+    // Always returns HH:mm (24-hour)  safe to set on <input type="time">
+    var formatTime = function (hhmm) {
+        if (!hhmm) return '';
+        var parts = hhmm.split(':');
+        var h = parseInt(parts[0]) || 0;
+        var min = (parts[1] || '00').substring(0, 2);
+        return String(h).padStart(2,'0') + ':' + min;
+    };
+
+    // Returns a human-readable string respecting the user's format preference
+    // Use this for notifications and display labels  NOT for <input type="time">
+    var formatTimeDisplay = function (hhmm, fmt) {
         if (!hhmm) return '';
         fmt = fmt || getSelectValue('[name="time-format"]') || '24-hour';
         var parts = hhmm.split(':');
-        var h = parseInt(parts[0]), min = parts[1] || '00';
+        var h = parseInt(parts[0]) || 0;
+        var min = (parts[1] || '00').substring(0, 2);
         if (fmt === '12-hour') {
             var ampm = h >= 12 ? 'PM' : 'AM';
             h = h % 12 || 12;
@@ -425,14 +450,88 @@ console.log('general-config.js loaded');
         return String(h).padStart(2,'0') + ':' + min;
     };
 
-    // Get current IST date+time strings from the browser
+    // Updates the optional display label next to the time input (if present)
+    var updateTimeDisplayLabel = function (hhmm) {
+        var fmt  = getSelectValue('[name="time-format"]') || '24-hour';
+        var lbl  = document.querySelector('[data-time-display]');
+        if (lbl) lbl.textContent = formatTimeDisplay(hhmm, fmt);
+    };
+
+    // Get current date+time strings in the active timezone from the browser
     var getISTNow = function () {
+        var tz  = getActiveTimezone();
         var now = new Date();
-        var dateStr = now.toLocaleDateString('en-CA', { timeZone: IST }); // YYYY-MM-DD
-        var timeStr = now.toLocaleTimeString('en-GB', { timeZone: IST, hour: '2-digit', minute: '2-digit', hour12: false });
+        var dateStr = now.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
+        var timeStr = now.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
         return { date: dateStr, time: timeStr };
     };
 
+
+
+    // =========================================================================
+    // LIVE DATE + TIME INPUTS   tick every second, respect timezone + format
+    // =========================================================================
+    var _clockTimer = null;
+
+    // Build a formatted date string from a JS Date for the active date-format
+    var _buildDateStr = function (now, tz, dateFmt) {
+        var d     = now.toLocaleDateString('en-GB', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
+        var parts = d.split('/'); // [DD, MM, YYYY]
+        if (dateFmt === 'MM/DD/YYYY') return parts[1] + '/' + parts[0] + '/' + parts[2];
+        if (dateFmt === 'YYYY-MM-DD') return parts[2] + '-' + parts[1] + '-' + parts[0];
+        return d; // DD/MM/YYYY
+    };
+
+    // Build a formatted time string for the active time-format
+    var _buildTimeStr = function (now, tz, timeFmt) {
+        var h12 = timeFmt === '12-hour';
+        return now.toLocaleTimeString('en-GB', {
+            timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: h12
+        });
+    };
+
+    // Push current date+time into the two inputs every second
+    var _tickInputs = function () {
+        var now     = new Date();
+        var tz      = getActiveTimezone();
+        var dateFmt = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+        var timeFmt = getSelectValue('[name="time-format"]') || '24-hour';
+
+        var dateEl = document.querySelector('[name="date"]');
+        var timeEl = document.querySelector('[name="time"]');
+
+        // Only overwrite if the user is not actively editing that field
+        if (dateEl && document.activeElement !== dateEl) {
+            dateEl.value = _buildDateStr(now, tz, dateFmt);
+        }
+        if (timeEl && document.activeElement !== timeEl) {
+            timeEl.value = _buildTimeStr(now, tz, timeFmt);
+        }
+
+        // Keep hint in sync
+        var hint = document.getElementById('manual-tz-hint');
+        if (hint) hint.textContent = tz === 'Asia/Kolkata' ? 'IST (UTC+05:30)' : 'GMT (UTC+00:00)';
+    };
+
+    var startLiveInputs = function () {
+        _tickInputs();
+        if (_clockTimer) clearInterval(_clockTimer);
+        _clockTimer = setInterval(_tickInputs, 1000);
+    };
+
+    // When timezone or format dropdowns change: immediately refresh inputs
+    var onTimezoneChange = function () { _tickInputs(); };
+    var onTimeFormatChange = function () { _tickInputs(); };
+
+    var initTimezoneInteraction = function () {
+        var tzSel = document.getElementById('timezone-select');
+        if (tzSel) tzSel.addEventListener('change', onTimezoneChange);
+        var tfSel = document.querySelector('[name="time-format"]');
+        if (tfSel) tfSel.addEventListener('change', onTimeFormatChange);
+        var dfSel = document.querySelector('[name="date-format"]');
+        if (dfSel) dfSel.addEventListener('change', _tickInputs);
+        startLiveInputs();
+    };
 
     var showNotification = function (msg, type) {
         type = type||'success';
@@ -473,7 +572,7 @@ console.log('general-config.js loaded');
                 asset_id:        getInputValue('[name="asset-id"]')        || 'CRN-CT-12'
             },
             date_time: {
-                timezone:    IST,
+                timezone:    getActiveTimezone(),
                 ntp_server:  getSelectValue('[name="ntp-server"]')  || 'time.google.com',
                 date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
                 time_format: getSelectValue('[name="time-format"]') || '24-hour'
@@ -537,7 +636,7 @@ console.log('general-config.js loaded');
     var handleSaveConfiguration = function () {
         var btn = el('save-btn'); if (!btn) return;
         var orig = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving…';
         btn.disabled  = true;
         btn.classList.remove('bg-primary','hover:bg-primaryHover');
         btn.classList.add('bg-gray-500','cursor-wait');
@@ -549,12 +648,12 @@ console.log('general-config.js loaded');
         })
         .then(function (r) { if(!r.ok) return r.json().then(function(e){throw new Error(e.message||'HTTP '+r.status);}); return r.json(); })
         .then(function (result) {
-            btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Saved!';
+            btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Save Success';
             btn.classList.remove('bg-gray-500','cursor-wait');
             btn.classList.add('bg-emerald-600','hover:bg-emerald-700');
-            showNotification(result.message||'Configuration saved!', 'success');
+            showNotification(result.message||'Configuration saved successfully!', 'success');
             window.dispatchEvent(new Event('gateway-config-saved'));
-            setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 2000);
+            setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 2500);
         })
         .catch(function (err) {
             btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
@@ -578,7 +677,11 @@ console.log('general-config.js loaded');
                 // otherwise leave as-is (WS time_update will keep it current)
                 if (cfg._realtime) {
                     if (cfg._realtime.current_date) setInputValue('[name="date"]', formatDate(cfg._realtime.current_date));
-                    if (cfg._realtime.current_time) setInputValue('[name="time"]', formatTime(cfg._realtime.current_time));
+                    if (cfg._realtime.current_time) {
+                        var raw24 = formatTime(cfg._realtime.current_time);
+                        setInputValue('[name="time"]', raw24);
+                        updateTimeDisplayLabel(raw24);
+                    }
                 }
                 resolve(cfg);
             }).catch(reject);
@@ -647,7 +750,7 @@ console.log('general-config.js loaded');
             nsy.addEventListener('click', function () {
                 var orig=this.innerHTML; this.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>'; this.disabled=true;
                 var payload = {
-                    timezone:    IST,
+                    timezone:    getActiveTimezone(),
                     ntp_server:  getSelectValue('[name="ntp-server"]')  || 'time.google.com',
                     date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
                     time_format: getSelectValue('[name="time-format"]') || '24-hour'
@@ -663,21 +766,26 @@ console.log('general-config.js loaded');
                     var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
                     var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
                     var displayDate = data.formatted_date || formatDate(data.current_date, fmt);
-                    var displayTime = data.formatted_time || formatTime(data.current_time, tfmt);
+                    // Always store 24h in input; format for display/notification separately
+                    var raw24   = formatTime(data.current_time || '');
+                    var displayTime = formatTimeDisplay(raw24, tfmt);
                     setInputValue('[name="date"]', displayDate);
-                    setInputValue('[name="time"]', displayTime);
-                    showNotification('Time synchronized — ' + displayDate + ' ' + displayTime + ' (Asia/Kolkata)', 'success');
+                    setInputValue('[name="time"]', raw24);
+                    updateTimeDisplayLabel(raw24);
+                    showNotification('Time synchronized  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'success');
                 })
                 .catch(function(){
-                    // Server unreachable — use browser IST time directly
+                    // Server unreachable  use browser IST time directly
                     var ist     = getISTNow();
                     var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
                     var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
                     var displayDate = formatDate(ist.date, fmt);
-                    var displayTime = formatTime(ist.time, tfmt);
+                    var raw24   = formatTime(ist.time);
+                    var displayTime = formatTimeDisplay(raw24, tfmt);
                     setInputValue('[name="date"]', displayDate);
-                    setInputValue('[name="time"]', displayTime);
-                    showNotification('Time set from browser — ' + displayDate + ' ' + displayTime + ' (Asia/Kolkata)', 'warning');
+                    setInputValue('[name="time"]', raw24);
+                    updateTimeDisplayLabel(raw24);
+                    showNotification('Time set from browser  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'warning');
                 })
                 .then(function(){ nsy.innerHTML=orig; nsy.disabled=false; });
             });
@@ -701,6 +809,7 @@ console.log('general-config.js loaded');
         initializePasswordToggles();
         initLiveButton();
         initializeWebSocket();
+        initTimezoneInteraction();
         // Auto-connect network status WebSocket on page open
         _netActive = true;
         connectNetworkStatusWs();

@@ -75,7 +75,7 @@ async function _selectConnection(id) {
     } catch { _toast('Failed to load connection', 'error'); return; }
 
     _updateStatusBar(conn);
-    _updateDiagnostics(conn);
+
     _showActionButtons(conn);
     await _loadForm(conn);
 }
@@ -288,8 +288,8 @@ function _renderMappingsTable(conn) {
     if (!groupsContainer) return;
     
     const mappings = conn.config?.mappings || [];
-    const groups = mappings.filter(m => m.alias);
-    const individuals = mappings.filter(m => !m.alias);
+    const groups = mappings.filter(m => m.type === 'group');
+    const individuals = mappings.filter(m => m.type !== 'group');
     
     // Update stats
     _st('stat-group-count', groups.length);
@@ -327,6 +327,10 @@ function _renderMappingsTable(conn) {
                         <div class="flex items-center gap-3">
                             <button class="text-white/70 hover:text-white" onclick="window._toggleGroup('${groupId}')">
                                 <i class="fa-solid fa-chevron-down text-sm"></i>
+                            </button>
+                            <button class="text-white/80 hover:text-white bg-white/15 hover:bg-white/25 rounded px-2 py-1 text-xs flex items-center gap-1"
+                                    onclick="window._openGroupTagsModal('${_esc(conn.id)}', ${idx})" title="Add tags to this group">
+                                <i class="fa-solid fa-plus text-xs"></i> Add Tags
                             </button>
                             <button class="text-white/70 hover:text-red-200" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${idx})" title="Remove group">
                                 <i class="fa-solid fa-trash text-sm"></i>
@@ -421,11 +425,13 @@ function _renderMappingsTable(conn) {
         const allIndividualTags = [];
         individuals.forEach((mapping, mIdx) => {
             const points = _flattenDatapoints(mapping.datapoints || {});
+            const alias  = mapping.alias || '';   // alias lives at top level for individuals
             points.forEach(({name, dtype}) => {
                 allIndividualTags.push({
                     mappingIdx: mIdx,
                     name,
                     dtype,
+                    alias,
                     channel: mapping.channel || ''
                 });
             });
@@ -433,11 +439,20 @@ function _renderMappingsTable(conn) {
         
         const pubChannelOptionsInd = _getPublishChannelOptions();
         individualTable.innerHTML = allIndividualTags.map((item, idx) => `
-            <tr class="hover:bg-slate-50" data-individual-idx="${idx}" data-mapping-idx="${item.mappingIdx}" data-tag-name="${_esc(item.name)}">
+            <tr class="hover:bg-amber-50/50" data-individual-idx="${idx}" data-mapping-idx="${item.mappingIdx}" data-tag-name="${_esc(item.name)}">
                 <td class="p-2">
                     <input type="checkbox" class="tag-select individual-select" data-tag="${_esc(item.name)}" onchange="window._updateTagCount()">
                 </td>
-                <td class="p-2 font-mono text-xs">${_esc(item.name)}</td>
+                <td class="p-2 font-mono text-xs">
+                    <i class="fa-regular fa-tag text-amber-400 mr-1"></i>${_esc(item.name)}
+                </td>
+                <td class="p-2">
+                    <input type="text" class="compact-input text-xs tag-alias-input"
+                           value="${_esc(item.alias)}"
+                           placeholder="optional alias..."
+                           data-tag="${_esc(item.name)}"
+                           title="Alias for this tag in published JSON (optional)">
+                </td>
                 <td class="p-2">
                     <select class="compact-select text-xs tag-type-select" data-tag="${_esc(item.name)}" data-mapping-idx="${item.mappingIdx}">
                         <option value="int"    ${item.dtype==='int'    ?'selected':''}>int</option>
@@ -474,8 +489,21 @@ function _renderMappingsTable(conn) {
 
 function _flattenDatapoints(dp) {
     const out = [];
-    ['bool','int','float','string'].forEach(dtype => (dp[dtype]||[]).forEach(name => out.push({name,dtype})));
+    ['bool','int','float','string'].forEach(dtype => (dp[dtype]||[]).forEach(entry => {
+        if (typeof entry === 'string') {
+            out.push({ name: entry, dtype, alias: '' });
+        } else {
+            out.push({ name: entry.name, dtype, alias: entry.alias || '' });
+        }
+    }));
     return out;
+}
+
+// Default alias: last segment of dot-path, e.g. "loadcells.load.weight" -> "weight"
+// Full name with dots replaced by underscores is also acceptable  user can edit it.
+function _defaultAlias(tagName) {
+    const parts = (tagName || '').split('.');
+    return parts[parts.length - 1];
 }
 
 // Get all channels (publish + subscribe) for use in mapping dropdowns
@@ -515,7 +543,7 @@ window._updateGroupChannel = async function(connId, groupIdx, channel) {
     const conn = _connections.find(c => c.id === connId);
     if (!conn) return;
     const mappings = conn.config?.mappings || [];
-    const groups = mappings.filter(m => m.alias);
+    const groups = mappings.filter(m => m.type === 'group');
     const mapping = groups[groupIdx];
     if (!mapping) return;
     if (channel) mapping.channel = channel;
@@ -533,7 +561,7 @@ window._updateIndividualChannel = async function(connId, mappingIdx, tagName, ch
     
     const mappings = conn.config?.mappings || [];
     const mapping = mappings[mappingIdx];
-    if (!mapping || mapping.alias) return; // Don't update groups here
+    if (!mapping || mapping.type === 'group') return; // Don't update groups here
     
     // Update the channel for this mapping
     if (channel) {
@@ -617,7 +645,7 @@ window.removeSelectedTags = async function() {
     try {
         // Deep-clone mappings so we can mutate safely
         let mappings = JSON.parse(JSON.stringify(conn.config?.mappings || []));
-        const groups = mappings.filter(m => m.alias);
+        const groups = mappings.filter(m => m.type === 'group');
 
         // Collect what to remove, keyed by visual group index or individual tag name
         const groupsToDelete   = new Set();   // visual group indices (whole group removal)
@@ -657,9 +685,9 @@ window.removeSelectedTags = async function() {
             return mapping;
         }).filter(Boolean);
 
-        // 2. Process individual mappings — remove entries whose single tag is in the set
+        // 2. Process individual mappings  remove entries whose single tag is in the set
         const updatedIndividuals = mappings
-            .filter(m => !m.alias)
+            .filter(m => m.type !== 'group')
             .filter(m => {
                 const pts = _flattenDatapoints(m.datapoints || {});
                 // Remove mapping if ALL its tags are in the individual removal set
@@ -814,19 +842,20 @@ async function _saveMqttPublishing(id) {
     const individualBuckets = {};   // key ? { channel, dtype, names[] }
 
     existingMappings.forEach((mapping, mIdx) => {
-        const isGroup = !!mapping.alias;
+        const isGroup = mapping.type === 'group';
 
         if (isGroup) {
-            // GROUP: one shared type + channel for all tags
-            const visualIdx = _getGroupVisualIdx(existingMappings, mIdx);
-            const typeSel   = document.querySelector(`.group-type-select[data-group-idx="${visualIdx}"]`);
-            const dtype     = typeSel ? typeSel.value : _detectGroupType(mapping.datapoints);
+            // GROUP: per-tag alias; plain string if default, {name,alias} object if customized
+            const visualIdx   = _getGroupVisualIdx(existingMappings, mIdx);
+            const typeSel     = document.querySelector(`.group-type-select[data-group-idx="${visualIdx}"]`);
+            const dtype       = typeSel ? typeSel.value : _detectGroupType(mapping.datapoints);
             const allTagNames = _flattenDatapoints(mapping.datapoints || {}).map(p => p.name);
-            updatedMappings.push({
-                ...mapping,
-                datapoints: { [dtype]: allTagNames },
+            const tagEntries  = allTagNames.map(name => {
+                const aliasInput = document.querySelector(`.tag-alias-input[data-tag="${CSS.escape(name)}"][data-group-idx="${visualIdx}"]`);
+                const alias      = aliasInput?.value.trim() || '';
+                return { name, alias };  // always object form
             });
-
+            updatedMappings.push({ ...mapping, type: 'group', datapoints: { [dtype]: tagEntries } });
         }
     });
 
@@ -834,16 +863,24 @@ async function _saveMqttPublishing(id) {
     // This is more reliable than iterating existingMappings because:
     //   1. After a previous save, multiple tags can share the same mapping-idx
     //   2. data-tag-name lookup can collide with group table rows
-    // We read every <tr data-individual-idx> row directly from the DOM.
+    // Each individual tag gets its own mapping entry.
+    // alias moves to top-level; datapoints contains plain string or {name} object.
+    // No alias entered ? plain string inside datapoints, no alias key at top.
     document.querySelectorAll('#individual-tags-table tr[data-individual-idx]').forEach(row => {
         const tagName = row.dataset.tagName;
         if (!tagName) return;
-        const typeSel = row.querySelector('.tag-type-select');
-        const chSel   = row.querySelector('.tag-channel');
-        const dtype   = typeSel?.value || 'float';
-        const channel = chSel?.value.trim() || '';
-        const entry   = { datapoints: { [dtype]: [tagName] } };
+        const typeSel    = row.querySelector('.tag-type-select');
+        const chSel      = row.querySelector('.tag-channel');
+        const aliasInput = row.querySelector('.tag-alias-input');
+        const dtype      = typeSel?.value || 'float';
+        const channel    = chSel?.value.trim() || '';
+        const alias      = aliasInput?.value.trim();
+        // alias typed ? top-level alias + {name} object inside datapoints
+        // no alias     ? plain string inside datapoints, no alias key
+        const tagEntry   = alias ? { name: tagName } : tagName;
+        const entry      = { datapoints: { [dtype]: [tagEntry] } };
         if (channel) entry.channel = channel;
+        if (alias)   entry.alias   = alias;
         updatedMappings.push(entry);
     });
 
@@ -907,7 +944,7 @@ window._cloudRemoveMapping = async function (connId, mappingIdx) {
     const conn = _connections.find(c => c.id === connId);
     if (!conn) return;
     const mappings = conn.config?.mappings || [];
-    const label = mappings[mappingIdx]?.alias || `mapping #${mappingIdx + 1}`;
+    const label = mappings[mappingIdx]?.alias || mappings[mappingIdx]?.datapoints ? JSON.stringify(mappings[mappingIdx]?.datapoints).substring(0,30) : `mapping #${mappingIdx + 1}`;
     if (!confirm(`Remove "${label}"?`)) return;
     mappings.splice(mappingIdx, 1);
     try {
@@ -937,44 +974,78 @@ window._cloudRemoveTagFromMapping = async function (connId, mappingIdx, tagName)
 async function _openTagsModal(conn) {
     _showM('addTagsModal');
     _el('tagsSelectedCount').textContent = '0';
-    _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Loading </td></tr>';
+    _el('tagsModalBody').innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading tags...</td></tr>';
 
-    // Inject alias + channel controls for creating a group
+    // Inject mode controls (group vs individual) + channel select
+    const chOptions = _getPublishChannelOptions();
+    const chOptHtml = [
+        '<option value=""> default channel </option>',
+        ...chOptions.filter(ch => ch.dir === 'publish').map(ch =>
+            `<option value="${_esc(ch.name)}">? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
+        ...chOptions.filter(ch => ch.dir === 'subscribe').map(ch =>
+            `<option value="${_esc(ch.name)}">? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
+    ].join('');
+
     if (!_el('modal-mapping-controls')) {
         const footer = _el('tagsCancel')?.closest('div');
         if (footer) {
             const ctrl = document.createElement('div');
             ctrl.id = 'modal-mapping-controls';
-            ctrl.className = 'bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200';
             ctrl.innerHTML = `
-                <h6 class="text-xs font-semibold text-slate-700 mb-3">Create Group (Optional)</h6>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="border-t border-slate-200 px-5 pt-4 pb-2">
+                    <!-- Mode toggle -->
+                    <div class="flex gap-2 mb-4">
+                        <button id="modal-mode-individual" onclick="window._setModalMode('individual')"
+                                class="modal-mode-btn active flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border-2 border-amber-400 bg-amber-50 text-amber-700 text-xs font-semibold transition-all">
+                            <i class="fa-regular fa-tag"></i> Individual Tags
+                        </button>
+                        <button id="modal-mode-group" onclick="window._setModalMode('group')"
+                                class="modal-mode-btn flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border-2 border-slate-200 bg-white text-slate-500 text-xs font-semibold transition-all">
+                            <i class="fa-solid fa-layer-group"></i> Group
+                        </button>
+                    </div>
+                    <!-- Group alias (shown only in group mode) -->
+                    <div id="modal-group-fields" style="display:none" class="mb-3">
+                        <label class="block text-xs font-medium text-slate-600 mb-1">
+                            <i class="fa-solid fa-layer-group text-blue-500 mr-1"></i>Group Name <span class="text-red-400">*</span>
+                        </label>
+                        <input id="modal-alias-input" type="text" class="compact-input w-full"
+                               placeholder="e.g. crane_sensors, motor_group">
+                        <p class="text-xs text-slate-400 mt-1">All selected tags publish together under this name</p>
+                    </div>
+                    <!-- Channel select (always shown) -->
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">
-                            <i class="fa-regular fa-layer-group text-blue-500 mr-1"></i>Group Alias
+                            <i class="fa-solid fa-broadcast-tower text-slate-400 mr-1"></i>Channel
                         </label>
-                        <input id="modal-alias-input" type="text" class="compact-input w-full" placeholder="e.g., motor_group, sensor_panel">
-                        <p class="help-text mt-1">All selected tags will be grouped under this name</p>
+                        <select id="modal-channel-input" class="compact-select w-full">${chOptHtml}</select>
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">
-                            <i class="fa-regular fa-envelope text-amber-500 mr-1"></i>Channel Override
-                        </label>
-                        <input id="modal-channel-input" type="text" class="compact-input w-full" placeholder="e.g., telemetry_channel">
-                        <p class="help-text mt-1">Optional: Override default channel for this group</p>
-                    </div>
-                </div>
-                <p class="text-xs text-slate-400 mt-2">
-                    <i class="fa-regular fa-circle-info mr-1"></i> 
-                    Leave Alias empty to add tags individually
-                </p>`;
+                </div>`;
             footer.parentElement.insertBefore(ctrl, footer);
         }
     } else {
-        // Reset values on re-open
+        // Reset on re-open, refresh channel options
         _sv('modal-alias-input', '');
-        _sv('modal-channel-input', '');
+        const chSel = _el('modal-channel-input');
+        if (chSel) chSel.innerHTML = chOptHtml;
+        window._setModalMode('individual');
     }
+
+    // Mode switcher
+    window._setModalMode = function(mode) {
+        const isGroup = mode === 'group';
+        const gFields = _el('modal-group-fields');
+        const btnInd  = _el('modal-mode-individual');
+        const btnGrp  = _el('modal-mode-group');
+        if (gFields) gFields.style.display = isGroup ? 'block' : 'none';
+        if (btnInd) {
+            btnInd.className = `modal-mode-btn flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border-2 text-xs font-semibold transition-all ${!isGroup ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-500'}`;
+        }
+        if (btnGrp) {
+            btnGrp.className = `modal-mode-btn flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border-2 text-xs font-semibold transition-all ${isGroup ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`;
+        }
+    };
+    window._setModalMode('individual');
 
     try {
         const d = await _api('GET', `${API}/available-tags`);
@@ -1017,7 +1088,7 @@ async function _openTagsModal(conn) {
                 if (!datapoints[dtype]) datapoints[dtype] = [];
                 datapoints[dtype].push(cb.dataset.tag);
             });
-            const newMapping = { alias, datapoints };
+            const newMapping = { alias, type: 'group', datapoints };
             if (channel) newMapping.channel = channel;
             newMappings = [...existingMappings, newMapping];
         } else {
@@ -1050,28 +1121,131 @@ async function _openTagsModal(conn) {
         }
     };
 }
-function _renderTagsModal(tags) {
+// --- ADD TAGS TO EXISTING GROUP -----------------------------------------------
+window._openGroupTagsModal = async function(connId, groupVisualIdx) {
+    const conn = _connections.find(c => c.id === connId);
+    if (!conn) return;
+
+    // Find the actual mapping by visual group index
+    const mappings = conn.config?.mappings || [];
+    const groups   = mappings.filter(m => m.type === 'group');
+    const mapping  = groups[groupVisualIdx];
+    if (!mapping) return;
+
+    // Get existing tag names in this group so we can grey them out
+    const existingNames = new Set(_flattenDatapoints(mapping.datapoints || {}).map(p => p.name));
+
+    _showM('addTagsModal');
+    _el('tagsSelectedCount').textContent = '0';
+    _el('tagsModalBody').innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">Loading...</td></tr>';
+
+    // Replace / inject controls  show locked "adding to group X" banner, no mode toggle
+    const existingCtrl = _el('modal-mapping-controls');
+    if (existingCtrl) existingCtrl.remove();
+
+    const footer = _el('tagsCancel')?.closest('div');
+    if (footer) {
+        const ctrl = document.createElement('div');
+        ctrl.id = 'modal-mapping-controls';
+        ctrl.innerHTML = `
+            <div class="border-t border-blue-200 px-5 pt-4 pb-3 bg-blue-50">
+                <div class="flex items-center gap-2 text-blue-700 text-xs font-semibold">
+                    <i class="fa-solid fa-layer-group"></i>
+                    Adding tags to group: <span class="bg-blue-600 text-white px-2 py-0.5 rounded-full ml-1">${_esc(mapping.alias)}</span>
+                </div>
+                <p class="text-xs text-blue-500 mt-1">Selected tags will be added to this group. Already-added tags are greyed out.</p>
+            </div>`;
+        footer.parentElement.insertBefore(ctrl, footer);
+    }
+
+    try {
+        const d = await _api('GET', `${API}/available-tags`);
+        _availTags = d.tags || [];
+        _renderTagsModal(_availTags, existingNames);
+    } catch {
+        _el('tagsModalBody').innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-400">Failed to load tags</td></tr>';
+    }
+
+    _el('tagSearch').oninput = e => {
+        const q = e.target.value.toLowerCase();
+        _renderTagsModal(
+            _availTags.filter(t => t.name.toLowerCase().includes(q) || (t.device||'').toLowerCase().includes(q)),
+            existingNames
+        );
+    };
+
+    _el('selectAllTags').onchange = e => {
+        document.querySelectorAll('.modal-tag-cb:not(:disabled)').forEach(cb => cb.checked = e.target.checked);
+        _updateTagCount();
+    };
+
+    _el('tagsCancel').onclick     = () => _hideM('addTagsModal');
+    _el('closeTagsModal').onclick = () => _hideM('addTagsModal');
+
+    _el('tagsConfirm').onclick = async () => {
+        const checked = [...document.querySelectorAll('.modal-tag-cb:checked')];
+        if (!checked.length) { _toast('Select at least one tag', 'error'); return; }
+
+        // Find the real mapping index
+        const allMappings = conn.config?.mappings || [];
+        let realIdx = -1, gCount = 0;
+        for (let i = 0; i < allMappings.length; i++) {
+            if (allMappings[i].type === 'group') {
+                if (gCount === groupVisualIdx) { realIdx = i; break; }
+                gCount++;
+            }
+        }
+        if (realIdx === -1) { _toast('Group not found', 'error'); return; }
+
+        // Merge new tags into the group's datapoints
+        const dp = { ...(allMappings[realIdx].datapoints || {}) };
+        checked.forEach(cb => {
+            const dtype = cb.dataset.dtype || 'float';
+            if (!dp[dtype]) dp[dtype] = [];
+            if (!dp[dtype].includes(cb.dataset.tag)) dp[dtype].push(cb.dataset.tag);
+        });
+
+        const updatedMappings = allMappings.map((m, i) =>
+            i === realIdx ? { ...m, datapoints: dp } : m
+        );
+
+        _setLoading(_el('tagsConfirm'), true);
+        try {
+            await _api('PUT', `${API}/connections/${connId}`, { config: { mappings: updatedMappings } });
+            _hideM('addTagsModal');
+            await _selectConnection(connId);
+            _toast(`${checked.length} tag(s) added to group "${mapping.alias}"`, 'success');
+        } catch {
+            _toast('Failed to add tags', 'error');
+        } finally {
+            _setLoading(_el('tagsConfirm'), false);
+        }
+    };
+};
+
+function _renderTagsModal(tags, disabledNames = new Set()) {
     const tbody = _el('tagsModalBody');
     if (!tags.length) { 
         tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">No tags available</td></tr>'; 
         return; 
     }
     tbody.innerHTML = tags.map(t => {
-        const isVirtual = t.source === 'virtual';
+        const isVirtual  = t.source === 'virtual';
+        const isDisabled = disabledNames.has(t.name);
         const sourceBadgeClass = isVirtual ? 'virtual' : (t.source === 'modbus' ? 'mqtt' : (t.source === 'loadcell' ? 'ftp' : 'http'));
         const deviceDisplay = t.device
             ? (isVirtual
                 ? `<span class="inline-flex items-center gap-1"><i class="fa-solid fa-microchip text-violet-400 text-xs"></i>${_esc(t.device)}</span>`
                 : _esc(t.device))
-            : (isVirtual ? '<span class="text-violet-400 italic text-xs">virtual</span>' : '—');
+            : (isVirtual ? '<span class="text-violet-400 italic text-xs">virtual</span>' : '');
         return `
-      <tr class="border-t border-slate-100 hover:bg-slate-50${isVirtual ? ' bg-violet-50/30' : ''}">
-        <td class="p-3"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" onchange="window._syncModalTagType(this); window._updateTagCount()"></td>
-        <td class="p-3 font-mono text-sm">${_esc(t.name)}</td>
+      <tr class="border-t border-slate-100 ${isDisabled ? 'opacity-40 bg-slate-50' : 'hover:bg-slate-50'}${isVirtual && !isDisabled ? ' bg-violet-50/30' : ''}">
+        <td class="p-3"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" ${isDisabled ? 'disabled' : ''} onchange="window._syncModalTagType(this); window._updateTagCount()"></td>
+        <td class="p-3 font-mono text-sm">${_esc(t.name)}${isDisabled ? ' <span class="text-xs text-slate-400 font-sans italic">already added</span>' : ''}</td>
         <td class="p-3 text-sm text-slate-600">${deviceDisplay}</td>
-        <td class="p-3 text-sm text-slate-500">${_esc(t.unit||'—')}</td>
+        <td class="p-3 text-sm text-slate-500">${_esc(t.unit||'')}</td>
         <td class="p-3">
-          <select class="compact-select text-xs modal-tag-type" data-tag="${_esc(t.name)}"
+          <select class="compact-select text-xs modal-tag-type" data-tag="${_esc(t.name)}" ${isDisabled ? 'disabled' : ''}
                   onchange="this.closest('tr').querySelector('.modal-tag-cb').dataset.dtype = this.value">
             <option value="int"    ${(t.dtype||'float')==='int'    ?'selected':''}>int</option>
             <option value="float"  ${(t.dtype||'float')==='float'  ?'selected':''}>float</option>
@@ -1175,7 +1349,7 @@ async function _handleCreate(e) {
     finally { _setLoading(btn, false); }
 }
 
-// --- STATUS BAR + DIAGNOSTICS -------------------------------------------------
+// --- STATUS BAR ----------------------------------------------------------------
 function _updateStatusBar(conn) {
     const s = conn?.statistics || {};
     _st('panelName',    conn ? _esc(conn.name) : 'No Connection Selected');
@@ -1184,10 +1358,6 @@ function _updateStatusBar(conn) {
     _st('statErrors',   (s.failed  ||0).toLocaleString());
     _st('statLastSent', s.lastActive||'Never');
     _st('statLatency',  (s.latency ||0)+' ms');
-}
-
-function _updateDiagnostics(conn) {
-    // Diagnostics panel removed from UI — no-op kept to avoid call-site errors
 }
 
 function _showActionButtons(conn) {

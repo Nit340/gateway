@@ -373,17 +373,25 @@ def build_iot_gateway_config():
         for m in raw_mappings:
             channel = m.get('channel') or default_ch
             if m.get('alias'):
-                # Groups go through as-is
+                # Groups go through as-is — datapoints may contain tag objects {name, alias, writable}
                 entry = {'channel': channel, 'datapoints': m.get('datapoints', {}), 'alias': m['alias']}
                 all_mappings.append(entry)
             else:
-                # Individual: one mapping entry per tag (preserves per-tag dtype)
-                for dtype, names in (m.get('datapoints') or {}).items():
-                    for name in names:
-                        all_mappings.append({
-                            'channel':    channel,
-                            'datapoints': {dtype: [name]},
-                        })
+                # Individual: one mapping entry per tag (preserves per-tag dtype, alias, writable)
+                for dtype, tag_entries in (m.get('datapoints') or {}).items():
+                    for tag_entry in tag_entries:
+                        if isinstance(tag_entry, str):
+                            # Legacy plain string
+                            all_mappings.append({
+                                'channel':    channel,
+                                'datapoints': {dtype: [tag_entry]},
+                            })
+                        else:
+                            # New object with name, alias, writable
+                            all_mappings.append({
+                                'channel':    channel,
+                                'datapoints': {dtype: [tag_entry]},
+                            })
 
     # -- 3. Assemble ---------------------------------------------------------
     return {

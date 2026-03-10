@@ -290,11 +290,12 @@
                     // Clear stale cookies and force login
                     document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
                     document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    window.location.replace('/login.html');
+                    document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    window.location.replace('/?expired=1');
                 }
             } catch (e) {
                 // Cannot reach server - redirect to login
-                window.location.replace('/login.html');
+                window.location.replace('/');
             }
         })();
     </script>
@@ -317,22 +318,16 @@
             
             <!-- Navigation -->
             <nav class="sidebar-nav" id="sidebarNav">
-                <!-- Section: Configuration -->
+                <!-- Active nav items (no section headers) -->
                 <div class="nav-section">
-                    <div class="section-title">Configuration</div>
                     <a href="#" data-page="general-configuration" class="nav-link active">
                         <i class="fa-solid fa-sliders"></i>
                         <span>General Configuration</span>
                     </a>
                     <a href="#" data-page="device-management" class="nav-link">
                         <i class="fa-solid fa-microchip"></i>
-                        <span>Device management</span>
+                        <span>Device Management</span>
                     </a>
-                </div>
-                
-                <!-- Section: Protocols -->
-                <div class="nav-section">
-                    <div class="section-title">Protocols & Integrations</div>
                     <a href="#" data-page="field-integration" class="nav-link">
                         <i class="fa-solid fa-plug"></i>
                         <span>Field Integration</span>
@@ -341,87 +336,82 @@
                         <i class="fa-solid fa-cloud"></i>
                         <span>Cloud Integration</span>
                     </a>
-                </div>
-                
-                <!-- Section: OTA -->
-                <div class="nav-section">
-                    <div class="section-title">OTA Firmware Management</div>
-                    <a href="#" data-page="ota-gateway" class="nav-link">
-                        <i class="fa-solid fa-server"></i>
-                        <span>Gateway-Level OTA & Recovery</span>
-                    </a>
-                </div>
-                
-                <!-- Section: CraneIQ -->
-                <div class="nav-section">
-                    <div class="section-title">CraneIQ Suite</div>
                     <a href="#" data-page="craneiq" class="nav-link">
-    <i class="fa-solid fa-weight-hanging"></i>
-    <span>CraneIQ </span>  <!-- Fixed: replaced � with - -->
-    <span class="nav-link-count">4</span>
-</a>
-                </div>
-                
-                <!-- Section: Data -->
-                <div class="nav-section">
-                    <div class="section-title">Data & Diagnostics</div>
-                    <a href="#" data-page="data-retention" class="nav-link">
-                        <i class="fa-solid fa-database"></i>
-                        <span>Data Retention</span>
-                    </a>
-                    <a href="#" data-page="logging" class="nav-link">
-                        <i class="fa-solid fa-file-lines"></i>
-                        <span>Logging</span>
-                    </a>
-                    <a href="#" data-page="diagnostics" class="nav-link">
-                        <i class="fa-solid fa-bug"></i>
-                        <span>Diagnostics </span>
-                    </a>
-                </div>
-                
-                <!-- Section: Security -->
-                <div class="nav-section">
-                    <div class="section-title">Security & Access</div>
-                    <a href="#" data-page="security" class="nav-link">
-                        <i class="fa-solid fa-lock"></i>
-                        <span>Security </span>
-                    </a>
-                    <a href="#" data-page="license" class="nav-link">
-                        <i class="fa-solid fa-key"></i>
-                        <span>Licensing & Subscriptions</span>
-                    </a>
-                </div>
-                
-                <!-- Section: Automation -->
-                <div class="nav-section">
-                    <div class="section-title">Automation</div>
-                    <a href="#" data-page="automation" class="nav-link">
-                        <i class="fa-solid fa-clock"></i>
-                        <span>Scheduler</span>
-                    </a>
-                    <a href="#" data-page="alerts" class="nav-link">
-                        <i class="fa-solid fa-bell"></i>
-                        <span>Alerts & Event </span>
+                        <i class="fa-solid fa-weight-hanging"></i>
+                        <span>CraneIQ</span>
+                        <span class="nav-link-count">4</span>
                     </a>
                     <a href="#" data-page="rules" class="nav-link">
                         <i class="fa-solid fa-diagram-project"></i>
                         <span>Rule Engine</span>
                     </a>
                 </div>
-                
-                <!-- Section: Backup -->
-                <div class="nav-section">
-                    <div class="section-title">System</div>
-                    <a href="#" data-page="backup" class="nav-link">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        <span>Backup</span>
-                    </a>
-                    <a href="#" data-page="notification" class="nav-link">
-                        <i class="fa-solid fa-message"></i>
-                        <span>Notification </span>
-                    </a>
+
+                <!-- Under Development Section -->
+                <div class="nav-section" id="underDevSection">
+                    <div class="section-title" id="underDevToggle" onclick="toggleUnderDev()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;">
+                        <span>Under Development</span>
+                        <i class="fa-solid fa-chevron-down" id="underDevChevron" style="font-size:10px; transition:transform 0.2s;"></i>
+                    </div>
+                    <div id="underDevLinks">
+                        <a href="#" data-page="ota-gateway" class="nav-link">
+                            <i class="fa-solid fa-server"></i>
+                            <span>Gateway OTA & Recovery</span>
+                        </a>
+                        <a href="#" data-page="data-retention" class="nav-link">
+                            <i class="fa-solid fa-database"></i>
+                            <span>Data Retention</span>
+                        </a>
+                        <a href="#" data-page="logging" class="nav-link">
+                            <i class="fa-solid fa-file-lines"></i>
+                            <span>Logging</span>
+                        </a>
+                        <a href="#" data-page="diagnostics" class="nav-link">
+                            <i class="fa-solid fa-bug"></i>
+                            <span>Diagnostics</span>
+                        </a>
+                        <a href="#" data-page="security" class="nav-link">
+                            <i class="fa-solid fa-lock"></i>
+                            <span>Security</span>
+                        </a>
+                        <a href="#" data-page="license" class="nav-link">
+                            <i class="fa-solid fa-key"></i>
+                            <span>Licensing & Subscriptions</span>
+                        </a>
+                        <a href="#" data-page="automation" class="nav-link">
+                            <i class="fa-solid fa-clock"></i>
+                            <span>Scheduler</span>
+                        </a>
+                        <a href="#" data-page="alerts" class="nav-link">
+                            <i class="fa-solid fa-bell"></i>
+                            <span>Alerts & Events</span>
+                        </a>
+                        <a href="#" data-page="backup" class="nav-link">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Backup</span>
+                        </a>
+                        <a href="#" data-page="notification" class="nav-link">
+                            <i class="fa-solid fa-message"></i>
+                            <span>Notification</span>
+                        </a>
+                    </div>
                 </div>
             </nav>
+            <script>
+                function toggleUnderDev() {
+                    const links = document.getElementById('underDevLinks');
+                    const chevron = document.getElementById('underDevChevron');
+                    const isHidden = links.style.display === 'none';
+                    links.style.display = isHidden ? 'block' : 'none';
+                    chevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+                }
+                // Start collapsed
+                document.addEventListener('DOMContentLoaded', function() {
+                    const links = document.getElementById('underDevLinks');
+                    const chevron = document.getElementById('underDevChevron');
+                    if (links) { links.style.display = 'none'; chevron.style.transform = 'rotate(-90deg)'; }
+                });
+            </script>
             
             <!-- Footer / User Profile -->
             <div class="sidebar-footer">
@@ -586,7 +576,8 @@
             // Clear auth cookies
             document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
             document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            window.location.replace('/login.html');
+            document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            window.location.replace('/');
         }
 
         window.handleLogout = handleLogout;
@@ -627,9 +618,9 @@
                     }
                 }
             } catch (e) {
-                // Silently ignore — page visibility is best-effort
+                // Silently ignore � page visibility is best-effort
             }
         })();
     </script>
 </body>
-</html>
+</htm

@@ -333,6 +333,7 @@ def create_tables(cursor):
             password   TEXT    NOT NULL,          -- SHA-256 hex digest
             display_name TEXT  DEFAULT '',
             enabled    BOOLEAN DEFAULT 1,
+            max_sessions INTEGER DEFAULT 1,
             last_login TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -409,7 +410,7 @@ def create_tables(cursor):
     # -----------------------------------------------------------------------
     # Port / Path configuration
     #   device_type : 'modbus' | 'loadcell'
-    #   port_number : 1-based index shown in the UI (Port 1, Port 2, …)
+    #   port_number : 1-based index shown in the UI (Port 1, Port 2, ï¿½)
     #   port_value  : actual system path stored in vfd_device.serial_port
     #                 or loadcell_device.device_path
     # -----------------------------------------------------------------------
@@ -471,6 +472,13 @@ def _migrate_existing_db(cursor):
                 'INSERT OR IGNORE INTO pipeline_send_log (config_type) VALUES (?)', (cfg_type,)
             )
         print("[DB] Migration: created pipeline_send_log table")
+
+    # webui_users: add max_sessions column if missing (migration for existing DBs)
+    cursor.execute("PRAGMA table_info(webui_users)")
+    _webui_cols = [r[1] for r in cursor.fetchall()]
+    if 'max_sessions' not in _webui_cols:
+        cursor.execute('ALTER TABLE webui_users ADD COLUMN max_sessions INTEGER DEFAULT 1')
+        print('[DB] Migration: added max_sessions to webui_users')
 
     # webui_users: ensure table exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='webui_users'")
@@ -1215,6 +1223,35 @@ def delete_admin_user(user_id):
 # WebUI users CRUD
 # ---------------------------------------------------------------------------
 
+def get_webui_user_max_sessions(user_id):
+    """Return the max_sessions limit for a webui user (default 1)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT max_sessions FROM webui_users WHERE id=?', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return int(row[0]) if row and row[0] is not None else 1
+    except Exception:
+        return 1
+
+
+def set_webui_user_max_sessions(user_id, max_sessions):
+    """Set the max concurrent session limit for a webui user."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE webui_users SET max_sessions=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+            (int(max_sessions), user_id)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
 def get_all_webui_users():
     try:
         conn = get_db_connection()
@@ -1391,7 +1428,7 @@ else:
 
 
 # ---------------------------------------------------------------------------
-# WebUI Page Restrictions — per-user access control
+# WebUI Page Restrictions ï¿½ per-user access control
 # ---------------------------------------------------------------------------
 
 # Master list of all pages in layout.html  (page_key, human label, sort_order)

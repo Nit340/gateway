@@ -10,6 +10,7 @@ import time
 import struct
 import socket
 import logging
+import os
 from datetime import datetime
 from enum import IntEnum
 from collections import deque
@@ -61,6 +62,9 @@ class EventType(IntEnum):
     ACTION_TRIGGERED = 9   # A global action was triggered by any connected service
     CONFIG_RECEIVED = 10   # A configuration entry was published or updated
     NOTIFICATION_RECEIVED = 11  # A notification was broadcast by any connected service
+    SERVICE_NAME_CONFLICT = 12  # Another instance is already registered with this service name; application will terminate
+    ACTION_RECEIVED = 13   # A global action was published/registered by a connected service
+    ACTION_REMOVED = 14    # A global action was removed because its publisher service disconnected
 
 
 class EventStatus(IntEnum):
@@ -500,6 +504,16 @@ class PipelineClient:
                         except Exception as e:
                             logger.error("Exception in global event callback: {}".format(e))
 
+                        # SERVICE_NAME_CONFLICT is fatal: terminate the process after calling the
+                        # user callback so it has a chance to log/clean up.  os._exit() bypasses
+                        # Python exception handlers and cannot be caught, mirroring the C++
+                        # behaviour of an uncaught std::runtime_error in a std::thread.
+                        if event_data.event_type == EventType.SERVICE_NAME_CONFLICT:
+                            logger.error("ilx_pipeline | Fatal: service name '{}' is already registered on the pipeline. "
+                                         "Stop all other running instances of this application.".format(
+                                             event_data.service_name))
+                            os._exit(1)
+
             if not self.callback_thread_running and not self.event_queue:
                 break
 
@@ -643,10 +657,21 @@ class PipelineClient:
                     logger.debug("Action triggered: '{}'".format(action_name))
                     self.trigger_event(EventType.ACTION_TRIGGERED, "", action_name, EventStatus.SUCCESS, 0)
             elif frame.command_code == CommandCode.PUBLISH_ACTION:
-                # Informational: the server broadcasts published actions to all clients
+                # Server broadcasts PUBLISH_ACTION to all clients when an action is registered.
+                # Fire ACTION_RECEIVED so subscribers can discover available actions.
                 if len(frame.payloads) >= 1:
                     action_name = frame.payloads[0].data.decode('utf-8')
-                    logger.debug("Action published: '{}'".format(action_name))
+                    publisher = frame.payloads[1].data.decode('utf-8') if len(frame.payloads) >= 2 else ""
+                    logger.debug("Action published: '{}' by '{}'".format(action_name, publisher))
+                    self.trigger_event(EventType.ACTION_RECEIVED, publisher, action_name, EventStatus.SUCCESS, 0)
+            elif frame.command_code == CommandCode.DELETE_ACTION:
+                # Server broadcasts DELETE_ACTION when a publisher service disconnects.
+                # Fire ACTION_REMOVED so subscribers can remove it from their local lists.
+                if len(frame.payloads) >= 1:
+                    action_name = frame.payloads[0].data.decode('utf-8')
+                    publisher = frame.payloads[1].data.decode('utf-8') if len(frame.payloads) >= 2 else ""
+                    logger.debug("Action removed: '{}' (publisher '{}')".format(action_name, publisher))
+                    self.trigger_event(EventType.ACTION_REMOVED, publisher, action_name, EventStatus.SUCCESS, 0)
             elif frame.command_code == CommandCode.CONFIG_UPDATE:
                 # Handle config update broadcast from the server
                 if len(frame.payloads) >= 3:
@@ -698,6 +723,21 @@ class PipelineClient:
                     with self.callback_cv:
                         self.event_queue.append(evt)
                         self.callback_cv.notify()
+            elif frame.command_code == CommandCode.DUPLICATE_SERVICE_NAME:
+                # The server detected that another instance is already using our service name.
+                # Extract the conflicting service name from the payload (if present).
+                conflict_name = self.service_name
+                if frame.payloads:
+                    try:
+                        conflict_name = frame.payloads[0].data.decode('utf-8')
+                    except Exception:
+                        pass
+                logger.error("Service name conflict: '{}' is already registered on the pipeline. "
+                             "Another instance may already be running.".format(conflict_name))
+                evt = EventData(EventType.SERVICE_NAME_CONFLICT, conflict_name, "", EventStatus.FAILURE, 0)
+                with self.callback_cv:
+                    self.event_queue.append(evt)
+                    self.callback_cv.notify()
             else:
                 # Log unknown command codes for debugging
                 logger.warning("Received unknown command code: {}".format(frame.command_code))
@@ -1532,6 +1572,8 @@ class PipelineClient:
             EventType.ACTION_TRIGGERED: "ACTION_TRIGGERED",
             EventType.CONFIG_RECEIVED: "CONFIG_RECEIVED",
             EventType.NOTIFICATION_RECEIVED: "NOTIFICATION_RECEIVED",
+            EventType.ACTION_RECEIVED: "ACTION_RECEIVED",
+            EventType.ACTION_REMOVED: "ACTION_REMOVED",
             EventType.UNKNOWN: "UNKNOWN"
         }
         return type_map.get(event_type, "UNKNOWN")

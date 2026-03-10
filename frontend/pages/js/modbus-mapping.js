@@ -836,7 +836,7 @@ async function _handleModbusCreate(e) {
         if (resp.ok) {
             _closeAddTagModal();
             await _loadData();
-            _toast('Tag created successfully', 'success');
+            _toast('Tag saved into VFD', 'success');
         } else {
             _toast(data.error || 'Failed to create tag', 'error');
         }
@@ -956,7 +956,7 @@ async function _handleModbusEdit(e) {
         if (resp.ok) {
             _closeEditModbus();
             await _loadData();
-            _toast('Tag updated successfully', 'success');
+            _toast('Tag data updated into VFD', 'success');
         } else {
             _toast(data.error || 'Failed to update tag', 'error');
         }
@@ -1270,7 +1270,7 @@ async function saveModbusConfig() {
     
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sending…';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving to VFD…';
     }
 
     try {
@@ -1297,9 +1297,9 @@ async function saveModbusConfig() {
         }
 
         if (data.success) {
-            _toast('✓ ' + (data.message || 'Configuration sent to modbus service'), 'success');
+            _toast('✓ Data saved into VFD' + (data.message ? ' — ' + data.message : ''), 'success');
         } else {
-            _toast(data.error || 'Failed to send configuration', 'error');
+            _toast(data.error || 'Failed to save data into VFD', 'error');
         }
     } catch (err) {
         console.error('[MODBUS-CFG] Error:', err);
