@@ -166,12 +166,321 @@ console.log('general-config.js loaded');
         txt('wifi-bssid',w.bssid     || '--');
         var freq = w.frequency ? w.frequency + ' MHz' : '--';
         txt('wifi-freq', freq);
-        // Update SSID input if empty (don't overwrite user's edit)
-        if (w.ssid && !getInputValue('[name="wifi-ssid"]')) setInputValue('[name="wifi-ssid"]', w.ssid);
+        // Sync label with live wlan.ssid (only if user hasn't already picked one)
+        if (w.ssid) {
+            var hid = el('wifi-ssid-value');
+            var lbl = el('wifi-ssid-label');
+            if (hid && (!hid.value || hid.value === 'Univa-Guest')) {
+                hid.value = w.ssid;
+                if (lbl) lbl.textContent = w.ssid;
+            }
+        }
         // Update global MAC
         if (isUp(w.state) && w.mac) {
             var m = $('[data-mac-address]'); if (m) m.textContent = w.mac;
         }
+    };
+
+    // =========================================================================
+    // WIFI SCAN & PICKER
+    // Click Scan -> dropdown opens with results -> click a row -> label updates
+    // =========================================================================
+    var _wifiNetworks = [];
+    var _wifiPanel    = null;
+
+    // Signal level 0-4 from dBm
+    var _dbmLevel = function (dbm) {
+        dbm = parseInt(dbm) || -100;
+        if (dbm >= -55) return 4;
+        if (dbm >= -65) return 3;
+        if (dbm >= -75) return 2;
+        if (dbm >= -85) return 1;
+        return 0;
+    };
+
+    // Draw 4 arc wifi icon as HTML string
+    var _wifiArcIcon = function (dbm) {
+        var lvl = _dbmLevel(dbm);
+        var color = lvl >= 3 ? '#2563eb' : lvl === 2 ? '#f59e0b' : '#ef4444';
+        var dim   = '#e2e8f0';
+        var arcs  = '';
+        var sizes = [[4,4],[8,8],[12,12],[16,16]];
+        for (var i = 0; i < 4; i++) {
+            var w = sizes[i][0], h = sizes[i][1];
+            var c = (i < lvl) ? color : dim;
+            arcs += '<span style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);' +
+                    'width:' + w + 'px;height:' + h + 'px;border-radius:50%;' +
+                    'border:2px solid ' + c + ';"></span>';
+        }
+        return '<span style="position:relative;display:inline-block;width:18px;height:16px;flex-shrink:0;">' + arcs + '</span>';
+    };
+
+    // Create the floating panel and append to body once
+    var _createPanel = function () {
+        if (_wifiPanel) return _wifiPanel;
+        var p = document.createElement('div');
+        p.id = 'wifi-dropdown-panel';
+        p.style.cssText =
+            'display:none;position:fixed;z-index:99999;background:#fff;' +
+            'border:1px solid #e2e8f0;border-radius:12px;' +
+            'box-shadow:0 8px 30px rgba(0,0,0,0.15);' +
+            'min-width:260px;max-height:320px;overflow-y:auto;' +
+            'font-family:inherit;font-size:14px;';
+        document.body.appendChild(p);
+        _wifiPanel = p;
+        return p;
+    };
+
+    var _positionPanel = function () {
+        var btn = el('wifi-scan-btn');
+        if (!btn || !_wifiPanel) return;
+        var r = btn.getBoundingClientRect();
+        _wifiPanel.style.left  = r.left + 'px';
+        _wifiPanel.style.width = Math.max(r.right - r.left + 200, 260) + 'px';
+        // Open below or above depending on space
+        if (window.innerHeight - r.bottom > 200) {
+            _wifiPanel.style.top    = (r.bottom + 6) + 'px';
+            _wifiPanel.style.bottom = 'auto';
+        } else {
+            _wifiPanel.style.top    = 'auto';
+            _wifiPanel.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+        }
+    };
+
+    var _closePanel = function () {
+        if (_wifiPanel) _wifiPanel.style.display = 'none';
+    };
+
+    var _renderPanel = function (networks) {
+        var p = _createPanel();
+        if (!networks || !networks.length) {
+            p.innerHTML =
+                '<div style="padding:20px;text-align:center;color:#94a3b8;">' +
+                '<i class="fa-solid fa-wifi" style="font-size:24px;color:#cbd5e1;display:block;margin-bottom:8px;"></i>' +
+                'No networks found</div>';
+            return;
+        }
+        p.innerHTML = networks.map(function (n) {
+            var ssid = n.ssid || '';
+            var dbm  = n.signal_quality || -100;
+            var sec  = n.security || 'Open';
+            var ch   = n.channel ? 'ch ' + n.channel : '';
+            var lock = (sec && sec.toLowerCase() !== 'open')
+                ? '<i class="fa-solid fa-lock" style="color:#94a3b8;font-size:11px;"></i>' : '';
+            return '<div class="wifi-row" data-ssid="' + ssid.replace(/"/g,'&quot;') + '" ' +
+                'style="display:flex;align-items:center;gap:12px;padding:11px 14px;' +
+                'cursor:pointer;border-bottom:1px solid #f1f5f9;">' +
+                _wifiArcIcon(dbm) +
+                '<span style="flex:1;min-width:0;">' +
+                  '<span style="display:block;font-size:13px;font-weight:500;color:#1e293b;' +
+                         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ssid + '</span>' +
+                  '<span style="font-size:11px;color:#94a3b8;">' + sec + (ch ? ' · ' + ch : '') + '</span>' +
+                '</span>' + lock +
+            '</div>';
+        }).join('');
+
+        // Hover + click
+        p.querySelectorAll('.wifi-row').forEach(function (row) {
+            row.addEventListener('mouseenter', function () { this.style.background = '#f0f9ff'; });
+            row.addEventListener('mouseleave', function () { this.style.background = ''; });
+            row.addEventListener('click', function () {
+                var ssid = this.dataset.ssid;
+                // Update label
+                var lbl = el('wifi-ssid-label');
+                if (lbl) lbl.textContent = ssid;
+                // Update hidden input
+                var hid = el('wifi-ssid-value');
+                if (hid) hid.value = ssid;
+                // Update hint
+                var hint = el('wifi-ssid-hint');
+                if (hint) hint.textContent = 'Selected: ' + ssid;
+                _closePanel();
+            });
+        });
+    };
+
+    var _doScanWifi = function () {
+        var btn  = el('wifi-scan-btn');
+        var icon = el('wifi-scan-icon');
+        var lbl  = el('wifi-scan-label');
+        var hint = el('wifi-ssid-hint');
+
+        // Button loading state
+        if (btn)  btn.disabled = true;
+        if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-xs';
+        if (lbl)  lbl.textContent = 'Scanning...';
+        if (hint) hint.textContent = 'Scanning for networks...';
+
+        // Show panel with spinner while waiting
+        var p = _createPanel();
+        p.innerHTML =
+            '<div style="padding:20px;text-align:center;color:#64748b;">' +
+            '<i class="fa-solid fa-rotate fa-spin" style="font-size:20px;color:#2563eb;display:block;margin-bottom:8px;"></i>' +
+            'Scanning... this takes a few seconds</div>';
+        _positionPanel();
+        p.style.display = 'block';
+
+        fetch('/api/wifi/scan', { credentials: 'same-origin' })
+        .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function (data) {
+            var networks = Array.isArray(data) ? data : (data.networks || []);
+            _wifiNetworks = networks;
+            _renderPanel(networks);
+            _positionPanel();
+            var count = networks.length;
+            if (hint) hint.textContent = count + ' network' + (count !== 1 ? 's' : '') + ' found — click one to select';
+        })
+        .catch(function (err) {
+            if (p) p.innerHTML =
+                '<div style="padding:20px;text-align:center;color:#ef4444;">' +
+                '<i class="fa-solid fa-triangle-exclamation" style="display:block;margin-bottom:8px;"></i>' +
+                'Scan failed: ' + err.message + '</div>';
+            if (hint) hint.textContent = 'Scan failed';
+        })
+        .then(function () {
+            // Always restore button
+            if (btn)  btn.disabled = false;
+            if (icon) icon.className = 'fa-solid fa-rotate text-xs';
+            if (lbl)  lbl.textContent = 'Rescan';
+        });
+    };
+
+    // =========================================================================
+    // WIFI AUTO-CONNECT TOGGLE
+    // Toggles auto-connect on/off. When ON, retries connection every 15 s
+    // until the WS reports state=1 (connected), then stops automatically.
+    // =========================================================================
+    var _acEnabled   = false;
+    var _acTimer     = null;
+
+    var _setAcUi = function (enabled, busy) {
+        var track = el('ac-track');
+        var thumb = el('ac-thumb');
+        var label = el('ac-label');
+        var btn   = el('wifi-auto-connect-btn');
+        if (!track) return;
+
+        if (busy) {
+            track.style.background = '#93c5fd';   // light blue while connecting
+            thumb.style.transform  = 'translateX(12px)';
+            if (label) label.textContent = 'Connecting…';
+            if (btn)   btn.setAttribute('aria-pressed', 'true');
+        } else if (enabled) {
+            track.style.background = '#2563eb';
+            thumb.style.transform  = 'translateX(12px)';
+            if (label) label.textContent = 'Auto';
+            if (btn) {
+                btn.setAttribute('aria-pressed', 'true');
+                btn.classList.remove('border-slate-300','text-slate-500','hover:bg-slate-50');
+                btn.classList.add('border-primary','text-primary','hover:bg-blue-50');
+            }
+        } else {
+            track.style.background = '#cbd5e1';
+            thumb.style.transform  = 'translateX(0px)';
+            if (label) label.textContent = 'Auto';
+            if (btn) {
+                btn.setAttribute('aria-pressed', 'false');
+                btn.classList.remove('border-primary','text-primary','hover:bg-blue-50');
+                btn.classList.add('border-slate-300','text-slate-500','hover:bg-slate-50');
+            }
+        }
+    };
+
+    var _stopAutoConnect = function () {
+        _acEnabled = false;
+        if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
+        _setAcUi(false, false);
+    };
+
+    var _doOneConnect = function () {
+        var ssid = (el('wifi-ssid-value') || {}).value || '';
+        var pass = getInputValue('[name="wifi-password"]');
+        if (!ssid) { _stopAutoConnect(); showNotification('Select a network first', 'warning'); return; }
+        _setAcUi(true, true);
+        fetch('/api/wifi/connect', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ssid: ssid, password: pass })
+        })
+        .then(function (r) {
+            if (!r.ok) return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); });
+            return r.json();
+        })
+        .then(function (data) {
+            showNotification(data.message || 'Connected to ' + ssid, 'success');
+            // If already connected stop retrying
+            if (isUp((_cache.wlan || {}).state)) { _stopAutoConnect(); }
+            else { _setAcUi(true, false); }
+        })
+        .catch(function (err) {
+            // Stay enabled; retry on next tick
+            _setAcUi(true, false);
+            console.warn('Auto-connect attempt failed:', err.message);
+        });
+    };
+
+    var _toggleAutoConnect = function () {
+        if (_acEnabled) {
+            _stopAutoConnect();
+            return;
+        }
+        var ssid = (el('wifi-ssid-value') || {}).value || '';
+        if (!ssid) { showNotification('Click Scan and select a network first', 'warning'); return; }
+        _acEnabled = true;
+        _setAcUi(true, false);
+        _doOneConnect();                               // immediate first attempt
+        _acTimer = setInterval(function () {
+            if (!_acEnabled) return;
+            // Auto-stop if WS says we're connected
+            if (isUp((_cache.wlan || {}).state)) { _stopAutoConnect(); showNotification('Auto-connect: already connected', 'success'); return; }
+            _doOneConnect();
+        }, 15000);
+    };
+
+    var initWifiScanAndConnect = function () {
+        _createPanel();
+
+        // Scan button
+        var scanBtn = el('wifi-scan-btn');
+        if (scanBtn) {
+            scanBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                _doScanWifi();
+            });
+        }
+
+        // Auto-connect toggle button
+        var acBtn = el('wifi-auto-connect-btn');
+        if (acBtn) {
+            var na = acBtn.cloneNode(true);
+            acBtn.parentNode.replaceChild(na, acBtn);
+            na.addEventListener('click', _toggleAutoConnect);
+        }
+
+        // Close panel on outside click
+        document.addEventListener('click', function (e) {
+            if (!_wifiPanel || _wifiPanel.style.display === 'none') return;
+            var btn = el('wifi-scan-btn');
+            if (btn && btn.contains(e.target)) return;
+            if (_wifiPanel.contains(e.target)) return;
+            _closePanel();
+        });
+
+        // Keep panel anchored on scroll/resize
+        window.addEventListener('scroll', function () {
+            if (_wifiPanel && _wifiPanel.style.display !== 'none') _positionPanel();
+        }, true);
+        window.addEventListener('resize', function () {
+            if (_wifiPanel && _wifiPanel.style.display !== 'none') _positionPanel();
+        });
+
+        // Set initial label from saved value
+        var saved = (el('wifi-ssid-value') || {}).value || 'Univa-Guest';
+        var lbl = el('wifi-ssid-label');
+        if (lbl) lbl.textContent = saved;
     };
 
     // =========================================================================
@@ -233,6 +542,12 @@ console.log('general-config.js loaded');
         renderEthernet();
         renderWifi();
         renderLte();
+
+        // Auto-stop toggle when WS confirms WiFi connected
+        if (_acEnabled && isUp((_cache.wlan || {}).state)) {
+            _stopAutoConnect();
+            showNotification('Auto-connect: WiFi connected', 'success');
+        }
     };
 
     // =========================================================================
@@ -580,7 +895,7 @@ console.log('general-config.js loaded');
             network: {
                 mode: getRadioValue('[name="network-mode"]') || 'wifi',
                 wifi: {
-                    ssid:     getInputValue('[name="wifi-ssid"]'),
+                    ssid:     (function(){ var h=el('wifi-ssid-value'); return h?h.value:getInputValue('[name="wifi-ssid"]'); }()),
                     password: getInputValue('[name="wifi-password"]'),
                     // live snapshot
                     live_state:          w.state,
@@ -708,6 +1023,13 @@ console.log('general-config.js loaded');
         if (cfg.network) {
             var n=cfg.network, w=n.wifi||{}, e=n.ethernet||{}, c=n.cellular||{};
             setInputValue('[name="wifi-ssid"]',         w.ssid     ||'');
+            // Sync label + hidden input
+            if (w.ssid) {
+                var hid = el('wifi-ssid-value');
+                if (hid) hid.value = w.ssid;
+                var lbl = el('wifi-ssid-label');
+                if (lbl) lbl.textContent = w.ssid;
+            }
             setInputValue('[name="wifi-password"]',     w.password ||'');
             setRadioValue('[name="ip-assignment"]',     e.ip_assignment||'dhcp');
             setInputValue('[name="static-ip"]',         e.static_ip||'');
@@ -807,6 +1129,7 @@ console.log('general-config.js loaded');
         initializeButtons();
         initializeNetworkToggles();
         initializePasswordToggles();
+        initWifiScanAndConnect();
         initLiveButton();
         initializeWebSocket();
         initTimezoneInteraction();

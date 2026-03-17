@@ -150,7 +150,49 @@
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
 
-    /* Section hover effect */
+    /* WiFi network picker item */
+    .wifi-network-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        cursor: pointer;
+        transition: background 0.12s;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .wifi-network-item:last-child { border-bottom: none; }
+    .wifi-network-item:hover  { background: #EFF6FF; }
+    .wifi-network-item.selected { background: #EFF6FF; }
+    .wifi-network-item.selected .wifi-net-name { color: #2563EB; font-weight: 600; }
+
+    /* Mini signal arc bars (4 arcs, like a phone) */
+    .wifi-signal-icon {
+        position: relative;
+        width: 18px;
+        height: 14px;
+        flex-shrink: 0;
+    }
+    .wifi-signal-icon span {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        border-radius: 50%;
+        border: 2px solid #CBD5E1;
+        transform: translateX(-50%);
+    }
+    .wifi-signal-icon span.lit { border-color: #2563EB; }
+    .wifi-signal-icon span.lit.fair   { border-color: #F59E0B; }
+    .wifi-signal-icon span.lit.poor   { border-color: #EF4444; }
+    .wifi-signal-icon .arc1 { width:4px;  height:4px;  }
+    .wifi-signal-icon .arc2 { width:8px;  height:8px;  }
+    .wifi-signal-icon .arc3 { width:12px; height:12px; }
+    .wifi-signal-icon .arc4 { width:16px; height:16px; }
+
+    /* Scanning pulse animation */
+    @keyframes wifiScanPulse {
+        0%,100% { opacity:1; } 50% { opacity:0.35; }
+    }
+    .wifi-scanning .wifi-network-item { animation: wifiScanPulse 1s infinite; }
     section {
         transition: all 0.2s ease;
     }
@@ -366,7 +408,7 @@
             <!-- Network Mode Selection -->
             <div class="mb-6">
                 <label class="block text-sm font-medium text-slate-700 mb-3">Network Mode</label>
-                <div class="flex flex-wrap gap-4">
+                <div class="flex flex-wrap items-center gap-4 mb-3">
                     <label class="flex items-center cursor-pointer">
                         <input type="radio" name="network-mode" value="ethernet" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                         <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-ethernet mr-2"></i> Ethernet</span>
@@ -379,6 +421,21 @@
                         <input type="radio" name="network-mode" value="lte" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                         <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
                     </label>
+              
+                    <!-- Auto-Connect toggle -->
+                    <button type="button" id="wifi-auto-connect-btn"
+                        title="Auto Connect"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 text-slate-500 bg-white hover:bg-slate-50 transition-all"
+                        aria-pressed="false">
+                        <!-- Track -->
+                        <span id="ac-track"
+                            style="display:inline-flex;align-items:center;width:28px;height:16px;border-radius:9999px;padding:2px;background:#cbd5e1;transition:background .25s;flex-shrink:0;">
+                            <span id="ac-thumb"
+                                style="width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .25s;transform:translateX(0px);display:block;"></span>
+                        </span>
+                        <i class="fa-solid fa-plug-circle-bolt text-xs"></i>
+                        <span id="ac-label">Auto</span>
+                    </button>
                 </div>
             </div>
 
@@ -441,9 +498,21 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">SSID <span class="text-red-500">*</span></label>
-                        <input type="text" name="wifi-ssid" value="Univa-Guest"
-                            class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                            placeholder="WiFi network name">
+
+                        <!-- SSID display + Scan button -->
+                        <div class="flex gap-2">
+                            <div class="flex-1 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                                <i class="fa-solid fa-wifi text-primary text-xs flex-shrink-0"></i>
+                                <span id="wifi-ssid-label" class="truncate text-slate-800">Univa-Guest</span>
+                            </div>
+                            <button type="button" id="wifi-scan-btn"
+                                class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-primary text-primary bg-white hover:bg-blue-50 transition-colors whitespace-nowrap">
+                                <i class="fa-solid fa-rotate text-xs" id="wifi-scan-icon"></i>
+                                <span id="wifi-scan-label">Scan</span>
+                            </button>
+                        </div>
+                        <input type="hidden" name="wifi-ssid" id="wifi-ssid-value" value="Univa-Guest">
+                        <p class="text-xs text-slate-500 mt-1" id="wifi-ssid-hint">Click Scan to find networks</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>

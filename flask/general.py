@@ -2,7 +2,6 @@
 import asyncio
 import json
 import datetime
-import random
 from aiohttp import web
 from aiohttp import WSMsgType as MsgType
 from database import get_general_configuration, update_general_configuration
@@ -344,103 +343,351 @@ async def network_status_websocket_handler(request):
 # WIFI SCAN HANDLER
 # ============================================================================
 
+def _scan_wifi_windows():
+    """
+    Scan WiFi on Windows properly:
+    1. Use wlanapi via ctypes to trigger a real async scan on the adapter
+    2. Wait for scan to complete (up to 4s)
+    3. Parse results with netsh (which now has fresh data)
+    """
+    import subprocess, re, time, ctypes, ctypes.wintypes
+
+    # ------------------------------------------------------------------ #
+    #  Step 1: trigger a real scan via wlanapi WlanScan()                 #
+    # ------------------------------------------------------------------ #
+    try:
+        wlanapi = ctypes.windll.LoadLibrary('wlanapi.dll')
+
+        # WlanOpenHandle
+        client_handle = ctypes.wintypes.HANDLE()
+        negotiated    = ctypes.wintypes.DWORD()
+        ret = wlanapi.WlanOpenHandle(2, None, ctypes.byref(negotiated), ctypes.byref(client_handle))
+        if ret == 0:
+            # WlanEnumInterfaces
+            class GUID(ctypes.Structure):
+                _fields_ = [('Data1', ctypes.c_ulong), ('Data2', ctypes.c_ushort),
+                             ('Data3', ctypes.c_ushort), ('Data4', ctypes.c_ubyte * 8)]
+
+            class WLAN_INTERFACE_INFO(ctypes.Structure):
+                _fields_ = [('InterfaceGuid', GUID), ('strInterfaceDescription', ctypes.c_wchar * 256),
+                             ('isState', ctypes.c_uint)]
+
+            class WLAN_INTERFACE_INFO_LIST(ctypes.Structure):
+                _fields_ = [('dwNumberOfItems', ctypes.c_ulong), ('dwIndex', ctypes.c_ulong),
+                             ('InterfaceInfo', WLAN_INTERFACE_INFO * 64)]
+
+            iface_list_ptr = ctypes.POINTER(WLAN_INTERFACE_INFO_LIST)()
+            ret2 = wlanapi.WlanEnumInterfaces(client_handle, None, ctypes.byref(iface_list_ptr))
+            if ret2 == 0 and iface_list_ptr:
+                iface_list = iface_list_ptr.contents
+                for i in range(iface_list.dwNumberOfItems):
+                    guid_ptr = ctypes.byref(iface_list.InterfaceInfo[i].InterfaceGuid)
+                    # WlanScan(hClientHandle, pInterfaceGuid, pDot11Ssid, pIeData, pReserved)
+                    wlanapi.WlanScan(client_handle, guid_ptr, None, None, None)
+                wlanapi.WlanFreeMemory(iface_list_ptr)
+            wlanapi.WlanCloseHandle(client_handle, None)
+            # Give the adapter time to complete the scan
+            time.sleep(3)
+    except Exception as e:
+        print('[WIFI-SCAN] wlanapi scan trigger failed (non-fatal): {}'.format(e))
+        time.sleep(1)  # still wait a bit in case a previous scan is cached
+
+    # ------------------------------------------------------------------ #
+    #  Step 2: read results via netsh                                      #
+    # ------------------------------------------------------------------ #
+    try:
+        result = subprocess.run(
+            ['netsh', 'wlan', 'show', 'networks', 'mode=bssid'],
+            capture_output=True, text=True, timeout=15,
+            encoding='utf-8', errors='replace'
+        )
+        print('[WIFI-SCAN] netsh rc={} lines={}'.format(
+            result.returncode, len(result.stdout.splitlines())))
+
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+
+        networks = []
+        seen     = set()
+
+        # Each network block starts with "SSID N :" on its own line
+        blocks = re.split(r'\nSSID\s+\d+\s*:', result.stdout)
+        for block in blocks[1:]:
+            lines = [l.strip() for l in block.strip().splitlines()]
+            ssid  = lines[0].strip() if lines else ''
+            if not ssid or ssid in seen:
+                continue
+            seen.add(ssid)
+
+            signal_pct = 0
+            security   = 'Open'
+            channel    = 0
+
+            for line in lines[1:]:
+                m = re.match(r'Signal\s*:\s*(\d+)\s*%', line)
+                if m: signal_pct = int(m.group(1))
+
+                m = re.match(r'Authentication\s*:\s*(.+)', line)
+                if m: security = m.group(1).strip()
+
+                m = re.match(r'Channel\s*:\s*(\d+)', line)
+                if m: channel = int(m.group(1))
+
+            # Windows signal% → dBm approximation
+            signal_dbm = int(signal_pct / 2) - 100
+
+            networks.append({
+                'ssid':           ssid,
+                'signal_quality': signal_dbm,
+                'security':       security,
+                'channel':        channel,
+            })
+
+        print('[WIFI-SCAN] parsed {} networks'.format(len(networks)))
+        return networks
+
+    except Exception as e:
+        print('[WIFI-SCAN] netsh parse error: {}'.format(e))
+        return []
+def _do_wifi_scan():
+    """Use netsh on Windows, fall back to nmcli/iw/iwlist on Linux."""
+    import platform
+    print('[WIFI-SCAN] Starting scan on {}...'.format(platform.system()))
+
+    if platform.system() == 'Windows':
+        networks = _scan_wifi_windows()
+    else:
+        networks = _scan_wifi_nmcli_linux()
+        if not networks:
+            networks = _scan_wifi_iw()
+        if not networks:
+            networks = _scan_wifi_iwlist()
+
+    if not networks:
+        print('[WIFI-SCAN] All methods returned empty.')
+    networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
+    return networks
+
+
+def _scan_wifi_nmcli_linux():
+    import subprocess
+    for cmd in (
+        ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list'],
+        ['sudo', 'nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list'],
+    ):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode != 0 or not result.stdout.strip():
+                continue
+            networks = []
+            seen = set()
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.rsplit(':', 3)
+                if len(parts) < 4:
+                    continue
+                ssid = parts[0].strip()
+                if not ssid or ssid in seen:
+                    continue
+                seen.add(ssid)
+                try:
+                    signal_dbm = int(int(parts[1].strip()) / 2) - 100
+                except Exception:
+                    signal_dbm = -100
+                networks.append({
+                    'ssid':           ssid,
+                    'signal_quality': signal_dbm,
+                    'security':       parts[2].strip() or 'Open',
+                    'channel':        int(parts[3].strip()) if parts[3].strip().isdigit() else 0,
+                })
+            if networks:
+                return networks
+        except Exception:
+            pass
+    return []
+
+
+def _scan_wifi_iw():
+    import subprocess, re
+    iface = 'wlan0'
+    try:
+        r = subprocess.run(['iw', 'dev'], capture_output=True, text=True, timeout=5)
+        m = re.search(r'Interface\s+(\S+)', r.stdout)
+        if m: iface = m.group(1)
+    except Exception:
+        pass
+    for cmd in (['iw', 'dev', iface, 'scan'], ['sudo', 'iw', 'dev', iface, 'scan']):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            if not result.stdout.strip():
+                continue
+            networks, seen, cur = [], set(), {}
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith('BSS '):
+                    if cur.get('ssid') and cur['ssid'] not in seen:
+                        seen.add(cur['ssid']); networks.append(cur)
+                    cur = {}
+                m = re.match(r'SSID:\s+(.+)', line)
+                if m: cur['ssid'] = m.group(1).strip()
+                m = re.match(r'signal:\s+(-?[\d.]+)\s+dBm', line)
+                if m: cur['signal_quality'] = int(float(m.group(1)))
+                m = re.match(r'\* primary channel:\s+(\d+)', line)
+                if m: cur['channel'] = int(m.group(1))
+                if re.match(r'RSN:', line): cur['security'] = 'WPA2'
+                if re.match(r'WPA:', line): cur.setdefault('security', 'WPA')
+            if cur.get('ssid') and cur['ssid'] not in seen:
+                networks.append(cur)
+            for n in networks:
+                n.setdefault('signal_quality', -100)
+                n.setdefault('security', 'Open')
+                n.setdefault('channel', 0)
+            if networks:
+                return networks
+        except Exception:
+            pass
+    return []
+
+
+def _scan_wifi_iwlist():
+    import subprocess, re
+    iface = 'wlan0'
+    for cmd in (['iwlist', iface, 'scan'], ['sudo', 'iwlist', iface, 'scan']):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            if not result.stdout.strip():
+                continue
+            networks, seen = [], set()
+            for cell in result.stdout.split('Cell ')[1:]:
+                ssid_m = re.search(r'ESSID:"([^"]+)"', cell)
+                if not ssid_m: continue
+                ssid = ssid_m.group(1)
+                if ssid in seen: continue
+                seen.add(ssid)
+                level_m = re.search(r'Signal level=(-?\d+)', cell)
+                qual_m  = re.search(r'Quality=(\d+)/(\d+)', cell)
+                chan_m  = re.search(r'Channel[:\s]+(\d+)', cell)
+                enc_m   = re.search(r'Encryption key:(on|off)', cell)
+                signal_dbm = int(level_m.group(1)) if level_m else (
+                    int(int(qual_m.group(1)) / int(qual_m.group(2)) * 70) - 100 if qual_m else -100)
+                security = 'Open'
+                if enc_m and enc_m.group(1) == 'on':
+                    security = 'WPA2' if 'WPA' in cell else 'WEP'
+                networks.append({
+                    'ssid': ssid, 'signal_quality': signal_dbm,
+                    'security': security, 'channel': int(chan_m.group(1)) if chan_m else 0,
+                })
+            if networks:
+                return networks
+        except Exception:
+            pass
+    return []
+
+async def wifi_scan_debug_handler(request):
+    """GET /api/wifi/scan/debug — raw output for troubleshooting."""
+    user = ws_auth(request)
+    if user is None:
+        return web.json_response({'error': 'Unauthorized'}, status=401)
+    import subprocess, platform
+    out = {'platform': platform.system()}
+    for label, cmd in [
+        ('netsh_networks', ['netsh', 'wlan', 'show', 'networks', 'mode=bssid']),
+        ('netsh_interfaces', ['netsh', 'wlan', 'show', 'interfaces']),
+        ('nmcli',  ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list']),
+        ('iw_dev', ['iw', 'dev']),
+    ]:
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10,
+                               encoding='utf-8', errors='replace')
+            out[label] = {'rc': r.returncode, 'stdout': r.stdout[:3000], 'stderr': r.stderr[:500]}
+        except FileNotFoundError:
+            out[label] = {'rc': -1, 'stdout': '', 'stderr': 'command not found'}
+        except Exception as e:
+            out[label] = {'rc': -1, 'stdout': '', 'stderr': str(e)}
+    out['note'] = 'parsed_networks triggers a real wlanapi scan (~3s wait)'
+    out['parsed_networks'] = _do_wifi_scan()
+    return web.json_response(out)
+
+
 async def wifi_scan_handler(request):
-    """POST /api/wifi-scan - Scan for WiFi networks and return signal strength"""
-    # Auth check
+    """GET /api/wifi/scan — scan for nearby WiFi networks via nmcli / iwlist."""
     user = ws_auth(request)
     if user is None:
         return web.json_response({'success': False, 'error': 'Unauthorized'}, status=401)
-    
+
     try:
-        # Simulate signal strength (0-4)
-        strength = random.randint(0, 4)
-        
-        # Update realtime state
-        realtime_state['wifi_signal_strength'] = strength
-        
-        # Simulate available networks
-        networks = [
-            {"ssid": "Network-1", "strength": random.randint(0, 4), "security": "WPA2", "channel": 6},
-            {"ssid": "Network-2", "strength": random.randint(0, 4), "security": "WPA3", "channel": 11},
-            {"ssid": "Network-3", "strength": random.randint(0, 4), "security": "Open", "channel": 1},
-            {"ssid": "Guest-WiFi", "strength": random.randint(0, 4), "security": "WPA2", "channel": 6},
-        ]
-        
-        # Sort by strength (descending)
-        networks.sort(key=lambda x: x['strength'], reverse=True)
-        
-        # Broadcast update to all WebSocket clients
-        if connected_websockets:
-            await broadcast_to_clients({
-                'type': 'wifi_signal_update',
-                'strength': strength
-            })
-        
+        loop = asyncio.get_event_loop()
+        networks = await loop.run_in_executor(None, _do_wifi_scan)
+
         return web.json_response({
-            'success': True,
-            'strength': strength,
+            'success':  True,
             'networks': networks,
-            'message': 'WiFi scan completed successfully'
+            'count':    len(networks),
+            'message':  '{} network{} found'.format(len(networks), 's' if len(networks) != 1 else ''),
         })
-        
+
     except Exception as e:
-        print("WiFi scan error: {}".format(e))
-        return web.json_response({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        print('[WIFI-SCAN] Unexpected error: {}'.format(e))
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
-# Optional: Real WiFi scanning for Linux systems
-def scan_wifi_linux():
-    """Actual WiFi scanning on Linux using iwlist (optional)"""
+def _do_wifi_connect(ssid, password):
+    """
+    Connect to a WiFi network using nmcli.
+    Returns (ok: bool, message: str).
+    """
     import subprocess
-    import re
-    
     try:
-        # Run iwlist scan
-        result = subprocess.run(['sudo', 'iwlist', 'wlan0', 'scan'], 
-                               capture_output=True, text=True, timeout=10)
-        
-        if result.returncode != 0:
-            return []
-        
-        # Parse the output
-        networks = []
-        cells = result.stdout.split('Cell ')
-        
-        for cell in cells[1:]:  # Skip first empty
-            ssid_match = re.search(r'ESSID:"([^"]+)"', cell)
-            quality_match = re.search(r'Quality=(\d+)/(\d+)', cell)
-            channel_match = re.search(r'Channel:(\d+)', cell)
-            encryption_match = re.search(r'Encryption key:(on|off)', cell)
-            
-            if ssid_match and quality_match:
-                ssid = ssid_match.group(1)
-                quality = int(quality_match.group(1))
-                max_quality = int(quality_match.group(2))
-                channel = int(channel_match.group(1)) if channel_match else 0
-                
-                # Determine security
-                if encryption_match:
-                    security = "WPA2" if encryption_match.group(1) == "on" else "Open"
-                else:
-                    security = "Unknown"
-                
-                # Convert to 0-4 scale
-                strength = int((quality / max_quality) * 4)
-                
-                networks.append({
-                    'ssid': ssid,
-                    'strength': strength,
-                    'security': security,
-                    'channel': channel
-                })
-        
-        return networks
+        cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+        if password:
+            cmd += ['password', password]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return True, 'Connected to {}'.format(ssid)
+        # nmcli puts the error on stdout for this command
+        err = (result.stdout or result.stderr or '').strip()
+        return False, err or 'Connection failed'
+    except subprocess.TimeoutExpired:
+        return False, 'Connection timed out'
+    except FileNotFoundError:
+        return False, 'nmcli not available on this system'
     except Exception as e:
-        print("Error scanning WiFi: {}".format(e))
-        return []
+        return False, str(e)
+
+
+async def wifi_connect_handler(request):
+    """POST /api/wifi/connect — connect to a WiFi network."""
+    user = ws_auth(request)
+    if user is None:
+        return web.json_response({'success': False, 'error': 'Unauthorized'}, status=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    ssid     = (body.get('ssid') or '').strip()
+    password = (body.get('password') or '').strip()
+
+    if not ssid:
+        return web.json_response({'success': False, 'error': 'ssid is required'}, status=400)
+
+    try:
+        loop = asyncio.get_event_loop()
+        ok, message = await loop.run_in_executor(None, _do_wifi_connect, ssid, password)
+
+        if ok:
+            # Update live state so the WS snapshot reflects the new connection
+            network_status_state['net.wlan.ssid'] = ssid
+            return web.json_response({'success': True,  'message': message})
+        else:
+            return web.json_response({'success': False, 'message': message}, status=502)
+
+    except Exception as e:
+        print('[WIFI-CONNECT] Unexpected error: {}'.format(e))
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
 # ============================================================================
@@ -719,8 +966,10 @@ def register_general_config_routes(app):
     # Time sync endpoint
     app.router.add_post('/api/sync-time', sync_time_handler)
 
-    # WiFi scan endpoint
-    app.router.add_post('/api/wifi-scan', wifi_scan_handler)
+    # WiFi scan + connect endpoints
+    app.router.add_get('/api/wifi/scan',    wifi_scan_handler)
+    app.router.add_get('/api/wifi/scan/debug', wifi_scan_debug_handler)
+    app.router.add_post('/api/wifi/connect', wifi_connect_handler)
     
     # WebSocket
     app.router.add_get('/ws/general', websocket_handler)
