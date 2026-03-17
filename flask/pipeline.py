@@ -1053,6 +1053,7 @@ def _handle_received_loadcell_config(cfg):
         ("pipeline_port",    pipeline_port),
         ("log_level",        log_level),
         ("poll_ms",          poll_ms),
+        ("unit",             "kg"),   # always normalise unit to kg in DB
     ]:
         if val is not None:
             fields.append("{} = ?".format(col))
@@ -1519,7 +1520,7 @@ async def pipeline_loadcell_import_handler(request):
             raw_unit     = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
             capacity_min, unit = _normalise_to_kg(cap_min_d.get("value", 0),    raw_unit)
             capacity_max, _    = _normalise_to_kg(cap_max_d.get("value", 1000), raw_unit)
-            # unit is always "kg" after normalisation
+            unit = "kg"  # always store as kg -- values already converted above
 
             tare_params  = (lc.get("tare") or {}).get("parameters") or {}
             tare_offset  = tare_params.get("offset_raw", tare_params.get("offset", 0.0))
@@ -1727,7 +1728,7 @@ async def send_loadcell_config_now():
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT id, name, device_path,
+            SELECT id, name, device_path, lc_mode,
                    poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                    raw_min, raw_max, capacity_min, capacity_max, unit,
                    pipeline_server, pipeline_port, log_level,
@@ -1781,6 +1782,16 @@ async def send_loadcell_config_now():
 
         new_version = get_next_pipeline_version("loadcell")
 
+        # Always output kg -- normalise capacity and known_weight at build time
+        # in case the DB still has a non-kg unit from an older import.
+        _db_unit     = r.get("unit") or "kg"
+        _cap_min_kg, _ = _normalise_to_kg(r.get("capacity_min") or 0,    _db_unit)
+        _cap_max_kg, _ = _normalise_to_kg(r.get("capacity_max") or 1000, _db_unit)
+        _kw_kg,      _ = _normalise_to_kg(r.get("known_weight") or 0,    _db_unit)
+        if _db_unit != "kg":
+            print("[LC-CFG] WARNING: DB unit='{}' -- normalising capacity {}/{} and known_weight {} to kg".format(
+                _db_unit, r.get("capacity_min"), r.get("capacity_max"), r.get("known_weight")))
+
         config = {
             "version":       2,
             "send_version":  new_version,
@@ -1813,13 +1824,13 @@ async def send_loadcell_config_now():
                     }
                 },
                 "specifications": {"capacity": {
-                    "min": {"value": r.get("capacity_min") or 0,    "unit": r.get("unit") or "kg"},
-                    "max": {"value": r.get("capacity_max") or 1000, "unit": r.get("unit") or "kg"},
+                    "min": {"value": _cap_min_kg, "unit": "kg"},
+                    "max": {"value": _cap_max_kg, "unit": "kg"},
                 }},
                 "levels":      {"type": "ratio",        "parameters": {"ratios": active_levels}},
                 "tare":        {"type": "manual",        "parameters": {"offset_raw": r.get("tare_offset") or 0.0}},
-                "calibration": {"type": "single_point", "parameters": {
-                    "ref_weight": {"value": r.get("known_weight") or 0, "unit": r.get("unit") or "kg"},
+                "calibration": {"type": "single_point" if r.get("lc_mode") == "single_ended" else "differential", "parameters": {
+                    "ref_weight": {"value": _kw_kg, "unit": "kg"},
                     "ref_raw":    r.get("known_weight_raw") or 0.0,
                 }},
                 "filter": {"raw": active_raw, "weight": active_weight}
@@ -1935,7 +1946,7 @@ async def pipeline_filters_post_handler(request):
             return web.json_response({"success": False, "error": "Device not found"})
 
         cursor.execute('''
-            SELECT id, name, device_path,
+            SELECT id, name, device_path, lc_mode,
                    poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                    raw_min, raw_max, capacity_min, capacity_max, unit,
                    pipeline_server, pipeline_port, log_level,
@@ -1961,6 +1972,16 @@ async def pipeline_filters_post_handler(request):
                          for lv in levels if lv.get("enabled", True)]
 
         new_version = get_next_pipeline_version("loadcell")
+
+        # Always output kg -- normalise capacity and known_weight at build time
+        # in case the DB still has a non-kg unit from an older import.
+        _db_unit     = r.get("unit") or "kg"
+        _cap_min_kg, _ = _normalise_to_kg(r.get("capacity_min") or 0,    _db_unit)
+        _cap_max_kg, _ = _normalise_to_kg(r.get("capacity_max") or 1000, _db_unit)
+        _kw_kg,      _ = _normalise_to_kg(r.get("known_weight") or 0,    _db_unit)
+        if _db_unit != "kg":
+            print("[LC-CFG] WARNING: DB unit='{}' -- normalising capacity {}/{} and known_weight {} to kg".format(
+                _db_unit, r.get("capacity_min"), r.get("capacity_max"), r.get("known_weight")))
 
         config = {
             "version":       2,
@@ -1999,8 +2020,8 @@ async def pipeline_filters_post_handler(request):
                 },
                 "specifications": {
                     "capacity": {
-                        "min": {"value": r.get("capacity_min") or 0,    "unit": r.get("unit") or "kg"},
-                        "max": {"value": r.get("capacity_max") or 1000, "unit": r.get("unit") or "kg"},
+                        "min": {"value": _cap_min_kg, "unit": "kg"},
+                        "max": {"value": _cap_max_kg, "unit": "kg"},
                     }
                 },
                 "levels": {
@@ -2012,11 +2033,11 @@ async def pipeline_filters_post_handler(request):
                     "parameters": {"offset_raw": r.get("tare_offset") or 0.0}
                 },
                 "calibration": {
-                    "type": "single_point",
+                    "type": "single_point" if r.get("lc_mode") == "single_ended" else "differential",
                     "parameters": {
                         "ref_weight": {
-                            "value": r.get("known_weight") or 0,
-                            "unit":  r.get("unit") or "kg",
+                            "value": _kw_kg,
+                            "unit":  "kg",
                         },
                         "ref_raw": r.get("known_weight_raw") or 0.0,
                     }

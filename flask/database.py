@@ -145,6 +145,9 @@ def create_tables(cursor):
             data_bits           INTEGER DEFAULT 8,
             stop_bits           INTEGER DEFAULT 1,
 
+            -- Modbus Slave ID (applies to both RTU and TCP)
+            slave_id            INTEGER DEFAULT 1,
+
             enabled             BOOLEAN DEFAULT 1,
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -162,6 +165,8 @@ def create_tables(cursor):
             service_id       INTEGER,
 
             device_path      TEXT    NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+            device_path_ch2  TEXT    DEFAULT NULL,
+            lc_mode          TEXT    DEFAULT 'init' CHECK(lc_mode IN ('init', 'single_ended', 'differential')),
 
             load_name        TEXT    DEFAULT 'load',
             capacity_name    TEXT    DEFAULT 'capacity',
@@ -278,21 +283,6 @@ def create_tables(cursor):
         )
     ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS mqtt_datapoints (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            connection_id    TEXT    NOT NULL,
-            tag_name         TEXT    NOT NULL,
-            topic            TEXT    NOT NULL DEFAULT '',
-            publish_mode     TEXT    NOT NULL DEFAULT 'onChange',
-            change_threshold REAL    DEFAULT 0.0,
-            enabled          INTEGER DEFAULT 1,
-            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(connection_id, tag_name),
-            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
-        )
-    ''')
-
 
 
     cursor.execute('''
@@ -304,6 +294,23 @@ def create_tables(cursor):
             latency_avg_ms  REAL    DEFAULT 0.0,
             last_active     TEXT    DEFAULT NULL,
             FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # MQTT tag datapoints mapping per connection
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS mqtt_datapoints (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id   TEXT    NOT NULL,
+            tag_name        TEXT    NOT NULL,
+            topic           TEXT    NOT NULL,
+            publish_mode    TEXT    DEFAULT 'on_change',
+            change_threshold REAL   DEFAULT 0.0,
+            enabled         INTEGER DEFAULT 1,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (connection_id) REFERENCES cloud_connections(id) ON DELETE CASCADE,
+            UNIQUE(connection_id, tag_name)
         )
     ''')
 
@@ -374,12 +381,14 @@ def create_tables(cursor):
     ''')
 
     # -----------------------------------------------------------------------
-    # Virtual Devices
+    # External Devices
     # -----------------------------------------------------------------------
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS virtual_device (
+        CREATE TABLE IF NOT EXISTS external_device (
             id         TEXT    PRIMARY KEY,
             name       TEXT    NOT NULL,
+            protocol   TEXT    DEFAULT 'external',
+            config     TEXT    DEFAULT '{}',
             enabled    BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -387,14 +396,32 @@ def create_tables(cursor):
     ''')
 
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS virtual_datapoints (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id TEXT    NOT NULL REFERENCES virtual_device(id) ON DELETE CASCADE,
-            name      TEXT    NOT NULL,
-            unit      TEXT    DEFAULT '',
-            UNIQUE(device_id, name)
+        CREATE TABLE IF NOT EXISTS external_datapoints (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id        TEXT    NOT NULL,
+            name             TEXT    NOT NULL,
+            slave_id         INTEGER DEFAULT 1,
+            register_address INTEGER NOT NULL DEFAULT 0,
+            register_type    TEXT    NOT NULL DEFAULT 'holding'
+                                 CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
+            data_type        TEXT    NOT NULL DEFAULT 'uint16'
+                                 CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
+            byte_order       TEXT    DEFAULT 'big',
+            word_order       TEXT    DEFAULT 'big',
+            scale_factor     REAL    DEFAULT 1.0,
+            offset           REAL    DEFAULT 0.0,
+            unit             TEXT    DEFAULT '',
+            description      TEXT    DEFAULT '',
+            enabled          BOOLEAN DEFAULT 1,
+            writable         BOOLEAN DEFAULT 0,
+            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(device_id, name),
+            FOREIGN KEY (device_id) REFERENCES external_device(id) ON DELETE CASCADE
         )
     ''')
+
+
 
     # -----------------------------------------------------------------------
     # WebUI Page Restrictions (per-user access control)
@@ -536,7 +563,7 @@ def _migrate_existing_db(cursor):
         print("[DB] Migration: created rules table")
 
 
-    # vfd_device: add protocol_type and device_type columns if missing (VFD rename migration)
+    # vfd_device: add protocol_type, device_type, slave_id columns if missing
     cursor.execute("PRAGMA table_info(vfd_device)")
     vfd_cols = {r[1] for r in cursor.fetchall()}
     if 'protocol_type' not in vfd_cols:
@@ -545,29 +572,79 @@ def _migrate_existing_db(cursor):
     if 'device_type' not in vfd_cols:
         cursor.execute("ALTER TABLE vfd_device ADD COLUMN device_type TEXT NOT NULL DEFAULT 'vfd'")
         print("[DB] Migration: added vfd_device.device_type")
+    if 'slave_id' not in vfd_cols:
+        cursor.execute("ALTER TABLE vfd_device ADD COLUMN slave_id INTEGER DEFAULT 1")
+        print("[DB] Migration: added vfd_device.slave_id")
 
-    # virtual_device / virtual_datapoints: ensure tables exist on older DBs
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='virtual_device'")
+    # loadcell_device: add lc_mode and device_path_ch2 if missing
+    cursor.execute("PRAGMA table_info(loadcell_device)")
+    lc_cols = {r[1] for r in cursor.fetchall()}
+    if 'lc_mode' not in lc_cols:
+        cursor.execute("ALTER TABLE loadcell_device ADD COLUMN lc_mode TEXT DEFAULT 'init'")
+        print("[DB] Migration: added loadcell_device.lc_mode")
+    if 'device_path_ch2' not in lc_cols:
+        cursor.execute("ALTER TABLE loadcell_device ADD COLUMN device_path_ch2 TEXT DEFAULT NULL")
+        print("[DB] Migration: added loadcell_device.device_path_ch2")
+
+    # external_datapoints: ensure table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external_datapoints'")
     if not cursor.fetchone():
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS virtual_device (
+            CREATE TABLE IF NOT EXISTS external_datapoints (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id        TEXT    NOT NULL,
+                name             TEXT    NOT NULL,
+                slave_id         INTEGER DEFAULT 1,
+                register_address INTEGER NOT NULL DEFAULT 0,
+                register_type    TEXT    NOT NULL DEFAULT 'holding'
+                                     CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
+                data_type        TEXT    NOT NULL DEFAULT 'uint16'
+                                     CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
+                byte_order       TEXT    DEFAULT 'big',
+                word_order       TEXT    DEFAULT 'big',
+                scale_factor     REAL    DEFAULT 1.0,
+                offset           REAL    DEFAULT 0.0,
+                unit             TEXT    DEFAULT '',
+                description      TEXT    DEFAULT '',
+                enabled          BOOLEAN DEFAULT 1,
+                writable         BOOLEAN DEFAULT 0,
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(device_id, name),
+                FOREIGN KEY (device_id) REFERENCES external_device(id) ON DELETE CASCADE
+            )
+        ''')
+        print("[DB] Migration: created external_datapoints table")
+
+    # external_device: ensure table exists + migrate columns
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external_device'")
+    if not cursor.fetchone():
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS external_device (
                 id         TEXT    PRIMARY KEY,
                 name       TEXT    NOT NULL,
+                protocol   TEXT    DEFAULT 'external',
+                config     TEXT    DEFAULT '{}',
                 enabled    BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS virtual_datapoints (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                device_id TEXT    NOT NULL REFERENCES virtual_device(id) ON DELETE CASCADE,
-                name      TEXT    NOT NULL,
-                unit      TEXT    DEFAULT \'\',
-                UNIQUE(device_id, name)
-            )
-        ''')
-        print("[DB] Migration: created virtual_device and virtual_datapoints tables")
+        print("[DB] Migration: created external_device table")
+    else:
+        cursor.execute("PRAGMA table_info(external_device)")
+        ext_cols = {r[1] for r in cursor.fetchall()}
+        if 'protocol' not in ext_cols:
+            cursor.execute("ALTER TABLE external_device ADD COLUMN protocol TEXT DEFAULT 'external'")
+            print("[DB] Migration: added external_device.protocol")
+        if 'config' not in ext_cols:
+            cursor.execute("ALTER TABLE external_device ADD COLUMN config TEXT DEFAULT '{}'")
+            print("[DB] Migration: added external_device.config")
+
+    # Update port_config: rename Path 1/2 to Channel 1/2 for loadcell
+    cursor.execute("UPDATE port_config SET label='Channel 1' WHERE device_type='loadcell' AND label='Path 1'")
+    cursor.execute("UPDATE port_config SET label='Channel 2' WHERE device_type='loadcell' AND label='Path 2'")
+
 
     # webui_user_page_restrictions: ensure table exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='webui_user_page_restrictions'")
@@ -597,8 +674,8 @@ def _migrate_existing_db(cursor):
         for device_type, port_number, label, port_value in [
             ('modbus',   1, 'Port 1', '/dev/ttymxc5'),
             ('modbus',   2, 'Port 2', '/dev/ttymxc2'),
-            ('loadcell', 1, 'Path 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
-            ('loadcell', 2, 'Path 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
+            ('loadcell', 1, 'Channel 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+            ('loadcell', 2, 'Channel 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
         ]:
             cursor.execute(
                 'INSERT OR IGNORE INTO port_config (device_type, port_number, label, port_value) VALUES (?, ?, ?, ?)',
@@ -659,8 +736,8 @@ def insert_default_data(cursor):
     for device_type, port_number, label, port_value in [
         ('modbus',   1, 'Port 1', '/dev/ttymxc5'),
         ('modbus',   2, 'Port 2', '/dev/ttymxc2'),
-        ('loadcell', 1, 'Path 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
-        ('loadcell', 2, 'Path 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
+        ('loadcell', 1, 'Channel 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+        ('loadcell', 2, 'Channel 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
     ]:
         cursor.execute(
             'INSERT OR IGNORE INTO port_config (device_type, port_number, label, port_value) VALUES (?, ?, ?, ?)',
@@ -1125,18 +1202,21 @@ def get_database_stats():
         cursor = conn.cursor()
         stats = {}
         for label, table in [
-            ('vfd_devices',      'vfd_device'),
-            ('loadcell_devices',    'loadcell_device'),
-            ('vfd_datapoints',   'vfd_datapoints'),
-            ('loadcell_datapoints', 'loadcell_datapoints'),
-            ('groups',              'tag_groups'),
-            ('admin_users',         'admin_users'),
-            ('webui_users',         'webui_users'),
+            ('vfd_devices',            'vfd_device'),
+            ('loadcell_devices',       'loadcell_device'),
+            ('external_devices',       'external_device'),
+            ('vfd_datapoints',         'vfd_datapoints'),
+            ('loadcell_datapoints',    'loadcell_datapoints'),
+            ('external_datapoints',    'external_datapoints'),
+            ('groups',                 'tag_groups'),
+            ('admin_users',            'admin_users'),
+            ('webui_users',            'webui_users'),
         ]:
             cursor.execute('SELECT COUNT(*) FROM {}'.format(table))
             stats[label] = cursor.fetchone()[0]
         conn.close()
-        stats['total_devices']    = stats['vfd_devices'] + stats['loadcell_devices']
+        stats['total_devices']    = stats['vfd_devices'] + stats['loadcell_devices'] + stats.get('external_devices', 0)
+        stats['total_datapoints'] = stats['vfd_datapoints'] + stats['loadcell_datapoints'] + stats.get('external_datapoints', 0)
         stats['total_datapoints'] = stats['vfd_datapoints'] + stats['loadcell_datapoints']
         return stats
     except Exception as e:

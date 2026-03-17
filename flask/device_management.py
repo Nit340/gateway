@@ -84,7 +84,7 @@ async def get_all_devices(request):
         
         # Get Loadcell devices
         cursor.execute('''
-            SELECT l.id, l.name, l.device_path,
+            SELECT l.id, l.name, l.device_path, l.device_path_ch2, l.lc_mode,
                    l.enabled, s.name as service_name
             FROM loadcell_device l
             LEFT JOIN services s ON l.service_id = s.id
@@ -92,7 +92,7 @@ async def get_all_devices(request):
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, enabled, service_name = row
+            device_id, name, device_path, device_path_ch2, lc_mode, enabled, service_name = row
             
             # Get or initialize real-time status
             if device_id not in device_status_tracker:
@@ -100,47 +100,102 @@ async def get_all_devices(request):
             
             status = device_status_tracker[device_id]
             
+            # Format address based on mode
+            if lc_mode == 'differential' and device_path_ch2:
+                # Get channel labels from port config
+                port_config_list = get_port_config('loadcell')
+                ch1_label = 'Channel 1'
+                ch2_label = 'Channel 2'
+                
+                for p in port_config_list:
+                    if p['port_value'] == device_path:
+                        ch1_label = p['label']
+                    if p['port_value'] == device_path_ch2:
+                        ch2_label = p['label']
+                
+                address = "{} & {}".format(ch1_label, ch2_label)
+            else:
+                # Single ended mode - get channel label
+                port_config_list = get_port_config('loadcell')
+                ch_label = 'Channel 1'
+                for p in port_config_list:
+                    if p['port_value'] == device_path:
+                        ch_label = p['label']
+                        break
+                address = ch_label
+            
             devices.append({
                 'id': device_id,
                 'name': name,
                 'type': 'Loadcell',
                 'protocol': 'loadcell',
-                'address': device_path,
+                'address': address,
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'enabled': bool(enabled),
                 'service': service_name,
                 'config': {
                     'device_path': device_path,
+                    'device_path_ch2': device_path_ch2,
+                    'lc_mode': lc_mode
                 }
             })
         
-        # Get Virtual devices
-        cursor.execute('''
-            SELECT v.id, v.name, v.enabled
-            FROM virtual_device v
-            ORDER BY v.id
-        ''')
         
-        for row in cursor.fetchall():
-            device_id, name, enabled = row
-            
-            if device_id not in device_status_tracker:
-                initialize_device_status(device_id, 'Online')
-            
-            status = device_status_tracker[device_id]
-            
-            devices.append({
-                'id': device_id,
-                'name': name,
-                'type': 'Virtual',
-                'protocol': 'virtual',
-                'address': 'N/A',
-                'status': status['status'],
-                'lastPoll': status['last_poll'],
-                'enabled': bool(enabled),
-                'service': None
-            })
+        # Get External devices
+        try:
+            cursor.execute('''
+                SELECT e.id, e.name, e.enabled, COALESCE(e.protocol,'external') as protocol,
+                       e.config
+                FROM external_device e
+                ORDER BY e.id
+            ''')
+            for row in cursor.fetchall():
+                device_id, name, enabled, ext_proto, config_json = row
+                
+                # Parse config
+                import json as ext_json
+                try:
+                    config = ext_json.loads(config_json) if config_json else {}
+                except:
+                    config = {}
+                
+                # Format address based on protocol
+                if ext_proto == 'ext-tcp':
+                    ip = config.get('ip_address', 'Not configured')
+                    port = config.get('port', '502')
+                    address = "{}:{}".format(ip, port)
+                elif ext_proto == 'ext-rtu':
+                    serial_port = config.get('serial_port', '/dev/ttymxc5')
+                    # Get port label from modbus port config
+                    port_config_list = get_port_config('modbus')
+                    address = serial_port
+                    for p in port_config_list:
+                        if p['port_value'] == serial_port:
+                            address = p['label']
+                            break
+                else:
+                    address = 'N/A'
+                
+                if device_id not in device_status_tracker:
+                    initialize_device_status(device_id, 'Offline')
+                status = device_status_tracker[device_id]
+                
+                devices.append({
+                    'id': device_id,
+                    'name': name,
+                    'type': 'External',
+                    'protocol': ext_proto,
+                    'address': address,
+                    'status': status['status'],
+                    'lastPoll': status['last_poll'],
+                    'enabled': bool(enabled),
+                    'service': None,
+                    'config': config
+                })
+        except Exception as e:
+            print("Error fetching external devices: {}".format(e))
+            pass
         
         conn.close()
         return web.json_response({'devices': devices})
@@ -167,7 +222,8 @@ async def get_device_details(request):
                    m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
                    m.ip_address, m.port,
                    m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
-                   m.enabled, s.name as service_name
+                   m.enabled, s.name as service_name,
+                   COALESCE(m.slave_id, 1) as slave_id
             FROM vfd_device m
             LEFT JOIN services s ON m.service_id = s.id
             WHERE m.id = ?
@@ -179,7 +235,7 @@ async def get_device_details(request):
             # It's a VFD device
             (dev_id, name, protocol_type, device_type, response_timeout_ms, byte_timeout_ms,
              max_retries, polling_interval_ms, ip_address, port, serial_port, 
-             baud_rate, parity, data_bits, stop_bits, enabled, service_name) = row
+             baud_rate, parity, data_bits, stop_bits, enabled, service_name, slave_id) = row
             
             # Get or initialize status
             if device_id not in device_status_tracker:
@@ -198,6 +254,7 @@ async def get_device_details(request):
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'config': {
+                    'slave_id': slave_id,
                     'response_timeout_ms': response_timeout_ms,
                     'byte_timeout_ms': byte_timeout_ms,
                     'max_retries': max_retries,
@@ -232,7 +289,9 @@ async def get_device_details(request):
                    l.pipeline_server, l.pipeline_port, l.log_level,
                    l.tare_offset, l.known_weight, l.known_weight_raw,
                    l.raw_filters, l.weight_filters, l.levels,
-                   l.enabled, s.name as service_name
+                   l.enabled, s.name as service_name,
+                   COALESCE(l.lc_mode, 'single_ended') as lc_mode,
+                   l.device_path_ch2
             FROM loadcell_device l
             LEFT JOIN services s ON l.service_id = s.id
             WHERE l.id = ?
@@ -254,7 +313,7 @@ async def get_device_details(request):
              pipeline_server, pipeline_port, log_level,
              tare_offset, known_weight, known_weight_raw,
              raw_filters_json, weight_filters_json, levels_json,
-             enabled, service_name) = row
+             enabled, service_name, lc_mode, device_path_ch2) = row
             
             import json as _json
             def _parse(v):
@@ -271,7 +330,9 @@ async def get_device_details(request):
                 'status': status['status'],
                 'lastPoll': status['last_poll'],
                 'config': {
+                    'lc_mode':        lc_mode,
                     'device_path':    device_path,
+                    'device_path_ch2': device_path_ch2,
                     'poll_ms':        poll_ms,
                     'resolution_bits': resolution_bits,
                     'effective_bits':  effective_bits,
@@ -300,33 +361,43 @@ async def get_device_details(request):
             conn.close()
             return web.json_response(details)
         
-        # Try Virtual device
-        cursor.execute('SELECT id, name, enabled FROM virtual_device WHERE id = ?', (device_id,))
-        row = cursor.fetchone()
         
-        if row:
-            dev_id, name, enabled = row
-            
-            if device_id not in device_status_tracker:
-                initialize_device_status(device_id, 'Online')
-            
-            status = device_status_tracker[device_id]
-            
-            details = {
-                'id': dev_id,
-                'name': name,
-                'type': 'Virtual',
-                'protocol': 'virtual',
-                'service': None,
-                'enabled': bool(enabled),
-                'status': status['status'],
-                'lastPoll': status['last_poll'],
-                'config': {}
-            }
-            
-            conn.close()
-            return web.json_response(details)
-        
+        # Try External device
+        try:
+            cursor.execute('''
+                SELECT id, name, enabled, COALESCE(protocol,"external") as protocol, 
+                       COALESCE(config,"{}") as config 
+                FROM external_device 
+                WHERE id = ?
+            ''', (device_id,))
+            row = cursor.fetchone()
+            if row:
+                dev_id, name, enabled, ext_proto, ext_config_json = row
+                if device_id not in device_status_tracker:
+                    initialize_device_status(device_id, 'Offline')
+                status = device_status_tracker[device_id]
+                import json as _extjson
+                try:
+                    ext_config = _extjson.loads(ext_config_json) if ext_config_json else {}
+                except Exception:
+                    ext_config = {}
+                details = {
+                    'id': dev_id, 
+                    'name': name, 
+                    'type': 'External', 
+                    'protocol': ext_proto,
+                    'service': None, 
+                    'enabled': bool(enabled),
+                    'status': status['status'], 
+                    'lastPoll': status['last_poll'], 
+                    'config': ext_config
+                }
+                conn.close()
+                return web.json_response(details)
+        except Exception as e:
+            print("Error fetching external device: {}".format(e))
+            pass
+
         conn.close()
         return web.json_response({'error': 'Device not found'}, status=404)
         
@@ -349,7 +420,7 @@ async def add_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Enforce max-1 for loadcell and virtual
+        # Enforce max-1 for loadcell
         if device_type == 'loadcell':
             cursor.execute('SELECT COUNT(*) FROM loadcell_device')
             if cursor.fetchone()[0] >= 1:
@@ -357,15 +428,6 @@ async def add_device(request):
                 return web.json_response({
                     'success': False,
                     'error': 'Only 1 Loadcell device is allowed. Delete the existing one first.'
-                }, status=400)
-
-        if device_type == 'virtual':
-            cursor.execute('SELECT COUNT(*) FROM virtual_device')
-            if cursor.fetchone()[0] >= 1:
-                conn.close()
-                return web.json_response({
-                    'success': False,
-                    'error': 'Only 1 Virtual device is allowed. Delete the existing one first.'
                 }, status=400)
 
         # Generate device ID with unique prefix
@@ -381,9 +443,12 @@ async def add_device(request):
                 except ValueError:
                     continue
             device_id = 'LC{}'.format(max_num + 1)
-        elif device_type == 'virtual':
-            cursor.execute('SELECT id FROM virtual_device WHERE id LIKE "VD%" ORDER BY id')
-            existing_ids = [row[0] for row in cursor.fetchall()]
+        elif device_type == 'external':
+            try:
+                cursor.execute('SELECT id FROM external_device WHERE id LIKE "EX%" ORDER BY id')
+                existing_ids = [row[0] for row in cursor.fetchall()]
+            except Exception:
+                existing_ids = []
             max_num = 0
             for existing_id in existing_ids:
                 try:
@@ -392,7 +457,7 @@ async def add_device(request):
                         max_num = num
                 except ValueError:
                     continue
-            device_id = 'VD{}'.format(max_num + 1)
+            device_id = 'EX{}'.format(max_num + 1)
         else:  # modbus
             cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
@@ -412,52 +477,46 @@ async def add_device(request):
         service_name = 'loadcell' if device_type == 'loadcell' else 'modbus'
         service_id = get_service_by_name(service_name)
         
-        if device_type == 'virtual':
-            # Add Virtual device - no service needed
-            cursor.execute('''
-                INSERT INTO virtual_device (id, name, enabled)
-                VALUES (?, ?, 1)
-            ''', (device_id, data.get('name', 'Virtual Device')))
-            
-            # Automatically create lan, wlan, lte datapoints
-            for tag_name in ('lan', 'wlan', 'lte'):
-                cursor.execute('''
-                    INSERT OR IGNORE INTO virtual_datapoints (device_id, name, unit)
-                    VALUES (?, ?, '')
-                ''', (device_id, tag_name))
-        
-        elif device_type == 'loadcell':
+        if device_type == 'loadcell':
             # Add Loadcell device
             config = data.get('config', {})
             device_name = data.get('name', 'Loadcell Device')
+            lc_mode = config.get('lc_mode', 'single_ended')
 
             # Build tag prefix from device name: e.g. "load" -> load.weight, load.capacity, load.unit
             tag_prefix   = device_name.strip().lower().replace(' ', '_')
             tag_weight   = 'loadcells.{}.weight'.format(tag_prefix)
             tag_capacity = 'loadcells.{}.capacity'.format(tag_prefix)
 
+            # Set device_path_ch2 based on mode
+            device_path_ch2 = config.get('device_path_ch2')
+            if lc_mode == 'single_ended':
+                device_path_ch2 = None
+
             cursor.execute('''
                 INSERT INTO loadcell_device (
-                    id, name, service_id, device_path,
+                    id, name, service_id, device_path, device_path_ch2, lc_mode,
                     poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                     raw_min, raw_max,
                     capacity_min, capacity_max, unit,
                     load_name, capacity_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 device_name,
                 service_id,
                 config.get('device_path', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+                device_path_ch2,
+                lc_mode,
                 config.get('poll_ms', 10),
-                config.get('resolution_bits', 24),
-                config.get('effective_bits', 14),
-                1 if config.get('signed') else 0,
-                config.get('gain', 1),
-                config.get('vref', 5),
-                config.get('raw_min', 0),
-                config.get('raw_max', 16383),
+                24,  # resolution_bits fixed
+                14,  # effective_bits fixed
+                0,   # signed fixed
+                1,   # gain fixed
+                5,   # vref fixed
+                0,   # raw_min fixed
+                16383,  # raw_max fixed
                 config.get('capacity_min', 0),
                 config.get('capacity_max', 1000),
                 config.get('unit', 'kg'),
@@ -478,6 +537,17 @@ async def add_device(request):
                 VALUES (?, ?, 'kg')
             ''', (device_id, tag_capacity))
             
+        elif device_type == 'external':
+            # Add External device — stores Modbus RTU or TCP config
+            config = data.get('config', {})
+            ext_protocol = data.get('protocol', 'ext-rtu')
+            import json as _extjson
+            cursor.execute('''
+                INSERT INTO external_device (id, name, enabled, protocol, config)
+                VALUES (?, ?, 1, ?, ?)
+            ''', (device_id, data.get('name', 'External Device'), ext_protocol, _extjson.dumps(config)))
+            # external_datapoints are managed via tag mapping page (like vfd_datapoints)
+
         else:  # VFD (TCP or RTU)
             config = data.get('config', {})
             
@@ -506,9 +576,10 @@ async def add_device(request):
                     id, name, protocol_type, device_type, service_id,
                     response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
                     ip_address, port,
-                    serial_port, baud_rate, parity, data_bits, stop_bits
+                    serial_port, baud_rate, parity, data_bits, stop_bits,
+                    slave_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 data.get('name', 'VFD Device'),
@@ -525,7 +596,8 @@ async def add_device(request):
                 config.get('baud_rate', 9600) if protocol_type == 'rtu' else None,
                 config.get('parity', 'N') if protocol_type == 'rtu' else None,
                 config.get('data_bits', 8) if protocol_type == 'rtu' else None,
-                config.get('stop_bits', 1) if protocol_type == 'rtu' else None
+                config.get('stop_bits', 1) if protocol_type == 'rtu' else None,
+                config.get('slave_id', 1)
             ))
         
         conn.commit()
@@ -564,16 +636,24 @@ async def update_device(request):
         cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (device_id,))
         is_modbus = cursor.fetchone() is not None
 
-        cursor.execute('SELECT id FROM virtual_device WHERE id = ?', (device_id,))
-        is_virtual = cursor.fetchone() is not None
+        try:
+            cursor.execute('SELECT id FROM external_device WHERE id = ?', (device_id,))
+            is_external = cursor.fetchone() is not None
+        except Exception:
+            is_external = False
         
-        if is_virtual:
-            # Update Virtual device - only name is editable
+        if is_external:
             new_name = data.get('name', '').strip()
             if not new_name:
                 conn.close()
                 return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
-            cursor.execute('UPDATE virtual_device SET name = ? WHERE id = ?', (new_name, device_id))
+            import json as _extjson
+            new_protocol = data.get('protocol', 'ext-rtu')
+            new_config = _extjson.dumps(data.get('config', {}))
+            cursor.execute(
+                'UPDATE external_device SET name=?, protocol=?, config=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                (new_name, new_protocol, new_config, device_id)
+            )
 
         elif is_modbus:
             # Update Modbus device
@@ -584,6 +664,9 @@ async def update_device(request):
             values = [data.get('name'), protocol_type]
             
             # Common fields - using new column names
+            if 'slave_id' in config:
+                update_fields.append('slave_id = ?')
+                values.append(config['slave_id'])
             if 'response_timeout_ms' in config:
                 update_fields.append('response_timeout_ms = ?')
                 values.append(config['response_timeout_ms'])
@@ -635,15 +718,15 @@ async def update_device(request):
             cursor.execute(query, values)
         
         else:
-            # Update Loadcell device (fallback - not modbus, not virtual)
+            # Update Loadcell device
             config = data.get('config', {})
             
             update_fields = ['name = ?']
             values = [data.get('name')]
             
             # Hardware parameters
-            for field in ('device_path', 'poll_ms', 'resolution_bits', 'effective_bits',
-                          'gain', 'vref', 'raw_min', 'raw_max',
+            for field in ('device_path', 'device_path_ch2', 'lc_mode',
+                          'poll_ms',
                           'capacity_min', 'capacity_max', 'unit',
                           'pipeline_server', 'pipeline_port', 'log_level'):
                 if field in config:
@@ -697,7 +780,14 @@ async def delete_device(request):
         
         cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
         cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
-        cursor.execute('DELETE FROM virtual_device WHERE id = ?', (device_id,))
+        try:
+            cursor.execute('DELETE FROM external_datapoints WHERE device_id = ?', (device_id,))
+        except Exception:
+            pass
+        try:
+            cursor.execute('DELETE FROM external_device WHERE id = ?', (device_id,))
+        except Exception:
+            pass
         
         conn.commit()
         conn.close()
@@ -754,7 +844,6 @@ async def disable_device(request):
         
         cursor.execute('UPDATE vfd_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         cursor.execute('UPDATE loadcell_device SET enabled = ? WHERE id = ?', (enabled, device_id))
-        cursor.execute('UPDATE virtual_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         
         conn.commit()
         conn.close()
@@ -930,15 +1019,18 @@ async def duplicate_device(request):
 
                 cursor.execute('''
                     INSERT INTO loadcell_device (
-                        id, name, service_id, device_path,
+                        id, name, service_id, device_path, device_path_ch2, lc_mode,
                         poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                         raw_min, raw_max, capacity_min, capacity_max, unit,
                         load_name, capacity_name, enabled
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     new_device_id, new_name, old_device.get('service_id'),
-                    old_device.get('device_path'), old_device.get('poll_ms'),
+                    old_device.get('device_path'),
+                    old_device.get('device_path_ch2'),
+                    old_device.get('lc_mode', 'single_ended'),
+                    old_device.get('poll_ms'),
                     old_device.get('resolution_bits'), old_device.get('effective_bits'),
                     old_device.get('signed'), old_device.get('gain'), old_device.get('vref'),
                     old_device.get('raw_min'), old_device.get('raw_max'),
@@ -999,7 +1091,7 @@ async def export_devices_csv(request):
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Channel', 'Capacity', 'Unit', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 'Capacity', 'Unit', 'Enabled'
         ])
         
         # Export VFD devices
@@ -1026,25 +1118,26 @@ async def export_devices_csv(request):
                 ip or '', port or '', serial or '',
                 baud or '', data_bits or '', parity or '', stop_bits or '',
                 resp_timeout or '', byte_timeout or '', max_retries or '', polling_interval or '',
-                '', '', '', '', '1' if enabled else '0'
+                '', '', '', '', '', '1' if enabled else '0'
             ])
         
         # Export Loadcell devices
         cursor.execute('''
-            SELECT l.id, l.name,
-                   l.device_path, l.capacity_max, l.unit, l.enabled
+            SELECT l.id, l.name, l.device_path, l.device_path_ch2, l.lc_mode,
+                   l.capacity_max, l.unit, l.enabled
             FROM loadcell_device l
             ORDER BY l.id
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, capacity_max, unit, enabled = row
+            device_id, name, device_path, device_path_ch2, lc_mode, capacity_max, unit, enabled = row
             writer.writerow([
                 device_id, name, 'Loadcell', 'loadcell',
                 '', '', '',
                 '', '', '', '',
                 '', '', '', '',
-                device_path or '', capacity_max or 1000, unit or 'kg', '1' if enabled else '0'
+                device_path or '', device_path_ch2 or '', lc_mode or 'single_ended',
+                capacity_max or 1000, unit or 'kg', '1' if enabled else '0'
             ])
         
         conn.close()
@@ -1104,8 +1197,6 @@ async def import_devices_csv(request):
                 
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
-                elif device_type.lower() == 'virtual':
-                    cursor.execute('SELECT id, name FROM virtual_device WHERE name = ?', (name,))
                 else:
                     cursor.execute('SELECT id, name FROM vfd_device WHERE name = ?', (name,))
                 
@@ -1145,14 +1236,9 @@ async def import_devices_csv(request):
         skipped_count = 0
         errors = []
 
-        # Pre-count existing loadcell and virtual devices for limit enforcement
+        # Pre-count existing loadcell devices for limit enforcement
         cursor.execute('SELECT COUNT(*) FROM loadcell_device')
         existing_loadcell_count = cursor.fetchone()[0]
-        cursor.execute('SELECT COUNT(*) FROM virtual_device')
-        existing_virtual_count = cursor.fetchone()[0]
-        # Track how many we're adding in this import (new ones only, not replacements)
-        import_loadcell_added = 0
-        import_virtual_added = 0
 
         csv_reader = csv.DictReader(io.StringIO(csv_content.decode('utf-8')))
         
@@ -1161,132 +1247,75 @@ async def import_devices_csv(request):
                 name = row.get('Name', '').strip()
                 device_type = row.get('Type', '').strip()
                 protocol = row.get('Protocol', '').strip().lower()
+                
                 if not name:
                     errors.append("Row {}: Missing device name".format(row_num))
                     continue
                 
                 if device_type.lower() == 'loadcell':
-                    cursor.execute('SELECT id FROM loadcell_device WHERE name = ?', (name,))
-                elif device_type.lower() == 'virtual':
-                    cursor.execute('SELECT id FROM virtual_device WHERE name = ?', (name,))
-                else:
-                    cursor.execute('SELECT id FROM vfd_device WHERE name = ?', (name,))
-                
-                existing_device = cursor.fetchone()
-                
-                if existing_device:
-                    # Loadcell and Virtual are always skipped on import - never replaced
-                    if device_type.lower() in ('loadcell', 'virtual'):
-                        skipped_count += 1
+                    # Check loadcell limit
+                    if existing_loadcell_count >= 1:
+                        errors.append("Row {}: Cannot import - only 1 Loadcell device allowed".format(row_num))
                         continue
-                    if skip_existing:
-                        skipped_count += 1
-                        continue
-                    elif replace_existing:
-                        device_id = existing_device[0]
-                        cursor.execute('DELETE FROM vfd_datapoints WHERE device_id = ?', (device_id,))
-                        cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
-                        remove_device_status(device_id)
-                        replaced_count += 1
-                    else:
-                        skipped_count += 1
-                        continue
-                
-                service_name = 'loadcell' if device_type.lower() == 'loadcell' else 'modbus'
-                service_id = get_service_by_name(service_name)
-
-                # Enforce max-1 for loadcell (new inserts only, not replacements)
-                if device_type.lower() == 'loadcell' and not existing_device:
-                    if (existing_loadcell_count + import_loadcell_added) >= 1:
-                        errors.append("Row {}: Skipped '{}' - only 1 Loadcell device allowed".format(row_num, name))
-                        skipped_count += 1
-                        continue
-
-                # Enforce max-1 for virtual (new inserts only, not replacements)
-                if device_type.lower() == 'virtual' and not existing_device:
-                    if (existing_virtual_count + import_virtual_added) >= 1:
-                        errors.append("Row {}: Skipped '{}' - only 1 Virtual device allowed".format(row_num, name))
-                        skipped_count += 1
-                        continue
-
-                if device_type.lower() == 'loadcell':
+                    
+                    # Generate new LC ID
                     cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
-                    existing_lc_ids = [r[0] for r in cursor.fetchall()]
-                    lc_max = 0
-                    for eid in existing_lc_ids:
+                    existing_ids = [r[0] for r in cursor.fetchall()]
+                    max_num = 0
+                    for existing_id in existing_ids:
                         try:
-                            lc_max = max(lc_max, int(eid[2:]))
+                            num = int(existing_id[2:])
+                            if num > max_num:
+                                max_num = num
                         except ValueError:
-                            pass
-                    device_id = 'LC{}'.format(lc_max + 1)
-
-                    device_path = row.get('Device Path', '/dev/spidev0.0').strip()
-                    capacity = float(row.get('Capacity', '40000'))
-                    unit = row.get('Unit', 'g').strip() or 'g'
-                    channel = int(row.get('Channel', '0') or '0')
-                    enabled = row.get('Enabled', '1').strip() == '1'
-
-                    # Build tag prefix from device name
-                    tag_prefix   = name.strip().lower().replace(' ', '_')
-                    tag_weight   = 'loadcells.{}.weight'.format(tag_prefix)
+                            continue
+                    device_id = 'LC{}'.format(max_num + 1)
+                    
+                    service_id = get_service_by_name('loadcell')
+                    
+                    # Build tag prefix
+                    tag_prefix = name.strip().lower().replace(' ', '_')
+                    tag_weight = 'loadcells.{}.weight'.format(tag_prefix)
                     tag_capacity = 'loadcells.{}.capacity'.format(tag_prefix)
-
+                    
+                    # Get mode and device paths
+                    lc_mode = row.get('Mode', 'single_ended').strip()
+                    device_path = row.get('Device Path', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw')
+                    device_path_ch2 = row.get('Device Path CH2') if lc_mode == 'differential' else None
+                    
                     cursor.execute('''
                         INSERT INTO loadcell_device (
-                            id, name, service_id, device_path,
+                            id, name, service_id, device_path, device_path_ch2, lc_mode,
                             poll_ms, resolution_bits, effective_bits, signed, gain, vref,
-                            raw_min, raw_max,
-                            capacity_min, capacity_max, unit,
+                            raw_min, raw_max, capacity_min, capacity_max, unit,
                             load_name, capacity_name, enabled
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
-                        device_id, name, service_id, device_path,
+                        device_id, name, service_id,
+                        device_path, device_path_ch2, lc_mode,
                         10, 24, 14, 0, 1, 5,
                         0, 16383,
-                        0, capacity, unit,
-                        tag_weight, tag_capacity, enabled
+                        float(row.get('Capacity', 1000) or 1000),
+                        row.get('Unit', 'kg') or 'kg',
+                        tag_weight, tag_capacity,
+                        1 if row.get('Enabled', '1') == '1' else 0
                     ))
-
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, '')",
-                        (device_id, tag_weight)
-                    )
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, 'kg')",
-                        (device_id, tag_capacity)
-                    )
                     
-                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
-                    if not existing_device:
-                        import_loadcell_added += 1
+                    # Create datapoints
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
+                        VALUES (?, ?, '')
+                    ''', (device_id, tag_weight))
+                    cursor.execute('''
+                        INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
+                        VALUES (?, ?, 'kg')
+                    ''', (device_id, tag_capacity))
                     
-                elif device_type.lower() == 'virtual':
-                    cursor.execute('SELECT id FROM virtual_device WHERE id LIKE "VD%" ORDER BY id')
-                    existing_vd_ids = [r[0] for r in cursor.fetchall()]
-                    vd_max = 0
-                    for eid in existing_vd_ids:
-                        try:
-                            vd_max = max(vd_max, int(eid[2:]))
-                        except ValueError:
-                            pass
-                    device_id = 'VD{}'.format(vd_max + 1)
-                    enabled = row.get('Enabled', '1').strip() == '1'
-
-                    cursor.execute(
-                        'INSERT INTO virtual_device (id, name, enabled) VALUES (?, ?, ?)',
-                        (device_id, name, 1 if enabled else 0)
-                    )
-                    for tag_name in ('lan', 'wlan', 'lte'):
-                        cursor.execute(
-                            "INSERT OR IGNORE INTO virtual_datapoints (device_id, name, unit) VALUES (?, ?, '')",
-                            (device_id, tag_name)
-                        )
-                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
-                    if not existing_device:
-                        import_virtual_added += 1
-
-                else:
+                    existing_loadcell_count += 1
+                    imported_count += 1
+                    
+                else:  # VFD device
                     cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
                     max_num = 0
@@ -1299,8 +1328,8 @@ async def import_devices_csv(request):
                             continue
                     device_id = 'VF{}'.format(max_num + 1)
                     
+                    service_id = get_service_by_name('modbus')
                     protocol_type = 'tcp' if 'tcp' in protocol else 'rtu'
-                    modbus_type = protocol_type
                     enabled = row.get('Enabled', '1').strip() == '1'
                     
                     # Get timeout values with defaults
@@ -1345,9 +1374,9 @@ async def import_devices_csv(request):
                             serial_port, baud_rate, parity, data_bits, stop_bits, enabled
                         ))
                     
-                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
+                    imported_count += 1
                 
-                imported_count += 1
+                initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                 
             except Exception as e:
                 errors.append("Row {}: {}".format(row_num, str(e)))
@@ -1396,31 +1425,41 @@ async def download_csv_template(request):
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Channel', 'Capacity', 'Unit', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 'Capacity', 'Unit', 'Enabled'
         ])
         
         writer.writerow([
-            '', 'Example Modbus TCP', 'Modbus', 'modbus-tcp',
+            '', 'Example Modbus TCP', 'VFD', 'vfd-tcp',
             '192.168.1.100', '502', '',
             '', '', '', '',
             '100', '100', '2', '300',
-            '', '', '', '', '1'
+            '', '', '', '', '', '1'
         ])
         
         writer.writerow([
-            '', 'Example Modbus RTU', 'Modbus', 'modbus-rtu',
+            '', 'Example Modbus RTU', 'VFD', 'vfd-rtu',
             '', '', '/dev/ttymxc5',
             '9600', '8', 'N', '1',
             '100', '100', '2', '300',
-            '', '', '', '', '1'
+            '', '', '', '', '', '1'
         ])
         
         writer.writerow([
-            '', 'Example Loadcell', 'Loadcell', 'loadcell',
+            '', 'Example Loadcell Single', 'Loadcell', 'loadcell',
             '', '', '',
             '', '', '', '',
             '', '', '', '',
-            '/dev/spidev0.0', '0', '40000', 'g', '1'
+            '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '', 'single_ended',
+            '1000', 'kg', '1'
+        ])
+        
+        writer.writerow([
+            '', 'Example Loadcell Differential', 'Loadcell', 'loadcell',
+            '', '', '',
+            '', '', '', '',
+            '', '', '', '',
+            '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw', 'differential',
+            '2000', 'kg', '1'
         ])
         
         csv_content = output.getvalue()
@@ -1455,15 +1494,7 @@ async def get_device_datapoints(request):
         
         datapoints = []
         
-        if is_virtual:
-            # Update Virtual device - only name is editable
-            new_name = data.get('name', '').strip()
-            if not new_name:
-                conn.close()
-                return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
-            cursor.execute('UPDATE virtual_device SET name = ? WHERE id = ?', (new_name, device_id))
-
-        elif is_modbus:
+        if is_modbus:
             cursor.execute('''
                 SELECT id, name, register_address, register_type, data_type,
                        byte_order, word_order, scale_factor, offset, unit, description

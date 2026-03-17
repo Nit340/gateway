@@ -365,7 +365,7 @@ def build_iot_gateway_config():
         if raw_pub:
             heartbeat_channel = raw_pub[0].get('name', 'default_publish')
 
-        # Collect mappings � groups pass through as-is;
+        # Collect mappings   groups pass through as-is;
         # individual tags each become their own mapping entry.
         default_ch   = _get_default_channel_for_connection(cfg)
         raw_mappings = cfg.get('mappings', [])
@@ -373,25 +373,22 @@ def build_iot_gateway_config():
         for m in raw_mappings:
             channel = m.get('channel') or default_ch
             if m.get('alias'):
-                # Groups go through as-is — datapoints may contain tag objects {name, alias, writable}
-                entry = {'channel': channel, 'datapoints': m.get('datapoints', {}), 'alias': m['alias']}
+                # Group: preserve alias, type, channel, and datapoints as-is
+                # datapoints entries may be plain strings or {name, alias} objects
+                entry = {
+                    'alias':      m['alias'],
+                    'channel':    channel,
+                    'datapoints': m.get('datapoints', {}),
+                }
                 all_mappings.append(entry)
             else:
-                # Individual: one mapping entry per tag (preserves per-tag dtype, alias, writable)
+                # Individual: one mapping entry per tag, preserving {name, alias} or plain string
                 for dtype, tag_entries in (m.get('datapoints') or {}).items():
                     for tag_entry in tag_entries:
-                        if isinstance(tag_entry, str):
-                            # Legacy plain string
-                            all_mappings.append({
-                                'channel':    channel,
-                                'datapoints': {dtype: [tag_entry]},
-                            })
-                        else:
-                            # New object with name, alias, writable
-                            all_mappings.append({
-                                'channel':    channel,
-                                'datapoints': {dtype: [tag_entry]},
-                            })
+                        all_mappings.append({
+                            'channel':    channel,
+                            'datapoints': {dtype: [tag_entry]},
+                        })
 
     # -- 3. Assemble ---------------------------------------------------------
     return {

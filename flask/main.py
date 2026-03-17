@@ -387,7 +387,7 @@ async def webui_login_api(request):
     active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
     if len(active_tokens) >= max_sessions:
         return web.json_response(
-            {'success': False, 'error': f"Maximum concurrent sessions reached ({max_sessions}). Please log out from another window first, or ask an admin to increase your session limit."},
+            {'success': False, 'error': "Maximum concurrent sessions reached ({}). Please log out from another window first, or ask an admin to increase your session limit.".format(max_sessions)},
             status=409
         )
 

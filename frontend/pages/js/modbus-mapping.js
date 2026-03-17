@@ -141,11 +141,9 @@ function _renderTagsTable() {
     rows.forEach((tag, rowIndex) => {
         // Determine if it's a load cell tag (check protocol or type)
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
-        const isVirtual = tag.protocol === 'virtual' || tag.type === 'virtual';
+        const isExt = tag.type === 'external';
         const tr = document.createElement('tr');
-        
-        // Use type-prefixed ID to avoid collisions between loadcell and modbus IDs
-        const tagType = isLC ? 'loadcell' : (isVirtual ? 'virtual' : 'modbus');
+        const tagType = isLC ? 'loadcell' : (isExt ? 'external' : 'modbus');
         tr.id = `tag-row-${tagType}-${tag.id}`;
         tr.className = 'tag-table-row';
         tr.dataset.tagId = tag.id;
@@ -166,21 +164,7 @@ function _renderTagsTable() {
         const enabled = tag.enabled !== undefined ? tag.enabled : true;
         const writable = tag.writable !== undefined ? tag.writable : false;
 
-        if (isVirtual) {
-            tr.innerHTML = `
-                <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
-                <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
-                <td><span class="protocol-badge virtual">Virtual</span></td>
-                <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
-                <td class="text-slate-300">—</td>
-                <td class="text-slate-300">—</td>
-                <td class="text-slate-300">—</td>
-                <td class="text-slate-600 text-xs">string</td>
-                <td class="text-slate-300">—</td>
-                <td class="text-slate-300">—</td>
-                <td class="text-slate-300">—</td>
-                <td class="text-right whitespace-nowrap text-slate-300">—</td>`;
-        } else if (isLC) {
+        if (isLC) {
             tr.innerHTML = `
                 <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
@@ -202,7 +186,7 @@ function _renderTagsTable() {
             tr.innerHTML = `
                 <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
-                <td><span class="protocol-badge ${tag.protocol_type === 'tcp' ? 'vfd-tcp' : 'vfd-rtu'}">${_esc(deviceType)}</span></td>
+                <td><span class="protocol-badge ${_pBadge(tag.protocol)}">${_pLabel(tag.protocol)}</span></td>
                 <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
                 <td class="text-slate-600 text-xs text-center">${slaveId}</td>
                 <td class="text-slate-600 font-mono text-xs">${address}</td>
@@ -212,10 +196,10 @@ function _renderTagsTable() {
                 <td class="text-slate-600 text-xs">${_esc(groupName)}</td>
                 <td><span class="writable-badge ${writable}">${writable ? 'Yes' : 'No'}</span></td>
                 <td class="text-right whitespace-nowrap">
-                    <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, 'modbus')" title="Edit">
+                    <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editTag(${tag.id}, '${tagType}')" title="Edit">
                         <i class="fa-solid fa-pencil text-sm"></i>
                     </button>
-                    <button class="text-red-500 hover:text-red-700" onclick="deleteTag(${tag.id}, 'modbus')" title="Delete">
+                    <button class="text-red-500 hover:text-red-700" onclick="deleteTag(${tag.id}, '${tagType}')" title="Delete">
                         <i class="fa-solid fa-trash text-sm"></i>
                     </button>
                 </td>`;
@@ -265,16 +249,14 @@ function _renderTagsBrowser() {
 
     paginatedRows.forEach(tag => {
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
-        const isVirtual = tag.protocol === 'virtual' || tag.type === 'virtual';
+        const isExt = tag.type === 'external';
         const d = document.createElement('div');
         d.className = 'tag-card';
         d.dataset.tagId = tag.id;
-        d.dataset.tagType = isLC ? 'loadcell' : (isVirtual ? 'virtual' : 'modbus');
-        
-        // Use click event listener
+        d.dataset.tagType = isLC ? 'loadcell' : (isExt ? 'external' : 'modbus');
         d.addEventListener('click', function(e) {
             e.stopPropagation();
-            const tagType = isLC ? 'loadcell' : (isVirtual ? 'virtual' : 'modbus');
+            const tagType = isLC ? 'loadcell' : (isExt ? 'external' : 'modbus');
             console.log(`Tag card clicked: ID ${tag.id}, Type: ${tagType}, Name: ${tag.tag_name || tag.name}`);
             highlightTagRow(tag.id, tagType);
         });
@@ -296,15 +278,13 @@ function _renderTagsBrowser() {
         const timeoutMs = tag.timeout_ms || tag.timeoutMs || 100;
         const registerCount = tag.register_count || tag.registerCount || 1;
         
-        let badgeClass = 'vfd-tcp';
-        if (isVirtual) badgeClass = 'virtual';
-        else if (isLC) badgeClass = 'loadcell';
-        else if (tag.device_type === 'rtu') badgeClass = 'vfd-rtu';
+        let badgeClass = _pBadge(tag.protocol) || 'modbus-tcp';
+        if (isLC) badgeClass = 'loadcell';
         
         let html = `
             <div class="tag-card-header">
                 <div class="tag-card-name">${_esc(tagName)}</div>
-                <span class="protocol-badge ${badgeClass}">${isVirtual ? 'VIRTUAL' : (isLC ? 'LOADCELL' : 'MODBUS')}</span>
+                <span class="protocol-badge ${badgeClass}">${isLC ? '—' : _pLabel(tag.protocol)}</span>
             </div>
             <div class="tag-card-body">
                 <div class="tag-card-row">
@@ -312,17 +292,7 @@ function _renderTagsBrowser() {
                     <span class="font-medium text-slate-700">${_esc(deviceName)}</span>
                 </div>`;
         
-        if (isVirtual) {
-            html += `
-                <div class="tag-card-row">
-                    <span>Type</span>
-                    <span>Virtual</span>
-                </div>
-                <div class="tag-card-row">
-                    <span>Data Type</span>
-                    <span>string</span>
-                </div>`;
-        } else if (!isLC) {
+        if (!isLC) {
             html += `
                 <div class="tag-card-row">
                     <span>Slave ID</span>
@@ -502,7 +472,7 @@ function highlightTagRow(tagId, tagType) {
         // Find tag info and toast
         const tag = (_tags || []).find(t =>
             String(t.id) === String(tagId) &&
-            (tagType ? ((tagType === 'loadcell') === (t.protocol === 'loadcell' || t.type === 'loadcell')) : true)
+            (tagType ? (t.type === tagType) : true)
         );
         if (tag) {
             const tagName = tag.tag_name || tag.name || 'Unknown';
@@ -526,7 +496,8 @@ function _updateDropdownFilters() {
         (_devices || []).forEach(d => {
             const o = document.createElement('option');
             o.value = d.id;
-            o.textContent = `${d.name} (${_pLabel(d.protocol)})`;
+            const _fProto = _pLabel(d.protocol);
+            o.textContent = _fProto !== '—' ? `${d.name} (${_fProto})` : d.name;
             sel.appendChild(o);
         });
         sel.value = cur;
@@ -549,6 +520,49 @@ function _updateDropdownFilters() {
 
     // Also populate the modal group dropdowns
     _populateGroupDropdowns();
+}
+
+// ─── PROTOCOL LABEL HELPER ────────────────────────────────────────────────────
+
+function _pLabel(p) {
+    if (!p) return '—';
+    
+    // Handle all possible protocol values
+    const protocol = String(p).toLowerCase();
+    
+    // Direct matches
+    if (protocol === 'tcp' || protocol === 'vfd-tcp' || protocol === 'ext-tcp' || protocol === 'modbus-tcp') {
+        return 'Modbus TCP';
+    }
+    
+    if (protocol === 'rtu' || protocol === 'vfd-rtu' || protocol === 'ext-rtu' || protocol === 'modbus-rtu') {
+        return 'Modbus RTU';
+    }
+    
+    if (protocol === 'loadcell') {
+        return '—';
+    }
+    
+    if (protocol === 'external') {
+        return '—';
+    }
+    
+    // Check if string contains tcp or rtu
+    if (protocol.includes('tcp')) return 'Modbus TCP';
+    if (protocol.includes('rtu')) return 'Modbus RTU';
+    
+    return '—';
+}
+
+function _pBadge(p) {
+    if (!p) return '';
+    
+    const protocol = String(p).toLowerCase();
+    
+    if (protocol.includes('tcp') || protocol === 'tcp') return 'modbus-tcp';
+    if (protocol.includes('rtu') || protocol === 'rtu') return 'modbus-rtu';
+    
+    return 'loadcell';
 }
 
 // ─── EVENT LISTENERS ─────────────────────────────────────────────────────────
@@ -582,10 +596,8 @@ function _bindStaticListeners() {
     document.getElementById('proceedToTagForm')?.addEventListener('click', _proceedToTagForm);
     document.getElementById('modbusFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
     document.getElementById('lcFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
-    document.getElementById('virtualFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
     document.getElementById('modbusFormCancel')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('lcFormClose')?.addEventListener('click', _closeAddTagModal);
-    document.getElementById('virtualFormClose')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('modbusTagForm')?.addEventListener('submit', _handleModbusCreate);
     document.getElementById('addTagModal')?.addEventListener('click', e => { if (e.target.id === 'addTagModal') _closeAddTagModal(); });
 
@@ -665,19 +677,26 @@ function _buildModalDeviceList() {
     _devices.forEach(dev => {
         const cnt = (_tags || []).filter(t => String(t.device_id) === String(dev.id)).length;
         const isLC = dev.protocol === 'loadcell';
-        const isVirtual = dev.protocol === 'virtual';
+        const isExt = dev.protocol === 'ext-rtu' || dev.protocol === 'ext-tcp';
         const el = document.createElement('div');
         el.className = 'modal-device-item';
         el.dataset.modalDeviceId = dev.id;
-        const icon = isVirtual ? 'fa-microchip text-indigo-600' : (isLC ? 'fa-scale-balanced text-green-600' : 'fa-ethernet text-blue-600');
-        const viewOnly = (isLC || isVirtual) ? '<span class="text-xs text-slate-400 italic">· view only</span>' : '';
+        const icon = isLC ? 'fa-scale-balanced text-green-600' : (isExt ? 'fa-plug text-emerald-600' : 'fa-ethernet text-blue-600');
+        const viewOnly = isLC ? '<span class="text-xs text-slate-400 italic">· view only</span>' : '';
+        // Device type: clean label — "VFD", "Loadcell", "External"
+        const rawType = dev.type || '';
+        const cleanType = rawType.replace(/\s*\(.*?\)/, '').trim(); // strip "(RTU)"/"(TCP)" etc.
+        const protoLabel = _pLabel(dev.protocol); // "Modbus RTU", "Modbus TCP", or "—"
         el.innerHTML = `
             <div class="flex items-center gap-3 min-w-0 flex-1">
                 <i class="fa-solid ${icon} text-sm w-4 flex-shrink-0"></i>
-                <div class="min-w-0">
-                    <div class="text-sm font-semibold text-slate-900 truncate">${_esc(dev.name)}</div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-semibold text-slate-900 truncate">${_esc(dev.name)}</span>
+                        ${cleanType ? `<span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium flex-shrink-0">${_esc(cleanType)}</span>` : ''}
+                    </div>
                     <div class="flex items-center gap-1.5 mt-0.5">
-                        <span class="protocol-badge ${_pBadge(dev.protocol)}">${_pLabel(dev.protocol)}</span>
+                        ${protoLabel !== '—' ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${protoLabel}</span>` : ''}
                         <span class="text-xs text-slate-400">${cnt} tag${cnt !== 1 ? 's' : ''}</span>
                         ${viewOnly}
                     </div>
@@ -708,8 +727,9 @@ function _selectDevice(devId, el) {
     if (prev) {
         prev.classList.remove('hidden');
         document.getElementById('previewDeviceName').textContent = dev.name;
+        const _previewProto = _pLabel(dev.protocol);
         document.getElementById('previewDeviceProtocol').innerHTML =
-            `<span class="protocol-badge ${_pBadge(dev.protocol)}">${_pLabel(dev.protocol)}</span>`;
+            _previewProto !== '—' ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${_previewProto}</span>` : '';
     }
 
     const btn = document.getElementById('proceedToTagForm');
@@ -726,30 +746,31 @@ function _proceedToTagForm() {
         return;
     }
     const proto = _selectedDeviceData.protocol;
-    const isVFD = proto === 'vfd-tcp' || proto === 'vfd-rtu' ||
-                  proto === 'modbus-tcp' || proto === 'modbus-rtu' ||
-                  (proto && (proto.includes('tcp') || proto.includes('rtu')));
+    const isVFD = proto && (proto.includes('tcp') || proto.includes('rtu'));
 
     if (isVFD) {
         document.getElementById('modbusCtxDevice').textContent = _selectedDeviceData.name;
         document.getElementById('modbusCtxProtocol').textContent = _pLabel(proto);
         _clearModbusForm('mb');
+        // Auto-populate slave ID from device config
+        const devSlaveId = _selectedDeviceData.slave_id || _selectedDeviceData.config?.slave_id || 1;
+        const slaveInput = document.getElementById('mbSlaveId');
+        const slaveDisplay = document.getElementById('mbSlaveIdDisplay');
+        if (slaveInput) slaveInput.value = devSlaveId;
+        if (slaveDisplay) slaveDisplay.textContent = devSlaveId;
         _showStep('stepModbusForm');
     } else if (proto === 'loadcell') {
         document.getElementById('lcCtxDevice').textContent = _selectedDeviceData.name;
         const lt = (_tags || []).find(t => String(t.device_id) === String(_selectedDeviceId) && (t.tag_name === 'load' || t.name === 'load'));
         document.getElementById('lcUnitDisplay').textContent = lt?.unit || 'kg';
         _showStep('stepLoadcellInfo');
-    } else if (proto === 'virtual') {
-        document.getElementById('virtualCtxDevice').textContent = _selectedDeviceData.name;
-        _showStep('stepVirtualInfo');
     } else {
         _toast('Unknown protocol: ' + proto, 'error');
     }
 }
 
 function _showStep(id) {
-    ['stepDeviceSelect', 'stepModbusForm', 'stepLoadcellInfo', 'stepVirtualInfo'].forEach(s => {
+    ['stepDeviceSelect', 'stepModbusForm', 'stepLoadcellInfo'].forEach(s => {
         const el = document.getElementById(s);
         if (el) el.style.display = s === id ? 'block' : 'none';
     });
@@ -850,13 +871,18 @@ async function _handleModbusCreate(e) {
 
 // ─── EDIT TAG (dispatch) ──────────────────────────────────────────────────────
 
-function editTag(tagId, tagType) {
+async function editTag(tagId, tagType) {
     const tag = (_tags || []).find(t => t.id == tagId);
     if (!tag) {
         _toast('Tag not found', 'error');
         return;
     }
-    
+
+    if (tagType === 'external') {
+        // External tags use same modbus endpoint
+        _openEditModbusModal(tag);
+        return;
+    }
     if (tagType === 'loadcell') {
         _toast('Load cell tags can only edit unit', 'info');
         // You could open a simple unit edit modal here
@@ -877,7 +903,10 @@ function _openEditModbusModal(tag) {
         ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${_pLabel(dev.protocol)}</span>` : '—';
 
     document.getElementById('editMbTagName').value = tag.tag_name || tag.name || '';
-    document.getElementById('editMbSlaveId').value = tag.slave_id ?? 1;
+    const _editSlaveId = tag.slave_id ?? 1;
+    document.getElementById('editMbSlaveId').value = _editSlaveId;
+    const _editSlaveDisp = document.getElementById('editMbSlaveIdDisplay');
+    if (_editSlaveDisp) _editSlaveDisp.textContent = _editSlaveId;
     document.getElementById('editMbRegisterType').value = tag.register_type || tag.registerType || 'holding';
     document.getElementById('editMbRegAddress').value = tag.register_address || tag.address || '';
     document.getElementById('editMbRegisterCount').value = tag.register_count || tag.registerCount || 1;
@@ -973,6 +1002,15 @@ function _closeEditModbus() { _hideModal('editModbusModal'); }
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
 async function deleteTag(tagId, tagType) {
+    if (tagType === 'external') {
+        const resp = await fetch(`/api/datapoints/modbus/${tagId}`);
+        const tag = await resp.json();
+        if (!resp.ok) { _toast('Tag not found', 'error'); return; }
+        _editingTagId = tagId;
+        _populateEditForm(tag, 'external');
+        _showModal('editTagModal');
+        return;
+    }
     if (tagType === 'loadcell') {
         _toast('Load cell tags are auto-managed and cannot be deleted', 'info');
         return;
@@ -1150,27 +1188,6 @@ function _setLoading(btn, loading) {
     }
 }
 
-function _pLabel(p) {
-    if (!p) return '—';
-    const labels = {
-        'vfd-tcp':   'VFD (TCP)',
-        'vfd-rtu':   'VFD (RTU)',
-        'modbus-tcp': 'VFD (TCP)',
-        'modbus-rtu': 'VFD (RTU)',
-        'loadcell':  'Load Cell',
-        'virtual':   'Virtual'
-    };
-    return labels[p] || (p.includes('tcp') ? 'VFD (TCP)' : p.includes('rtu') ? 'VFD (RTU)' : p.toUpperCase());
-}
-
-function _pBadge(p) {
-    if (!p) return '';
-    if (p === 'vfd-tcp' || p === 'modbus-tcp' || p.includes('tcp')) return 'vfd-tcp';
-    if (p === 'vfd-rtu' || p === 'modbus-rtu' || p.includes('rtu')) return 'vfd-rtu';
-    if (p === 'virtual') return 'virtual';
-    return 'loadcell';
-}
-
 function _esc(s) {
     if (s === null || s === undefined) return '';
     return String(s)
@@ -1261,7 +1278,6 @@ function _toast(msg, type = 'info') {
 }
 
 // ─── SAVE MODBUS CONFIGURATION TO PIPELINE ───────────────────────────────────
-// modbus-mapping.js - COMPLETE FIXED saveModbusConfig function
 async function saveModbusConfig() {
     console.log('[MODBUS-CFG] Save button clicked');
     
@@ -1270,11 +1286,11 @@ async function saveModbusConfig() {
     
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving to VFD…';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving…';
     }
 
     try {
-        // SIMPLE: Just tell backend to save modbus config
+        // Save modbus config (VFD + External share same modbus pipeline)
         const resp = await fetch('/api/pipeline/modbus-config/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
@@ -1297,7 +1313,7 @@ async function saveModbusConfig() {
         }
 
         if (data.success) {
-            _toast('✓ Data saved into VFD' + (data.message ? ' — ' + data.message : ''), 'success');
+            _toast('✓ Configuration saved' + (data.message ? ' — ' + data.message : ''), 'success');
         } else {
             _toast(data.error || 'Failed to save data into VFD', 'error');
         }
@@ -1311,15 +1327,6 @@ async function saveModbusConfig() {
         }
     }
 }
-// ─── EXPORTS ──────────────────────────────────────────────────────────────────
-window.initializeModbusMapping = initializeModbusMapping;
-window.editTag = editTag;
-window.deleteTag = deleteTag;
-window.importCSV = importCSV;
-window.exportCSV = exportCSV;
-window.highlightTagRow = highlightTagRow;
-window.changeBrowserPage = changeBrowserPage;
-window.saveModbusConfig = saveModbusConfig;
 
 // ─── GROUPS PANEL ────────────────────────────────────────────────────────────
 
@@ -1437,6 +1444,7 @@ window._deleteTagGroup         = _deleteTagGroup;
         console.log('[modbus-mapping] auto-init: page DOM detected, initializing');
         initializeModbusMapping();
     }
+
 })();
 
 })();

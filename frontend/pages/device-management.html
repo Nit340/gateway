@@ -27,10 +27,10 @@
                     </div>
                 </label>
                 <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="device-type" value="virtual" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                    <input type="radio" name="device-type" value="external" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                     <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Virtual</div>
-                        <div class="text-xs text-slate-500 mt-0.5">Auto-creates LAN, WLAN, LTE tags</div>
+                        <div class="font-medium text-sm text-slate-900">External Devices</div>
+                        <div class="text-xs text-slate-500 mt-0.5">External third-party hardware</div>
                     </div>
                 </label>
             </div>
@@ -72,6 +72,11 @@
             <div id="modbus-rtu-config" class="protocol-config active">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">VFD — Modbus RTU Settings</h3>
                 <div class="space-y-4">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
+                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="rtuSlaveId">
+                    </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
@@ -107,9 +112,9 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
                             <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="parity">
-                                <option>N</option>
-                                <option>E</option>
-                                <option>O</option>
+                                <option value="N">None</option>
+                                <option value="E">Even</option>
+                                <option value="O">Odd</option>
                             </select>
                         </div>
                         <div>
@@ -147,6 +152,12 @@
             <div id="modbus-tcp-config" class="protocol-config">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">VFD — Modbus TCP Settings</h3>
                 <div class="space-y-4">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
+                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpSlaveId">
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
@@ -185,14 +196,45 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Loadcell Settings</h3>
                 <div class="space-y-5">
 
-                    <!-- SysFS Device Path -->
+                    <!-- Mode Selection -->
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">SysFS Path <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Mode <span class="text-red-500">*</span></label>
+                        <div class="grid grid-cols-2 gap-3" id="lcModeSelector">
+                            <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                                <input type="radio" name="lc-mode" value="single_ended" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                <div class="ml-3">
+                                    <div class="font-medium text-sm text-slate-900">Single Point</div>
+                                 
+                                </div>
+                            </label>
+                            <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                                <input type="radio" name="lc-mode" value="differential" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                <div class="ml-3">
+                                    <div class="font-medium text-sm text-slate-900">Differential</div>
+                                   
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Channel for Single Point -->
+                    <div id="lcSingleEndedChannel">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel <span class="text-red-500">*</span></label>
                         <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePath">
-                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Path 1</option>
-                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Path 2</option>
+                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
+                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
                         </select>
                         <p class="text-xs text-slate-400 mt-1">IIO sysfs channel path (sysfs_hx711)</p>
+                    </div>
+
+                    <!-- Channel for Differential (Channel  only) -->
+                    <div id="lcDifferentialChannels" style="display:none;">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel  <span class="text-red-500">*</span></label>
+                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePathCh1">
+                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
+                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">Select Channel  for differential measurement (IIO sysfs channel path)</p>
                     </div>
 
                     <!-- Poll Interval -->
@@ -202,53 +244,77 @@
                             class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcPollMs">
                     </div>
 
-                    <!-- ADC Hardware Parameters -->
+                    <!-- ADC Hardware Parameters (Protected) -->
                     <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 border-b border-slate-100 pb-2">ADC Hardware Parameters</p>
+                        <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ADC Hardware Parameters</p>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 font-medium" title="Sensitive ADC hardware configuration. Users are not permitted to change these values.">
+                                <i class="fa-solid fa-lock text-xs"></i> Protected
+                            </span>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                            <p class="text-xs text-amber-700 flex items-start gap-1.5">
+                                <i class="fa-solid fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
+                                <span>These are sensitive ADC hardware configuration values. Users are <strong>not permitted</strong> to modify them. Contact your hardware engineer if changes are required.</span>
+                            </p>
+                        </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Resolution Bits</label>
-                                <input type="number" min="1" max="32" value="24"
-                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcResolutionBits">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Resolution Bits</label>
+                                <input type="number" value="24" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcResolutionBits"
+                                    title="Sensitive ADC configuration — not user-editable">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Effective Bits</label>
-                                <input type="number" min="1" max="32" value="14"
-                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcEffectiveBits">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Effective Bits</label>
+                                <input type="number" value="14" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcEffectiveBits"
+                                    title="Sensitive ADC configuration — not user-editable">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Signed</label>
-                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="lcSigned">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Signed / Unsigned</label>
+                                <select disabled
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcSigned"
+                                    title="Sensitive ADC configuration — not user-editable">
                                     <option value="false" selected>Unsigned</option>
                                     <option value="true">Signed</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Gain</label>
-                                <input type="number" step="0.1" min="0" value="1"
-                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcGain">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Gain</label>
+                                <input type="number" value="1" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcGain"
+                                    title="Sensitive ADC configuration — not user-editable">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Vref (V)</label>
-                                <input type="number" step="0.1" min="0" value="5"
-                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcVref">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Vref (V)</label>
+                                <input type="number" value="5" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcVref"
+                                    title="Sensitive ADC configuration — not user-editable">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Raw Value Range -->
+                    <!-- Raw Value Range (Protected) -->
                     <div>
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 border-b border-slate-100 pb-2">Raw Value Range</p>
+                        <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Raw Value Range</p>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 font-medium" title="Sensitive ADC hardware configuration. Users are not permitted to change these values.">
+                                <i class="fa-solid fa-lock text-xs"></i> Protected
+                            </span>
+                        </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Raw Min</label>
-                                <input type="number" value="0"
-                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcRawMin">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Raw Min</label>
+                                <input type="number" value="0" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcRawMin"
+                                    title="Sensitive ADC configuration — not user-editable">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 mb-1">Raw Max</label>
-                                <input type="number" value="16383"
-                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcRawMax">
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Raw Max</label>
+                                <input type="number" value="16383" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcRawMax"
+                                    title="Sensitive ADC configuration — not user-editable">
                             </div>
                         </div>
                     </div>
@@ -281,27 +347,131 @@
 
                 </div>
             </div>
-            <!-- Virtual Device Configuration -->
-            <div id="virtual-config" class="protocol-config">
-                <div class="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                    <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <i class="fa-solid fa-microchip text-indigo-600 text-sm"></i>
+            
+            <!-- External Device Configuration -->
+            <div id="external-config" class="protocol-config">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">External Device Settings</h3>
+
+                <!-- External Protocol Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Protocol</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                            <input type="radio" name="ext-protocol" value="ext-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                            <div class="ml-3">
+                                <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
+                                <div class="text-xs text-slate-500 mt-0.5">Serial communication</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                            <input type="radio" name="ext-protocol" value="ext-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                            <div class="ml-3">
+                                <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
+                                <div class="text-xs text-slate-500 mt-0.5">Ethernet communication</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- External RTU Settings -->
+                <div id="ext-rtu-config" class="ext-protocol-config">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
+                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extRtuSlaveId">
                         </div>
                         <div>
-                            <h4 class="text-sm font-semibold text-indigo-900 mb-1">Virtual Device</h4>
-                            <p class="text-xs text-indigo-700 leading-relaxed">Just enter a device name above. Three datapoint tags will be automatically created:</p>
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded">
-                                    <i class="fa-solid fa-network-wired text-xs"></i> lan
-                                </span>
-                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded">
-                                    <i class="fa-solid fa-wifi text-xs"></i> wlan
-                                </span>
-                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded">
-                                    <i class="fa-solid fa-signal text-xs"></i> lte
-                                </span>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="extSerialPort">
+                                <option value="/dev/ttymxc5">Port 1</option>
+                                <option value="/dev/ttymxc2">Port 2</option>
+                            </select>
+                            <p class="text-xs text-slate-400 mt-1">This will be displayed in the Address/ID column</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="extBaudRate">
+                                    <option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option>
+                                </select>
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Data Bits</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="extDataBits">
+                                    <option>8</option><option>7</option><option>6</option><option>5</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="extParity">
+                                    <option>N</option><option>E</option><option>O</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Stop Bits</label>
+                                <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="extStopBits">
+                                    <option>1</option><option>2</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
+                                <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extRtuResponseTimeout">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
+                                <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extRtuByteTimeout">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
+                                <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extRtuMaxRetries">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                            <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extRtuPollingInterval">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- External TCP Settings -->
+                <div id="ext-tcp-config" class="ext-protocol-config" style="display:none;">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
+                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpSlaveId">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                                <input type="text" value="192.168.1.100" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpIp">
+                                <p class="text-xs text-slate-400 mt-1">Part of the Address/ID display</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                                <input type="number" min="1" max="65535" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpPort">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
+                                <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpResponseTimeout">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
+                                <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpByteTimeout">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
+                                <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpMaxRetries">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                            <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpPollingInterval">
                         </div>
                     </div>
                 </div>
@@ -320,158 +490,55 @@
     </div>
 </div>
 
-<!-- Edit Device Modal -->
-<div class="modal-overlay" id="editDeviceModal">
-    <div class="modal p-6" style="max-width: 600px;">
+<!-- Edit Device Panel - Slides in from right like Add Device -->
+<div class="add-device-panel" id="editDevicePanel">
+    <div class="p-6">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-lg font-semibold text-slate-800">Edit Device</h2>
-            <button class="text-slate-400 hover:text-slate-600" id="closeEditModal">
+            <button class="text-slate-400 hover:text-slate-600" id="closeEditPanel">
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
         </div>
         
-        <div id="editDeviceContent">
-            <!-- Content will be populated by JavaScript -->
+        <!-- Device Info Badge (read-only) -->
+        <div class="mb-5 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <div class="text-xs text-slate-500 mb-1">Device Type</div>
+                    <span id="editDeviceTypeBadge" class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700">—</span>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 mb-1">Protocol</div>
+                    <span id="editDeviceProtocolBadge" class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-green-50 text-green-700">—</span>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 mb-1">Device ID</div>
+                    <span class="text-xs font-mono text-slate-600" id="editDeviceIdDisplay">—</span>
+                </div>
+            </div>
+            <div class="text-xs text-slate-500 mt-2">
+                <i class="fa-solid fa-info-circle mr-1"></i>
+                <span id="editDeviceAddressHint">Address/ID will be automatically formatted in the table view</span>
+            </div>
         </div>
-        
+
+        <!-- Device Name Input -->
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Device Name <span class="text-red-500">*</span></label>
+            <input type="text" id="editDeviceNameInput" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter device name">
+        </div>
+
+        <!-- Dynamic config fields populated by JS -->
+        <div id="editDeviceConfigFields"></div>
+
+        <!-- Panel Actions -->
         <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
             <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelEditBtn">
                 Cancel
             </button>
             <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveEditBtn">
-                Save Changes
+                <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Changes
             </button>
-        </div>
-    </div>
-</div>
-
-
-<!-- Scan Devices Modal -->
-<div class="modal-overlay" id="scanDevicesModal">
-    <div class="modal p-6" style="max-width: 800px;">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-semibold text-slate-800">Scan for Devices</h2>
-            <button class="text-slate-400 hover:text-slate-600" id="closeScanModal">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-        </div>
-        
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-700 mb-3">Select Scan Type</label>
-            <div class="grid grid-cols-3 gap-3">
-                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
-                    <input type="radio" name="scan-type" value="modbus-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                    <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
-                    </div>
-                </label>
-                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
-                    <input type="radio" name="scan-type" value="modbus-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                    <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
-                    </div>
-                </label>
-                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 scan-type-option">
-                    <input type="radio" name="scan-type" value="loadcell" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                    <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Loadcell</div>
-                    </div>
-                </label>
-            </div>
-        </div>
-        
-        <!-- Scan Parameters -->
-        <div id="scanParameters">
-            <!-- Modbus RTU Scan -->
-            <div id="rtu-scan-params" class="scan-params active">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
-                        <input type="text" value="/dev/ttymxc5" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanSerialPort">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
-                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm bg-white" id="scanBaudRate">
-                                <option>9600</option>
-                                <option>19200</option>
-                                <option>38400</option>
-                                <option>57600</option>
-                                <option>115200</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Address Range</label>
-                            <input type="text" value="1-10" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanAddressRange">
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Modbus TCP Scan -->
-            <div id="tcp-scan-params" class="scan-params">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">IP Range</label>
-                        <input type="text" value="192.168.1.1-192.168.1.254" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanIpRange">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
-                        <input type="number" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanPort">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Loadcell Scan -->
-            <div id="loadcell-scan-params" class="scan-params">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Pattern</label>
-                        <input type="text" value="/dev/spidev*" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm" id="scanDevicePattern">
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Scan Results -->
-        <div id="scanResults" class="mt-6 hidden">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-slate-900">Scan Results</h3>
-                <label class="flex items-center text-sm">
-                    <input type="checkbox" class="mr-2" id="selectAllScanned">
-                    Select All
-                </label>
-            </div>
-            <div class="border border-slate-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-slate-50">
-                        <tr>
-                            <th class="p-3 text-left"><input type="checkbox" id="selectAllScanned"></th>
-                            <th class="p-3 text-left">Type</th>
-                            <th class="p-3 text-left">Address</th>
-                            <th class="p-3 text-left">Details</th>
-                        </tr>
-                    </thead>
-                    <tbody id="scanResultsBody">
-                        <!-- Results populated by JS -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-between">
-            <div id="scanStatus" class="text-sm text-slate-600"></div>
-            <div class="flex space-x-3">
-                <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelScanBtn">
-                    Cancel
-                </button>
-                <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="startScanBtn">
-                    <i class="fa-solid fa-radar mr-2"></i> Start Scan
-                </button>
-                <button class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium text-sm hidden" id="addScannedDevicesBtn">
-                    <i class="fa-solid fa-plus mr-2"></i> Add Selected
-                </button>
-            </div>
         </div>
     </div>
 </div>
@@ -486,9 +553,6 @@
                         <p class="text-slate-500 text-sm mt-1">Register, configure, monitor, and manage all Field devices connected to the Univa IoT Gateway.</p>
                     </div>
                     <div class="flex items-center space-x-3">
-                        <button class="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium text-sm flex items-center" id="scanDevicesBtn">
-                            <i class="fa-solid fa-wifi mr-2"></i> Scan Devices
-                        </button>
                         <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addDeviceBtn">
                             <i class="fa-solid fa-plus mr-2"></i> Add Device
                         </button>
@@ -513,7 +577,7 @@
                                 Refresh
                             </button>
                         </div>
-                        <p class="text-slate-500 text-sm mt-2">View all connected devices with status, communication health, and last polled timestamp.</p>
+                        <p class="text-slate-500 text-sm mt-2">View all connected devices with communication health and last polled timestamp.</p>
                     </div>
                     
                     <!-- Device Filters -->
@@ -524,6 +588,10 @@
                                 <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-sm"></i>
                             </div>
                         </div>
+                        <div class="text-xs text-slate-500">
+                            <i class="fa-solid fa-circle-info mr-1"></i>
+                            Address/ID column shows: Serial Port for RTU, IP:Port for TCP, Channel for Loadcell
+                        </div>
                     </div>
                     
                     <!-- Devices Table -->
@@ -531,12 +599,12 @@
                         <table class="w-full" id="devicesTable">
                             <thead class="bg-slate-50 border-b border-border">
                                 <tr class="text-left text-xs text-slate-500 uppercase tracking-wider">
+                                    <th class="p-4 font-medium">Sl.No</th>
                                     <th class="p-4 font-medium">Device ID</th>
                                     <th class="p-4 font-medium">Device Name</th>
                                     <th class="p-4 font-medium">Device Type</th>
                                     <th class="p-4 font-medium">Protocol</th>
                                     <th class="p-4 font-medium">Address/ID</th>
-                                    <th class="p-4 font-medium">Status</th>
                                     <th class="p-4 font-medium">Last Poll</th>
                                     <th class="p-4 font-medium text-right">Actions</th>
                                 </tr>

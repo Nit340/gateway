@@ -315,88 +315,113 @@
             <div class="sidebar-logo">
                 <img src="assets/images/logo.png" alt="Innospace" style="height:36px; width:auto; object-fit:contain;">
             </div>
-            
-            <!-- Navigation -->
-            <nav class="sidebar-nav" id="sidebarNav">
-                <!-- Active nav items (no section headers) -->
-                <div class="nav-section">
-                    <a href="#" data-page="general-configuration" class="nav-link active">
-                        <i class="fa-solid fa-sliders"></i>
-                        <span>General Configuration</span>
-                    </a>
-                    <a href="#" data-page="device-management" class="nav-link">
-                        <i class="fa-solid fa-microchip"></i>
-                        <span>Device Management</span>
-                    </a>
-                    <a href="#" data-page="field-integration" class="nav-link">
-                        <i class="fa-solid fa-plug"></i>
-                        <span>Field Integration</span>
-                    </a>
-                    <a href="#" data-page="mqtt-cloud" class="nav-link">
-                        <i class="fa-solid fa-cloud"></i>
-                        <span>Cloud Integration</span>
-                    </a>
-                    <a href="#" data-page="craneiq" class="nav-link">
-                        <i class="fa-solid fa-weight-hanging"></i>
-                        <span>CraneIQ</span>
-                        <span class="nav-link-count">4</span>
-                    </a>
-                    <a href="#" data-page="rules" class="nav-link">
-                        <i class="fa-solid fa-diagram-project"></i>
-                        <span>Rule Engine</span>
-                    </a>
-                </div>
+          <!-- Navigation -->
+<nav class="sidebar-nav" id="sidebarNav">
+    <!-- Configuration Section -->
+    <div class="nav-section">
+        <div class="section-title">Configuration</div>
+        <a href="#" data-page="general-configuration" class="nav-link active">
+            <i class="fa-solid fa-sliders"></i>
+            <span>General Configuration</span>
+        </a>
+        <a href="#" data-page="device-management" class="nav-link">
+            <i class="fa-solid fa-microchip"></i>
+            <span>Device Management</span>
+        </a>
+    </div>
 
-                <!-- Under Development Section -->
-                <div class="nav-section" id="underDevSection">
-                    <div class="section-title" id="underDevToggle" onclick="toggleUnderDev()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none;">
-                        <span>Under Development</span>
-                        <i class="fa-solid fa-chevron-down" id="underDevChevron" style="font-size:10px; transition:transform 0.2s;"></i>
-                    </div>
-                    <div id="underDevLinks">
-                        <a href="#" data-page="ota-gateway" class="nav-link">
-                            <i class="fa-solid fa-server"></i>
-                            <span>Gateway OTA & Recovery</span>
-                        </a>
-                        <a href="#" data-page="data-retention" class="nav-link">
-                            <i class="fa-solid fa-database"></i>
-                            <span>Data Retention</span>
-                        </a>
-                        <a href="#" data-page="logging" class="nav-link">
-                            <i class="fa-solid fa-file-lines"></i>
-                            <span>Logging</span>
-                        </a>
-                        <a href="#" data-page="diagnostics" class="nav-link">
-                            <i class="fa-solid fa-bug"></i>
-                            <span>Diagnostics</span>
-                        </a>
-                        <a href="#" data-page="security" class="nav-link">
-                            <i class="fa-solid fa-lock"></i>
-                            <span>Security</span>
-                        </a>
-                        <a href="#" data-page="license" class="nav-link">
-                            <i class="fa-solid fa-key"></i>
-                            <span>Licensing & Subscriptions</span>
-                        </a>
-                        <a href="#" data-page="automation" class="nav-link">
-                            <i class="fa-solid fa-clock"></i>
-                            <span>Scheduler</span>
-                        </a>
-                        <a href="#" data-page="alerts" class="nav-link">
-                            <i class="fa-solid fa-bell"></i>
-                            <span>Alerts & Events</span>
-                        </a>
-                        <a href="#" data-page="backup" class="nav-link">
-                            <i class="fa-solid fa-floppy-disk"></i>
-                            <span>Backup</span>
-                        </a>
-                        <a href="#" data-page="notification" class="nav-link">
-                            <i class="fa-solid fa-message"></i>
-                            <span>Notification</span>
-                        </a>
-                    </div>
-                </div>
-            </nav>
+    <!-- Protocols & Integrations Section -->
+    <div class="nav-section">
+        <div class="section-title">Protocols & Integrations</div>
+        <a href="#" data-page="field-integration" class="nav-link">
+            <i class="fa-solid fa-plug"></i>
+            <span>Field Integration</span>
+        </a>
+        <a href="#" data-page="mqtt-cloud" class="nav-link">
+            <i class="fa-solid fa-cloud"></i>
+            <span>Cloud Integration</span>
+        </a>
+    </div>
+
+    <!-- OTA Firmware Management Section -->
+    <div class="nav-section">
+        <div class="section-title">OTA Firmware Management</div>
+        <a href="#" data-page="ota-gateway" class="nav-link">
+            <i class="fa-solid fa-server"></i>
+            <span>Gateway OTA & Recovery</span>
+        </a>
+    </div>
+
+    <!-- CraneIQ Suite Section -->
+    <div class="nav-section">
+        <div class="section-title">CraneIQ Suite</div>
+        <a href="#" data-page="craneiq" class="nav-link">
+            <i class="fa-solid fa-weight-hanging"></i>
+            <span>CraneIQ</span>
+            <span class="nav-link-count"></span>
+        </a>
+    </div>
+
+    <!-- Data & Diagnostics Section -->
+    <div class="nav-section">
+        <div class="section-title">Data & Diagnostics</div>
+        <a href="#" data-page="data-retention" class="nav-link">
+            <i class="fa-solid fa-database"></i>
+            <span>Data Retention</span>
+        </a>
+        <a href="#" data-page="logging" class="nav-link">
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Logging</span>
+        </a>
+        <a href="#" data-page="diagnostics" class="nav-link">
+            <i class="fa-solid fa-bug"></i>
+            <span>Diagnostics & Live Terminal</span>
+        </a>
+    </div>
+
+    <!-- Security & Access Section -->
+    <div class="nav-section">
+        <div class="section-title">Security & Access</div>
+        <a href="#" data-page="security" class="nav-link">
+            <i class="fa-solid fa-lock"></i>
+            <span>Security & Access Control</span>
+        </a>
+        <a href="#" data-page="license" class="nav-link">
+            <i class="fa-solid fa-key"></i>
+            <span>Licensing & Subscriptions</span>
+        </a>
+    </div>
+
+    <!-- Automation Section -->
+    <div class="nav-section">
+        <div class="section-title">Automation</div>
+        <a href="#" data-page="automation" class="nav-link">
+            <i class="fa-solid fa-clock"></i>
+            <span>Scheduler / Automation Jobs</span>
+        </a>
+        <a href="#" data-page="alerts" class="nav-link">
+            <i class="fa-solid fa-bell"></i>
+            <span>Alerts & Event Classes</span>
+        </a>
+        <a href="#" data-page="rules" class="nav-link">
+            <i class="fa-solid fa-diagram-project"></i>
+            <span>Rule Engine</span>
+        </a>
+    </div>
+
+    <!-- System Section -->
+    <div class="nav-section">
+        <div class="section-title">System</div>
+        <a href="#" data-page="backup" class="nav-link">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>Backup & Restore</span>
+        </a>
+        <a href="#" data-page="notification" class="nav-link">
+            <i class="fa-solid fa-message"></i>
+            <span>Notification</span>
+        </a>
+    </div>
+</nav>
             <script>
                 function toggleUnderDev() {
                     const links = document.getElementById('underDevLinks');

@@ -145,6 +145,15 @@
                 color: #5B21B6;
             }
             
+            .type-external {
+                background-color: #F0FDF4;
+                color: #166534;
+            }
+            
+            .ext-protocol-config {
+                display: block;
+            }
+            
             .animate-fade-in {
                 animation: fadeIn 0.3s ease;
             }
@@ -289,12 +298,38 @@
                 `<option value="${p.port_value}">${p.label}</option>`
             ).join('');
         }
-        // Loadcell device path dropdown
+        
+        // External RTU serial port dropdown
+        const extSerialPortEl = document.getElementById('extSerialPort');
+        if (extSerialPortEl && portConfig.modbus.length) {
+            extSerialPortEl.innerHTML = portConfig.modbus.map(p =>
+                `<option value="${p.port_value}">${p.label}</option>`
+            ).join('');
+        }
+        
+        // Loadcell device path dropdown for single point
         const devicePathEl = document.getElementById('devicePath');
         if (devicePathEl && portConfig.loadcell.length) {
             devicePathEl.innerHTML = portConfig.loadcell.map(p =>
                 `<option value="${p.port_value}">${p.label}</option>`
             ).join('');
+        }
+        
+        // Update differential channel labels if they exist
+        updateDifferentialChannelLabels();
+    }
+    
+    function updateDifferentialChannelLabels() {
+        const ch1Label = document.getElementById('diffChannel1Label');
+        const ch2Label = document.getElementById('diffChannel2Label');
+        
+        if (ch1Label && portConfig.loadcell.length >= 1) {
+            ch1Label.textContent = portConfig.loadcell[0]?.label || 'Channel 1';
+        }
+        if (ch2Label && portConfig.loadcell.length >= 2) {
+            ch2Label.textContent = portConfig.loadcell[1]?.label || 'Channel 2';
+        } else if (ch2Label) {
+            ch2Label.textContent = 'Channel 2';
         }
     }
 
@@ -398,7 +433,8 @@
     function getDeviceOnlineStatus(device) {
         const protocol = (device.protocol || '').toLowerCase();
         if (protocol === 'vfd-rtu' || protocol === 'vfd-tcp' ||
-            protocol === 'rtu'     || protocol === 'tcp') {
+            protocol === 'rtu'     || protocol === 'tcp' ||
+            protocol === 'ext-rtu' || protocol === 'ext-tcp') {
             return pipelineStatus.modbus_service ? 'Online' : 'Offline';
         }
         if (protocol === 'loadcell') {
@@ -413,7 +449,8 @@
     function getServiceGroup(device) {
         const protocol = (device.protocol || '').toLowerCase();
         if (protocol === 'vfd-rtu' || protocol === 'vfd-tcp' ||
-            protocol === 'rtu'     || protocol === 'tcp')   return 'modbus';
+            protocol === 'rtu'     || protocol === 'tcp' ||
+            protocol === 'ext-rtu' || protocol === 'ext-tcp')   return 'modbus';
         if (protocol === 'loadcell')                        return 'loadcell';
         if (protocol === 'virtual')                         return 'virtual';
         return null;
@@ -465,10 +502,6 @@
         devices.forEach(device => {
             const row = document.getElementById(`device-${device.id}`);
             if (!row) return;
-            const statusCell = row.querySelector('.device-status-cell');
-            if (statusCell) {
-                statusCell.innerHTML = buildStatusBadgeHtml(getDeviceOnlineStatus(device));
-            }
             const pollCell = row.querySelector('.device-poll-cell');
             if (pollCell) {
                 pollCell.innerHTML = buildLastPollHtml(device);
@@ -506,16 +539,20 @@
         
         tbody.innerHTML = '';
         
-        filteredDevices.forEach(device => {
+        filteredDevices.forEach((device, idx) => {
             const row = document.createElement('tr');
             row.className = 'hover:bg-slate-50';
             row.id = `device-${device.id}`;
+            const rowIndex = idx + 1;
             
             const deviceTypeBadge = getDeviceTypeBadge(device);
             const protocolBadge = getProtocolBadge(device);
             const address = getDeviceAddress(device);
             
             row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-slate-500">${rowIndex}</div>
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-xs font-mono text-slate-500">${escapeHtml(device.id)}</div>
                 </td>
@@ -529,9 +566,8 @@
                     ${protocolBadge}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm text-slate-700 font-mono text-xs">${escapeHtml(address)}</div>
+                    <div class="text-sm text-slate-700 font-mono text-xs" title="${getAddressTooltip(device)}">${escapeHtml(address)}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap device-status-cell">&nbsp;</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 device-poll-cell">&nbsp;</td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button class="text-green-600 hover:text-green-800 mr-3" onclick="window.deviceManagement.viewDeviceInline('${device.id}')" title="View Details">
@@ -556,15 +592,52 @@
         applyStatusToTable();
     }
 
+    function getAddressTooltip(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+        if (protocol === 'vfd-tcp' || protocol === 'ext-tcp') {
+            return 'TCP/IP Address:Port';
+        } else if (protocol === 'vfd-rtu' || protocol === 'ext-rtu') {
+            return 'Serial Port';
+        } else if (protocol === 'loadcell') {
+            const config = device.config || {};
+            if (config.lc_mode === 'differential') {
+                return 'Differential Mode - Selected cahnnel';
+            } else {
+                return 'Single Point Mode - Selected channel';
+            }
+        }
+        return 'Device Address/Identifier';
+    }
+
     function getDeviceAddress(device) {
-        if (device.protocol === 'vfd-tcp') {
-            return device.address || 'Not configured';
-        } else if (device.protocol === 'vfd-rtu') {
-            const entry = portConfig.modbus.find(p => p.port_value === (device.config?.serial_port || device.address));
-            return entry ? entry.label : (device.config?.serial_port === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
+        if (device.protocol === 'vfd-tcp' || device.protocol === 'ext-tcp') {
+            const config = device.config || {};
+            const ip = config.ip_address || device.address || 'Not configured';
+            const port = config.port || '502';
+            // Don't add port if it's already in the address
+            if (ip.includes(':')) return ip;
+            return `${ip}:${port}`;
+        } else if (device.protocol === 'vfd-rtu' || device.protocol === 'ext-rtu') {
+            const config = device.config || {};
+            const serialPort = config.serial_port || device.address || '/dev/ttymxc5';
+            // Get friendly port label from portConfig
+            const entry = portConfig.modbus.find(p => p.port_value === serialPort);
+            return entry ? entry.label : (serialPort === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
         } else if (device.protocol === 'loadcell') {
-            const entry = portConfig.loadcell.find(p => p.port_value === (device.config?.device_path || device.address));
-            return entry ? entry.label : (device.config?.device_path === '/sys/bus/iio/devices/iio:device1/in_voltage0_raw' ? 'Path 2' : 'Path 1');
+            const config = device.config || {};
+            const lcMode = config.lc_mode || 'single_ended';
+            
+            if (lcMode === 'differential') {
+                // For differential mode, show Channel 1 only
+                const ch1Entry = portConfig.loadcell.find(p => p.port_value === config.device_path);
+                const ch1Label = ch1Entry ? ch1Entry.label : 'Channel 1';
+                return ch1Label;
+            } else {
+                // Single point mode - show single channel
+                const devicePath = config.device_path || device.address;
+                const entry = portConfig.loadcell.find(p => p.port_value === devicePath);
+                return entry ? entry.label : 'Channel 1';
+            }
         }
         return device.address || 'Not configured';
     }
@@ -583,6 +656,9 @@
         } else if (protocol === 'virtual') {
             badgeClass += 'type-virtual';
             typeText = 'Virtual';
+        } else if (protocol === 'external' || protocol === 'ext-rtu' || protocol === 'ext-tcp') {
+            badgeClass += 'type-external';
+            typeText = 'External';
         } else {
             badgeClass += 'type-modbus-tcp';
             typeText = device.type || 'Unknown';
@@ -607,6 +683,15 @@
             protoText = '—';
         } else if (protocol === 'virtual') {
             badgeClass += 'type-virtual';
+            protoText = '—';
+        } else if (protocol === 'ext-rtu') {
+            badgeClass += 'type-external';
+            protoText = 'Modbus RTU';
+        } else if (protocol === 'ext-tcp') {
+            badgeClass += 'type-external';
+            protoText = 'Modbus TCP';
+        } else if (protocol === 'external') {
+            badgeClass += 'type-external';
             protoText = '—';
         } else {
             badgeClass += 'type-modbus-tcp';
@@ -641,13 +726,20 @@
         } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
             typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'VFD', proto: 'Modbus RTU' };
         } else if (protocol === 'loadcell') {
-            typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell', proto: 'SysFS / IIO' };
+            typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell', proto: 'IIO Channel' };
         } else if (protocol === 'virtual') {
             typeStyle = { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Virtual', proto: '—' };
+        } else if (protocol === 'ext-rtu') {
+            typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'External', proto: 'Modbus RTU' };
+        } else if (protocol === 'ext-tcp') {
+            typeStyle = { bg: 'bg-blue-50', text: 'text-blue-700', label: 'External', proto: 'Modbus TCP' };
+        } else if (protocol === 'external') {
+            typeStyle = { bg: 'bg-slate-50', text: 'text-slate-700', label: 'External', proto: '—' };
         }
         
         const config = device.config || {};
-        const isTCP = protocol === 'vfd-tcp' || protocol === 'tcp';
+        const isTCP = protocol === 'vfd-tcp' || protocol === 'tcp' || protocol === 'ext-tcp';
+        const isRTU = protocol === 'vfd-rtu' || protocol === 'rtu' || protocol === 'ext-rtu';
         
         let detailsHtml = `
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -670,13 +762,7 @@
                                     <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
                                     <div class="text-sm text-slate-700">${typeStyle.proto || escapeHtml(device.protocol || '—')}</div>
                                 </div>` : ''}
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Status</div>
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="w-2 h-2 rounded-full ${statusStyle.dot}"></span>
-                                        <span class="text-sm text-slate-700">${status}</span>
-                                    </div>
-                                </div>
+
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Device ID</div>
                                     <div class="text-sm font-mono text-slate-600">${escapeHtml(device.id)}</div>
@@ -702,6 +788,10 @@
         if (isTCP) {
             detailsHtml += `
                                 <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Slave ID</div>
+                                    <div class="text-sm text-slate-700">${config.slave_id || 1}</div>
+                                </div>
+                                <div>
                                     <div class="text-xs text-slate-500 mb-0.5">IP Address</div>
                                     <div class="text-sm font-mono text-slate-700">${escapeHtml(config.ip_address || device.address || '192.168.1.100')}</div>
                                 </div>
@@ -726,10 +816,14 @@
                                     <div class="text-sm text-slate-700">${config.polling_interval_ms || 300}</div>
                                 </div>
             `;
-        } else if (protocol === 'vfd-rtu') {
+        } else if (isRTU) {
             const rtuPortEntry = portConfig.modbus.find(p => p.port_value === config.serial_port);
             const rtuPortLabel = rtuPortEntry ? rtuPortEntry.label : (config.serial_port === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
             detailsHtml += `
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Slave ID</div>
+                                    <div class="text-sm text-slate-700">${config.slave_id || 1}</div>
+                                </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Serial Port</div>
                                     <div class="text-sm font-mono text-slate-700">${rtuPortLabel}</div>
@@ -768,13 +862,39 @@
                                 </div>
             `;
         } else if (protocol === 'loadcell') {
-            const lcPathEntry = portConfig.loadcell.find(p => p.port_value === config.device_path);
-            const lcPathLabel = lcPathEntry ? lcPathEntry.label : (config.device_path === '/sys/bus/iio/devices/iio:device1/in_voltage0_raw' ? 'Path 2' : 'Path 1');
-            detailsHtml += `
+            const lcMode = config.lc_mode || 'single_ended';
+            
+            if (lcMode === 'differential') {
+                const ch1Entry = portConfig.loadcell.find(p => p.port_value === config.device_path);
+                const ch1Label = ch1Entry ? ch1Entry.label : 'Channel';
+                
+                detailsHtml += `
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">SysFS Path</div>
-                                    <div class="text-sm font-mono text-slate-700">${lcPathLabel}</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Mode</div>
+                                    <div class="text-sm text-slate-700">Differential</div>
                                 </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Channel </div>
+                                    <div class="text-sm font-mono text-slate-700">${ch1Label}</div>
+                                </div>
+                `;
+            } else {
+                const chEntry = portConfig.loadcell.find(p => p.port_value === config.device_path);
+                const chLabel = chEntry ? chEntry.label : 'Channel';
+                
+                detailsHtml += `
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Mode</div>
+                                    <div class="text-sm text-slate-700">Single Point</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Channel</div>
+                                    <div class="text-sm font-mono text-slate-700">${chLabel}</div>
+                                </div>
+                `;
+            }
+            
+            detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Poll Interval (ms)</div>
                                     <div class="text-sm text-slate-700">${config.poll_ms || 10}</div>
@@ -901,7 +1021,6 @@
 
             // Enforce max-1 for loadcell and virtual
             const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
-            const virtualCount  = devices.filter(d => d.protocol === 'virtual').length;
 
             const lcRadio = panel.querySelector('input[name="device-type"][value="loadcell"]');
             const lcLabel = lcRadio ? lcRadio.closest('label') : null;
@@ -914,16 +1033,17 @@
                 }
             }
 
-            const vdRadio = panel.querySelector('input[name="device-type"][value="virtual"]');
-            const vdLabel = vdRadio ? vdRadio.closest('label') : null;
-            if (vdRadio) {
-                vdRadio.disabled = virtualCount >= 1;
-                if (vdLabel) {
-                    vdLabel.title = virtualCount >= 1 ? 'Only 1 Virtual device is allowed' : '';
-                    vdLabel.style.opacity = virtualCount >= 1 ? '0.45' : '';
-                    vdLabel.style.cursor  = virtualCount >= 1 ? 'not-allowed' : '';
-                }
+            // Reset loadcell mode to single_ended by default
+            const singleEndedRadio = panel.querySelector('input[name="lc-mode"][value="single_ended"]');
+            if (singleEndedRadio) {
+                singleEndedRadio.checked = true;
+                handleLcModeChange();
             }
+
+            // Wire ext-protocol radios
+            panel.querySelectorAll('input[name="ext-protocol"]').forEach(r => {
+                r.addEventListener('change', handleExtProtocolChange);
+            });
 
             const firstRadio = panel.querySelector('input[name="device-type"][value="vfd"]');
             if (firstRadio) {
@@ -965,13 +1085,56 @@
             'vfd-rtu':   'modbus-rtu-config',
             'vfd-tcp':   'modbus-tcp-config',
             'loadcell':  'loadcell-config',
-            'virtual':   'virtual-config',
+            'external':  'external-config',
         };
         const configDivId = configIdMap[resolvedType] || (resolvedType + '-config');
         const selectedConfig = document.getElementById(configDivId);
         if (selectedConfig) {
             selectedConfig.classList.add('active');
         }
+
+        // Wire loadcell mode radios
+        if (resolvedType === 'loadcell') {
+            document.querySelectorAll('input[name="lc-mode"]').forEach(r => {
+                r.removeEventListener('change', handleLcModeChange);
+                r.addEventListener('change', handleLcModeChange);
+            });
+            handleLcModeChange();
+        }
+
+        // Wire external protocol radios
+        if (resolvedType === 'external') {
+            document.querySelectorAll('input[name="ext-protocol"]').forEach(r => {
+                r.removeEventListener('change', handleExtProtocolChange);
+                r.addEventListener('change', handleExtProtocolChange);
+            });
+            handleExtProtocolChange();
+        }
+    }
+
+    function handleExtProtocolChange() {
+        const proto = document.querySelector('input[name="ext-protocol"]:checked')?.value || 'ext-rtu';
+        const rtuEl = document.getElementById('ext-rtu-config');
+        const tcpEl = document.getElementById('ext-tcp-config');
+        if (rtuEl) rtuEl.style.display = proto === 'ext-rtu' ? 'block' : 'none';
+        if (tcpEl) tcpEl.style.display = proto === 'ext-tcp' ? 'block' : 'none';
+        
+        console.log(`External protocol changed to: ${proto}`);
+    }
+
+    function handleLcModeChange() {
+        const mode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
+        const singleEl = document.getElementById('lcSingleEndedChannel');
+        const diffEl = document.getElementById('lcDifferentialChannels');
+        
+        if (singleEl) {
+            singleEl.style.display = mode === 'single_ended' ? 'block' : 'none';
+        }
+        if (diffEl) {
+            diffEl.style.display = mode === 'differential' ? 'block' : 'none';
+        }
+        
+        console.log(`Loadcell mode changed to: ${mode}`);
     }
 
     async function saveDevice() {
@@ -1004,14 +1167,6 @@
                         return;
                     }
                 }
-                if (deviceType === 'virtual') {
-                    const existing = devices.filter(d => d.protocol === 'virtual').length;
-                    if (existing >= 1) {
-                        showNotification('Only 1 Virtual device is allowed. Delete the existing one first.', 'error');
-                        isSaving = false;
-                        return;
-                    }
-                }
             }
 
             let requestData = {
@@ -1031,6 +1186,7 @@
                 requestData.protocol_type = 'rtu';
                 requestData.device_type = 'rtu';
                 requestData.config = {
+                    slave_id: parseInt(document.getElementById('rtuSlaveId')?.value) || 1,
                     serial_port: document.getElementById('serialPort')?.value || (portConfig.modbus[0]?.port_value ?? '/dev/ttymxc5'),
                     baud_rate: parseInt(document.getElementById('baudRate')?.value) || 9600,
                     data_bits: parseInt(document.getElementById('dataBits')?.value) || 8,
@@ -1047,6 +1203,7 @@
                 requestData.protocol_type = 'tcp';
                 requestData.device_type = 'tcp';
                 requestData.config = {
+                    slave_id: parseInt(document.getElementById('tcpSlaveId')?.value) || 1,
                     ip_address: document.getElementById('modbusTcpIp')?.value || '192.168.1.100',
                     port: parseInt(document.getElementById('modbusTcpPort')?.value) || 502,
                     response_timeout_ms: parseInt(document.getElementById('tcpResponseTimeout')?.value) || 100,
@@ -1057,18 +1214,28 @@
             } else if (deviceType === 'loadcell') {
                 requestData.type = 'loadcell';
                 requestData.protocol = 'loadcell';
+                const lcMode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
+                
+                let devicePath = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                
+                if (lcMode === 'single_ended') {
+                    devicePath = document.getElementById('devicePath')?.value || devicePath;
+                } else if (lcMode === 'differential') {
+                    devicePath = document.getElementById('devicePathCh1')?.value || devicePath;
+                }
+                
                 requestData.config = {
-                    // Device connection
-                    device_path: document.getElementById('devicePath')?.value || (portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
+                    lc_mode: lcMode,
+                    device_path: devicePath,
                     poll_ms: parseInt(document.getElementById('lcPollMs')?.value) || 10,
-                    // ADC hardware parameters
-                    resolution_bits: parseInt(document.getElementById('lcResolutionBits')?.value) || 24,
-                    effective_bits: parseInt(document.getElementById('lcEffectiveBits')?.value) || 14,
-                    signed: document.getElementById('lcSigned')?.value === 'true',
-                    gain: parseFloat(document.getElementById('lcGain')?.value) || 1,
-                    vref: parseFloat(document.getElementById('lcVref')?.value) || 5,
-                    raw_min: parseFloat(document.getElementById('lcRawMin')?.value) || 0,
-                    raw_max: parseFloat(document.getElementById('lcRawMax')?.value) || 16383,
+                    // ADC hardware parameters (fixed, not user-editable)
+                    resolution_bits: 24,
+                    effective_bits: 14,
+                    signed: false,
+                    gain: 1,
+                    vref: 5,
+                    raw_min: 0,
+                    raw_max: 16383,
                     // Capacity specification
                     capacity_min: parseFloat(document.getElementById('lcCapacityMin')?.value) || 0,
                     capacity_max: parseFloat(document.getElementById('lcCapacityMax')?.value) || 1000,
@@ -1077,30 +1244,52 @@
                     load_name: 'load_weight',
                     capacity_name: 'capacity'
                 };
-            } else if (deviceType === 'virtual') {
-                requestData.type = 'virtual';
-                requestData.protocol = 'virtual';
-                requestData.config = {};
+            } else if (deviceType === 'external') {
+                const extProto = document.querySelector('#addDevicePanel input[name="ext-protocol"]:checked')?.value || 'ext-rtu';
+                if (extProto === 'ext-rtu') {
+                    requestData.type = 'external';
+                    requestData.protocol = 'ext-rtu';
+                    requestData.protocol_type = 'rtu';
+                    requestData.config = {
+                        slave_id: parseInt(document.getElementById('extRtuSlaveId')?.value) || 1,
+                        serial_port: document.getElementById('extSerialPort')?.value || '/dev/ttymxc5',
+                        baud_rate: parseInt(document.getElementById('extBaudRate')?.value) || 9600,
+                        data_bits: parseInt(document.getElementById('extDataBits')?.value) || 8,
+                        parity: document.getElementById('extParity')?.value || 'N',
+                        stop_bits: parseInt(document.getElementById('extStopBits')?.value) || 1,
+                        response_timeout_ms: parseInt(document.getElementById('extRtuResponseTimeout')?.value) || 100,
+                        byte_timeout_ms: parseInt(document.getElementById('extRtuByteTimeout')?.value) || 100,
+                        max_retries: parseInt(document.getElementById('extRtuMaxRetries')?.value) || 2,
+                        polling_interval_ms: parseInt(document.getElementById('extRtuPollingInterval')?.value) || 300
+                    };
+                } else {
+                    requestData.type = 'external';
+                    requestData.protocol = 'ext-tcp';
+                    requestData.protocol_type = 'tcp';
+                    requestData.config = {
+                        slave_id: parseInt(document.getElementById('extTcpSlaveId')?.value) || 1,
+                        ip_address: document.getElementById('extTcpIp')?.value || '192.168.1.100',
+                        port: parseInt(document.getElementById('extTcpPort')?.value) || 502,
+                        response_timeout_ms: parseInt(document.getElementById('extTcpResponseTimeout')?.value) || 100,
+                        byte_timeout_ms: parseInt(document.getElementById('extTcpByteTimeout')?.value) || 100,
+                        max_retries: parseInt(document.getElementById('extTcpMaxRetries')?.value) || 2,
+                        polling_interval_ms: parseInt(document.getElementById('extTcpPollingInterval')?.value) || 300
+                    };
+                }
             }
             
-            const method = selectedDeviceId ? 'PUT' : 'POST';
-            const url = selectedDeviceId ? `/api/devices/${selectedDeviceId}` : '/api/devices';
-            
-            console.log('Saving device:', requestData);
-            
-            const response = await fetch(url, {
-                method: method,
+            console.log('Adding new device:', requestData);
+
+            const response = await fetch('/api/devices', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok && result.success) {
-                showNotification(
-                    selectedDeviceId ? 'Device updated successfully' : 'Device added successfully',
-                    'success'
-                );
+                showNotification('Device added successfully', 'success');
                 closeAddDevicePanel();
                 await refreshData();
             } else {
@@ -1112,6 +1301,158 @@
         } finally {
             isSaving = false;
         }
+    }
+
+    // ==================== EDIT CONFIG FIELDS BUILDER ====================
+    function _buildEditConfigFields(proto, cfg) {
+        const sel = (id, label, val, opts) => `
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">${label}</label>
+            <select id="${id}" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                ${opts.map(o => `<option value="${o.v}" ${String(o.v)===String(val)?'selected':''}>${o.l}</option>`).join('')}
+            </select></div>`;
+        const inp = (id, label, val, type='text', extra='') => `
+            <div><label class="block text-sm font-medium text-slate-700 mb-1">${label}</label>
+            <input type="${type}" id="${id}" value="${val ?? ''}" ${extra} class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>`;
+        const ro = (id, label, val) => `
+            <div><label class="block text-sm font-medium text-slate-600 mb-1">${label}</label>
+            <div class="flex items-center h-9 px-3 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-medium">${val}</div>
+            <input type="hidden" id="${id}" value="${val}"></div>`;
+
+        if (proto === 'vfd-rtu' || proto === 'ext-rtu') {
+            const portOpts = portConfig.modbus.length
+                ? portConfig.modbus.map(p => ({v: p.port_value, l: p.label}))
+                : [{v:'/dev/ttymxc5', l:'Port 1'},{v:'/dev/ttymxc2', l:'Port 2'}];
+            return `<div class="space-y-4">
+                ${ro('editSlaveId','Slave ID', cfg.slave_id||1)}
+                ${sel('editSerialPort','Serial Port', cfg.serial_port||'/dev/ttymxc5', portOpts)}
+                <p class="text-xs text-slate-400 mt-1 mb-2">This will be displayed as the Address/ID in the table view</p>
+                <div class="grid grid-cols-2 gap-4">
+                    ${sel('editBaudRate','Baud Rate', cfg.baud_rate||9600, [9600,19200,38400,57600,115200].map(v=>({v,l:v})))}
+                    ${sel('editDataBits','Data Bits', cfg.data_bits||8, [8,7,6,5].map(v=>({v,l:v})))}
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    ${sel('editParity','Parity', cfg.parity||'N', [{v:'N',l:'N'},{v:'E',l:'E'},{v:'O',l:'O'}])}
+                    ${sel('editStopBits','Stop Bits', cfg.stop_bits||1, [{v:1,l:'1'},{v:2,l:'2'}])}
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    ${inp('editResponseTimeout','Response Timeout (ms)', cfg.response_timeout_ms||100,'number','min="10" max="10000"')}
+                    ${inp('editByteTimeout','Byte Timeout (ms)', cfg.byte_timeout_ms||100,'number','min="10" max="10000"')}
+                    ${inp('editMaxRetries','Max Retries', cfg.max_retries||2,'number','min="0" max="10"')}
+                </div>
+                ${inp('editPollingInterval','Polling Interval (ms)', cfg.polling_interval_ms||300,'number','min="10" max="10000"')}
+            </div>`;
+        }
+        if (proto === 'vfd-tcp' || proto === 'ext-tcp') {
+            return `<div class="space-y-4">
+                ${ro('editSlaveId','Slave ID', cfg.slave_id||1)}
+                <div class="grid grid-cols-2 gap-4">
+                    ${inp('editTcpIp','IP Address', cfg.ip_address||'192.168.1.100')}
+                    ${inp('editTcpPort','Port', cfg.port||502,'number','min="1" max="65535"')}
+                </div>
+                <p class="text-xs text-slate-400 mt-1 mb-2">Address will be displayed as IP:Port in the table view</p>
+                <div class="grid grid-cols-3 gap-3">
+                    ${inp('editResponseTimeout','Response Timeout (ms)', cfg.response_timeout_ms||100,'number','min="10" max="10000"')}
+                    ${inp('editByteTimeout','Byte Timeout (ms)', cfg.byte_timeout_ms||100,'number','min="10" max="10000"')}
+                    ${inp('editMaxRetries','Max Retries', cfg.max_retries||2,'number','min="0" max="10"')}
+                </div>
+                ${inp('editPollingInterval','Polling Interval (ms)', cfg.polling_interval_ms||300,'number','min="10" max="10000"')}
+            </div>`;
+        }
+        if (proto === 'loadcell') {
+            const mode = cfg.lc_mode || 'single_ended';
+            const chOpts = (portConfig.loadcell.length
+                ? portConfig.loadcell.map(p => ({v: p.port_value, l: p.label}))
+                : [{v:'/sys/bus/iio/devices/iio:device0/in_voltage0_raw',l:'Channel 1'},{v:'/sys/bus/iio/devices/iio:device1/in_voltage0_raw',l:'Channel 2'}]);
+            
+            return `<div class="space-y-4">
+                ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'}])}
+                <div id="editLcChSingle" style="${mode==='single_ended'?'':'display:none'}">
+                    ${sel('editDevicePath','Channel', cfg.device_path||chOpts[0].v, chOpts)}
+                </div>
+                <div id="editLcChDiff" style="${mode==='differential'?'':'display:none'}">
+                    ${sel('editDevicePathCh1','Channel ', cfg.device_path||chOpts[0].v, chOpts)}
+                    <p class="text-xs text-slate-400 mt-1">Select Channel  for differential measurement</p>
+                </div>
+                <p class="text-xs text-slate-400 mt-1 mb-2">Channel selection determines the Address/ID display in the table view</p>
+                ${inp('editPollMs','Poll Interval (ms)', cfg.poll_ms||10,'number','min="1" max="1000"')}
+                <div class="grid grid-cols-3 gap-3">
+                    ${inp('editCapacityMin','Capacity Min', cfg.capacity_min||0,'number','step="0.1"')}
+                    ${inp('editCapacityMax','Capacity Max', cfg.capacity_max||1000,'number','step="0.1"')}
+                    ${inp('editUnit','Unit', cfg.unit||'kg')}
+                </div>
+            </div>`;
+        }
+        return '<p class="text-sm text-slate-500">No editable configuration for this device type.</p>';
+    }
+
+    
+    async function saveEditDevice() {
+        if (isSaving) return;
+        isSaving = true;
+        try {
+            const deviceName = document.getElementById('editDeviceNameInput')?.value.trim();
+            if (!deviceName) { showNotification('Please enter a device name', 'error'); isSaving = false; return; }
+            if (!selectedDeviceId) { showNotification('No device selected for edit', 'error'); isSaving = false; return; }
+
+            // Gather config from edit modal fields
+            const cfg = {};
+            const g = id => document.getElementById(id);
+            // Common
+            if (g('editSlaveId')) cfg.slave_id = parseInt(g('editSlaveId').value) || 1;
+            if (g('editResponseTimeout')) cfg.response_timeout_ms = parseInt(g('editResponseTimeout').value) || 100;
+            if (g('editByteTimeout')) cfg.byte_timeout_ms = parseInt(g('editByteTimeout').value) || 100;
+            if (g('editMaxRetries')) cfg.max_retries = parseInt(g('editMaxRetries').value) || 2;
+            if (g('editPollingInterval')) cfg.polling_interval_ms = parseInt(g('editPollingInterval').value) || 300;
+            // RTU
+            if (g('editSerialPort')) cfg.serial_port = g('editSerialPort').value;
+            if (g('editBaudRate')) cfg.baud_rate = parseInt(g('editBaudRate').value) || 9600;
+            if (g('editDataBits')) cfg.data_bits = parseInt(g('editDataBits').value) || 8;
+            if (g('editParity')) cfg.parity = g('editParity').value || 'N';
+            if (g('editStopBits')) cfg.stop_bits = parseInt(g('editStopBits').value) || 1;
+            // TCP
+            if (g('editTcpIp')) cfg.ip_address = g('editTcpIp').value;
+            if (g('editTcpPort')) cfg.port = parseInt(g('editTcpPort').value) || 502;
+            // Loadcell
+            if (g('editLcMode')) {
+                cfg.lc_mode = g('editLcMode').value;
+                // For differential mode, get Channel 1 from dropdown
+                if (cfg.lc_mode === 'differential') {
+                    cfg.device_path = g('editDevicePathCh1')?.value || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                } else {
+                    cfg.device_path = g('editDevicePath')?.value;
+                }
+            }
+            if (g('editPollMs')) cfg.poll_ms = parseInt(g('editPollMs').value) || 10;
+            if (g('editCapacityMin')) cfg.capacity_min = parseFloat(g('editCapacityMin').value) || 0;
+            if (g('editCapacityMax')) cfg.capacity_max = parseFloat(g('editCapacityMax').value) || 1000;
+            if (g('editUnit')) cfg.unit = g('editUnit').value?.trim() || 'kg';
+
+            const response = await fetch(`/api/devices/${selectedDeviceId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: deviceName, config: cfg })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showNotification('Device updated successfully', 'success');
+                closeEditPanel();
+                await refreshData();
+            } else {
+                showNotification('Failed to save device: ' + (result.message || result.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            showNotification('Error saving device: ' + error.message, 'error');
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    function closeEditPanel() {
+        const panel = document.getElementById('editDevicePanel');
+        if (panel) {
+            panel.classList.remove('active');
+        }
+        selectedDeviceId = null;
     }
 
     // ==================== DEVICE ACTIONS ====================
@@ -1167,122 +1508,84 @@
             try {
                 const response = await fetch(`/api/devices/${deviceId}/details`);
                 const device = await response.json();
-                
-                if (!device || device.error) {
-                    showNotification('Device not found', 'error');
-                    return;
+                if (!device || device.error) { 
+                    showNotification('Device not found', 'error'); 
+                    return; 
+                }
+
+                selectedDeviceId = deviceId;
+                const proto = (device.protocol || '').toLowerCase();
+                const config = device.config || {};
+
+                // Populate read-only header
+                const subtitleEl = document.getElementById('editModalSubtitle');
+                if (subtitleEl) {
+                    subtitleEl.textContent = device.name;
                 }
                 
-                selectedDeviceId = deviceId;
+                const deviceIdEl = document.getElementById('editDeviceIdDisplay');
+                if (deviceIdEl) {
+                    deviceIdEl.textContent = device.id;
+                }
                 
-                const panel = document.getElementById('addDevicePanel');
+                const typeLabels = {
+                    'vfd-tcp': 'VFD',
+                    'vfd-rtu': 'VFD',
+                    'loadcell': 'Loadcell',
+                    'ext-rtu': 'External',
+                    'ext-tcp': 'External',
+                    'external': 'External'
+                };
+                
+                const protocolLabels = {
+                    'vfd-tcp': 'Modbus TCP',
+                    'vfd-rtu': 'Modbus RTU',
+                    'loadcell': '—',
+                    'ext-rtu': 'Modbus RTU',
+                    'ext-tcp': 'Modbus TCP',
+                    'external': '—'
+                };
+                
+                const typeBadge = document.getElementById('editDeviceTypeBadge');
+                if (typeBadge) {
+                    typeBadge.textContent = typeLabels[proto] || proto.toUpperCase();
+                }
+                
+                const protocolBadge = document.getElementById('editDeviceProtocolBadge');
+                if (protocolBadge) {
+                    protocolBadge.textContent = protocolLabels[proto] || proto.toUpperCase();
+                }
+
+                // Update address hint
+                const addressHint = document.getElementById('editDeviceAddressHint');
+                if (addressHint) {
+                    if (proto === 'vfd-tcp' || proto === 'ext-tcp') {
+                        addressHint.textContent = 'Address will be displayed as IP:Port in the table view';
+                    } else if (proto === 'vfd-rtu' || proto === 'ext-rtu') {
+                        addressHint.textContent = 'Serial port selection determines the Address/ID display';
+                    } else if (proto === 'loadcell') {
+                        addressHint.textContent = 'Channel selection determines the Address/ID display';
+                    }
+                }
+
+                // Populate name
+                const nameInput = document.getElementById('editDeviceNameInput');
+                if (nameInput) {
+                    nameInput.value = device.name || '';
+                }
+
+                // Build config fields based on protocol
+                const cfgDiv = document.getElementById('editDeviceConfigFields');
+                if (cfgDiv) {
+                    cfgDiv.innerHTML = _buildEditConfigFields(proto, config);
+                }
+
+                // Open the panel
+                const panel = document.getElementById('editDevicePanel');
                 if (panel) {
                     panel.classList.add('active');
                 }
-                
-                document.getElementById('deviceNameInput').value = device.name || '';
-                
-                let deviceTypeValue = 'vfd-rtu';
-                const protocol = device.protocol || '';
-                
-                console.log('Editing device:', device);
-                console.log('Protocol:', protocol);
-                
-                if (protocol === 'vfd-tcp' || protocol === 'tcp') {
-                    deviceTypeValue = 'vfd';
-                } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
-                    deviceTypeValue = 'vfd';
-                } else if (protocol === 'loadcell') {
-                    deviceTypeValue = 'loadcell';
-                } else if (protocol === 'virtual') {
-                    deviceTypeValue = 'virtual';
-                }
-                
-                console.log('Selected device type value:', deviceTypeValue);
-                
-                const deviceTypeRadio = document.querySelector(`input[name="device-type"][value="${deviceTypeValue}"]`);
-                if (deviceTypeRadio) {
-                    deviceTypeRadio.checked = true;
-                    // For VFD: set the protocol sub-radio based on actual device protocol
-                    if (deviceTypeValue === 'vfd') {
-                        const vfdProtoVal = (protocol === 'vfd-tcp' || protocol === 'tcp') ? 'vfd-tcp' : 'vfd-rtu';
-                        const vfdProtoRadio = panel.querySelector('input[name="vfd-protocol"][value="' + vfdProtoVal + '"]');
-                        if (vfdProtoRadio) vfdProtoRadio.checked = true;
-                        // Wire vfd-protocol radios
-                        panel.querySelectorAll('input[name="vfd-protocol"]').forEach(function(r) {
-                            r.addEventListener('change', function() { switchDeviceType('vfd'); });
-                        });
-                    }
-                    switchDeviceType(deviceTypeValue);
-                }
-                
-                setTimeout(() => {
-                    const config = device.config || {};
-                    
-                    if (deviceTypeValue === 'vfd') {
-                        const vfdR = document.querySelector('#addDevicePanel input[name="vfd-protocol"]:checked');
-                        deviceTypeValue = vfdR ? vfdR.value : 'vfd-rtu';
-                    }
-                    if (deviceTypeValue === 'vfd-rtu') {
-                        if (document.getElementById('serialPort'))
-                            document.getElementById('serialPort').value = config.serial_port || (portConfig.modbus[0]?.port_value ?? '/dev/ttymxc5');
-                        if (document.getElementById('baudRate')) 
-                            document.getElementById('baudRate').value = config.baud_rate || 9600;
-                        if (document.getElementById('dataBits')) 
-                            document.getElementById('dataBits').value = config.data_bits || 8;
-                        if (document.getElementById('parity')) 
-                            document.getElementById('parity').value = config.parity || 'N';
-                        if (document.getElementById('stopBits')) 
-                            document.getElementById('stopBits').value = config.stop_bits || 1;
-                        if (document.getElementById('responseTimeout')) 
-                            document.getElementById('responseTimeout').value = config.response_timeout_ms || 100;
-                        if (document.getElementById('byteTimeout')) 
-                            document.getElementById('byteTimeout').value = config.byte_timeout_ms || 100;
-                        if (document.getElementById('maxRetries')) 
-                            document.getElementById('maxRetries').value = config.max_retries || 2;
-                        if (document.getElementById('pollingInterval')) 
-                            document.getElementById('pollingInterval').value = config.polling_interval_ms || 300;
-                    } else if (deviceTypeValue === 'vfd-tcp') {
-                        if (document.getElementById('modbusTcpIp')) 
-                            document.getElementById('modbusTcpIp').value = config.ip_address || '192.168.1.100';
-                        if (document.getElementById('modbusTcpPort')) 
-                            document.getElementById('modbusTcpPort').value = config.port || 502;
-                        if (document.getElementById('tcpResponseTimeout')) 
-                            document.getElementById('tcpResponseTimeout').value = config.response_timeout_ms || 100;
-                        if (document.getElementById('tcpByteTimeout')) 
-                            document.getElementById('tcpByteTimeout').value = config.byte_timeout_ms || 100;
-                        if (document.getElementById('tcpMaxRetries')) 
-                            document.getElementById('tcpMaxRetries').value = config.max_retries || 2;
-                        if (document.getElementById('tcpPollingInterval')) 
-                            document.getElementById('tcpPollingInterval').value = config.polling_interval_ms || 300;
-                    } else if (deviceTypeValue === 'loadcell') {
-                        if (document.getElementById('devicePath'))
-                            document.getElementById('devicePath').value = config.device_path || (portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw');
-                        if (document.getElementById('lcPollMs'))
-                            document.getElementById('lcPollMs').value = config.poll_ms || 10;
-                        if (document.getElementById('lcResolutionBits'))
-                            document.getElementById('lcResolutionBits').value = config.resolution_bits || 24;
-                        if (document.getElementById('lcEffectiveBits'))
-                            document.getElementById('lcEffectiveBits').value = config.effective_bits || 14;
-                        if (document.getElementById('lcSigned'))
-                            document.getElementById('lcSigned').value = config.signed ? 'true' : 'false';
-                        if (document.getElementById('lcGain'))
-                            document.getElementById('lcGain').value = config.gain ?? 1;
-                        if (document.getElementById('lcVref'))
-                            document.getElementById('lcVref').value = config.vref ?? 5;
-                        if (document.getElementById('lcRawMin'))
-                            document.getElementById('lcRawMin').value = config.raw_min ?? 0;
-                        if (document.getElementById('lcRawMax'))
-                            document.getElementById('lcRawMax').value = config.raw_max ?? 16383;
-                        if (document.getElementById('lcCapacityMin'))
-                            document.getElementById('lcCapacityMin').value = config.capacity_min ?? 0;
-                        if (document.getElementById('lcCapacityMax'))
-                            document.getElementById('lcCapacityMax').value = config.capacity_max ?? 1000;
-                        if (document.getElementById('lcUnit'))
-                            document.getElementById('lcUnit').value = config.unit || 'kg';
-                    }
-                }, 100);
-                
+
             } catch (error) {
                 console.error('Error loading device for edit:', error);
                 showNotification('Failed to load device details', 'error');
@@ -1607,7 +1910,7 @@
             `;
             
             dialog.innerHTML = `
-                <h3 style="margin: 0 0 16px 0; color: #f59e0b;">?? Duplicate Devices Found</h3>
+                <h3 style="margin: 0 0 16px 0; color: #f59e0b;">Duplicate Devices Found</h3>
                 <p style="white-space: pre-wrap; margin: 16px 0; font-family: monospace; font-size: 13px; color: #666;">${escapeHtml(message)}</p>
                 <div style="display: flex; gap: 12px; margin-top: 20px;">
                     <button id="replaceBtn" style="flex: 1; padding: 10px 16px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
@@ -1749,12 +2052,12 @@
     function setupEventListeners() {
         const anchorNode = document.getElementById('addDeviceBtn');
         if (anchorNode && document.contains(anchorNode) && eventListenersBoundToNode === anchorNode) {
-            console.log('?? Event listeners already setup, skipping...');
+            console.log('Event listeners already setup, skipping...');
             return;
         }
         eventListenersBoundToNode = anchorNode;
         
-        console.log('?? Setting up Device Management event listeners...');
+        console.log('Setting up Device Management event listeners...');
         
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
@@ -1792,6 +2095,11 @@
             radio.addEventListener('change', function() {
                 switchDeviceType(this.value);
             });
+        });
+
+        // Wire external protocol radios in setup
+        document.querySelectorAll('#addDevicePanel input[name="ext-protocol"]').forEach(r => {
+            r.addEventListener('change', handleExtProtocolChange);
         });
         
         const closeDetailsBtn = document.getElementById('closeDetailsBtn');
@@ -1853,9 +2161,29 @@
             searchInput.addEventListener('input', renderDevicesTable);
         }
         
+        const saveEditBtn = document.getElementById('saveEditBtn');
+        if (saveEditBtn) saveEditBtn.addEventListener('click', saveEditDevice);
+
+        const closeEditPanelBtn = document.getElementById('closeEditPanel');
+        if (closeEditPanelBtn) closeEditPanelBtn.addEventListener('click', closeEditPanel);
+
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        if (cancelEditBtn) cancelEditBtn.addEventListener('click', closeEditPanel);
+
+        // Wire editLcMode change in edit panel
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.id === 'editLcMode') {
+                const mode = e.target.value;
+                const s = document.getElementById('editLcChSingle');
+                const d = document.getElementById('editLcChDiff');
+                if (s) s.style.display = mode === 'single_ended' ? 'block' : 'none';
+                if (d) d.style.display = mode === 'differential' ? 'block' : 'none';
+            }
+        });
+
         setupImportExportListeners();
-        
-        console.log('? Device Management event listeners setup complete');
+
+        console.log('Device Management event listeners setup complete');
     }
 
     // ==================== UTILITY ====================

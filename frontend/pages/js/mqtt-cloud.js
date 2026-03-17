@@ -288,8 +288,8 @@ function _renderMappingsTable(conn) {
     if (!groupsContainer) return;
     
     const mappings = conn.config?.mappings || [];
-    const groups = mappings.filter(m => m.type === 'group');
-    const individuals = mappings.filter(m => m.type !== 'group');
+    const groups = mappings.filter(m => !!m.alias);
+    const individuals = mappings.filter(m => !m.alias);
     
     // Update stats
     _st('stat-group-count', groups.length);
@@ -320,9 +320,9 @@ function _renderMappingsTable(conn) {
                     <div class="bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-3 flex items-center justify-between">
                         <div class="flex items-center gap-3">
                             <input type="checkbox" class="tag-select group-select w-4 h-4" data-group="${idx}" onchange="window._updateTagCount()">
-                            <i class="fa-solid fa-layer-group text-white text-base"></i>
-                            <span class="font-semibold text-white text-base">${_esc(mapping.alias)}</span>
-                            <span class="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">${points.length} tag${points.length !== 1 ? 's' : ''}</span>
+                            <i class="fa-solid fa-layer-group text-black text-base"></i>
+                            <span class="font-semibold text-black text-base">${_esc(mapping.alias)}</span>
+                            <span class="bg-white/20 text-black text-xs px-2 py-0.5 rounded-full">${points.length} tag${points.length !== 1 ? 's' : ''}</span>
                         </div>
                         <div class="flex items-center gap-3">
                             <button class="text-white/70 hover:text-white" onclick="window._toggleGroup('${groupId}')">
@@ -348,11 +348,11 @@ function _renderMappingsTable(conn) {
                                     data-conn="${_esc(conn.id)}" data-group-idx="${idx}"
                                     onchange="window._updateGroupChannel('${_esc(conn.id)}', ${idx}, this.value)">
                                 <option value="">  default channel  </option>
-                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label="? Publish">` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label=" Publish">` : ''}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="? Subscribe">` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label=" Subscribe">` : ''}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
                                 ${currentChannel && !pubChannelOptions.find(c => c.name === currentChannel)
                                     ? `<option value="${_esc(currentChannel)}" selected>${_esc(currentChannel)}</option>` : ''}
@@ -381,19 +381,28 @@ function _renderMappingsTable(conn) {
                                 <tr>
                                     <th class="p-2 pl-8 w-8"></th>
                                     <th class="p-2 text-left font-medium">Tag Name</th>
+                                    <th class="p-2 text-left font-medium w-36">Alias <span class="text-slate-400 font-normal">(optional)</span></th>
                                     <th class="p-2 text-left font-medium w-32">Type</th>
                                     <th class="p-2 text-center font-medium w-24">Channel</th>
                                     <th class="p-2 w-12"></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
-                                ${points.map(({name, dtype}) => `
+                                ${points.map(({name, dtype, alias}) => `
                                     <tr class="hover:bg-slate-50" data-tag-row data-group-idx="${idx}" data-tag-name="${_esc(name)}">
                                         <td class="p-2 pl-8 w-8">
                                             <input type="checkbox" class="tag-select" data-tag="${_esc(name)}" data-group="${idx}" onchange="window._updateTagCount()">
                                         </td>
                                         <td class="p-2 font-mono text-xs">
                                             <i class="fa-regular fa-circle-dot text-blue-300 mr-1"></i>${_esc(name)}
+                                        </td>
+                                        <td class="p-2">
+                                            <input type="text" class="compact-input text-xs tag-alias-input"
+                                                   value="${_esc(alias||'')}"
+                                                   placeholder="optional alias..."
+                                                   data-tag="${_esc(name)}"
+                                                   data-group-idx="${idx}"
+                                                   title="Alias for this tag inside the group JSON (optional)">
                                         </td>
                                         <td class="p-2">
                                             <span class="text-xs text-slate-400 italic">via group</span>
@@ -465,11 +474,11 @@ function _renderMappingsTable(conn) {
                     <select class="compact-select text-xs tag-channel" data-mapping-idx="${item.mappingIdx}"
                             onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
                         <option value="">  default  </option>
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label="? Publish">` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label=" Publish">` : ''}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="? Subscribe">` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label=" Subscribe">` : ''}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
                         ${item.channel && !pubChannelOptionsInd.find(c => c.name === item.channel)
                             ? `<option value="${_esc(item.channel)}" selected>${_esc(item.channel)}</option>` : ''}
@@ -543,7 +552,7 @@ window._updateGroupChannel = async function(connId, groupIdx, channel) {
     const conn = _connections.find(c => c.id === connId);
     if (!conn) return;
     const mappings = conn.config?.mappings || [];
-    const groups = mappings.filter(m => m.type === 'group');
+    const groups = mappings.filter(m => !!m.alias);
     const mapping = groups[groupIdx];
     if (!mapping) return;
     if (channel) mapping.channel = channel;
@@ -561,7 +570,7 @@ window._updateIndividualChannel = async function(connId, mappingIdx, tagName, ch
     
     const mappings = conn.config?.mappings || [];
     const mapping = mappings[mappingIdx];
-    if (!mapping || mapping.type === 'group') return; // Don't update groups here
+    if (!mapping || !!mapping.alias) return; // Don't update groups here
     
     // Update the channel for this mapping
     if (channel) {
@@ -645,7 +654,7 @@ window.removeSelectedTags = async function() {
     try {
         // Deep-clone mappings so we can mutate safely
         let mappings = JSON.parse(JSON.stringify(conn.config?.mappings || []));
-        const groups = mappings.filter(m => m.type === 'group');
+        const groups = mappings.filter(m => !!m.alias);
 
         // Collect what to remove, keyed by visual group index or individual tag name
         const groupsToDelete   = new Set();   // visual group indices (whole group removal)
@@ -678,7 +687,10 @@ window.removeSelectedTags = async function() {
                 const toStrip = groupTagsToStrip[visIdx];
                 const dp = mapping.datapoints || {};
                 ['bool', 'int', 'float', 'string'].forEach(dtype => {
-                    if (dp[dtype]) dp[dtype] = dp[dtype].filter(n => !toStrip.has(n));
+                    if (dp[dtype]) dp[dtype] = dp[dtype].filter(entry => {
+                        const n = typeof entry === 'string' ? entry : entry.name;
+                        return !toStrip.has(n);
+                    });
                 });
                 mapping.datapoints = dp;
             }
@@ -687,7 +699,7 @@ window.removeSelectedTags = async function() {
 
         // 2. Process individual mappings  remove entries whose single tag is in the set
         const updatedIndividuals = mappings
-            .filter(m => m.type !== 'group')
+            .filter(m => !m.alias)
             .filter(m => {
                 const pts = _flattenDatapoints(m.datapoints || {});
                 // Remove mapping if ALL its tags are in the individual removal set
@@ -842,10 +854,10 @@ async function _saveMqttPublishing(id) {
     const individualBuckets = {};   // key ? { channel, dtype, names[] }
 
     existingMappings.forEach((mapping, mIdx) => {
-        const isGroup = mapping.type === 'group';
+        const isGroup = !!mapping.alias;
 
         if (isGroup) {
-            // GROUP: per-tag alias; plain string if default, {name,alias} object if customized
+            // GROUP: per-tag alias lives INSIDE datapoints as {name, alias} if set, else plain string
             const visualIdx   = _getGroupVisualIdx(existingMappings, mIdx);
             const typeSel     = document.querySelector(`.group-type-select[data-group-idx="${visualIdx}"]`);
             const dtype       = typeSel ? typeSel.value : _detectGroupType(mapping.datapoints);
@@ -853,9 +865,11 @@ async function _saveMqttPublishing(id) {
             const tagEntries  = allTagNames.map(name => {
                 const aliasInput = document.querySelector(`.tag-alias-input[data-tag="${CSS.escape(name)}"][data-group-idx="${visualIdx}"]`);
                 const alias      = aliasInput?.value.trim() || '';
-                return { name, alias };  // always object form
+                // alias entered ? {name, alias} inside datapoints; no alias ? plain string
+                return alias ? { name, alias } : name;
             });
-            updatedMappings.push({ ...mapping, type: 'group', datapoints: { [dtype]: tagEntries } });
+            const { type: _drop, ...mappingWithoutType } = mapping;
+            updatedMappings.push({ ...mappingWithoutType, datapoints: { [dtype]: tagEntries } });
         }
     });
 
@@ -875,12 +889,11 @@ async function _saveMqttPublishing(id) {
         const dtype      = typeSel?.value || 'float';
         const channel    = chSel?.value.trim() || '';
         const alias      = aliasInput?.value.trim();
-        // alias typed ? top-level alias + {name} object inside datapoints
-        // no alias     ? plain string inside datapoints, no alias key
-        const tagEntry   = alias ? { name: tagName } : tagName;
+        // alias typed ? {name, alias} object inside datapoints (alias lives INSIDE, not top-level)
+        // no alias     ? plain string inside datapoints, no alias key anywhere
+        const tagEntry   = alias ? { name: tagName, alias } : tagName;
         const entry      = { datapoints: { [dtype]: [tagEntry] } };
         if (channel) entry.channel = channel;
-        if (alias)   entry.alias   = alias;
         updatedMappings.push(entry);
     });
 
@@ -961,7 +974,7 @@ window._cloudRemoveTagFromMapping = async function (connId, mappingIdx, tagName)
     const mappings = conn.config?.mappings || [];
     const dp = mappings[mappingIdx]?.datapoints || {};
     ['bool','int','float','string'].forEach(dtype => {
-        if (dp[dtype]) dp[dtype] = dp[dtype].filter(n => n !== tagName);
+        if (dp[dtype]) dp[dtype] = dp[dtype].filter(n => (typeof n === 'string' ? n : n.name) !== tagName);
     });
     try {
         await _api('PUT', `${API}/connections/${connId}`, { config: { mappings } });
@@ -1088,7 +1101,7 @@ async function _openTagsModal(conn) {
                 if (!datapoints[dtype]) datapoints[dtype] = [];
                 datapoints[dtype].push(cb.dataset.tag);
             });
-            const newMapping = { alias, type: 'group', datapoints };
+            const newMapping = { alias, datapoints };
             if (channel) newMapping.channel = channel;
             newMappings = [...existingMappings, newMapping];
         } else {
@@ -1128,7 +1141,7 @@ window._openGroupTagsModal = async function(connId, groupVisualIdx) {
 
     // Find the actual mapping by visual group index
     const mappings = conn.config?.mappings || [];
-    const groups   = mappings.filter(m => m.type === 'group');
+    const groups   = mappings.filter(m => !!m.alias);
     const mapping  = groups[groupVisualIdx];
     if (!mapping) return;
 
@@ -1190,7 +1203,7 @@ window._openGroupTagsModal = async function(connId, groupVisualIdx) {
         const allMappings = conn.config?.mappings || [];
         let realIdx = -1, gCount = 0;
         for (let i = 0; i < allMappings.length; i++) {
-            if (allMappings[i].type === 'group') {
+            if (!!allMappings[i].alias) {
                 if (gCount === groupVisualIdx) { realIdx = i; break; }
                 gCount++;
             }
