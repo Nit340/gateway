@@ -7,12 +7,55 @@ import sqlite3
 import io
 import csv
 import re
+import os
 from datetime import datetime
 from aiohttp import web
 
 from general import device_status_tracker
 from database import DB_FILE, get_service_by_name, get_port_config
 from general import initialize_device_status, remove_device_status, update_device_status
+
+# ============================================================================
+# EXTERNAL DEVICE FILE STORAGE
+# Each external device is stored as an individual JSON file:
+#   /mnt/data/external_devices/<device_id>.json
+# ============================================================================
+
+_EXT_DEVICE_DIR = os.environ.get('EXT_DEVICE_DIR', '/mnt/data/external_devices')
+
+def _ensure_ext_dir():
+    os.makedirs(_EXT_DEVICE_DIR, exist_ok=True)
+
+def _ext_device_path(device_id):
+    return os.path.join(_EXT_DEVICE_DIR, '{}.json'.format(device_id))
+
+def _write_ext_device_file(device_id, payload):
+    """Write a single external device JSON file."""
+    _ensure_ext_dir()
+    path = _ext_device_path(device_id)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+def _read_ext_device_file(device_id):
+    """Read a single external device JSON file. Returns dict or None."""
+    path = _ext_device_path(device_id)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print('[EXT] Failed to read {}: {}'.format(path, e))
+        return None
+
+def _delete_ext_device_file(device_id):
+    """Delete the external device JSON file if it exists."""
+    path = _ext_device_path(device_id)
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except Exception as e:
+        print('[EXT] Failed to delete {}: {}'.format(path, e))
 
 # ============================================================================
 # DATABASE CONNECTION HELPER
@@ -420,14 +463,14 @@ async def add_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Enforce max-1 for loadcell
+        # Enforce max-2 for loadcell
         if device_type == 'loadcell':
             cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-            if cursor.fetchone()[0] >= 1:
+            if cursor.fetchone()[0] >= 2:
                 conn.close()
                 return web.json_response({
                     'success': False,
-                    'error': 'Only 1 Loadcell device is allowed. Delete the existing one first.'
+                    'error': 'Maximum 2 Loadcell devices allowed. Delete an existing one first.'
                 }, status=400)
 
         # Generate device ID with unique prefix
@@ -541,11 +584,26 @@ async def add_device(request):
             # Add External device — stores Modbus RTU or TCP config
             config = data.get('config', {})
             ext_protocol = data.get('protocol', 'ext-rtu')
+            device_type_init = data.get('device_type_init', '')
+            model_name = data.get('model_name', '')
             import json as _extjson
+            # Store device_type_init and model_name inside config for persistence
+            config['device_type_init'] = device_type_init
+            config['model_name'] = model_name
             cursor.execute('''
                 INSERT INTO external_device (id, name, enabled, protocol, config)
                 VALUES (?, ?, 1, ?, ?)
             ''', (device_id, data.get('name', 'External Device'), ext_protocol, _extjson.dumps(config)))
+
+            # Write per-device JSON file
+            _write_ext_device_file(device_id, {
+                'id': device_id,
+                'name': data.get('name', 'External Device'),
+                'protocol': ext_protocol,
+                'enabled': True,
+                'config': config,
+                'created_at': datetime.utcnow().isoformat()
+            })
             # external_datapoints are managed via tag mapping page (like vfd_datapoints)
 
         else:  # VFD (TCP or RTU)
@@ -649,11 +707,26 @@ async def update_device(request):
                 return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
             import json as _extjson
             new_protocol = data.get('protocol', 'ext-rtu')
-            new_config = _extjson.dumps(data.get('config', {}))
+            new_config = data.get('config', {})
+            # Preserve device_type_init and model_name if provided at top level
+            if 'device_type_init' in data:
+                new_config['device_type_init'] = data['device_type_init']
+            if 'model_name' in data:
+                new_config['model_name'] = data['model_name']
             cursor.execute(
                 'UPDATE external_device SET name=?, protocol=?, config=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-                (new_name, new_protocol, new_config, device_id)
+                (new_name, new_protocol, _extjson.dumps(new_config), device_id)
             )
+
+            # Update per-device JSON file
+            _write_ext_device_file(device_id, {
+                'id': device_id,
+                'name': new_name,
+                'protocol': new_protocol,
+                'enabled': True,
+                'config': new_config,
+                'updated_at': datetime.utcnow().isoformat()
+            })
 
         elif is_modbus:
             # Update Modbus device
@@ -791,6 +864,9 @@ async def delete_device(request):
         
         conn.commit()
         conn.close()
+        
+        # Remove per-device JSON file if it exists
+        _delete_ext_device_file(device_id)
         
         remove_device_status(device_id)
         
@@ -982,6 +1058,14 @@ async def duplicate_device(request):
             loadcell_row = cursor.fetchone()
             
             if loadcell_row:
+                # Enforce max-2 for loadcell duplicates
+                cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+                if cursor.fetchone()[0] >= 2:
+                    conn.close()
+                    return web.json_response({
+                        'success': False,
+                        'message': 'Maximum 2 Loadcell devices allowed. Delete an existing one first.'
+                    }, status=400)
                 # Get column names
                 cursor.execute('PRAGMA table_info(loadcell_device)')
                 columns = [col[1] for col in cursor.fetchall()]

@@ -14,42 +14,17 @@
             <label class="block text-sm font-medium text-slate-700 mb-3">Device Type</label>
             <div class="flex flex-col gap-2">
                 <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="device-type" value="vfd" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                    <input type="radio" name="device-type" value="loadcell" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
                     <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">VFD</div>
-                        <div class="text-xs text-slate-500 mt-0.5">Variable Frequency Drive</div>
-                    </div>
-                </label>
-                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="device-type" value="loadcell" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                    <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Loadcell</div>
+                        <div class="font-medium text-sm text-slate-900">On-Board Loadcell</div>
+                        <div class="text-xs text-slate-500 mt-0.5">Built-in IIO ADC channel</div>
                     </div>
                 </label>
                 <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
                     <input type="radio" name="device-type" value="external" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                     <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">External Devices</div>
-                        <div class="text-xs text-slate-500 mt-0.5">External third-party hardware</div>
-                    </div>
-                </label>
-            </div>
-        </div>
-
-        <!-- Protocol Selection (shown only for VFD) -->
-        <div class="mb-6" id="protocolSelectionSection">
-            <label class="block text-sm font-medium text-slate-700 mb-2">Protocol</label>
-            <div class="grid grid-cols-2 gap-3">
-                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="vfd-protocol" value="vfd-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                    <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
-                    </div>
-                </label>
-                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                    <input type="radio" name="vfd-protocol" value="vfd-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                    <div class="ml-3">
-                        <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
+                        <div class="font-medium text-sm text-slate-900">External Interface Device</div>
+                        <div class="text-xs text-slate-500 mt-0.5">External third-party hardware via Modbus</div>
                     </div>
                 </label>
             </div>
@@ -68,173 +43,38 @@
         
         <!-- Protocol Specific Configuration -->
         <div id="protocolConfigs">
-            <!-- Modbus RTU Configuration - Updated with correct parameters -->
-            <div id="modbus-rtu-config" class="protocol-config active">
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">VFD — Modbus RTU Settings</h3>
-                <div class="space-y-4">
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
-                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="rtuSlaveId">
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
-                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="serialPort">
-                            <option value="/dev/ttymxc5">Port 1</option>
-                            <option value="/dev/ttymxc2">Port 2</option>
-                        </select>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Baud Rate</label>
-                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="baudRate">
-                                <option>9600</option>
-                                <option>19200</option>
-                                <option>38400</option>
-                                <option>57600</option>
-                                <option>115200</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Data Bits</label>
-                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="dataBits">
-                                <option>8</option>
-                                <option>7</option>
-                                <option>6</option>
-                                <option>5</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Parity</label>
-                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="parity">
-                                <option value="N">None</option>
-                                <option value="E">Even</option>
-                                <option value="O">Odd</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Stop Bits</label>
-                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="stopBits">
-                                <option>1</option>
-                                <option>2</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
-                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="responseTimeout">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
-                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="byteTimeout">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
-                            <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="maxRetries">
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
-                        <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="pollingInterval">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Modbus TCP Configuration - Updated with correct parameters -->
-            <div id="modbus-tcp-config" class="protocol-config">
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">VFD — Modbus TCP Settings</h3>
-                <div class="space-y-4">
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
-                        <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpSlaveId">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
-                            <input type="text" value="192.168.1.100" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpIp">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
-                            <input type="number" min="1" max="65535" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="modbusTcpPort">
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
-                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpResponseTimeout">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
-                            <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpByteTimeout">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
-                            <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpMaxRetries">
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
-                        <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="tcpPollingInterval">
-                    </div>
-                </div>
-            </div>
-            
             <!-- Loadcell Configuration -->
-            <div id="loadcell-config" class="protocol-config">
+            <div id="loadcell-config" class="protocol-config active">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Loadcell Settings</h3>
                 <div class="space-y-5">
 
                     <!-- Mode Selection -->
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Mode <span class="text-red-500">*</span></label>
-                        <div class="grid grid-cols-2 gap-3" id="lcModeSelector">
+                        <div class="flex flex-col gap-2" id="lcModeSelector">
                             <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
                                 <input type="radio" name="lc-mode" value="single_ended" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
                                 <div class="ml-3">
                                     <div class="font-medium text-sm text-slate-900">Single Point</div>
-                                 
                                 </div>
                             </label>
                             <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
                                 <input type="radio" name="lc-mode" value="differential" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                                 <div class="ml-3">
                                     <div class="font-medium text-sm text-slate-900">Differential</div>
-                                   
+                                </div>
+                            </label>
+                            <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                                <input type="radio" name="lc-mode" value="indifferential" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                <div class="ml-3">
+                                    <div class="font-medium text-sm text-slate-900">Indifferential</div>
                                 </div>
                             </label>
                         </div>
-                    </div>
-
-                    <!-- Channel for Single Point -->
-                    <div id="lcSingleEndedChannel">
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel <span class="text-red-500">*</span></label>
-                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePath">
-                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
-                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
-                        </select>
-                        <p class="text-xs text-slate-400 mt-1">IIO sysfs channel path (sysfs_hx711)</p>
-                    </div>
-
-                    <!-- Channel for Differential (Channel  only) -->
-                    <div id="lcDifferentialChannels" style="display:none;">
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel  <span class="text-red-500">*</span></label>
-                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePathCh1">
-                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
-                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
-                        </select>
-                        <p class="text-xs text-slate-400 mt-1">Select Channel  for differential measurement (IIO sysfs channel path)</p>
+                        <p class="text-xs text-slate-400 mt-2">
+                            <i class="fa-solid fa-circle-info mr-1"></i>
+                            All modes default to <strong>Channel 1</strong>.
+                        </p>
                     </div>
 
                     <!-- Poll Interval -->
@@ -351,6 +191,20 @@
             <!-- External Device Configuration -->
             <div id="external-config" class="protocol-config">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">External Device Settings</h3>
+
+                <!-- Device Type Init & Model Name -->
+                <div class="space-y-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Type Init <span class="text-red-500">*</span></label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. vfd, sensor, meter" id="extDeviceTypeInit">
+                        <p class="text-xs text-slate-400 mt-1">Identifier for the type of external device (e.g. vfd)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Model Name <span class="text-red-500">*</span></label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. ABB ACS880, Siemens SINAMICS" id="extModelName">
+                        <p class="text-xs text-slate-400 mt-1">Manufacturer model name of the external device</p>
+                    </div>
+                </div>
 
                 <!-- External Protocol Selection -->
                 <div class="mb-4">

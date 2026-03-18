@@ -625,19 +625,10 @@
             return entry ? entry.label : (serialPort === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
         } else if (device.protocol === 'loadcell') {
             const config = device.config || {};
-            const lcMode = config.lc_mode || 'single_ended';
-            
-            if (lcMode === 'differential') {
-                // For differential mode, show Channel 1 only
-                const ch1Entry = portConfig.loadcell.find(p => p.port_value === config.device_path);
-                const ch1Label = ch1Entry ? ch1Entry.label : 'Channel 1';
-                return ch1Label;
-            } else {
-                // Single point mode - show single channel
-                const devicePath = config.device_path || device.address;
-                const entry = portConfig.loadcell.find(p => p.port_value === devicePath);
-                return entry ? entry.label : 'Channel 1';
-            }
+            // All modes (single_ended, differential, indifferential) default to Channel 1
+            const devicePath = config.device_path || device.address;
+            const entry = portConfig.loadcell.find(p => p.port_value === devicePath);
+            return entry ? entry.label : 'Channel 1';
         }
         return device.address || 'Not configured';
     }
@@ -863,36 +854,18 @@
             `;
         } else if (protocol === 'loadcell') {
             const lcMode = config.lc_mode || 'single_ended';
+            const lcModeLabel = lcMode === 'single_ended' ? 'Single Point' : lcMode === 'differential' ? 'Differential' : 'Indifferential';
             
-            if (lcMode === 'differential') {
-                const ch1Entry = portConfig.loadcell.find(p => p.port_value === config.device_path);
-                const ch1Label = ch1Entry ? ch1Entry.label : 'Channel';
-                
-                detailsHtml += `
+            detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Mode</div>
-                                    <div class="text-sm text-slate-700">Differential</div>
-                                </div>
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Channel </div>
-                                    <div class="text-sm font-mono text-slate-700">${ch1Label}</div>
-                                </div>
-                `;
-            } else {
-                const chEntry = portConfig.loadcell.find(p => p.port_value === config.device_path);
-                const chLabel = chEntry ? chEntry.label : 'Channel';
-                
-                detailsHtml += `
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Mode</div>
-                                    <div class="text-sm text-slate-700">Single Point</div>
+                                    <div class="text-sm text-slate-700">${lcModeLabel}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Channel</div>
-                                    <div class="text-sm font-mono text-slate-700">${chLabel}</div>
+                                    <div class="text-sm font-mono text-slate-700">Channel 1</div>
                                 </div>
-                `;
-            }
+            `;
             
             detailsHtml += `
                                 <div>
@@ -1019,17 +992,17 @@
             populatePortDropdowns();
             document.getElementById('deviceNameInput').value = '';
 
-            // Enforce max-1 for loadcell and virtual
+            // Enforce max-2 for loadcell
             const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
 
             const lcRadio = panel.querySelector('input[name="device-type"][value="loadcell"]');
             const lcLabel = lcRadio ? lcRadio.closest('label') : null;
             if (lcRadio) {
-                lcRadio.disabled = loadcellCount >= 1;
+                lcRadio.disabled = loadcellCount >= 2;
                 if (lcLabel) {
-                    lcLabel.title = loadcellCount >= 1 ? 'Only 1 Loadcell device is allowed' : '';
-                    lcLabel.style.opacity = loadcellCount >= 1 ? '0.45' : '';
-                    lcLabel.style.cursor  = loadcellCount >= 1 ? 'not-allowed' : '';
+                    lcLabel.title = loadcellCount >= 2 ? 'Maximum 2 Loadcell devices allowed' : '';
+                    lcLabel.style.opacity = loadcellCount >= 2 ? '0.45' : '';
+                    lcLabel.style.cursor  = loadcellCount >= 2 ? 'not-allowed' : '';
                 }
             }
 
@@ -1045,10 +1018,18 @@
                 r.addEventListener('change', handleExtProtocolChange);
             });
 
-            const firstRadio = panel.querySelector('input[name="device-type"][value="vfd"]');
-            if (firstRadio) {
-                firstRadio.checked = true;
-                switchDeviceType('vfd');
+            // Default to loadcell
+            const lcDefaultRadio = panel.querySelector('input[name="device-type"][value="loadcell"]');
+            if (lcDefaultRadio && !lcDefaultRadio.disabled) {
+                lcDefaultRadio.checked = true;
+                switchDeviceType('loadcell');
+            } else {
+                // If loadcell is at max, default to external
+                const extRadio = panel.querySelector('input[name="device-type"][value="external"]');
+                if (extRadio) {
+                    extRadio.checked = true;
+                    switchDeviceType('external');
+                }
             }
         }
     }
@@ -1064,37 +1045,22 @@
     function switchDeviceType(type) {
         const panel = document.getElementById('addDevicePanel');
 
-        // Show/hide protocol sub-section (only visible for VFD)
-        const protocolSection = document.getElementById('protocolSelectionSection');
-        if (protocolSection) {
-            protocolSection.style.display = (type === 'vfd') ? '' : 'none';
-        }
-
-        // Resolve VFD -> actual modbus protocol from nested radio
-        let resolvedType = type;
-        if (type === 'vfd') {
-            const vfdProto = panel.querySelector('input[name="vfd-protocol"]:checked');
-            resolvedType = vfdProto ? vfdProto.value : 'vfd-rtu';
-        }
-
         const configs = (panel || document).querySelectorAll('.protocol-config');
         configs.forEach(config => config.classList.remove('active'));
 
-        // Map resolved type to the actual config div ID
+        // Map type to config div ID
         const configIdMap = {
-            'vfd-rtu':   'modbus-rtu-config',
-            'vfd-tcp':   'modbus-tcp-config',
             'loadcell':  'loadcell-config',
             'external':  'external-config',
         };
-        const configDivId = configIdMap[resolvedType] || (resolvedType + '-config');
+        const configDivId = configIdMap[type] || (type + '-config');
         const selectedConfig = document.getElementById(configDivId);
         if (selectedConfig) {
             selectedConfig.classList.add('active');
         }
 
         // Wire loadcell mode radios
-        if (resolvedType === 'loadcell') {
+        if (type === 'loadcell') {
             document.querySelectorAll('input[name="lc-mode"]').forEach(r => {
                 r.removeEventListener('change', handleLcModeChange);
                 r.addEventListener('change', handleLcModeChange);
@@ -1103,7 +1069,7 @@
         }
 
         // Wire external protocol radios
-        if (resolvedType === 'external') {
+        if (type === 'external') {
             document.querySelectorAll('input[name="ext-protocol"]').forEach(r => {
                 r.removeEventListener('change', handleExtProtocolChange);
                 r.addEventListener('change', handleExtProtocolChange);
@@ -1124,16 +1090,7 @@
 
     function handleLcModeChange() {
         const mode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
-        const singleEl = document.getElementById('lcSingleEndedChannel');
-        const diffEl = document.getElementById('lcDifferentialChannels');
-        
-        if (singleEl) {
-            singleEl.style.display = mode === 'single_ended' ? 'block' : 'none';
-        }
-        if (diffEl) {
-            diffEl.style.display = mode === 'differential' ? 'block' : 'none';
-        }
-        
+        // No channel dropdowns — Channel 1 is always the default for all modes.
         console.log(`Loadcell mode changed to: ${mode}`);
     }
 
@@ -1157,12 +1114,12 @@
                 return;
             }
             
-            // Enforce max-1 for loadcell and virtual (only on add, not edit)
+            // Enforce max-2 for loadcell (only on add, not edit)
             if (!selectedDeviceId) {
                 if (deviceType === 'loadcell') {
                     const existing = devices.filter(d => d.protocol === 'loadcell').length;
-                    if (existing >= 1) {
-                        showNotification('Only 1 Loadcell device is allowed. Delete the existing one first.', 'error');
+                    if (existing >= 2) {
+                        showNotification('Maximum 2 Loadcell devices allowed. Delete an existing one first.', 'error');
                         isSaving = false;
                         return;
                     }
@@ -1174,55 +1131,15 @@
                 config: {}
             };
             
-            // Resolve VFD -> actual protocol
-            if (deviceType === 'vfd') {
-                const vfdProto = document.querySelector('#addDevicePanel input[name="vfd-protocol"]:checked')?.value;
-                deviceType = vfdProto || 'vfd-rtu';
-            }
-
-            if (deviceType === 'vfd-rtu') {
-                requestData.type = 'vfd';
-                requestData.protocol = 'vfd-rtu';
-                requestData.protocol_type = 'rtu';
-                requestData.device_type = 'rtu';
-                requestData.config = {
-                    slave_id: parseInt(document.getElementById('rtuSlaveId')?.value) || 1,
-                    serial_port: document.getElementById('serialPort')?.value || (portConfig.modbus[0]?.port_value ?? '/dev/ttymxc5'),
-                    baud_rate: parseInt(document.getElementById('baudRate')?.value) || 9600,
-                    data_bits: parseInt(document.getElementById('dataBits')?.value) || 8,
-                    parity: document.getElementById('parity')?.value || 'N',
-                    stop_bits: parseInt(document.getElementById('stopBits')?.value) || 1,
-                    response_timeout_ms: parseInt(document.getElementById('responseTimeout')?.value) || 100,
-                    byte_timeout_ms: parseInt(document.getElementById('byteTimeout')?.value) || 100,
-                    max_retries: parseInt(document.getElementById('maxRetries')?.value) || 2,
-                    polling_interval_ms: parseInt(document.getElementById('pollingInterval')?.value) || 300
-                };
-            } else if (deviceType === 'vfd-tcp') {
-                requestData.type = 'vfd';
-                requestData.protocol = 'vfd-tcp';
-                requestData.protocol_type = 'tcp';
-                requestData.device_type = 'tcp';
-                requestData.config = {
-                    slave_id: parseInt(document.getElementById('tcpSlaveId')?.value) || 1,
-                    ip_address: document.getElementById('modbusTcpIp')?.value || '192.168.1.100',
-                    port: parseInt(document.getElementById('modbusTcpPort')?.value) || 502,
-                    response_timeout_ms: parseInt(document.getElementById('tcpResponseTimeout')?.value) || 100,
-                    byte_timeout_ms: parseInt(document.getElementById('tcpByteTimeout')?.value) || 100,
-                    max_retries: parseInt(document.getElementById('tcpMaxRetries')?.value) || 2,
-                    polling_interval_ms: parseInt(document.getElementById('tcpPollingInterval')?.value) || 300
-                };
-            } else if (deviceType === 'loadcell') {
+            // Resolve protocol for this request (no VFD)
+            if (deviceType === 'loadcell') {
                 requestData.type = 'loadcell';
                 requestData.protocol = 'loadcell';
                 const lcMode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
                 
-                let devicePath = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
-                
-                if (lcMode === 'single_ended') {
-                    devicePath = document.getElementById('devicePath')?.value || devicePath;
-                } else if (lcMode === 'differential') {
-                    devicePath = document.getElementById('devicePathCh1')?.value || devicePath;
-                }
+                // Always default to Channel 1 — no dropdown for channel selection
+                const defaultPath = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                const devicePath = defaultPath;
                 
                 requestData.config = {
                     lc_mode: lcMode,
@@ -1246,10 +1163,14 @@
                 };
             } else if (deviceType === 'external') {
                 const extProto = document.querySelector('#addDevicePanel input[name="ext-protocol"]:checked')?.value || 'ext-rtu';
+                const extDeviceTypeInit = document.getElementById('extDeviceTypeInit')?.value?.trim() || '';
+                const extModelName = document.getElementById('extModelName')?.value?.trim() || '';
                 if (extProto === 'ext-rtu') {
                     requestData.type = 'external';
                     requestData.protocol = 'ext-rtu';
                     requestData.protocol_type = 'rtu';
+                    requestData.device_type_init = extDeviceTypeInit;
+                    requestData.model_name = extModelName;
                     requestData.config = {
                         slave_id: parseInt(document.getElementById('extRtuSlaveId')?.value) || 1,
                         serial_port: document.getElementById('extSerialPort')?.value || '/dev/ttymxc5',
@@ -1266,6 +1187,8 @@
                     requestData.type = 'external';
                     requestData.protocol = 'ext-tcp';
                     requestData.protocol_type = 'tcp';
+                    requestData.device_type_init = extDeviceTypeInit;
+                    requestData.model_name = extModelName;
                     requestData.config = {
                         slave_id: parseInt(document.getElementById('extTcpSlaveId')?.value) || 1,
                         ip_address: document.getElementById('extTcpIp')?.value || '192.168.1.100',
@@ -1360,20 +1283,11 @@
         }
         if (proto === 'loadcell') {
             const mode = cfg.lc_mode || 'single_ended';
-            const chOpts = (portConfig.loadcell.length
-                ? portConfig.loadcell.map(p => ({v: p.port_value, l: p.label}))
-                : [{v:'/sys/bus/iio/devices/iio:device0/in_voltage0_raw',l:'Channel 1'},{v:'/sys/bus/iio/devices/iio:device1/in_voltage0_raw',l:'Channel 2'}]);
+            const modeLabel = mode === 'single_ended' ? 'Single Point' : mode === 'differential' ? 'Differential' : 'Indifferential';
             
             return `<div class="space-y-4">
-                ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'}])}
-                <div id="editLcChSingle" style="${mode==='single_ended'?'':'display:none'}">
-                    ${sel('editDevicePath','Channel', cfg.device_path||chOpts[0].v, chOpts)}
-                </div>
-                <div id="editLcChDiff" style="${mode==='differential'?'':'display:none'}">
-                    ${sel('editDevicePathCh1','Channel ', cfg.device_path||chOpts[0].v, chOpts)}
-                    <p class="text-xs text-slate-400 mt-1">Select Channel  for differential measurement</p>
-                </div>
-                <p class="text-xs text-slate-400 mt-1 mb-2">Channel selection determines the Address/ID display in the table view</p>
+                ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'},{v:'indifferential',l:'Indifferential'}])}
+                <p class="text-xs text-slate-400 -mt-1">All modes use <strong>Channel 1</strong> by default.</p>
                 ${inp('editPollMs','Poll Interval (ms)', cfg.poll_ms||10,'number','min="1" max="1000"')}
                 <div class="grid grid-cols-3 gap-3">
                     ${inp('editCapacityMin','Capacity Min', cfg.capacity_min||0,'number','step="0.1"')}
@@ -1415,11 +1329,10 @@
             // Loadcell
             if (g('editLcMode')) {
                 cfg.lc_mode = g('editLcMode').value;
-                // For differential mode, get Channel 1 from dropdown
-                if (cfg.lc_mode === 'differential') {
-                    cfg.device_path = g('editDevicePathCh1')?.value || '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
-                } else {
-                    cfg.device_path = g('editDevicePath')?.value;
+                // Always use Channel 1 default — no channel dropdown
+                cfg.device_path = '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                if (portConfig.loadcell.length > 0) {
+                    cfg.device_path = portConfig.loadcell[0].port_value;
                 }
             }
             if (g('editPollMs')) cfg.poll_ms = parseInt(g('editPollMs').value) || 10;
@@ -2083,23 +1996,15 @@
         }
         
         const addDevicePanel = document.getElementById('addDevicePanel');
-        // Wire vfd-protocol radios to update config panel
-        document.querySelectorAll('#addDevicePanel input[name="vfd-protocol"]').forEach(function(r) {
-            r.addEventListener('change', function() {
-                const dt = document.querySelector('#addDevicePanel input[name="device-type"]:checked')?.value;
-                if (dt === 'vfd') switchDeviceType('vfd');
-            });
+        // Wire ext-protocol radios in setup
+        document.querySelectorAll('#addDevicePanel input[name="ext-protocol"]').forEach(r => {
+            r.addEventListener('change', handleExtProtocolChange);
         });
 
         document.querySelectorAll('#addDevicePanel input[name="device-type"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 switchDeviceType(this.value);
             });
-        });
-
-        // Wire external protocol radios in setup
-        document.querySelectorAll('#addDevicePanel input[name="ext-protocol"]').forEach(r => {
-            r.addEventListener('change', handleExtProtocolChange);
         });
         
         const closeDetailsBtn = document.getElementById('closeDetailsBtn');
@@ -2173,11 +2078,8 @@
         // Wire editLcMode change in edit panel
         document.addEventListener('change', function(e) {
             if (e.target && e.target.id === 'editLcMode') {
-                const mode = e.target.value;
-                const s = document.getElementById('editLcChSingle');
-                const d = document.getElementById('editLcChDiff');
-                if (s) s.style.display = mode === 'single_ended' ? 'block' : 'none';
-                if (d) d.style.display = mode === 'differential' ? 'block' : 'none';
+                // No channel dropdowns to show/hide — Channel 1 is always default
+                console.log('Loadcell edit mode changed to:', e.target.value);
             }
         });
 

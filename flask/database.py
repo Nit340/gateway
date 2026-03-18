@@ -166,7 +166,7 @@ def create_tables(cursor):
 
             device_path      TEXT    NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
             device_path_ch2  TEXT    DEFAULT NULL,
-            lc_mode          TEXT    DEFAULT 'init' CHECK(lc_mode IN ('init', 'single_ended', 'differential')),
+            lc_mode          TEXT    DEFAULT 'init' CHECK(lc_mode IN ('init', 'single_ended', 'differential', 'indifferential')),
 
             load_name        TEXT    DEFAULT 'load',
             capacity_name    TEXT    DEFAULT 'capacity',
@@ -585,6 +585,59 @@ def _migrate_existing_db(cursor):
     if 'device_path_ch2' not in lc_cols:
         cursor.execute("ALTER TABLE loadcell_device ADD COLUMN device_path_ch2 TEXT DEFAULT NULL")
         print("[DB] Migration: added loadcell_device.device_path_ch2")
+
+    # loadcell_device: ensure lc_mode CHECK allows 'indifferential' (rebuild if old constraint)
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='loadcell_device'")
+    _lc_sql = cursor.fetchone()
+    if _lc_sql and 'indifferential' not in _lc_sql[0]:
+        try:
+            cursor.executescript('''
+                PRAGMA foreign_keys = OFF;
+                CREATE TABLE IF NOT EXISTS loadcell_device_new AS SELECT * FROM loadcell_device;
+                DROP TABLE loadcell_device;
+                CREATE TABLE loadcell_device (
+                    id               TEXT    PRIMARY KEY,
+                    name             TEXT    NOT NULL,
+                    service_id       INTEGER,
+                    device_path      TEXT    NOT NULL DEFAULT '/sys/bus/iio/devices/iio:device0/in_voltage0_raw',
+                    device_path_ch2  TEXT    DEFAULT NULL,
+                    lc_mode          TEXT    DEFAULT 'init',
+                    load_name        TEXT    DEFAULT 'load',
+                    capacity_name    TEXT    DEFAULT 'capacity',
+                    pipeline_server  TEXT    DEFAULT '127.0.0.1',
+                    pipeline_port    INTEGER DEFAULT 7000,
+                    log_level        TEXT    DEFAULT 'info',
+                    poll_ms          INTEGER DEFAULT 10,
+                    resolution_bits  INTEGER DEFAULT 24,
+                    effective_bits   INTEGER DEFAULT 14,
+                    signed           BOOLEAN DEFAULT 0,
+                    gain             REAL    DEFAULT 1,
+                    vref             REAL    DEFAULT 5,
+                    raw_min          REAL    DEFAULT 0,
+                    raw_max          REAL    DEFAULT 16383,
+                    capacity_min     REAL    DEFAULT 0,
+                    capacity_max     REAL    DEFAULT 1000,
+                    unit             TEXT    DEFAULT 'kg',
+                    tare_offset      REAL    DEFAULT 0.0,
+                    known_weight     REAL    DEFAULT 0.0,
+                    known_weight_raw REAL    DEFAULT 0.0,
+                    raw_filters      TEXT    DEFAULT '[]',
+                    weight_filters   TEXT    DEFAULT '[]',
+                    levels           TEXT    DEFAULT '[]',
+                    publish_step_grams REAL  DEFAULT 1.0,
+                    action_tare      TEXT    DEFAULT NULL,
+                    action_calibrate TEXT    DEFAULT NULL,
+                    enabled          BOOLEAN DEFAULT 1,
+                    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO loadcell_device SELECT * FROM loadcell_device_new;
+                DROP TABLE loadcell_device_new;
+                PRAGMA foreign_keys = ON;
+            ''')
+            print("[DB] Migration: rebuilt loadcell_device to allow lc_mode='indifferential'")
+        except Exception as _e:
+            print("[DB] Migration warning (lc_mode rebuild): {}".format(_e))
 
     # external_datapoints: ensure table exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external_datapoints'")
