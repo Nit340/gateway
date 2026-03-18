@@ -298,7 +298,7 @@
                 `<option value="${p.port_value}">${p.label}</option>`
             ).join('');
         }
-        
+
         // External RTU serial port dropdown
         const extSerialPortEl = document.getElementById('extSerialPort');
         if (extSerialPortEl && portConfig.modbus.length) {
@@ -306,30 +306,13 @@
                 `<option value="${p.port_value}">${p.label}</option>`
             ).join('');
         }
-        
-        // Loadcell device path dropdown for single point
+
+        // Loadcell single-ended: single channel dropdown
         const devicePathEl = document.getElementById('devicePath');
         if (devicePathEl && portConfig.loadcell.length) {
             devicePathEl.innerHTML = portConfig.loadcell.map(p =>
                 `<option value="${p.port_value}">${p.label}</option>`
             ).join('');
-        }
-        
-        // Update differential channel labels if they exist
-        updateDifferentialChannelLabels();
-    }
-    
-    function updateDifferentialChannelLabels() {
-        const ch1Label = document.getElementById('diffChannel1Label');
-        const ch2Label = document.getElementById('diffChannel2Label');
-        
-        if (ch1Label && portConfig.loadcell.length >= 1) {
-            ch1Label.textContent = portConfig.loadcell[0]?.label || 'Channel 1';
-        }
-        if (ch2Label && portConfig.loadcell.length >= 2) {
-            ch2Label.textContent = portConfig.loadcell[1]?.label || 'Channel 2';
-        } else if (ch2Label) {
-            ch2Label.textContent = 'Channel 2';
         }
     }
 
@@ -625,10 +608,14 @@
             return entry ? entry.label : (serialPort === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
         } else if (device.protocol === 'loadcell') {
             const config = device.config || {};
-            // All modes (single_ended, differential, indifferential) default to Channel 1
-            const devicePath = config.device_path || device.address;
-            const entry = portConfig.loadcell.find(p => p.port_value === devicePath);
-            return entry ? entry.label : 'Channel 1';
+            const lcMode = config.lc_mode || 'single_ended';
+            if (lcMode === 'single_ended') {
+                const entry = portConfig.loadcell.find(p => p.port_value === config.device_path);
+                return entry ? entry.label : 'Channel 1';
+            } else {
+                // Differential: fixed Channel 1
+                return 'Channel 1';
+            }
         }
         return device.address || 'Not configured';
     }
@@ -753,7 +740,14 @@
                                     <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
                                     <div class="text-sm text-slate-700">${typeStyle.proto || escapeHtml(device.protocol || '—')}</div>
                                 </div>` : ''}
-
+                                ${(protocol === 'ext-rtu' || protocol === 'ext-tcp') && config.device_type ? `<div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Type</div>
+                                    <div class="text-sm text-slate-700">${escapeHtml(config.device_type)}</div>
+                                </div>` : ''}
+                                ${(protocol === 'ext-rtu' || protocol === 'ext-tcp') && config.model_name ? `<div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Model Name</div>
+                                    <div class="text-sm text-slate-700">${escapeHtml(config.model_name)}</div>
+                                </div>` : ''}
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Device ID</div>
                                     <div class="text-sm font-mono text-slate-600">${escapeHtml(device.id)}</div>
@@ -854,18 +848,33 @@
             `;
         } else if (protocol === 'loadcell') {
             const lcMode = config.lc_mode || 'single_ended';
-            const lcModeLabel = lcMode === 'single_ended' ? 'Single Point' : lcMode === 'differential' ? 'Differential' : 'Indifferential';
-            
-            detailsHtml += `
+            const lcModeLabel = lcMode === 'single_ended' ? 'Single Point' : 'Differential';
+
+            if (lcMode === 'single_ended') {
+                const chEntry = portConfig.loadcell.find(p => p.port_value === config.device_path);
+                const chLabel = chEntry ? chEntry.label : 'Channel 1';
+                detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Mode</div>
                                     <div class="text-sm text-slate-700">${lcModeLabel}</div>
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Channel</div>
-                                    <div class="text-sm font-mono text-slate-700">Channel 1</div>
+                                    <div class="text-sm font-mono text-slate-700">${chLabel}</div>
                                 </div>
-            `;
+                `;
+            } else {
+                detailsHtml += `
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Mode</div>
+                                    <div class="text-sm text-slate-700">${lcModeLabel}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Channel</div>
+                                    <div class="text-sm font-mono text-slate-700">Channel 1 (fixed)</div>
+                                </div>
+                `;
+            }
             
             detailsHtml += `
                                 <div>
@@ -1090,8 +1099,11 @@
 
     function handleLcModeChange() {
         const mode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
-        // No channel dropdowns — Channel 1 is always the default for all modes.
-        console.log(`Loadcell mode changed to: ${mode}`);
+        const singleEl = document.getElementById('lcSingleEndedChannels');
+        const diffEl   = document.getElementById('lcDifferentialInfo');
+        if (singleEl) singleEl.style.display = mode === 'single_ended' ? 'block' : 'none';
+        if (diffEl)   diffEl.style.display   = mode === 'differential'  ? 'block' : 'none';
+        console.log('Loadcell mode changed to:', mode);
     }
 
     async function saveDevice() {
@@ -1136,14 +1148,24 @@
                 requestData.type = 'loadcell';
                 requestData.protocol = 'loadcell';
                 const lcMode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
-                
-                // Always default to Channel 1 — no dropdown for channel selection
-                const defaultPath = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
-                const devicePath = defaultPath;
+
+                const defaultCh1 = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+
+                let devicePath, devicePathCh2;
+                if (lcMode === 'single_ended') {
+                    // Single dropdown: user picks which channel to use
+                    devicePath    = document.getElementById('devicePath')?.value || defaultCh1;
+                    devicePathCh2 = null;
+                } else {
+                    // Differential: fixed Channel 1, no second channel
+                    devicePath    = defaultCh1;
+                    devicePathCh2 = null;
+                }
                 
                 requestData.config = {
                     lc_mode: lcMode,
                     device_path: devicePath,
+                    device_path_ch2: devicePathCh2,
                     poll_ms: parseInt(document.getElementById('lcPollMs')?.value) || 10,
                     // ADC hardware parameters (fixed, not user-editable)
                     resolution_bits: 24,
@@ -1182,6 +1204,7 @@
                         byte_timeout_ms: parseInt(document.getElementById('extRtuByteTimeout')?.value) || 100,
                         max_retries: parseInt(document.getElementById('extRtuMaxRetries')?.value) || 2,
                         polling_interval_ms: parseInt(document.getElementById('extRtuPollingInterval')?.value) || 300
+                        // NOTE: no ip_address, no port — RTU uses serial only
                     };
                 } else {
                     requestData.type = 'external';
@@ -1197,6 +1220,7 @@
                         byte_timeout_ms: parseInt(document.getElementById('extTcpByteTimeout')?.value) || 100,
                         max_retries: parseInt(document.getElementById('extTcpMaxRetries')?.value) || 2,
                         polling_interval_ms: parseInt(document.getElementById('extTcpPollingInterval')?.value) || 300
+                        // NOTE: no serial_port, baud_rate, parity etc — TCP uses IP only
                     };
                 }
             }
@@ -1245,8 +1269,14 @@
             const portOpts = portConfig.modbus.length
                 ? portConfig.modbus.map(p => ({v: p.port_value, l: p.label}))
                 : [{v:'/dev/ttymxc5', l:'Port 1'},{v:'/dev/ttymxc2', l:'Port 2'}];
+            const extFields = proto === 'ext-rtu' ? `
+                <div class="grid grid-cols-2 gap-4">
+                    ${inp('editDeviceType','Type', cfg.device_type||cfg.device_type_init||'')}
+                    ${inp('editModelName','Model Name', cfg.model_name||'')}
+                </div>` : '';
             return `<div class="space-y-4">
-                ${ro('editSlaveId','Slave ID', cfg.slave_id||1)}
+                ${extFields}
+                ${inp('editSlaveId','Slave ID', cfg.slave_id||1,'number','min="1" max="247"')}
                 ${sel('editSerialPort','Serial Port', cfg.serial_port||'/dev/ttymxc5', portOpts)}
                 <p class="text-xs text-slate-400 mt-1 mb-2">This will be displayed as the Address/ID in the table view</p>
                 <div class="grid grid-cols-2 gap-4">
@@ -1266,8 +1296,14 @@
             </div>`;
         }
         if (proto === 'vfd-tcp' || proto === 'ext-tcp') {
+            const extFields = proto === 'ext-tcp' ? `
+                <div class="grid grid-cols-2 gap-4">
+                    ${inp('editDeviceType','Type', cfg.device_type||cfg.device_type_init||'')}
+                    ${inp('editModelName','Model Name', cfg.model_name||'')}
+                </div>` : '';
             return `<div class="space-y-4">
-                ${ro('editSlaveId','Slave ID', cfg.slave_id||1)}
+                ${extFields}
+                ${inp('editSlaveId','Slave ID', cfg.slave_id||1,'number','min="1" max="247"')}
                 <div class="grid grid-cols-2 gap-4">
                     ${inp('editTcpIp','IP Address', cfg.ip_address||'192.168.1.100')}
                     ${inp('editTcpPort','Port', cfg.port||502,'number','min="1" max="65535"')}
@@ -1283,11 +1319,31 @@
         }
         if (proto === 'loadcell') {
             const mode = cfg.lc_mode || 'single_ended';
-            const modeLabel = mode === 'single_ended' ? 'Single Point' : mode === 'differential' ? 'Differential' : 'Indifferential';
-            
+            const chOpts = portConfig.loadcell.length
+                ? portConfig.loadcell.map(p => ({v: p.port_value, l: p.label}))
+                : [
+                    {v:'/sys/bus/iio/devices/iio:device0/in_voltage0_raw', l:'Channel 1'},
+                    {v:'/sys/bus/iio/devices/iio:device1/in_voltage0_raw', l:'Channel 2'}
+                  ];
+
+            const singleChannel = `
+                <div id="editLcChSingle" style="${mode==='single_ended'?'':'display:none'}">
+                    ${sel('editDevicePath','Channel', cfg.device_path||chOpts[0].v, chOpts)}
+                    <p class="text-xs text-slate-400 mt-1">IIO sysfs channel path (sysfs_hx711)</p>
+                </div>`;
+
+            const diffInfo = `
+                <div id="editLcChDiff" style="${mode==='differential'?'':'display:none'}">
+                    <div class="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <i class="fa-solid fa-circle-info text-blue-500 text-sm"></i>
+                        <p class="text-xs text-blue-700">Differential mode uses <strong>Channel 1</strong> as the fixed input channel.</p>
+                    </div>
+                </div>`;
+
             return `<div class="space-y-4">
-                ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'},{v:'indifferential',l:'Indifferential'}])}
-                <p class="text-xs text-slate-400 -mt-1">All modes use <strong>Channel 1</strong> by default.</p>
+                ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'}])}
+                ${singleChannel}
+                ${diffInfo}
                 ${inp('editPollMs','Poll Interval (ms)', cfg.poll_ms||10,'number','min="1" max="1000"')}
                 <div class="grid grid-cols-3 gap-3">
                     ${inp('editCapacityMin','Capacity Min', cfg.capacity_min||0,'number','step="0.1"')}
@@ -1311,6 +1367,9 @@
             // Gather config from edit modal fields
             const cfg = {};
             const g = id => document.getElementById(id);
+            // External device identity (top-level fields)
+            const editDeviceType  = g('editDeviceType')?.value?.trim()  || '';
+            const editModelName   = g('editModelName')?.value?.trim()   || '';
             // Common
             if (g('editSlaveId')) cfg.slave_id = parseInt(g('editSlaveId').value) || 1;
             if (g('editResponseTimeout')) cfg.response_timeout_ms = parseInt(g('editResponseTimeout').value) || 100;
@@ -1329,10 +1388,14 @@
             // Loadcell
             if (g('editLcMode')) {
                 cfg.lc_mode = g('editLcMode').value;
-                // Always use Channel 1 default — no channel dropdown
-                cfg.device_path = '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
-                if (portConfig.loadcell.length > 0) {
-                    cfg.device_path = portConfig.loadcell[0].port_value;
+                const defaultCh1 = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
+                if (cfg.lc_mode === 'single_ended') {
+                    cfg.device_path     = g('editDevicePath')?.value || defaultCh1;
+                    cfg.device_path_ch2 = null;
+                } else {
+                    // Differential: fixed Channel 1
+                    cfg.device_path     = defaultCh1;
+                    cfg.device_path_ch2 = null;
                 }
             }
             if (g('editPollMs')) cfg.poll_ms = parseInt(g('editPollMs').value) || 10;
@@ -1343,7 +1406,12 @@
             const response = await fetch(`/api/devices/${selectedDeviceId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: deviceName, config: cfg })
+                body: JSON.stringify({
+                    name: deviceName,
+                    config: cfg,
+                    device_type_init: editDeviceType,
+                    model_name: editModelName
+                })
             });
             const result = await response.json();
             if (response.ok && result.success) {
@@ -2078,8 +2146,11 @@
         // Wire editLcMode change in edit panel
         document.addEventListener('change', function(e) {
             if (e.target && e.target.id === 'editLcMode') {
-                // No channel dropdowns to show/hide — Channel 1 is always default
-                console.log('Loadcell edit mode changed to:', e.target.value);
+                const mode = e.target.value;
+                const s = document.getElementById('editLcChSingle');
+                const d = document.getElementById('editLcChDiff');
+                if (s) s.style.display = mode === 'single_ended'  ? '' : 'none';
+                if (d) d.style.display = mode === 'differential'  ? '' : 'none';
             }
         });
 

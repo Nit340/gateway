@@ -51,7 +51,7 @@
                     <!-- Mode Selection -->
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Mode <span class="text-red-500">*</span></label>
-                        <div class="flex flex-col gap-2" id="lcModeSelector">
+                        <div class="grid grid-cols-2 gap-3" id="lcModeSelector">
                             <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
                                 <input type="radio" name="lc-mode" value="single_ended" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
                                 <div class="ml-3">
@@ -64,17 +64,25 @@
                                     <div class="font-medium text-sm text-slate-900">Differential</div>
                                 </div>
                             </label>
-                            <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
-                                <input type="radio" name="lc-mode" value="indifferential" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                                <div class="ml-3">
-                                    <div class="font-medium text-sm text-slate-900">Indifferential</div>
-                                </div>
-                            </label>
                         </div>
-                        <p class="text-xs text-slate-400 mt-2">
-                            <i class="fa-solid fa-circle-info mr-1"></i>
-                            All modes default to <strong>Channel 1</strong>.
-                        </p>
+                    </div>
+
+                    <!-- Single Point: one channel dropdown -->
+                    <div id="lcSingleEndedChannels">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel <span class="text-red-500">*</span></label>
+                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePath">
+                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
+                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">IIO sysfs channel path (sysfs_hx711)</p>
+                    </div>
+
+                    <!-- Differential: fixed Channel 1 (no dropdown) -->
+                    <div id="lcDifferentialInfo" style="display:none;">
+                        <div class="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <i class="fa-solid fa-circle-info text-blue-500 text-sm"></i>
+                            <p class="text-xs text-blue-700">Differential mode uses <strong>Channel 1</strong> as the fixed input channel.</p>
+                        </div>
                     </div>
 
                     <!-- Poll Interval -->
@@ -192,10 +200,10 @@
             <div id="external-config" class="protocol-config">
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">External Device Settings</h3>
 
-                <!-- Device Type Init & Model Name -->
+                <!-- Device Type & Model Name -->
                 <div class="space-y-4 mb-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Type Init <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Type <span class="text-red-500">*</span></label>
                         <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. vfd, sensor, meter" id="extDeviceTypeInit">
                         <p class="text-xs text-slate-400 mt-1">Identifier for the type of external device (e.g. vfd)</p>
                     </div>

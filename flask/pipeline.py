@@ -2166,7 +2166,10 @@ async def pipeline_filters_post_handler(request):
 # ============================================================================
 
 async def pipeline_save_modbus_config(request):
-    """POST /api/pipeline/modbus-config/save"""
+    """POST /api/pipeline/modbus-config/save
+    Builds modbus_config.json from external_device (ext-rtu / ext-tcp)
+    and their external_datapoints, then sends via pipeline.
+    """
     print("\n" + "="*70)
     print("[MODBUS-CFG] Save Modbus Configuration  ->  Build  ->  Send")
     print("="*70)
@@ -2178,29 +2181,56 @@ async def pipeline_save_modbus_config(request):
         conn = sqlite3.connect(DB_FILE)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+
+        # Read enabled external devices that use Modbus (ext-rtu or ext-tcp)
         cursor.execute('''
             SELECT
-                md.id, md.device_id, md.name as tag_name, md.slave_id,
-                md.register_address, md.register_type, md.data_type,
-                md.byte_order, md.word_order, md.scale_factor, md.offset,
-                md.unit, md.writable, md.retry_count, md.timeout_ms,
-                md.register_count, md."group" as tag_group,
-                m.name as device_name, m.protocol_type,
-                m.ip_address, m.port,
-                m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
-                m.response_timeout_ms, m.byte_timeout_ms, m.max_retries,
-                m.polling_interval_ms
-            FROM vfd_datapoints md
-            JOIN vfd_device m ON md.device_id = m.id
-            WHERE md.enabled = 1
-            ORDER BY md.device_id, md.slave_id
+                ed.id          AS tag_id,
+                ed.device_id,
+                ed.name        AS tag_name,
+                ed.slave_id,
+                ed.register_address,
+                ed.register_type,
+                ed.data_type,
+                ed.byte_order,
+                ed.word_order,
+                ed.scale_factor,
+                ed.offset,
+                ed.unit,
+                ed.writable,
+                1   AS retry_count,
+                100 AS timeout_ms,
+                1   AS register_count,
+                e.name          AS device_name,
+                e.protocol      AS ext_protocol,
+                e.serial_port,
+                e.baud_rate,
+                e.parity,
+                e.data_bits,
+                e.stop_bits,
+                e.ip_address,
+                e.port,
+                e.slave_id          AS device_slave_id,
+                e.response_timeout_ms,
+                e.byte_timeout_ms,
+                e.max_retries,
+                e.polling_interval_ms
+            FROM external_datapoints ed
+            JOIN external_device e ON ed.device_id = e.id
+            WHERE ed.enabled = 1
+              AND e.enabled  = 1
+              AND e.protocol IN ('ext-rtu', 'ext-tcp')
+            ORDER BY ed.device_id, ed.slave_id
         ''')
         rows = cursor.fetchall()
         conn.close()
 
-        print("[MODBUS-CFG] {} tags from DB".format(len(rows)))
+        print("[MODBUS-CFG] {} tags from external_datapoints".format(len(rows)))
         if not rows:
-            return web.json_response({"success": False, "error": "No Modbus tags found in database"})
+            return web.json_response({
+                "success": False,
+                "error": "No Modbus tags found — add tags to External devices with Modbus RTU or TCP protocol"
+            })
 
         connection_map = {}
         assets = []
@@ -2209,12 +2239,14 @@ async def pipeline_save_modbus_config(request):
             r      = dict(row)
             dev_id = r['device_id']
             name   = r['device_name'] or str(dev_id)
-            dtype  = r['protocol_type'] or 'tcp'
+            proto  = r['ext_protocol'] or 'ext-rtu'
+            is_tcp = 'tcp' in proto
 
             if dev_id not in connection_map:
-                if dtype in ('tcp', 'modbus-tcp'):
+                if is_tcp:
                     connection_map[dev_id] = {
-                        "id": name, "type": "tcp",
+                        "id":                name,
+                        "type":              "tcp",
                         "host":              r.get('ip_address') or '127.0.0.1',
                         "port":              r.get('port') or 502,
                         "responseTimeoutMs": r.get('response_timeout_ms') or 100,
@@ -2224,7 +2256,8 @@ async def pipeline_save_modbus_config(request):
                     }
                 else:
                     connection_map[dev_id] = {
-                        "id": name, "type": "rtu",
+                        "id":                name,
+                        "type":              "rtu",
                         "device":            r.get('serial_port') or '/dev/ttyUSB0',
                         "baud":              r.get('baud_rate') or 9600,
                         "parity":            r.get('parity') or 'N',
@@ -2236,10 +2269,10 @@ async def pipeline_save_modbus_config(request):
                         "pollingIntervalMs": r.get('polling_interval_ms') or 300,
                     }
 
-            asset = {
+            assets.append({
                 "name":          r['tag_name'],
                 "connection_id": name,
-                "slaveId":       r['slave_id'] or 1,
+                "slaveId":       r['slave_id'] or r.get('device_slave_id') or 1,
                 "registerType":  r['register_type'] or 'holding',
                 "address":       r['register_address'] or 0,
                 "registerCount": r['register_count'] or 1,
@@ -2251,10 +2284,7 @@ async def pipeline_save_modbus_config(request):
                 "retryCount":    r['retry_count'] or 1,
                 "timeoutMs":     r['timeout_ms'] or 100,
                 "writable":      bool(r['writable']),
-            }
-            if r.get('tag_group'):
-                asset['group'] = r['tag_group']
-            assets.append(asset)
+            })
 
         new_version = get_next_pipeline_version("modbus")
         with pipeline_state["lock"]:
@@ -2283,7 +2313,6 @@ async def pipeline_save_modbus_config(request):
 
         if connected and client:
             target_service = _find_modbus_service()
-
             if target_service:
                 try:
                     rid = client.datapoint_update(target_service, get_pipeline_config_name("modbus"), config_json)
@@ -2332,8 +2361,6 @@ async def pipeline_save_modbus_config(request):
         import traceback
         traceback.print_exc()
         return web.json_response({"success": False, "error": str(e)})
-
-
 async def send_modbus_config_now():
     """Build and send the modbus config directly (no HTTP request needed)."""
     class _FakeRequest:

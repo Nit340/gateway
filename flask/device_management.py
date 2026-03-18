@@ -144,28 +144,21 @@ async def get_all_devices(request):
             status = device_status_tracker[device_id]
             
             # Format address based on mode
-            if lc_mode == 'differential' and device_path_ch2:
-                # Get channel labels from port config
-                port_config_list = get_port_config('loadcell')
-                ch1_label = 'Channel 1'
-                ch2_label = 'Channel 2'
-                
+            port_config_list = get_port_config('loadcell')
+            if lc_mode == 'differential':
+                # Differential: always Channel 1 (fixed)
+                address = 'Channel 1'
                 for p in port_config_list:
                     if p['port_value'] == device_path:
-                        ch1_label = p['label']
-                    if p['port_value'] == device_path_ch2:
-                        ch2_label = p['label']
-                
-                address = "{} & {}".format(ch1_label, ch2_label)
-            else:
-                # Single ended mode - get channel label
-                port_config_list = get_port_config('loadcell')
-                ch_label = 'Channel 1'
-                for p in port_config_list:
-                    if p['port_value'] == device_path:
-                        ch_label = p['label']
+                        address = p['label']
                         break
-                address = ch_label
+            else:
+                # Single ended: show whichever channel was selected
+                address = 'Channel 1'
+                for p in port_config_list:
+                    if p['port_value'] == device_path:
+                        address = p['label']
+                        break
             
             devices.append({
                 'id': device_id,
@@ -188,42 +181,40 @@ async def get_all_devices(request):
         # Get External devices
         try:
             cursor.execute('''
-                SELECT e.id, e.name, e.enabled, COALESCE(e.protocol,'external') as protocol,
-                       e.config
-                FROM external_device e
-                ORDER BY e.id
+                SELECT id, name, enabled, protocol,
+                       device_type, model_name,
+                       slave_id, response_timeout_ms, byte_timeout_ms,
+                       max_retries, polling_interval_ms,
+                       serial_port, baud_rate, data_bits, parity, stop_bits,
+                       ip_address, port
+                FROM external_device
+                ORDER BY id
             ''')
             for row in cursor.fetchall():
-                device_id, name, enabled, ext_proto, config_json = row
-                
-                # Parse config
-                import json as ext_json
-                try:
-                    config = ext_json.loads(config_json) if config_json else {}
-                except:
-                    config = {}
-                
+                (device_id, name, enabled, ext_proto,
+                 device_type_val, model_name,
+                 slave_id, resp_timeout, byte_timeout,
+                 max_retries, polling_interval,
+                 serial_port, baud_rate, data_bits, parity, stop_bits,
+                 ip_address, port) = row
+
                 # Format address based on protocol
                 if ext_proto == 'ext-tcp':
-                    ip = config.get('ip_address', 'Not configured')
-                    port = config.get('port', '502')
-                    address = "{}:{}".format(ip, port)
+                    address = "{}:{}".format(ip_address or 'Not configured', port or 502)
                 elif ext_proto == 'ext-rtu':
-                    serial_port = config.get('serial_port', '/dev/ttymxc5')
-                    # Get port label from modbus port config
                     port_config_list = get_port_config('modbus')
-                    address = serial_port
+                    address = serial_port or '/dev/ttymxc5'
                     for p in port_config_list:
                         if p['port_value'] == serial_port:
                             address = p['label']
                             break
                 else:
                     address = 'N/A'
-                
+
                 if device_id not in device_status_tracker:
                     initialize_device_status(device_id, 'Offline')
                 status = device_status_tracker[device_id]
-                
+
                 devices.append({
                     'id': device_id,
                     'name': name,
@@ -234,7 +225,22 @@ async def get_all_devices(request):
                     'lastPoll': status['last_poll'],
                     'enabled': bool(enabled),
                     'service': None,
-                    'config': config
+                    'config': {
+                        'device_type': device_type_val or '',
+                        'model_name': model_name or '',
+                        'slave_id': slave_id,
+                        'response_timeout_ms': resp_timeout,
+                        'byte_timeout_ms': byte_timeout,
+                        'max_retries': max_retries,
+                        'polling_interval_ms': polling_interval,
+                        'serial_port': serial_port,
+                        'baud_rate': baud_rate,
+                        'data_bits': data_bits,
+                        'parity': parity,
+                        'stop_bits': stop_bits,
+                        'ip_address': ip_address,
+                        'port': port,
+                    }
                 })
         except Exception as e:
             print("Error fetching external devices: {}".format(e))
@@ -408,32 +414,53 @@ async def get_device_details(request):
         # Try External device
         try:
             cursor.execute('''
-                SELECT id, name, enabled, COALESCE(protocol,"external") as protocol, 
-                       COALESCE(config,"{}") as config 
-                FROM external_device 
+                SELECT id, name, enabled, protocol,
+                       device_type, model_name,
+                       slave_id, response_timeout_ms, byte_timeout_ms,
+                       max_retries, polling_interval_ms,
+                       serial_port, baud_rate, data_bits, parity, stop_bits,
+                       ip_address, port
+                FROM external_device
                 WHERE id = ?
             ''', (device_id,))
             row = cursor.fetchone()
             if row:
-                dev_id, name, enabled, ext_proto, ext_config_json = row
+                (dev_id, name, enabled, ext_proto,
+                 device_type_val, model_name,
+                 slave_id, resp_timeout, byte_timeout,
+                 max_retries, polling_interval,
+                 serial_port, baud_rate, data_bits, parity, stop_bits,
+                 ip_address, port) = row
+
                 if device_id not in device_status_tracker:
                     initialize_device_status(device_id, 'Offline')
                 status = device_status_tracker[device_id]
-                import json as _extjson
-                try:
-                    ext_config = _extjson.loads(ext_config_json) if ext_config_json else {}
-                except Exception:
-                    ext_config = {}
+
                 details = {
-                    'id': dev_id, 
-                    'name': name, 
-                    'type': 'External', 
+                    'id': dev_id,
+                    'name': name,
+                    'type': 'External',
                     'protocol': ext_proto,
-                    'service': None, 
+                    'service': None,
                     'enabled': bool(enabled),
-                    'status': status['status'], 
-                    'lastPoll': status['last_poll'], 
-                    'config': ext_config
+                    'status': status['status'],
+                    'lastPoll': status['last_poll'],
+                    'config': {
+                        'device_type': device_type_val or '',
+                        'model_name': model_name or '',
+                        'slave_id': slave_id,
+                        'response_timeout_ms': resp_timeout,
+                        'byte_timeout_ms': byte_timeout,
+                        'max_retries': max_retries,
+                        'polling_interval_ms': polling_interval,
+                        'serial_port': serial_port,
+                        'baud_rate': baud_rate,
+                        'data_bits': data_bits,
+                        'parity': parity,
+                        'stop_bits': stop_bits,
+                        'ip_address': ip_address,
+                        'port': port,
+                    }
                 }
                 conn.close()
                 return web.json_response(details)
@@ -581,30 +608,73 @@ async def add_device(request):
             ''', (device_id, tag_capacity))
             
         elif device_type == 'external':
-            # Add External device — stores Modbus RTU or TCP config
-            config = data.get('config', {})
             ext_protocol = data.get('protocol', 'ext-rtu')
-            device_type_init = data.get('device_type_init', '')
+            device_type_val = data.get('device_type_init', data.get('device_type', ''))
             model_name = data.get('model_name', '')
-            import json as _extjson
-            # Store device_type_init and model_name inside config for persistence
-            config['device_type_init'] = device_type_init
-            config['model_name'] = model_name
-            cursor.execute('''
-                INSERT INTO external_device (id, name, enabled, protocol, config)
-                VALUES (?, ?, 1, ?, ?)
-            ''', (device_id, data.get('name', 'External Device'), ext_protocol, _extjson.dumps(config)))
+            config = data.get('config', {})
 
-            # Write per-device JSON file
-            _write_ext_device_file(device_id, {
+            cursor.execute('''
+                INSERT INTO external_device (
+                    id, name, protocol,
+                    device_type, model_name,
+                    slave_id, response_timeout_ms, byte_timeout_ms,
+                    max_retries, polling_interval_ms,
+                    serial_port, baud_rate, data_bits, parity, stop_bits,
+                    ip_address, port,
+                    enabled
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+            ''', (
+                device_id,
+                data.get('name', 'External Device'),
+                ext_protocol,
+                device_type_val,
+                model_name,
+                config.get('slave_id', 1),
+                config.get('response_timeout_ms', 100),
+                config.get('byte_timeout_ms', 100),
+                config.get('max_retries', 2),
+                config.get('polling_interval_ms', 300),
+                # RTU fields — only set for ext-rtu, NULL for TCP
+                config.get('serial_port') if ext_protocol == 'ext-rtu' else None,
+                config.get('baud_rate')   if ext_protocol == 'ext-rtu' else None,
+                config.get('data_bits')   if ext_protocol == 'ext-rtu' else None,
+                config.get('parity')      if ext_protocol == 'ext-rtu' else None,
+                config.get('stop_bits')   if ext_protocol == 'ext-rtu' else None,
+                # TCP fields — only set for ext-tcp, NULL for RTU
+                config.get('ip_address')  if ext_protocol == 'ext-tcp' else None,
+                config.get('port')        if ext_protocol == 'ext-tcp' else None,
+            ))
+
+            # Build file payload with only the relevant fields per protocol
+            file_payload = {
                 'id': device_id,
                 'name': data.get('name', 'External Device'),
                 'protocol': ext_protocol,
+                'device_type': device_type_val,
+                'model_name': model_name,
+                'slave_id': config.get('slave_id', 1),
+                'response_timeout_ms': config.get('response_timeout_ms', 100),
+                'byte_timeout_ms': config.get('byte_timeout_ms', 100),
+                'max_retries': config.get('max_retries', 2),
+                'polling_interval_ms': config.get('polling_interval_ms', 300),
                 'enabled': True,
-                'config': config,
                 'created_at': datetime.utcnow().isoformat()
-            })
-            # external_datapoints are managed via tag mapping page (like vfd_datapoints)
+            }
+            if ext_protocol == 'ext-rtu':
+                file_payload.update({
+                    'serial_port': config.get('serial_port', '/dev/ttymxc5'),
+                    'baud_rate':   config.get('baud_rate', 9600),
+                    'data_bits':   config.get('data_bits', 8),
+                    'parity':      config.get('parity', 'N'),
+                    'stop_bits':   config.get('stop_bits', 1),
+                })
+            else:
+                file_payload.update({
+                    'ip_address': config.get('ip_address', ''),
+                    'port':       config.get('port', 502),
+                })
+            _write_ext_device_file(device_id, file_payload)
+            # external_datapoints are managed via tag mapping page
 
         else:  # VFD (TCP or RTU)
             config = data.get('config', {})
@@ -705,28 +775,71 @@ async def update_device(request):
             if not new_name:
                 conn.close()
                 return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
-            import json as _extjson
-            new_protocol = data.get('protocol', 'ext-rtu')
-            new_config = data.get('config', {})
-            # Preserve device_type_init and model_name if provided at top level
-            if 'device_type_init' in data:
-                new_config['device_type_init'] = data['device_type_init']
-            if 'model_name' in data:
-                new_config['model_name'] = data['model_name']
-            cursor.execute(
-                'UPDATE external_device SET name=?, protocol=?, config=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-                (new_name, new_protocol, _extjson.dumps(new_config), device_id)
-            )
 
-            # Update per-device JSON file
-            _write_ext_device_file(device_id, {
+            new_protocol = data.get('protocol', 'ext-rtu')
+            device_type_val = data.get('device_type_init', data.get('device_type', ''))
+            model_name = data.get('model_name', '')
+            config = data.get('config', {})
+
+            cursor.execute('''
+                UPDATE external_device SET
+                    name=?, protocol=?,
+                    device_type=?, model_name=?,
+                    slave_id=?, response_timeout_ms=?, byte_timeout_ms=?,
+                    max_retries=?, polling_interval_ms=?,
+                    serial_port=?, baud_rate=?, data_bits=?, parity=?, stop_bits=?,
+                    ip_address=?, port=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            ''', (
+                new_name, new_protocol,
+                device_type_val, model_name,
+                config.get('slave_id', 1),
+                config.get('response_timeout_ms', 100),
+                config.get('byte_timeout_ms', 100),
+                config.get('max_retries', 2),
+                config.get('polling_interval_ms', 300),
+                # RTU fields — only for ext-rtu
+                config.get('serial_port') if new_protocol == 'ext-rtu' else None,
+                config.get('baud_rate')   if new_protocol == 'ext-rtu' else None,
+                config.get('data_bits')   if new_protocol == 'ext-rtu' else None,
+                config.get('parity')      if new_protocol == 'ext-rtu' else None,
+                config.get('stop_bits')   if new_protocol == 'ext-rtu' else None,
+                # TCP fields — only for ext-tcp
+                config.get('ip_address')  if new_protocol == 'ext-tcp' else None,
+                config.get('port')        if new_protocol == 'ext-tcp' else None,
+                device_id
+            ))
+
+            # Update per-device JSON file with protocol-specific fields only
+            file_payload = {
                 'id': device_id,
                 'name': new_name,
                 'protocol': new_protocol,
+                'device_type': device_type_val,
+                'model_name': model_name,
+                'slave_id': config.get('slave_id', 1),
+                'response_timeout_ms': config.get('response_timeout_ms', 100),
+                'byte_timeout_ms': config.get('byte_timeout_ms', 100),
+                'max_retries': config.get('max_retries', 2),
+                'polling_interval_ms': config.get('polling_interval_ms', 300),
                 'enabled': True,
-                'config': new_config,
                 'updated_at': datetime.utcnow().isoformat()
-            })
+            }
+            if new_protocol == 'ext-rtu':
+                file_payload.update({
+                    'serial_port': config.get('serial_port', '/dev/ttymxc5'),
+                    'baud_rate':   config.get('baud_rate', 9600),
+                    'data_bits':   config.get('data_bits', 8),
+                    'parity':      config.get('parity', 'N'),
+                    'stop_bits':   config.get('stop_bits', 1),
+                })
+            else:
+                file_payload.update({
+                    'ip_address': config.get('ip_address', ''),
+                    'port':       config.get('port', 502),
+                })
+            _write_ext_device_file(device_id, file_payload)
 
         elif is_modbus:
             # Update Modbus device
@@ -1143,7 +1256,132 @@ async def duplicate_device(request):
                     'device_name': new_name,
                     'datapoints_copied': len(datapoints)
                 })
-            
+
+            # Check if it's an External device
+            try:
+                cursor.execute('SELECT * FROM external_device WHERE id = ?', (device_id,))
+                ext_row = cursor.fetchone()
+            except Exception:
+                ext_row = None
+
+            if ext_row:
+                cursor.execute('PRAGMA table_info(external_device)')
+                ext_cols = [col[1] for col in cursor.fetchall()]
+                old_ext = dict(zip(ext_cols, ext_row))
+
+                # Generate new EX ID
+                cursor.execute('SELECT id FROM external_device WHERE id LIKE "EX%" ORDER BY id')
+                existing_ids = [row[0] for row in cursor.fetchall()]
+                max_num = 0
+                for eid in existing_ids:
+                    try:
+                        num = int(eid[2:])
+                        if num > max_num:
+                            max_num = num
+                    except ValueError:
+                        continue
+                new_device_id = 'EX{}'.format(max_num + 1)
+
+                # Generate new name
+                base_name_clean = re.sub(r'-\d+$', '', old_ext['name'])
+                cursor.execute('SELECT name FROM external_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
+                existing_names = [row[0] for row in cursor.fetchall()]
+                numbers = []
+                for name in existing_names:
+                    match = re.search(r'-(\d+)$', name)
+                    if match:
+                        numbers.append(int(match.group(1)))
+                counter = (max(numbers) + 1) if numbers else 1
+                new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
+
+                ext_proto = old_ext.get('protocol', 'ext-rtu')
+
+                cursor.execute('''
+                    INSERT INTO external_device (
+                        id, name, protocol,
+                        device_type, model_name,
+                        slave_id, response_timeout_ms, byte_timeout_ms,
+                        max_retries, polling_interval_ms,
+                        serial_port, baud_rate, data_bits, parity, stop_bits,
+                        ip_address, port, enabled
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+                ''', (
+                    new_device_id, new_name, ext_proto,
+                    old_ext.get('device_type', ''),
+                    old_ext.get('model_name', ''),
+                    old_ext.get('slave_id', 1),
+                    old_ext.get('response_timeout_ms', 100),
+                    old_ext.get('byte_timeout_ms', 100),
+                    old_ext.get('max_retries', 2),
+                    old_ext.get('polling_interval_ms', 300),
+                    old_ext.get('serial_port') if ext_proto == 'ext-rtu' else None,
+                    old_ext.get('baud_rate')   if ext_proto == 'ext-rtu' else None,
+                    old_ext.get('data_bits')   if ext_proto == 'ext-rtu' else None,
+                    old_ext.get('parity')      if ext_proto == 'ext-rtu' else None,
+                    old_ext.get('stop_bits')   if ext_proto == 'ext-rtu' else None,
+                    old_ext.get('ip_address')  if ext_proto == 'ext-tcp' else None,
+                    old_ext.get('port')        if ext_proto == 'ext-tcp' else None,
+                ))
+
+                # Duplicate external datapoints
+                try:
+                    cursor.execute('''
+                        SELECT name, slave_id, register_address, register_type, data_type,
+                               byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
+                        FROM external_datapoints WHERE device_id = ?
+                    ''', (device_id,))
+                    ext_dps = cursor.fetchall()
+                    for dp in ext_dps:
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO external_datapoints (
+                                device_id, name, slave_id, register_address, register_type, data_type,
+                                byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
+                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        ''', (new_device_id,) + dp)
+                except Exception:
+                    ext_dps = []
+
+                # Write per-device JSON file
+                file_payload = {
+                    'id': new_device_id, 'name': new_name,
+                    'protocol': ext_proto,
+                    'device_type': old_ext.get('device_type', ''),
+                    'model_name': old_ext.get('model_name', ''),
+                    'slave_id': old_ext.get('slave_id', 1),
+                    'response_timeout_ms': old_ext.get('response_timeout_ms', 100),
+                    'byte_timeout_ms': old_ext.get('byte_timeout_ms', 100),
+                    'max_retries': old_ext.get('max_retries', 2),
+                    'polling_interval_ms': old_ext.get('polling_interval_ms', 300),
+                    'enabled': True,
+                    'created_at': datetime.utcnow().isoformat()
+                }
+                if ext_proto == 'ext-rtu':
+                    file_payload.update({
+                        'serial_port': old_ext.get('serial_port', '/dev/ttymxc5'),
+                        'baud_rate':   old_ext.get('baud_rate', 9600),
+                        'data_bits':   old_ext.get('data_bits', 8),
+                        'parity':      old_ext.get('parity', 'N'),
+                        'stop_bits':   old_ext.get('stop_bits', 1),
+                    })
+                else:
+                    file_payload.update({
+                        'ip_address': old_ext.get('ip_address', ''),
+                        'port':       old_ext.get('port', 502),
+                    })
+                _write_ext_device_file(new_device_id, file_payload)
+
+                initialize_device_status(new_device_id, 'Online')
+                conn.commit()
+                conn.close()
+
+                return web.json_response({
+                    'success': True,
+                    'message': 'Device duplicated successfully as {}'.format(new_name),
+                    'device_id': new_device_id,
+                    'device_name': new_name,
+                    'datapoints_copied': len(ext_dps) if ext_dps else 0
+                })
+
             conn.close()
             return web.json_response({
                 'success': False,
@@ -1207,22 +1445,50 @@ async def export_devices_csv(request):
         
         # Export Loadcell devices
         cursor.execute('''
-            SELECT l.id, l.name, l.device_path, l.device_path_ch2, l.lc_mode,
+            SELECT l.id, l.name, l.device_path, l.lc_mode,
                    l.capacity_max, l.unit, l.enabled
             FROM loadcell_device l
             ORDER BY l.id
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, device_path_ch2, lc_mode, capacity_max, unit, enabled = row
+            device_id, name, device_path, lc_mode, capacity_max, unit, enabled = row
             writer.writerow([
                 device_id, name, 'Loadcell', 'loadcell',
                 '', '', '',
                 '', '', '', '',
                 '', '', '', '',
-                device_path or '', device_path_ch2 or '', lc_mode or 'single_ended',
+                device_path or '', '', lc_mode or 'single_ended',
                 capacity_max or 1000, unit or 'kg', '1' if enabled else '0'
             ])
+
+        # Export External devices
+        try:
+            cursor.execute('''
+                SELECT id, name, protocol,
+                       device_type, model_name,
+                       slave_id, response_timeout_ms, byte_timeout_ms,
+                       max_retries, polling_interval_ms,
+                       serial_port, baud_rate, data_bits, parity, stop_bits,
+                       ip_address, port, enabled
+                FROM external_device
+                ORDER BY id
+            ''')
+            for row in cursor.fetchall():
+                (dev_id, name, proto,
+                 device_type, model_name,
+                 slave_id, resp_to, byte_to, max_ret, poll_iv,
+                 serial_port, baud, data_bits, parity, stop_bits,
+                 ip, port, enabled) = row
+                writer.writerow([
+                    dev_id, name, 'External', proto,
+                    ip or '', port or '', serial_port or '',
+                    baud or '', data_bits or '', parity or '', stop_bits or '',
+                    resp_to or '', byte_to or '', max_ret or '', poll_iv or '',
+                    '', '', '', '', '', '1' if enabled else '0'
+                ])
+        except Exception:
+            pass
         
         conn.close()
         

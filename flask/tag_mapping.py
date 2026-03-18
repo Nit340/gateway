@@ -10,119 +10,105 @@ from database import DB_FILE
 # ============================================================================
 
 async def get_all_datapoints(request):
-    """GET all datapoints (modbus + loadcell)"""
+    """GET all datapoints (external modbus + loadcell)"""
     try:
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
-        conn.row_factory = sqlite3.Row  # This allows accessing columns by name
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         tags = []
-        
-        # Get Modbus datapoints - with proper column quoting for 'group'
-        # Now including device's slave_id from vfd_device table
+
+        # External (Modbus RTU / TCP) datapoints â€” primary modbus source
+        try:
+            cursor.execute('''
+                SELECT
+                    ed.id,
+                    ed.device_id,
+                    ed.name,
+                    ed.register_address,
+                    ed.register_type,
+                    ed.data_type,
+                    ed.byte_order,
+                    ed.word_order,
+                    ed.scale_factor,
+                    ed.offset,
+                    ed.unit,
+                    ed.description,
+                    ed.enabled,
+                    ed.slave_id         AS tag_slave_id,
+                    ed.writable,
+                    e.name              AS device_name,
+                    e.protocol          AS ext_protocol,
+                    e.slave_id          AS device_slave_id
+                FROM external_datapoints ed
+                JOIN external_device e ON ed.device_id = e.id
+                ORDER BY ed.device_id, ed.slave_id, ed.name
+            ''')
+            for row in cursor.fetchall():
+                r = dict(row)
+                proto = r.get('ext_protocol', 'ext-rtu')
+                protocol_type = 'tcp' if 'tcp' in proto else 'rtu'
+                device_type_display = "Modbus TCP" if protocol_type == 'tcp' else "Modbus RTU"
+                tags.append({
+                    'id': r['id'],
+                    'device_id': r['device_id'],
+                    'device_name': r['device_name'],
+                    'device_type': device_type_display,
+                    'tag_name': r['name'],
+                    'name': r['name'],
+                    'register_address': r['register_address'],
+                    'address': r['register_address'],
+                    'register_type': r['register_type'],
+                    'registerType': r['register_type'],
+                    'data_type': r['data_type'],
+                    'dataType': r['data_type'],
+                    'byte_order': r['byte_order'],
+                    'byteOrder': r['byte_order'],
+                    'word_order': r['word_order'],
+                    'wordOrder': r['word_order'],
+                    'scale_factor': r['scale_factor'],
+                    'scale': r['scale_factor'],
+                    'offset': r['offset'],
+                    'unit': r['unit'] or '',
+                    'description': r['description'] or '',
+                    'enabled': bool(r['enabled']),
+                    'slave_id': r['tag_slave_id'] if r['tag_slave_id'] is not None else (r['device_slave_id'] or 1),
+                    'slaveId': r['tag_slave_id'] if r['tag_slave_id'] is not None else (r['device_slave_id'] or 1),
+                    'group_id': None,
+                    'group_name': '',
+                    'group': '',
+                    'writable': bool(r['writable']) if r['writable'] is not None else False,
+                    'retry_count': 1,
+                    'retryCount': 1,
+                    'timeout_ms': 100,
+                    'timeoutMs': 100,
+                    'register_count': 1,
+                    'registerCount': 1,
+                    'type': 'external',
+                    'protocol': proto,
+                    'protocol_type': protocol_type,
+                })
+        except Exception as _ext_err:
+            print("Warning: could not load external datapoints:", _ext_err)
+
+        # Loadcell datapoints
         cursor.execute('''
-            SELECT 
-                md.id, 
-                md.device_id, 
-                md.name, 
-                md.register_address, 
-                md.register_type,
-                md.data_type, 
-                md.byte_order, 
-                md.word_order, 
-                md.scale_factor, 
-                md.offset,
-                md.unit, 
-                md.description, 
-                md.enabled, 
-                md.slave_id as tag_slave_id,
-                md.group_id, 
-                dg.name as group_name, 
-                md."group" as tag_group,
-                m.name as device_name, 
-                m.protocol_type,
-                m.slave_id as device_slave_id,
-                md.writable, 
-                md.retry_count, 
-                md.timeout_ms, 
-                md.register_count
-            FROM vfd_datapoints md
-            JOIN vfd_device m ON md.device_id = m.id
-            LEFT JOIN tag_groups dg ON md.group_id = dg.id
-            ORDER BY md.device_id, md.slave_id, md.name
-        ''')
-        
-        rows = cursor.fetchall()
-        
-        for row in rows:
-            # Convert row to dict for easier handling
-            r = dict(row)
-            protocol_type = r['protocol_type'] or 'rtu'
-            
-            # Set proper display names
-            device_type_display = "Modbus TCP" if protocol_type == 'tcp' else "Modbus RTU"
-            
-            tags.append({
-                'id': r['id'],
-                'device_id': r['device_id'],
-                'device_name': r['device_name'],
-                'device_type': device_type_display,
-                'tag_name': r['name'],
-                'name': r['name'],
-                'register_address': r['register_address'],
-                'address': r['register_address'],
-                'register_type': r['register_type'],
-                'registerType': r['register_type'],
-                'data_type': r['data_type'],
-                'dataType': r['data_type'],
-                'byte_order': r['byte_order'],
-                'byteOrder': r['byte_order'],
-                'word_order': r['word_order'],
-                'wordOrder': r['word_order'],
-                'scale_factor': r['scale_factor'],
-                'scale': r['scale_factor'],
-                'offset': r['offset'],
-                'unit': r['unit'] or '',
-                'description': r['description'] or '',
-                'enabled': bool(r['enabled']),
-                # Use device's slave_id instead of tag's slave_id
-                'slave_id': r['device_slave_id'] if r['device_slave_id'] is not None else 1,
-                'slaveId': r['device_slave_id'] if r['device_slave_id'] is not None else 1,
-                'group_id': r['group_id'],
-                'group_name': r['group_name'] or '',
-                'group': r['tag_group'] or '',
-                'writable': bool(r['writable']) if r['writable'] is not None else False,
-                'retry_count': r['retry_count'] if r['retry_count'] is not None else 1,
-                'retryCount': r['retry_count'] if r['retry_count'] is not None else 1,
-                'timeout_ms': r['timeout_ms'] if r['timeout_ms'] is not None else 100,
-                'timeoutMs': r['timeout_ms'] if r['timeout_ms'] is not None else 100,
-                'register_count': r['register_count'] if r['register_count'] is not None else 1,
-                'registerCount': r['register_count'] if r['register_count'] is not None else 1,
-                'type': 'modbus',
-                'protocol': protocol_type
-            })
-        
-        # Get Loadcell datapoints
-        cursor.execute('''
-            SELECT 
-                ld.id, 
-                ld.device_id, 
-                ld.name, 
+            SELECT
+                ld.id,
+                ld.device_id,
+                ld.name,
                 ld.unit,
-                l.name as device_name, 
+                l.name as device_name,
                 l.capacity_max as capacity,
                 l.unit as device_unit,
-                l.load_name, 
+                l.load_name,
                 l.capacity_name
             FROM loadcell_datapoints ld
             JOIN loadcell_device l ON ld.device_id = l.id
             ORDER BY ld.device_id, ld.name
         ''')
-        
-        rows = cursor.fetchall()
-        
-        for row in rows:
+        for row in cursor.fetchall():
             r = dict(row)
             tags.append({
                 'id': r['id'],
@@ -142,68 +128,6 @@ async def get_all_datapoints(request):
                 'type': 'loadcell',
                 'protocol': 'loadcell'
             })
-        
-        # Get External datapoints
-        try:
-            cursor.execute('''
-                SELECT
-                    ed.id,
-                    ed.device_id,
-                    ed.name,
-                    ed.register_address,
-                    ed.register_type,
-                    ed.data_type,
-                    ed.byte_order,
-                    ed.word_order,
-                    ed.scale_factor,
-                    ed.offset,
-                    ed.unit,
-                    ed.description,
-                    ed.enabled,
-                    ed.slave_id as tag_slave_id,
-                    ed.writable,
-                    e.name as device_name,
-                    COALESCE(e.protocol, 'external') as protocol
-                FROM external_datapoints ed
-                JOIN external_device e ON ed.device_id = e.id
-                ORDER BY ed.device_id, ed.slave_id, ed.name
-            ''')
-            for row in cursor.fetchall():
-                r = dict(row)
-                proto = r.get('protocol', 'ext-rtu')
-                protocol_type = 'tcp' if 'tcp' in proto else 'rtu'
-                device_type_display = "Modbus TCP" if 'tcp' in proto else "Modbus RTU"
-                
-                tags.append({
-                    'id': r['id'],
-                    'device_id': r['device_id'],
-                    'device_name': r['device_name'],
-                    'device_type': device_type_display,
-                    'tag_name': r['name'],
-                    'name': r['name'],
-                    'register_address': r['register_address'],
-                    'address': r['register_address'],
-                    'register_type': r['register_type'],
-                    'registerType': r['register_type'],
-                    'data_type': r['data_type'],
-                    'dataType': r['data_type'],
-                    'byte_order': r['byte_order'],
-                    'word_order': r['word_order'],
-                    'scale_factor': r['scale_factor'],
-                    'offset': r['offset'],
-                    'unit': r['unit'] or '',
-                    'description': r['description'] or '',
-                    'enabled': bool(r['enabled']),
-                    # Use tag's slave_id from external_datapoints table
-                    'slave_id': r['tag_slave_id'] if r['tag_slave_id'] is not None else 1,
-                    'slaveId': r['tag_slave_id'] if r['tag_slave_id'] is not None else 1,
-                    'writable': bool(r['writable']) if r['writable'] is not None else False,
-                    'protocol': proto,
-                    'protocol_type': protocol_type,
-                    'type': 'external'
-                })
-        except Exception as _ext_err:
-            print("Warning: could not load external datapoints:", _ext_err)
 
         conn.close()
         return web.json_response(tags)
@@ -213,126 +137,60 @@ async def get_all_datapoints(request):
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
-
-# ============================================================================
-# ADD MODBUS DATAPOINT (TAG)
-# ============================================================================
-
 async def add_modbus_datapoint(request):
-    """POST - Add Modbus datapoint (tag)"""
+    """POST - Add Modbus datapoint tag to an external device"""
     try:
         data = await request.json()
-        print("Received data for modbus tag creation:", data)  # Debug log
-        
+        print("Received data for modbus tag creation:", data)
+
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
         cursor = conn.cursor()
-        
-        # Validate device exists — check both vfd_device and external_device
+
         device_id = data.get('device_id')
-        cursor.execute('SELECT id, protocol_type FROM vfd_device WHERE id = ?', (device_id,))
-        vfd_row = cursor.fetchone()
-        is_vfd = vfd_row is not None
-        protocol_type = None
-        
-        if is_vfd:
-            protocol_type = vfd_row[1] or 'rtu'
-        else:
-            try:
-                cursor.execute('SELECT id, protocol FROM external_device WHERE id = ?', (device_id,))
-                ext_row = cursor.fetchone()
-                is_ext = ext_row is not None
-                if is_ext:
-                    proto = ext_row[1] or 'ext-rtu'
-                    protocol_type = 'tcp' if 'tcp' in proto else 'rtu'
-            except Exception:
-                is_ext = False
-            if not is_ext:
+        cursor.execute('SELECT id, protocol FROM external_device WHERE id = ?', (device_id,))
+        ext_row = cursor.fetchone()
+        if not ext_row:
+            cursor.execute('SELECT id FROM loadcell_device WHERE id = ?', (device_id,))
+            if not cursor.fetchone():
                 conn.close()
                 return web.json_response({'error': 'Device not found'}, status=404)
+            conn.close()
+            return web.json_response({'error': 'Loadcell tags are auto-created when device is added'}, status=400)
 
-        # Choose correct datapoints table
-        dp_table = 'external_datapoints' if not is_vfd else 'vfd_datapoints'
-
-        # Check if tag name already exists for this device+slave
         cursor.execute('''
-            SELECT id FROM {table}
+            SELECT id FROM external_datapoints
             WHERE device_id = ? AND slave_id = ? AND name = ?
-        '''.format(table=dp_table), (device_id, data.get('slave_id', 1), data.get('tag_name')))
-
+        ''', (device_id, data.get('slave_id', 1), data.get('tag_name')))
         if cursor.fetchone():
             conn.close()
             return web.json_response({'error': 'Tag name already exists for this device'}, status=400)
-        
-        # Get group value - can be empty string or None
-        group_value = data.get('group', '')
-        if group_value is None:
-            group_value = ''
-            
-        # Try to find matching device group by name for group_id
-        group_id = None
-        if group_value:
-            cursor.execute('SELECT id FROM tag_groups WHERE name = ?', (group_value,))
-            grp = cursor.fetchone()
-            if grp:
-                group_id = grp[0]
 
-        if dp_table == 'external_datapoints':
-            cursor.execute('''
-                INSERT INTO external_datapoints (
-                    device_id, name, slave_id, register_address, register_type, data_type,
-                    byte_order, word_order, scale_factor, offset, unit, description, enabled,
-                    writable
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data.get('device_id'), data.get('tag_name'), data.get('slave_id', 1),
-                data.get('register_address'), data.get('register_type', 'holding'),
-                data.get('data_type', 'uint16'), data.get('byte_order', 'big'),
-                data.get('word_order', 'big'), data.get('scale_factor', 1.0),
-                data.get('offset', 0.0), data.get('unit', ''), data.get('description', ''),
-                data.get('enabled', True), data.get('writable', False)
-            ))
-        else:
-            cursor.execute('''
-                INSERT INTO vfd_datapoints (
-                    device_id, name, slave_id, group_id, "group", register_address, register_type, data_type,
-                    byte_order, word_order, scale_factor, offset, unit, description, enabled,
-                    writable, retry_count, timeout_ms, register_count
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                data.get('device_id'), data.get('tag_name'), data.get('slave_id', 1),
-                group_id, group_value, data.get('register_address'),
-                data.get('register_type', 'holding'), data.get('data_type', 'uint16'),
-                data.get('byte_order', 'big'), data.get('word_order', 'big'),
-                data.get('scale_factor', 1.0), data.get('offset', 0.0),
-                data.get('unit', ''), data.get('description', ''),
-                data.get('enabled', True), data.get('writable', False),
-                data.get('retry_count', 1), data.get('timeout_ms', 100),
-                data.get('register_count', 1)
-            ))
-        
+        cursor.execute('''
+            INSERT INTO external_datapoints (
+                device_id, name, slave_id, register_address, register_type, data_type,
+                byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            device_id, data.get('tag_name'), data.get('slave_id', 1),
+            data.get('register_address'), data.get('register_type', 'holding'),
+            data.get('data_type', 'uint16'), data.get('byte_order', 'big'),
+            data.get('word_order', 'big'), data.get('scale_factor', 1.0),
+            data.get('offset', 0.0), data.get('unit', ''), data.get('description', ''),
+            data.get('enabled', True), data.get('writable', False)
+        ))
+
         datapoint_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        
-        return web.json_response({
-            'success': True,
-            'message': 'Tag added successfully',
-            'id': datapoint_id
-        })
-        
+
+        return web.json_response({'success': True, 'message': 'Tag added successfully', 'id': datapoint_id})
+
     except Exception as e:
         print("Error adding tag: {}".format(str(e)))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
-
-# ============================================================================
-# UPDATE MODBUS TAG
-# ============================================================================
-
 async def update_modbus_datapoint(request):
     """PUT - Update Modbus tag"""
     try:
@@ -344,18 +202,12 @@ async def update_modbus_datapoint(request):
         conn.execute('PRAGMA foreign_keys = ON')
         cursor = conn.cursor()
         
-        # Check which table this tag is in
-        cursor.execute('SELECT id FROM vfd_datapoints WHERE id = ?', (tag_id,))
-        is_vfd_tag = cursor.fetchone() is not None
-        try:
-            cursor.execute('SELECT id FROM external_datapoints WHERE id = ?', (tag_id,))
-            is_ext_tag = cursor.fetchone() is not None
-        except Exception:
-            is_ext_tag = False
-        if not is_vfd_tag and not is_ext_tag:
+        # All modbus tags are in external_datapoints
+        cursor.execute('SELECT id FROM external_datapoints WHERE id = ?', (tag_id,))
+        if not cursor.fetchone():
             conn.close()
             return web.json_response({'error': 'Tag not found'}, status=404)
-        upd_table = 'external_datapoints' if is_ext_tag else 'vfd_datapoints' 
+        upd_table = 'external_datapoints' 
         
         update_fields = []
         values = []
@@ -477,69 +329,52 @@ async def delete_datapoint(request):
 # ============================================================================
 
 async def get_available_devices(request):
-    """GET devices available for creating tags"""
+    """GET devices available for creating tags.
+    External devices (ext-rtu / ext-tcp) are the Modbus source.
+    """
     try:
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
         cursor = conn.cursor()
-        
-        devices = []
-        
-        # Get VFD devices - include slave_id
-        cursor.execute('''
-            SELECT id, name, protocol_type, slave_id FROM vfd_device 
-            WHERE enabled = 1 
-            ORDER BY name
-        ''')
-        
-        for row in cursor.fetchall():
-            pt = row[2] or 'rtu'
-            device_type_display = "Modbus TCP" if pt == 'tcp' else "Modbus RTU"
-            devices.append({
-                'id': row[0],
-                'name': row[1],
-                'type': device_type_display,
-                'protocol': pt,
-                'slave_id': row[3] if row[3] is not None else 1
-            })
-        
-        # Get Loadcell devices
-        cursor.execute('''
-            SELECT id, name FROM loadcell_device 
-            WHERE enabled = 1 
-            ORDER BY name
-        ''')
-        
-        for row in cursor.fetchall():
-            devices.append({
-                'id': row[0],
-                'name': row[1],
-                'type': 'Loadcell',
-                'protocol': 'loadcell',
-                'slave_id': None
-            })
 
-        # Get External devices - external_device table doesn't have slave_id column
+        devices = []
+
+        # External devices (Modbus RTU / TCP)
         try:
             cursor.execute('''
-                SELECT id, name, COALESCE(protocol, 'ext-rtu') as protocol
+                SELECT id, name, protocol, slave_id
                 FROM external_device
                 WHERE enabled = 1
                 ORDER BY name
             ''')
             for row in cursor.fetchall():
-                proto = row[2]
-                device_type_display = "Modbus TCP" if 'tcp' in proto else "Modbus RTU"
+                proto = row[2] or 'ext-rtu'
                 protocol_type = 'tcp' if 'tcp' in proto else 'rtu'
+                device_type_display = "Modbus TCP" if protocol_type == 'tcp' else "Modbus RTU"
                 devices.append({
-                    'id': row[0],
-                    'name': row[1],
-                    'type': device_type_display,
+                    'id':       row[0],
+                    'name':     row[1],
+                    'type':     device_type_display,
                     'protocol': protocol_type,
-                    'slave_id': None  # External devices don't have device-level slave_id; it's per-tag
+                    'slave_id': row[3] if row[3] is not None else 1
                 })
         except Exception:
             pass
+
+        # Loadcell devices
+        cursor.execute('''
+            SELECT id, name FROM loadcell_device
+            WHERE enabled = 1
+            ORDER BY name
+        ''')
+        for row in cursor.fetchall():
+            devices.append({
+                'id':       row[0],
+                'name':     row[1],
+                'type':     'Loadcell',
+                'protocol': 'loadcell',
+                'slave_id': None
+            })
 
         conn.close()
         return web.json_response({'devices': devices})
@@ -547,11 +382,6 @@ async def get_available_devices(request):
     except Exception as e:
         print("Error getting available devices: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
-
-# ============================================================================
-# GET PROTOCOL FORM SCHEMA
-# ============================================================================
-
 async def get_protocol_form(request):
     """GET form schema for creating tag by protocol"""
     try:

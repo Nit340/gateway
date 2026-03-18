@@ -381,17 +381,35 @@ def create_tables(cursor):
     ''')
 
     # -----------------------------------------------------------------------
-    # External Devices
+    # External Devices  (all config stored as individual columns, not JSON)
     # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS external_device (
-            id         TEXT    PRIMARY KEY,
-            name       TEXT    NOT NULL,
-            protocol   TEXT    DEFAULT 'external',
-            config     TEXT    DEFAULT '{}',
-            enabled    BOOLEAN DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id                  TEXT    PRIMARY KEY,
+            name                TEXT    NOT NULL,
+            protocol            TEXT    DEFAULT 'ext-rtu'
+                                    CHECK(protocol IN ('ext-rtu', 'ext-tcp', 'external')),
+            -- Device identity
+            device_type         TEXT    DEFAULT '',
+            model_name          TEXT    DEFAULT '',
+            -- Common Modbus
+            slave_id            INTEGER DEFAULT 1,
+            response_timeout_ms INTEGER DEFAULT 100,
+            byte_timeout_ms     INTEGER DEFAULT 100,
+            max_retries         INTEGER DEFAULT 2,
+            polling_interval_ms INTEGER DEFAULT 300,
+            -- RTU fields
+            serial_port         TEXT    DEFAULT '/dev/ttymxc5',
+            baud_rate           INTEGER DEFAULT 9600,
+            data_bits           INTEGER DEFAULT 8,
+            parity              TEXT    DEFAULT 'N',
+            stop_bits           INTEGER DEFAULT 1,
+            -- TCP fields
+            ip_address          TEXT    DEFAULT '',
+            port                INTEGER DEFAULT 502,
+            enabled             BOOLEAN DEFAULT 1,
+            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -669,30 +687,76 @@ def _migrate_existing_db(cursor):
         ''')
         print("[DB] Migration: created external_datapoints table")
 
-    # external_device: ensure table exists + migrate columns
+    # external_device: migrate old JSON-config table → flat columns
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='external_device'")
     if not cursor.fetchone():
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS external_device (
-                id         TEXT    PRIMARY KEY,
-                name       TEXT    NOT NULL,
-                protocol   TEXT    DEFAULT 'external',
-                config     TEXT    DEFAULT '{}',
-                enabled    BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        print("[DB] Migration: created external_device table")
+        # Brand-new DB — table already created with flat columns above
+        pass
     else:
         cursor.execute("PRAGMA table_info(external_device)")
         ext_cols = {r[1] for r in cursor.fetchall()}
-        if 'protocol' not in ext_cols:
-            cursor.execute("ALTER TABLE external_device ADD COLUMN protocol TEXT DEFAULT 'external'")
-            print("[DB] Migration: added external_device.protocol")
-        if 'config' not in ext_cols:
-            cursor.execute("ALTER TABLE external_device ADD COLUMN config TEXT DEFAULT '{}'")
-            print("[DB] Migration: added external_device.config")
+
+        if 'device_type' not in ext_cols:
+            # Old schema with JSON config blob — rebuild to flat columns, migrating data
+            import json as _mj
+            cursor.execute("SELECT id, name, protocol, config, enabled, created_at, updated_at FROM external_device")
+            old_rows = cursor.fetchall()
+
+            cursor.execute("DROP TABLE external_device")
+            cursor.execute('''
+                CREATE TABLE external_device (
+                    id                  TEXT    PRIMARY KEY,
+                    name                TEXT    NOT NULL,
+                    protocol            TEXT    DEFAULT 'ext-rtu',
+                    device_type         TEXT    DEFAULT '',
+                    model_name          TEXT    DEFAULT '',
+                    slave_id            INTEGER DEFAULT 1,
+                    response_timeout_ms INTEGER DEFAULT 100,
+                    byte_timeout_ms     INTEGER DEFAULT 100,
+                    max_retries         INTEGER DEFAULT 2,
+                    polling_interval_ms INTEGER DEFAULT 300,
+                    serial_port         TEXT    DEFAULT '/dev/ttymxc5',
+                    baud_rate           INTEGER DEFAULT 9600,
+                    data_bits           INTEGER DEFAULT 8,
+                    parity              TEXT    DEFAULT 'N',
+                    stop_bits           INTEGER DEFAULT 1,
+                    ip_address          TEXT    DEFAULT '',
+                    port                INTEGER DEFAULT 502,
+                    enabled             BOOLEAN DEFAULT 1,
+                    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
+            for row in old_rows:
+                dev_id, name, protocol, config_json, enabled, created_at, updated_at = row
+                try:
+                    cfg = _mj.loads(config_json) if config_json else {}
+                except Exception:
+                    cfg = {}
+                cursor.execute('''
+                    INSERT OR IGNORE INTO external_device (
+                        id, name, protocol,
+                        device_type, model_name,
+                        slave_id, response_timeout_ms, byte_timeout_ms,
+                        max_retries, polling_interval_ms,
+                        serial_port, baud_rate, data_bits, parity, stop_bits,
+                        ip_address, port,
+                        enabled, created_at, updated_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ''', (
+                    dev_id, name, protocol or 'ext-rtu',
+                    cfg.get('device_type_init', ''), cfg.get('model_name', ''),
+                    cfg.get('slave_id', 1),
+                    cfg.get('response_timeout_ms', 100), cfg.get('byte_timeout_ms', 100),
+                    cfg.get('max_retries', 2), cfg.get('polling_interval_ms', 300),
+                    cfg.get('serial_port', '/dev/ttymxc5'),
+                    cfg.get('baud_rate', 9600), cfg.get('data_bits', 8),
+                    cfg.get('parity', 'N'), cfg.get('stop_bits', 1),
+                    cfg.get('ip_address', ''), cfg.get('port', 502),
+                    enabled, created_at, updated_at
+                ))
+            print("[DB] Migration: rebuilt external_device with flat columns ({} rows migrated)".format(len(old_rows)))
 
     # Update port_config: rename Path 1/2 to Channel 1/2 for loadcell
     cursor.execute("UPDATE port_config SET label='Channel 1' WHERE device_type='loadcell' AND label='Path 1'")
