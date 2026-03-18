@@ -330,10 +330,13 @@
                         Active Timezone <span class="text-red-500">*</span>
                     </label>
                     <select name="timezone" id="timezone-select" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                        <option value="Asia/Kolkata">IST Asia/Kolkata (GMT+05:30)</option>
-                        <option value="GMT">GMT Greenwich Mean Time (UTC+00:00)</option>
+                        <option value="Asia/Kolkata">IST -- Asia/Kolkata (GMT+05:30)</option>
+                        <option value="UTC">UTC -- Coordinated Universal Time (GMT+00:00)</option>
+                        <option value="Europe/London">GMT -- Europe/London (GMT+00:00)</option>
+                        <option value="Asia/Shanghai">CST -- Asia/Shanghai, China (GMT+08:00)</option>
+                        <option value="Asia/Tokyo">JST -- Asia/Tokyo, Japan (GMT+09:00)</option>
                     </select>
-                    <p class="text-xs text-slate-500 mt-1">Controls which timezone the date/time inputs below reflect</p>
+                    <p class="text-xs text-slate-500 mt-1">System time is set from the NTP server then converted to this timezone</p>
                 </div>
                 
                 <!-- NTP Server -->
@@ -342,7 +345,8 @@
                         NTP Server <span class="text-red-500">*</span>
                     </label>
                     <select name="ntp-server" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                        <option value="time.google.com">time.google.com</option>
+                        <option value="time.google.com">time.google.com (Google)</option>
+                        <option value="pool.ntp.org">pool.ntp.org (NTP Pool Project)</option>
                     </select>
                 </div>
 
@@ -503,16 +507,16 @@
                         <div class="flex gap-2">
                             <div class="flex-1 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                                 <i class="fa-solid fa-wifi text-primary text-xs flex-shrink-0"></i>
-                                <span id="wifi-ssid-label" class="truncate text-slate-800">Univa-Guest</span>
+                                <span id="wifi-ssid-label" class="truncate text-slate-800"></span>
                             </div>
                             <button type="button" id="wifi-scan-btn"
                                 class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-primary text-primary bg-white hover:bg-blue-50 transition-colors whitespace-nowrap">
                                 <i class="fa-solid fa-rotate text-xs" id="wifi-scan-icon"></i>
-                                <span id="wifi-scan-label">Scan</span>
+                                <span id="wifi-scan-label">Select Network</span>
                             </button>
                         </div>
                         <input type="hidden" name="wifi-ssid" id="wifi-ssid-value" value="Univa-Guest">
-                        <p class="text-xs text-slate-500 mt-1" id="wifi-ssid-hint">Click Scan to find networks</p>
+                        <p class="text-xs text-slate-500 mt-1" id="wifi-ssid-hint">Click Select Network to find available networks</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>

@@ -433,7 +433,7 @@ def _scan_wifi_windows():
                 m = re.match(r'Channel\s*:\s*(\d+)', line)
                 if m: channel = int(m.group(1))
 
-            # Windows signal% → dBm approximation
+            # Windows signal% -> dBm approximation
             signal_dbm = int(signal_pct / 2) - 100
 
             networks.append({
@@ -449,42 +449,209 @@ def _scan_wifi_windows():
     except Exception as e:
         print('[WIFI-SCAN] netsh parse error: {}'.format(e))
         return []
+def _get_wifi_iface():
+    """Return the first wireless interface name found via 'iw dev', default wlan0."""
+    import subprocess, re
+    try:
+        r = subprocess.run(
+            ['iw', 'dev'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5
+        )
+        m = re.search(r'Interface\s+(\S+)', r.stdout.decode('utf-8', errors='replace'))
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return 'wlan0'
+
+
 def _do_wifi_scan():
-    """Use netsh on Windows, fall back to nmcli/iw/iwlist on Linux."""
-    import platform
-    print('[WIFI-SCAN] Starting scan on {}...'.format(platform.system()))
+    """
+    Trigger a real WiFi scan and return results.
 
-    if platform.system() == 'Windows':
-        networks = _scan_wifi_windows()
+    This device uses wpa_supplicant to manage wlan0 directly.
+    NetworkManager reports the interface as 'unmanaged' so nmcli
+    cannot scan. iw dev wlan0 scan works because the process runs
+    as root and wpa_supplicant keeps the interface up.
+
+    Strategy:
+      1. iw scan  -- primary: works perfectly on this device
+      2. wpa_cli  -- fallback if iw is missing
+    """
+    import time
+    print('[WIFI-SCAN] Starting scan on Linux...')
+
+    iface = _get_wifi_iface()
+    print('[WIFI-SCAN] Using interface: {}'.format(iface))
+
+    # -- Method 1: iw dev <iface> scan --
+    networks = _scan_wifi_iw(iface)
+    if networks:
+        networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
+        print('[WIFI-SCAN] Found {} networks via iw.'.format(len(networks)))
+        return networks
+
+    # -- Method 2: wpa_cli scan + scan_results --
+    print('[WIFI-SCAN] iw empty, trying wpa_cli...')
+    networks = _scan_wifi_wpa_cli(iface)
+    if networks:
+        networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
+        print('[WIFI-SCAN] Found {} networks via wpa_cli.'.format(len(networks)))
+        return networks
+
+    print('[WIFI-SCAN] All methods returned empty.')
+    return []
+
+
+def _scan_wifi_wpa_cli(iface):
+    """
+    Use wpa_cli to trigger a scan and read results.
+    wpa_supplicant is the WiFi manager on many embedded Linux systems
+    where NetworkManager is absent or does not own the interface.
+    """
+    import subprocess, re, time, os
+
+    # Locate the wpa_supplicant control socket for this interface
+    socket_dirs = [
+        '/var/run/wpa_supplicant',
+        '/run/wpa_supplicant',
+        '/tmp/wpa_supplicant',
+    ]
+    socket_dir = None
+    for d in socket_dirs:
+        candidate = '{}/{}'.format(d, iface)
+        if os.path.exists(candidate):
+            socket_dir = d
+            break
+
+    # Build base wpa_cli command
+    base = ['wpa_cli']
+    if socket_dir:
+        base += ['-p', socket_dir, '-i', iface]
     else:
-        networks = _scan_wifi_nmcli_linux()
-        if not networks:
-            networks = _scan_wifi_iw()
-        if not networks:
-            networks = _scan_wifi_iwlist()
+        base += ['-i', iface]
 
-    if not networks:
-        print('[WIFI-SCAN] All methods returned empty.')
-    networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
+    print('[WIFI-SCAN] wpa_cli base cmd: {}'.format(' '.join(base)))
+
+    # Trigger scan
+    try:
+        r = subprocess.run(
+            base + ['scan'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+        )
+        out = r.stdout.decode('utf-8', errors='replace').strip()
+        print('[WIFI-SCAN] wpa_cli scan rc={} out={}'.format(r.returncode, out[:80]))
+        if r.returncode != 0 and 'OK' not in out:
+            return []
+    except FileNotFoundError:
+        print('[WIFI-SCAN] wpa_cli not found')
+        return []
+    except Exception as e:
+        print('[WIFI-SCAN] wpa_cli scan error: {}'.format(e))
+        return []
+
+    # Wait for scan to complete
+    time.sleep(4)
+
+    # Read scan results
+    try:
+        r = subprocess.run(
+            base + ['scan_results'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+        )
+        output = r.stdout.decode('utf-8', errors='replace')
+        print('[WIFI-SCAN] wpa_cli scan_results rc={} lines={}'.format(
+            r.returncode, len(output.splitlines())))
+    except Exception as e:
+        print('[WIFI-SCAN] wpa_cli scan_results error: {}'.format(e))
+        return []
+
+    # Parse tab-separated output: bssid / frequency / signal / flags / ssid
+    networks = []
+    seen     = set()
+    for line in output.splitlines():
+        line = line.strip()
+        if not line or line.startswith('bssid'):
+            continue
+        parts = line.split('	')
+        if len(parts) < 5:
+            parts = re.split(r'  +', line)
+        if len(parts) < 5:
+            continue
+        try:
+            freq   = int(parts[1].strip())
+            signal = int(parts[2].strip())
+            flags  = parts[3].strip()
+            ssid   = parts[4].strip()
+        except (IndexError, ValueError):
+            continue
+
+        if not ssid or ssid in seen:
+            continue
+        seen.add(ssid)
+
+        channel = 0
+        if 2412 <= freq <= 2484:
+            channel = (freq - 2407) // 5
+        elif 5000 <= freq <= 5885:
+            channel = (freq - 5000) // 5
+
+        if 'WPA2' in flags:
+            security = 'WPA2'
+        elif 'WPA' in flags:
+            security = 'WPA'
+        elif 'WEP' in flags:
+            security = 'WEP'
+        else:
+            security = 'Open'
+
+        networks.append({
+            'ssid':           ssid,
+            'signal_quality': signal,
+            'security':       security,
+            'channel':        channel,
+        })
+
     return networks
 
 
-def _scan_wifi_nmcli_linux():
+def _scan_wifi_nmcli(iface):
+    """
+    Read wifi list from nmcli.
+    Tries with and without explicit ifname, with and without sudo.
+    """
     import subprocess
-    for cmd in (
-        ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list'],
-        ['sudo', 'nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list'],
-    ):
+    base_fields = ['SSID', 'SIGNAL', 'SECURITY', 'CHAN']
+    field_arg   = ','.join(base_fields)
+
+    cmds = [
+        ['nmcli', '--escape', 'no', '-t', '-f', field_arg,
+         'dev', 'wifi', 'list', 'ifname', iface],
+        ['nmcli', '--escape', 'no', '-t', '-f', field_arg,
+         'dev', 'wifi', 'list'],
+    ]
+
+    for cmd in cmds:
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode != 0 or not result.stdout.strip():
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
+            )
+            stdout = result.stdout.decode('utf-8', errors='replace')
+            print('[WIFI-SCAN] nmcli rc={} lines={} cmd={}'.format(
+                result.returncode, len(stdout.splitlines()), ' '.join(cmd)))
+
+            if result.returncode != 0 or not stdout.strip():
                 continue
+
             networks = []
-            seen = set()
-            for line in result.stdout.splitlines():
+            seen     = set()
+            for line in stdout.splitlines():
                 line = line.strip()
                 if not line:
                     continue
+                # nmcli -t uses ':' as separator; SSID may contain ':'
+                # rsplit from right gives: [ssid_part, signal, security, chan]
                 parts = line.rsplit(':', 3)
                 if len(parts) < 4:
                     continue
@@ -493,126 +660,154 @@ def _scan_wifi_nmcli_linux():
                     continue
                 seen.add(ssid)
                 try:
+                    # nmcli SIGNAL is 0-100; convert to dBm approximation
                     signal_dbm = int(int(parts[1].strip()) / 2) - 100
                 except Exception:
                     signal_dbm = -100
+                security = parts[2].strip()
+                if not security or security == '--':
+                    security = 'Open'
+                try:
+                    channel = int(parts[3].strip())
+                except Exception:
+                    channel = 0
                 networks.append({
                     'ssid':           ssid,
                     'signal_quality': signal_dbm,
-                    'security':       parts[2].strip() or 'Open',
-                    'channel':        int(parts[3].strip()) if parts[3].strip().isdigit() else 0,
+                    'security':       security,
+                    'channel':        channel,
                 })
+
             if networks:
+                print('[WIFI-SCAN] nmcli parsed {} networks'.format(len(networks)))
                 return networks
-        except Exception:
-            pass
+
+        except FileNotFoundError:
+            print('[WIFI-SCAN] nmcli not found')
+            break
+        except Exception as e:
+            print('[WIFI-SCAN] nmcli error: {}'.format(e))
+
     return []
 
 
-def _scan_wifi_iw():
+def _scan_wifi_iw(iface):
+    """
+    Fallback: parse 'iw dev <iface> scan' output.
+    Requires root (runs as root on this device so no sudo needed).
+    """
     import subprocess, re
-    iface = 'wlan0'
-    try:
-        r = subprocess.run(['iw', 'dev'], capture_output=True, text=True, timeout=5)
-        m = re.search(r'Interface\s+(\S+)', r.stdout)
-        if m: iface = m.group(1)
-    except Exception:
-        pass
-    for cmd in (['iw', 'dev', iface, 'scan'], ['sudo', 'iw', 'dev', iface, 'scan']):
+
+    for cmd in (
+        ['iw', 'dev', iface, 'scan'],
+        ['iw', 'dev', iface, 'scan', 'passive'],
+    ):
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-            if not result.stdout.strip():
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=25
+            )
+            stdout = result.stdout.decode('utf-8', errors='replace')
+            stderr = result.stderr.decode('utf-8', errors='replace')
+            print('[WIFI-SCAN] iw rc={} lines={} stderr={}'.format(
+                result.returncode, len(stdout.splitlines()), stderr.strip()[:120]))
+
+            if not stdout.strip():
                 continue
+
             networks, seen, cur = [], set(), {}
-            for line in result.stdout.splitlines():
+
+            def _flush(c):
+                if c.get('ssid') and c['ssid'] not in seen:
+                    seen.add(c['ssid'])
+                    c.setdefault('signal_quality', -100)
+                    c.setdefault('security', 'Open')
+                    c.setdefault('channel', 0)
+                    networks.append(dict(c))
+
+            for line in stdout.splitlines():
                 line = line.strip()
                 if line.startswith('BSS '):
-                    if cur.get('ssid') and cur['ssid'] not in seen:
-                        seen.add(cur['ssid']); networks.append(cur)
+                    _flush(cur)
                     cur = {}
-                m = re.match(r'SSID:\s+(.+)', line)
-                if m: cur['ssid'] = m.group(1).strip()
-                m = re.match(r'signal:\s+(-?[\d.]+)\s+dBm', line)
-                if m: cur['signal_quality'] = int(float(m.group(1)))
-                m = re.match(r'\* primary channel:\s+(\d+)', line)
-                if m: cur['channel'] = int(m.group(1))
-                if re.match(r'RSN:', line): cur['security'] = 'WPA2'
-                if re.match(r'WPA:', line): cur.setdefault('security', 'WPA')
-            if cur.get('ssid') and cur['ssid'] not in seen:
-                networks.append(cur)
-            for n in networks:
-                n.setdefault('signal_quality', -100)
-                n.setdefault('security', 'Open')
-                n.setdefault('channel', 0)
-            if networks:
-                return networks
-        except Exception:
-            pass
-    return []
+                    continue
+                m = re.match(r'SSID:\s*(.*)', line)
+                if m:
+                    cur['ssid'] = m.group(1).strip()
+                    continue
+                m = re.match(r'signal:\s*(-?[\d.]+)\s*dBm', line)
+                if m:
+                    cur['signal_quality'] = int(float(m.group(1)))
+                    continue
+                m = re.match(r'\*\s*primary channel:\s*(\d+)', line)
+                if m:
+                    cur['channel'] = int(m.group(1))
+                    continue
+                # DS Parameter set is another way channel is reported
+                m = re.match(r'DS Parameter set:\s*channel\s*(\d+)', line)
+                if m:
+                    cur.setdefault('channel', int(m.group(1)))
+                    continue
+                if re.match(r'RSN:', line):
+                    cur['security'] = 'WPA2'
+                    continue
+                if re.match(r'WPA:', line):
+                    cur.setdefault('security', 'WPA')
 
+            _flush(cur)
 
-def _scan_wifi_iwlist():
-    import subprocess, re
-    iface = 'wlan0'
-    for cmd in (['iwlist', iface, 'scan'], ['sudo', 'iwlist', iface, 'scan']):
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-            if not result.stdout.strip():
-                continue
-            networks, seen = [], set()
-            for cell in result.stdout.split('Cell ')[1:]:
-                ssid_m = re.search(r'ESSID:"([^"]+)"', cell)
-                if not ssid_m: continue
-                ssid = ssid_m.group(1)
-                if ssid in seen: continue
-                seen.add(ssid)
-                level_m = re.search(r'Signal level=(-?\d+)', cell)
-                qual_m  = re.search(r'Quality=(\d+)/(\d+)', cell)
-                chan_m  = re.search(r'Channel[:\s]+(\d+)', cell)
-                enc_m   = re.search(r'Encryption key:(on|off)', cell)
-                signal_dbm = int(level_m.group(1)) if level_m else (
-                    int(int(qual_m.group(1)) / int(qual_m.group(2)) * 70) - 100 if qual_m else -100)
-                security = 'Open'
-                if enc_m and enc_m.group(1) == 'on':
-                    security = 'WPA2' if 'WPA' in cell else 'WEP'
-                networks.append({
-                    'ssid': ssid, 'signal_quality': signal_dbm,
-                    'security': security, 'channel': int(chan_m.group(1)) if chan_m else 0,
-                })
             if networks:
+                print('[WIFI-SCAN] iw parsed {} networks'.format(len(networks)))
                 return networks
-        except Exception:
-            pass
+
+        except FileNotFoundError:
+            print('[WIFI-SCAN] iw not found')
+            break
+        except Exception as e:
+            print('[WIFI-SCAN] iw error: {}'.format(e))
+
     return []
 
 async def wifi_scan_debug_handler(request):
-    """GET /api/wifi/scan/debug — raw output for troubleshooting."""
+    """GET /api/wifi/scan/debug -- raw output for troubleshooting (Linux only)."""
     user = ws_auth(request)
     if user is None:
         return web.json_response({'error': 'Unauthorized'}, status=401)
     import subprocess, platform
-    out = {'platform': platform.system()}
-    for label, cmd in [
-        ('netsh_networks', ['netsh', 'wlan', 'show', 'networks', 'mode=bssid']),
-        ('netsh_interfaces', ['netsh', 'wlan', 'show', 'interfaces']),
-        ('nmcli',  ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list']),
-        ('iw_dev', ['iw', 'dev']),
-    ]:
+    iface = _get_wifi_iface()
+    out   = {'platform': platform.system(), 'detected_iface': iface}
+    debug_cmds = [
+        ('ip_link',      ['ip', 'link', 'show']),
+        ('iw_dev',       ['iw', 'dev']),
+        ('nmcli_dev',    ['nmcli', 'dev', 'status']),
+        ('nmcli_rescan', ['nmcli', 'dev', 'wifi', 'rescan', 'ifname', iface]),
+        ('nmcli_list',   ['nmcli', '--escape', 'no', '-t', '-f',
+                          'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list', 'ifname', iface]),
+        ('iw_scan',      ['iw', 'dev', iface, 'scan']),
+    ]
+    for label, cmd in debug_cmds:
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10,
-                               encoding='utf-8', errors='replace')
-            out[label] = {'rc': r.returncode, 'stdout': r.stdout[:3000], 'stderr': r.stderr[:500]}
+            r = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=20
+            )
+            out[label] = {
+                'rc':     r.returncode,
+                'stdout': r.stdout.decode('utf-8', errors='replace')[:3000],
+                'stderr': r.stderr.decode('utf-8', errors='replace')[:500],
+            }
         except FileNotFoundError:
             out[label] = {'rc': -1, 'stdout': '', 'stderr': 'command not found'}
         except Exception as e:
             out[label] = {'rc': -1, 'stdout': '', 'stderr': str(e)}
-    out['note'] = 'parsed_networks triggers a real wlanapi scan (~3s wait)'
+    out['note'] = 'parsed_networks runs the full _do_wifi_scan() including rescan + 3s wait'
     out['parsed_networks'] = _do_wifi_scan()
     return web.json_response(out)
 
 
 async def wifi_scan_handler(request):
-    """GET /api/wifi/scan — scan for nearby WiFi networks via nmcli / iwlist."""
+    """GET /api/wifi/scan -- scan for nearby WiFi networks via nmcli / iwlist."""
     user = ws_auth(request)
     if user is None:
         return web.json_response({'success': False, 'error': 'Unauthorized'}, status=401)
@@ -658,7 +853,7 @@ def _do_wifi_connect(ssid, password):
 
 
 async def wifi_connect_handler(request):
-    """POST /api/wifi/connect — connect to a WiFi network."""
+    """POST /api/wifi/connect -- connect to a WiFi network."""
     user = ws_auth(request)
     if user is None:
         return web.json_response({'success': False, 'error': 'Unauthorized'}, status=401)
@@ -751,79 +946,177 @@ def update_wifi_signal_strength(strength):
 
 async def sync_time_handler(request):
     """POST /api/sync-time
-    Accepts optional JSON body with timezone, ntp_server, date_format, time_format.
-    Applies the timezone, optionally triggers NTP sync, and returns the current
-    date/time formatted according to the selected options.
+
+    Flow:
+      1. Check internet (ping ntp_server) -- abort if offline
+      2. One-time NTP sync via ntpdate
+      3. Stop NTP service (time frozen after sync)
+      4. Set timezone
+      5. set-local-rtc 0 (tell kernel RTC = UTC)
+      6. hwclock --systohc (write synced system clock to RTC)
+      7. Return updated time
     """
     user = ws_auth(request)
     if user is None:
         return web.json_response({'success': False, 'error': 'Unauthorized'}, status=401)
 
-    # Parse request body (may be empty)
     try:
         body = await request.json()
     except Exception:
         body = {}
 
-    timezone    = body.get('timezone',    'UTC')
-    ntp_server  = body.get('ntp_server',  'pool.ntp.org')
+    timezone    = body.get('timezone',    'Asia/Kolkata')
+    ntp_server  = body.get('ntp_server',  'time.google.com')
     date_format = body.get('date_format', 'DD/MM/YYYY')
     time_format = body.get('time_format', '24-hour')
 
-    # Store as active timezone so periodic_updates uses it from now on
+    import subprocess as _sp, os as _os
+
+    # ------------------------------------------------------------------
+    # STEP 1: Check internet connectivity
+    # ------------------------------------------------------------------
+    try:
+        ping = _sp.run(
+            ['ping', '-c', '1', '-W', '2', ntp_server],
+            stdout=_sp.PIPE, stderr=_sp.PIPE
+        )
+        if ping.returncode != 0:
+            return web.json_response({
+                'success': False,
+                'error': 'No Internet Connection'
+            }, status=400)
+    except Exception:
+        return web.json_response({
+            'success': False,
+            'error': 'No Internet Connection'
+        }, status=400)
+
+    # ------------------------------------------------------------------
+    # STEP 2: One-time NTP sync via chronyc (ntpdate not installed)
+    # Start chronyd first in case it was stopped from a previous sync
+    # ------------------------------------------------------------------
+    CHRONYC = '/usr/bin/chronyc'
+
+    _sp.call(['systemctl', 'start', 'chronyd'])
+    import time as _time
+    _time.sleep(2)  # give daemon a moment to start
+
+    r_step = _sp.run(
+        [CHRONYC, 'makestep'],
+        stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=15
+    )
+    out_step = (r_step.stdout + r_step.stderr).decode('utf-8', errors='replace').strip()
+    print('[SYNC-TIME] chronyc makestep rc={} out={}'.format(r_step.returncode, out_step))
+    if r_step.returncode != 0:
+        return web.json_response({
+            'success': False,
+            'error': 'NTP Sync Failed',
+            'detail': out_step
+        }, status=500)
+
+    r_wait = _sp.run(
+        [CHRONYC, 'waitsync', '6', '0.1', '0', '5'],
+        stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=35
+    )
+    out_wait = (r_wait.stdout + r_wait.stderr).decode('utf-8', errors='replace').strip()
+    print('[SYNC-TIME] chronyc waitsync rc={} out={}'.format(r_wait.returncode, out_wait))
+
+    # ------------------------------------------------------------------
+    # STEP 3: Stop NTP service (time is now frozen at synced value)
+    # ------------------------------------------------------------------
+    _sp.call(['timedatectl', 'set-ntp', 'false'])
+    _sp.call(['systemctl', 'stop', 'chronyd'])
+    print('[SYNC-TIME] NTP service stopped (one-time sync complete)')
+
+    # ------------------------------------------------------------------
+    # STEP 4: Set timezone
+    # ------------------------------------------------------------------
+    try:
+        r_tz = _sp.run(
+            ['timedatectl', 'set-timezone', timezone],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=5
+        )
+        if r_tz.returncode == 0:
+            print('[SYNC-TIME] timedatectl set-timezone {} OK'.format(timezone))
+        else:
+            raise Exception('timedatectl returned {}'.format(r_tz.returncode))
+    except Exception as e:
+        print('[SYNC-TIME] timedatectl failed: {}, trying symlink'.format(e))
+        try:
+            tz_file = '/usr/share/zoneinfo/{}'.format(timezone)
+            if _os.path.exists(tz_file):
+                if _os.path.lexists('/etc/localtime'):
+                    _os.remove('/etc/localtime')
+                _os.symlink(tz_file, '/etc/localtime')
+                try:
+                    with open('/etc/timezone', 'w') as _f:
+                        _f.write(timezone + '\n')
+                except Exception:
+                    pass
+                print('[SYNC-TIME] symlinked /etc/localtime -> {}'.format(tz_file))
+            else:
+                print('[SYNC-TIME] zoneinfo file not found: {}'.format(tz_file))
+        except Exception as e2:
+            print('[SYNC-TIME] timezone symlink failed: {}'.format(e2))
+
+    # ------------------------------------------------------------------
+    # STEP 5: Tell kernel RTC stores UTC
+    # ------------------------------------------------------------------
+    try:
+        _sp.call(['timedatectl', 'set-local-rtc', '0'], timeout=5)
+        print('[SYNC-TIME] timedatectl set-local-rtc 0 OK (RTC stores UTC)')
+    except Exception as e:
+        print('[SYNC-TIME] set-local-rtc error (non-fatal): {}'.format(e))
+
+    # ------------------------------------------------------------------
+    # STEP 6: Write synced system clock to RTC hardware
+    #         Called last -- after timezone set and set-local-rtc 0
+    #         so RTC gets the correct UTC value
+    # ------------------------------------------------------------------
+    try:
+        r_hwclock = _sp.run(
+            ['hwclock', '--systohc'],
+            stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=5
+        )
+        out_hwclock = (r_hwclock.stdout + r_hwclock.stderr).decode('utf-8', errors='replace').strip()
+        out_hwclock = out_hwclock if out_hwclock else ('OK' if r_hwclock.returncode == 0 else 'failed')
+        print('[SYNC-TIME] hwclock --systohc rc={} out={}'.format(r_hwclock.returncode, out_hwclock))
+    except Exception as e:
+        print('[SYNC-TIME] hwclock --systohc error (non-fatal): {}'.format(e))
+
+    # ------------------------------------------------------------------
+    # STEP 7: Update active_timezone and return updated time to UI
+    # ------------------------------------------------------------------
     global active_timezone
     active_timezone = timezone
 
-    # --- Attempt real NTP sync if ntpdate / chronyc is available ---
-    sync_method = 'system_clock'
-    try:
-        import subprocess
-        result = subprocess.run(
-            ['ntpdate', '-u', ntp_server],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            sync_method = 'ntp'
-        else:
-            # Fall back to chronyc
-            result2 = subprocess.run(
-                ['chronyc', 'makestep'],
-                capture_output=True, text=True, timeout=10
-            )
-            if result2.returncode == 0:
-                sync_method = 'chrony'
-    except Exception:
-        pass  # NTP tool not available - use system clock
-
-    # Get current time in the requested timezone via get_now()
     now = get_now()
 
-    # Format date according to date_format preference
+    # Format date
     if date_format == 'MM/DD/YYYY':
         formatted_date = now.strftime('%m/%d/%Y')
-        iso_date       = now.strftime('%Y-%m-%d')   # for the input[type=date] value
+        iso_date       = now.strftime('%Y-%m-%d')
     elif date_format == 'YYYY-MM-DD':
         formatted_date = now.strftime('%Y-%m-%d')
         iso_date       = formatted_date
-    else:  # DD/MM/YYYY (default)
+    else:
         formatted_date = now.strftime('%d/%m/%Y')
         iso_date       = now.strftime('%Y-%m-%d')
 
-    # Format time according to time_format preference
+    # Format time
     if time_format == '12-hour':
         formatted_time = now.strftime('%I:%M %p')
         input_time     = now.strftime('%I:%M')
-    else:  # 24-hour (default)
+    else:
         formatted_time = now.strftime('%H:%M')
         input_time     = formatted_time
 
-    # Update realtime_state so WS broadcast is consistent
+    # Update in-memory realtime state and broadcast to WebSocket clients
     realtime_state['current_date'] = iso_date
     realtime_state['current_time'] = input_time
     previous_state['current_date'] = iso_date
     previous_state['current_time'] = input_time
 
-    # Broadcast updated time to all connected general WS clients
     if connected_websockets:
         await broadcast_to_clients({
             'type':         'time_update',
@@ -833,14 +1126,13 @@ async def sync_time_handler(request):
 
     return web.json_response({
         'success':        True,
-        'current_date':   iso_date,       # YYYY-MM-DD  (for <input type="date">)
-        'current_time':   input_time,     # HH:MM or HH:MM  (for <input type="time">)
-        'formatted_date': formatted_date, # human-readable per date_format
-        'formatted_time': formatted_time, # human-readable per time_format
+        'current_date':   iso_date,
+        'current_time':   input_time,
+        'formatted_date': formatted_date,
+        'formatted_time': formatted_time,
         'timezone':       timezone,
         'ntp_server':     ntp_server,
-        'sync_method':    sync_method,
-        'message':        'Time synchronized successfully',
+        'message':        'Time synced successfully (one-time sync)',
     })
     """GET /api/general-configuration"""
     config = get_general_configuration()

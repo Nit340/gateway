@@ -183,7 +183,7 @@ console.log('general-config.js loaded');
 
     // =========================================================================
     // WIFI SCAN & PICKER
-    // Click Scan -> dropdown opens with results -> click a row -> label updates
+    // Click Select Network -> dropdown opens with results -> click a row -> label updates
     // =========================================================================
     var _wifiNetworks = [];
     var _wifiPanel    = null;
@@ -308,15 +308,15 @@ console.log('general-config.js loaded');
         // Button loading state
         if (btn)  btn.disabled = true;
         if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-xs';
-        if (lbl)  lbl.textContent = 'Scanning...';
-        if (hint) hint.textContent = 'Scanning for networks...';
+        if (lbl)  lbl.textContent = 'Searching...';
+        if (hint) hint.textContent = 'Searching for networks...';
 
         // Show panel with spinner while waiting
         var p = _createPanel();
         p.innerHTML =
             '<div style="padding:20px;text-align:center;color:#64748b;">' +
             '<i class="fa-solid fa-rotate fa-spin" style="font-size:20px;color:#2563eb;display:block;margin-bottom:8px;"></i>' +
-            'Scanning... this takes a few seconds</div>';
+            'Searching... this takes a few seconds</div>';
         _positionPanel();
         p.style.display = 'block';
 
@@ -337,14 +337,14 @@ console.log('general-config.js loaded');
             if (p) p.innerHTML =
                 '<div style="padding:20px;text-align:center;color:#ef4444;">' +
                 '<i class="fa-solid fa-triangle-exclamation" style="display:block;margin-bottom:8px;"></i>' +
-                'Scan failed: ' + err.message + '</div>';
-            if (hint) hint.textContent = 'Scan failed';
+                'Network search failed: ' + err.message + '</div>';
+            if (hint) hint.textContent = 'Network search failed';
         })
         .then(function () {
             // Always restore button
             if (btn)  btn.disabled = false;
             if (icon) icon.className = 'fa-solid fa-rotate text-xs';
-            if (lbl)  lbl.textContent = 'Rescan';
+            if (lbl)  lbl.textContent = 'Select Network';
         });
     };
 
@@ -428,7 +428,7 @@ console.log('general-config.js loaded');
             return;
         }
         var ssid = (el('wifi-ssid-value') || {}).value || '';
-        if (!ssid) { showNotification('Click Scan and select a network first', 'warning'); return; }
+        if (!ssid) { showNotification('Click Select Network and choose a network first', 'warning'); return; }
         _acEnabled = true;
         _setAcUi(true, false);
         _doOneConnect();                               // immediate first attempt
@@ -443,7 +443,7 @@ console.log('general-config.js loaded');
     var initWifiScanAndConnect = function () {
         _createPanel();
 
-        // Scan button
+        // Select Network button
         var scanBtn = el('wifi-scan-btn');
         if (scanBtn) {
             scanBtn.addEventListener('click', function (e) {
@@ -577,7 +577,7 @@ console.log('general-config.js loaded');
             if (connected) {
                 bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs';
                 if (icon) icon.className = 'fa-solid fa-circle-dot fa-beat text-emerald-500';
-                if (txt)  txt.textContent = 'Live   receiving network data from pipeline';
+                if (txt)  txt.textContent = 'Live   network data ';
             } else {
                 bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs';
                 if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-amber-400';

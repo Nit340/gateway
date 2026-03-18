@@ -446,6 +446,28 @@ async def webui_session_status(request):
         'hidden_pages': hidden_pages,
     })
 
+async def webui_session_role(request):
+    """GET /api/auth/session-role
+    Returns whether the current session is the 'editor' (first login) or a 'viewer'.
+    The editor is the token at index 0 of WEBUI_USER_TOKENS[username].
+    All other active tokens for the same user are viewers (read-only).
+    """
+    token = request.cookies.get('gw_webui_session')
+    if not token or token not in WEBUI_SESSIONS:
+        return web.json_response({'authenticated': False, 'role': 'viewer'}, status=401)
+
+    info = WEBUI_SESSIONS[token]
+    username = info['username'] if isinstance(info, dict) else info
+
+    # The first token in the list for this user is the editor
+    user_tokens = WEBUI_USER_TOKENS.get(username, [])
+    # Filter to only tokens still active in WEBUI_SESSIONS
+    active_tokens = [t for t in user_tokens if t in WEBUI_SESSIONS]
+    role = 'editor' if (active_tokens and active_tokens[0] == token) else 'viewer'
+
+    return web.json_response({'authenticated': True, 'username': username, 'role': role})
+
+
 async def database_viewer_handler(request):
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -756,9 +778,10 @@ def create_app():
     app.router.add_post('/api/auth/login', webui_login_api)
     app.router.add_post('/api/auth/logout', webui_logout_api)
     app.router.add_get('/api/auth/status', webui_session_status)
+    app.router.add_get('/api/auth/session-role', webui_session_role)
     # Patch register_auth_routes: temporarily wrap add_route/add_get/add_post
     # so duplicate registrations from auth.py are silently skipped
-    _owned = {'/api/auth/login', '/api/auth/logout', '/api/auth/status'}
+    _owned = {'/api/auth/login', '/api/auth/logout', '/api/auth/status', '/api/auth/session-role'}
     _orig_add_route = app.router.add_route
     _orig_add_get   = app.router.add_get
     _orig_add_post  = app.router.add_post
