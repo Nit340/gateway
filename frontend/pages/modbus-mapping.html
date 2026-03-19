@@ -131,8 +131,8 @@
                     Cancel
                 </button>
                 <button id="saveModbusConfigBtn">
-  <i class="fa-solid fa-floppy-disk mr-1"></i> Save Configuration
-</button>
+                    <i class="fa-solid fa-floppy-disk mr-1"></i> Save Configuration
+                </button>
             </div>
         </div>
     </div>
@@ -217,14 +217,15 @@
                     </div>
 
                     <div class="mb-3">
-    <label class="block text-xs font-medium text-slate-700 mb-1">Register Type <span class="text-red-500">*</span></label>
-    <select id="mbRegisterType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" required>
-        <option value="holding">Holding Register</option>
-        <option value="input">Input Register</option>
-        <option value="coil">Coil</option>
-        <option value="discrete">Discrete Input</option>
-    </select>
-</div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Register Type <span class="text-red-500">*</span></label>
+                        <select id="mbRegisterType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" required>
+                            <option value="holding">Holding Register</option>
+                            <option value="input">Input Register</option>
+                            <option value="coil">Coil</option>
+                            <option value="discrete">Discrete Input</option>
+                        </select>
+                    </div>
+                    
                     <!-- Address and Register Count -->
                     <div class="grid grid-cols-2 gap-3 mb-3">
                         <div>
@@ -233,7 +234,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 mb-1">Register Count</label>
-                            <input type="number" id="mbRegisterCount" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" value="1" min="1" max="10">
+                            <input type="number" id="mbRegisterCount" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" value="1" min="1" max="10">
                         </div>
                     </div>
 
@@ -281,19 +282,20 @@
                     </div>
 
                     <!-- Unit and Group - Group as Dropdown -->
-<div class="grid grid-cols-2 gap-3 mb-3">
-    <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
-        <input type="text" id="mbUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="V, A, Hz, °C">
-    </div>
-    <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Group</label>
-        <select id="mbGroup" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-            <option value="">No Group</option>
-            <!-- Groups will be populated by JavaScript -->
-        </select>
-    </div>
-</div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
+                            <input type="text" id="mbUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="V, A, Hz, °C">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 mb-1">Group</label>
+                            <select id="mbGroup" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                                <option value="">No Group</option>
+                                <!-- Groups will be populated by JavaScript -->
+                            </select>
+                        </div>
+                    </div>
+                    
                     <!-- Writable and Retry/Timeout -->
                     <div class="grid grid-cols-3 gap-3 mb-3">
                         <div class="flex items-center mt-2">
@@ -316,6 +318,7 @@
                         <textarea id="mbDescription" rows="2" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Tag description..."></textarea>
                     </div>
 
+                    <!-- Footer buttons - Back, Cancel, Create Tag -->
                     <div class="flex justify-between items-center pt-4 border-t border-slate-200">
                         <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="modbusFormBack">
                             <i class="fa-solid fa-arrow-left mr-1"></i> Back
@@ -333,30 +336,42 @@
             <!-- STEP 2B: Load Cell info (read-only) -->
             <div id="stepLoadcellInfo" style="display:none;">
                 <div class="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                    <div class="text-xs text-green-700 mb-0.5">Selected Device</div>
-                    <div class="text-sm font-semibold text-green-900" id="lcCtxDevice">—</div>
+                    <div class="flex items-center justify-between text-sm">
+                        <div>
+                            <div class="text-xs text-green-700 mb-0.5">Device</div>
+                            <div class="font-semibold text-green-900" id="lcCtxDevice">—</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-green-700 mb-0.5">Device Type</div>
+                            <span class="protocol-badge loadcell">Load Cell</span>
+                        </div>
+                    </div>
                 </div>
+                
+                <!-- Auto-generated load cell tags display -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
                     <div class="p-3 rounded-lg border border-indigo-200 bg-indigo-50">
                         <div class="text-xs text-indigo-500 mb-1">Auto Tag</div>
                         <div class="font-semibold text-indigo-900 text-sm flex items-center gap-1">
-                            <i class="fa-solid fa-wifi text-xs"></i> wlan
+                            <i class="fa-solid fa-weight-scale text-xs"></i> load
                         </div>
-                        <div class="text-xs text-indigo-500 mt-1">STRING</div>
+                        <div class="text-xs text-indigo-500 mt-1">FLOAT32</div>
+                        <div class="text-xs text-indigo-700 mt-1" id="lcUnitDisplay">kg</div>
                     </div>
                     <div class="p-3 rounded-lg border border-indigo-200 bg-indigo-50">
                         <div class="text-xs text-indigo-500 mb-1">Auto Tag</div>
                         <div class="font-semibold text-indigo-900 text-sm flex items-center gap-1">
-                            <i class="fa-solid fa-signal text-xs"></i> lte
+                            <i class="fa-solid fa-circle-info text-xs"></i> status
                         </div>
-                        <div class="text-xs text-indigo-500 mt-1">STRING</div>
+                        <div class="text-xs text-indigo-500 mt-1">UINT16</div>
                     </div>
                 </div>
 
                 <div class="flex justify-between items-center pt-4 border-t border-slate-200">
-                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="virtualFormBack">
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="lcFormBack">
                         <i class="fa-solid fa-arrow-left mr-1"></i> Back
                     </button>
-                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="virtualFormClose">Close</button>
+                    <button type="button" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50" id="lcFormClose">Close</button>
                 </div>
             </div>
 
@@ -408,15 +423,15 @@
                     </div>
                 </div>
 
-               <div class="mb-3">
-    <label class="block text-xs font-medium text-slate-700 mb-1">Register Type <span class="text-red-500">*</span></label>
-    <select id="editMbRegisterType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" required>
-        <option value="holding">Holding Register</option>
-        <option value="input">Input Register</option>
-        <option value="coil">Coil</option>
-        <option value="discrete">Discrete Input</option>
-    </select>
-</div>
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Register Type <span class="text-red-500">*</span></label>
+                    <select id="editMbRegisterType" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white" required>
+                        <option value="holding">Holding Register</option>
+                        <option value="input">Input Register</option>
+                        <option value="coil">Coil</option>
+                        <option value="discrete">Discrete Input</option>
+                    </select>
+                </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-3">
                     <div>
@@ -468,18 +483,18 @@
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-3">
-    <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
-        <input type="text" id="editMbUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="V, A, Hz, °C">
-    </div>
-    <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Group</label>
-        <select id="editMbGroup" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-            <option value="">No Group</option>
-            <!-- Groups will be populated by JavaScript -->
-        </select>
-    </div>
-</div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
+                        <input type="text" id="editMbUnit" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="V, A, Hz, °C">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Group</label>
+                        <select id="editMbGroup" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                            <option value="">No Group</option>
+                            <!-- Groups will be populated by JavaScript -->
+                        </select>
+                    </div>
+                </div>
 
                 <div class="grid grid-cols-3 gap-3 mb-3">
                     <div class="flex items-center mt-2">

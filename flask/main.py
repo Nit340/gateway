@@ -541,17 +541,23 @@ async def start_background_tasks(app):
         start_pipeline_background(app)
 
         async def _pipeline_watchdog():
-            """Restart the pipeline thread automatically if it crashes or exits."""
+            """Keep the pipeline thread alive forever.
+
+            The pipeline thread is permanent -- it starts on boot and must
+            never stop while the server is running.  connect/disconnect
+            endpoints are no-ops, so should_run is always True.
+            The watchdog simply checks every 5 s and restarts the thread
+            if it has died for any reason (crash, exception, etc.).
+            """
             import asyncio as _asyncio
             from pipeline import pipeline_state as _ps, start_pipeline_background as _spb
             while True:
                 await _asyncio.sleep(5)
                 with _ps["lock"]:
-                    should_run = _ps.get("should_run", True)
                     thread = _ps.get("background_thread")
-                if not should_run:
-                    # Intentional shutdown -- stop watching
-                    break
+                    # Ensure should_run is always True -- nothing should ever
+                    # set it to False now that connect/disconnect are no-ops.
+                    _ps["should_run"] = True
                 if thread is None or not thread.is_alive():
                     print("[MAIN] Watchdog: pipeline thread is dead -- restarting...")
                     _spb(app)

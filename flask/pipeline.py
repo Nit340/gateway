@@ -515,20 +515,22 @@ def _flush_pending_for_service(client, svc):
                 key = ("modbus", version)
                 already = key in _sent_versions
             if already:
+                # Do NOT return here -- fall through so loadcell/iot/core blocks still run
                 print("[PIPELINE] Modbus v{} already sent -- skip duplicate flush".format(version))
-                return
-            try:
-                rid = client.datapoint_update(svc, get_pipeline_config_name("modbus"), pending)
-                if rid > 0:
-                    print("[PIPELINE] Flushed pending modbus config to '{}' (rid={})".format(svc, rid))
-                    record_pipeline_send_success("modbus", version, svc, "flushed pending")
-                    with pipeline_state["lock"]:
-                        pipeline_state["modbus_config_pending"] = None
-                    _mark_sent(key[0], key[1])
-                else:
-                    print("[PIPELINE] Flush modbus failed (rid=0) -- stays pending")
-            except Exception as e:
-                print("[PIPELINE] Flush modbus error: {}".format(e))
+            else:
+                try:
+                    rid = client.datapoint_update(svc, get_pipeline_config_name("modbus"), pending)
+                    if rid > 0:
+                        print("[PIPELINE] Flushed pending modbus config to '{}' (rid={})".format(svc, rid))
+                        record_pipeline_send_success("modbus", version, svc, "flushed pending")
+                        with pipeline_state["lock"]:
+                            pipeline_state["modbus_config"]         = pending
+                            pipeline_state["modbus_config_pending"] = None
+                        _mark_sent(key[0], key[1])
+                    else:
+                        print("[PIPELINE] Flush modbus failed (rid=0) -- stays pending")
+                except Exception as e:
+                    print("[PIPELINE] Flush modbus error: {}".format(e))
 
     # ---- Loadcell ----
     if svc == loadcell_svc:
@@ -805,14 +807,19 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                             parsed = json.loads(val)
                                             print("[PIPELINE] Parsed {}: {}".format(dp, parsed))
                                         except json.JSONDecodeError as e:
+                                            # Value is not valid JSON (e.g. lte sends unquoted keys).
+                                            # Store raw string and broadcast as-is; skip dict traversal.
                                             print("[PIPELINE] JSON parse error for {}: {}".format(dp, e))
                                             update_network_status_field(dp, val)
                                             main_loop = pipeline_state.get("main_loop")
                                             _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": val}))
+                                            parsed = None  # sentinel -- skip dict-walk below
                                     else:
                                         parsed = val
 
-                                    if not isinstance(parsed, dict):
+                                    if parsed is None:
+                                        pass  # already handled in except block above
+                                    elif not isinstance(parsed, dict):
                                         update_network_status_field(dp, parsed)
                                         main_loop = pipeline_state.get("main_loop")
                                         _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": parsed}))
@@ -850,16 +857,10 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         print("[PIPELINE] CONFIG_RECEIVED: name='{}' version={}".format(
                             cfg.name, cfg.version))
                         if cfg.name == "loadcell_config":
-                            # Skip if we already processed this exact version
-                            with _sent_versions_lock:
-                                rx_key = ("loadcell_rx", cfg.version)
-                                already_rx = rx_key in _sent_versions
-                            if already_rx:
-                                print("[LC-RX] Skipping duplicate CONFIG_RECEIVED v{}".format(cfg.version))
-                            else:
-                                with _sent_versions_lock:
-                                    _sent_versions.add(rx_key)
-                                _handle_received_loadcell_config(cfg)
+                            # Always process every incoming loadcell_config --
+                            # the loadcell service may send it at any time and
+                            # we must never ignore or skip it.
+                            _handle_received_loadcell_config(cfg)
 
             except Exception as e:
                 print("[PIPELINE] Event handler error: {}".format(e))
@@ -2311,38 +2312,57 @@ async def pipeline_save_modbus_config(request):
             client    = pipeline_state.get("client")
             connected = pipeline_state.get("connected", False)
 
+        print("[MODBUS-CFG] Pipeline connected={}, client={}".format(connected, client is not None))
+
         if connected and client:
             target_service = _find_modbus_service()
-            if target_service:
+            configured_name = get_pipeline_service_name("modbus")
+            with pipeline_state["lock"]:
+                active_services = list(pipeline_state.get("connected_services", set()))
+            print("[MODBUS-CFG] configured service_name='{}', target_service={}, connected_services={}".format(
+                configured_name, target_service, active_services))
+
+            if not target_service:
+                # No service name configured or service not yet seen -- queue and log clearly
+                pipeline_message = (
+                    "Modbus service '{}' not found in connected services {} -- queued as pending. "
+                    "Set the correct service name in Admin -> Pipeline Targets.".format(
+                        configured_name or "<not configured>", active_services)
+                )
+                print("[MODBUS-CFG] " + pipeline_message)
+                record_pipeline_send_failure("modbus", pipeline_message)
+                with pipeline_state["lock"]:
+                    pipeline_state["modbus_config_pending"] = config_json
+            else:
                 try:
                     rid = client.datapoint_update(target_service, get_pipeline_config_name("modbus"), config_json)
+                    print("[MODBUS-CFG] datapoint_update rid={}".format(rid))
                     if rid > 0:
                         pipeline_sent    = True
-                        pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                        pipeline_message = "Sent to '{}' (v{})".format(target_service, new_version)
                         print("[MODBUS-CFG] " + pipeline_message)
                         record_pipeline_send_success("modbus", new_version, target_service, pipeline_message)
                         with pipeline_state["lock"]:
+                            pipeline_state["modbus_config"]         = config_json
                             pipeline_state["modbus_config_pending"] = None
+                        _mark_sent("modbus", new_version)
                     else:
                         pipeline_message = "Send failed (rid=0) -- queued as pending"
+                        print("[MODBUS-CFG] " + pipeline_message)
                         record_pipeline_send_failure("modbus", pipeline_message)
                         with pipeline_state["lock"]:
                             pipeline_state["modbus_config_pending"] = config_json
                 except Exception as exc:
                     pipeline_message = "Error: {} -- queued as pending".format(exc)
+                    print("[MODBUS-CFG] " + pipeline_message)
+                    import traceback; traceback.print_exc()
                     record_pipeline_send_failure("modbus", pipeline_message)
                     with pipeline_state["lock"]:
                         pipeline_state["modbus_config_pending"] = config_json
-            else:
-                pipeline_message = "Service '{}' not connected -- queued as pending".format(
-                    get_pipeline_service_name("modbus") or "modbus_service")
-                record_pipeline_send_failure("modbus", pipeline_message)
-                with pipeline_state["lock"]:
-                    pipeline_state["modbus_config_pending"] = config_json
         else:
             with pipeline_state["lock"]:
                 pipeline_state["modbus_config_pending"] = config_json
-            pipeline_message = "Queued as pending (not connected)"
+            pipeline_message = "Queued as pending (pipeline not connected)"
             record_pipeline_send_failure("modbus", pipeline_message)
             print("[MODBUS-CFG] " + pipeline_message)
 
@@ -2527,80 +2547,24 @@ async def _do_auto_send():
             elif cfg_type == "iot_gateway":
                 d = await send_iot_gateway_config_now()
             elif cfg_type == "core":
-                # resend latest stored core config
-                conn2 = sqlite3.connect(DB_FILE)
-                conn2.row_factory = sqlite3.Row
-                cur2 = conn2.cursor()
-                try:
-                    cur2.execute('''
-                        CREATE TABLE IF NOT EXISTS core_configs (
-                            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                            version      INTEGER NOT NULL,
-                            device_names TEXT,
-                            service_name TEXT,
-                            config_json  TEXT NOT NULL,
-                            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    conn2.commit()
-                    cur2.execute(
-                        "SELECT config_json, version FROM core_configs ORDER BY id DESC LIMIT 1"
-                    )
-                    row = cur2.fetchone()
-                finally:
-                    conn2.close()
-                if not row:
-                    d = {"success": False, "error": "no core config stored"}
-                else:
-                    # inline resend
-                    config_json = row["config_json"]
-                    new_version = get_next_pipeline_version("core")
-                    pipeline_sent = False
-                    pipeline_message = "Not sent -- pipeline not connected"
-                    target_service = None
-                    with pipeline_state["lock"]:
-                        client    = pipeline_state.get("client")
-                        connected = pipeline_state.get("connected", False)
-                    if connected and client:
-                        target_service = _find_core_service()
-                        if target_service:
-                            try:
-                                ok = client.publish_config(Config(
-                                    name    = get_pipeline_config_name("core"),
-                                    value   = config_json,
-                                    version = new_version,
-                                    service = target_service,
-                                ))
-                                if ok:
-                                    pipeline_sent    = True
-                                    pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
-                                    record_pipeline_send_success("core", new_version, target_service, pipeline_message)
-                                    with pipeline_state["lock"]:
-                                        pipeline_state["core_config"]         = config_json
-                                        pipeline_state["core_config_pending"] = None
-                                        pipeline_state["core_config_version"] = new_version
-                                else:
-                                    pipeline_message = "publish_config failed -- queued"
-                                    with pipeline_state["lock"]:
-                                        pipeline_state["core_config_pending"] = config_json
-                            except Exception as exc:
-                                pipeline_message = "Error: {} -- queued".format(exc)
-                                with pipeline_state["lock"]:
-                                    pipeline_state["core_config_pending"] = config_json
-                        else:
-                            pipeline_message = "Service not connected -- queued"
-                            with pipeline_state["lock"]:
-                                pipeline_state["core_config_pending"] = config_json
-                    else:
-                        pipeline_message = "Not connected -- queued"
-                        with pipeline_state["lock"]:
-                            pipeline_state["core_config_pending"] = config_json
-                    d = {
-                        "success":          True,
-                        "pipeline_sent":    pipeline_sent,
-                        "pipeline_message": pipeline_message,
-                        "version":          new_version,
-                    }
+                # Always build fresh from rules DB -- never rely on a stored blob.
+                # This ensures the loadcell datapoint names are always current
+                # (auto-discovered from loadcell_device) and all enabled rules
+                # are included, even on first boot when core_configs is empty.
+                from rules import _build_and_send_core_config as _core_send
+                _core_result = await _core_send()
+                d = {
+                    "success":          True,
+                    "pipeline_sent":    _core_result.get("sent", False),
+                    "pipeline_message": (
+                        "Sent to {} (rules-built)".format(_core_result.get("service"))
+                        if _core_result.get("sent")
+                        else "Queued as pending (rules-built)"
+                        if _core_result.get("pending")
+                        else _core_result.get("error", "unknown")
+                    ),
+                    "version":          _core_result.get("version"),
+                }
             else:
                 d = {"success": False, "error": "unknown config_type"}
 

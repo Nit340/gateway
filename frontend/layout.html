@@ -277,27 +277,368 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* ── Read-Only / Viewer Mode ──────────────────────────────── */
+        #viewerBanner {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 9999;
+            background: #FEF3C7;
+            border-bottom: 2px solid #F59E0B;
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #92400E;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        #viewerBanner.show { display: flex; }
+        #viewerBanner i { font-size: 15px; color: #D97706; flex-shrink: 0; }
+        #viewerBanner .vb-close {
+            margin-left: auto;
+            cursor: pointer;
+            color: #92400E;
+            opacity: 0.6;
+            font-size: 14px;
+        }
+        #viewerBanner .vb-close:hover { opacity: 1; }
+
+        /* Viewer mode: disable all interactive controls in the page content area */
+        body.viewer-mode #contentArea input,
+        body.viewer-mode #contentArea select,
+        body.viewer-mode #contentArea textarea,
+        body.viewer-mode #pageContent input,
+        body.viewer-mode #pageContent select,
+        body.viewer-mode #pageContent textarea {
+            pointer-events: none !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            background: #F1F5F9 !important;
+        }
+        body.viewer-mode #contentArea button:not(.viewer-allow),
+        body.viewer-mode #contentArea [type="submit"]:not(.viewer-allow),
+        body.viewer-mode #pageContent button:not(.viewer-allow),
+        body.viewer-mode #pageContent [type="submit"]:not(.viewer-allow) {
+            pointer-events: none !important;
+            opacity: 0.45 !important;
+            cursor: not-allowed !important;
+            filter: grayscale(0.4);
+        }
+        /* Keep sidebar navigation and logout always clickable */
+        body.viewer-mode .sidebar button,
+        body.viewer-mode .sidebar a,
+        body.viewer-mode #mobileMenuBtn { pointer-events: auto !important; opacity: 1 !important; filter: none !important; }
+
+        /* ── Server Connection Alert Overlay ─────────────────────────── */
+        #serverAlertOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+        }
+        #serverAlertOverlay.show { display: flex; }
+
+        .sa-card {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+            padding: 36px 32px;
+            max-width: 420px;
+            width: 92%;
+            text-align: center;
+            animation: saSlideIn 0.25s ease;
+        }
+        @keyframes saSlideIn {
+            from { opacity: 0; transform: translateY(-16px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0)     scale(1);    }
+        }
+
+        .sa-icon-wrap {
+            width: 68px; height: 68px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 18px;
+        }
+        .sa-icon-crash   { background: #FEF2F2; }
+        .sa-icon-network { background: #FFF7ED; }
+        .sa-icon-timeout { background: #FFFBEB; }
+
+        .sa-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.7px; padding: 3px 10px;
+            border-radius: 20px; margin-bottom: 12px;
+        }
+        .sa-badge-crash   { background: #FEF2F2; color: #DC2626; }
+        .sa-badge-network { background: #FFF7ED; color: #EA580C; }
+        .sa-badge-timeout { background: #FFFBEB; color: #CA8A04; }
+
+        .sa-title {
+            font-size: 18px; font-weight: 700;
+            color: #0F172A; margin-bottom: 8px;
+        }
+        .sa-desc {
+            font-size: 13px; color: #64748B;
+            line-height: 1.6; margin-bottom: 18px;
+        }
+        .sa-detail {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 11px; color: #475569;
+            text-align: left; line-height: 1.8;
+            margin-bottom: 22px;
+        }
+        .sa-detail strong { color: #1E293B; }
+
+        .sa-btn-retry {
+            background: #2563EB; color: white;
+            border: none; border-radius: 8px;
+            padding: 10px 22px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .sa-btn-retry:hover { background: #1D4ED8; }
+        .sa-btn-login {
+            background: white; color: #475569;
+            border: 1px solid #E2E8F0; border-radius: 8px;
+            padding: 10px 22px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; margin-left: 8px;
+        }
+        .sa-btn-login:hover { background: #F8FAFC; border-color: #CBD5E1; }
+
+        #sa-countdown {
+            font-size: 11px; color: #94A3B8; margin-top: 14px;
+        }
+        #sa-countdown span { font-weight: 600; color: #64748B; }
     </style>
 </head>
 <body>
+    <!-- Viewer / Read-Only Banner (shown when this is not the first session) -->
+    <div id="viewerBanner">
+        <i class="fa-solid fa-eye"></i>
+        <span>
+            <strong>View-Only Mode</strong> — Another user is currently editing.
+            You can browse but cannot make changes.
+        </span>
+        <span class="vb-close" onclick="document.getElementById('viewerBanner').classList.remove('show')" title="Dismiss">
+            <i class="fa-solid fa-xmark"></i>
+        </span>
+    </div>
+    <!-- ── Server Connection Alert Overlay ── -->
+    <div id="serverAlertOverlay">
+        <div class="sa-card">
+            <div class="sa-icon-wrap" id="saIcon">⚠</div>
+            <div class="sa-badge"    id="saBadge">Error</div>
+            <div class="sa-title"    id="saTitle">Connection Lost</div>
+            <div class="sa-desc"     id="saDesc">Unable to reach the gateway server.</div>
+            <div class="sa-detail"   id="saDetail"></div>
+            <div>
+                <button class="sa-btn-retry" onclick="window.__saRetry()">↻ Retry Now</button>
+                <button class="sa-btn-login" onclick="window.location.replace('/')">Login Page</button>
+            </div>
+            <div id="sa-countdown"></div>
+        </div>
+    </div>
+
     <script>
-        // Auth guard - always verify with server on every load.
-        // If backend restarted, WEBUI_SESSIONS is cleared and this returns 401 -> login.
-        (async function () {
-            try {
-                const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
-                if (!res.ok) {
-                    // Clear stale cookies and force login
-                    document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-                    document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    /* ══════════════════════════════════════════════════════════════
+       Auth guard + connection-loss overlay for layout.html
+    ══════════════════════════════════════════════════════════════ */
+    (function () {
+
+        /* ── Error definitions ── */
+        var ERRS = {
+            NO_NETWORK: {
+                icon:'📡', iconClass:'sa-icon-network',
+                badge:'No Network', badgeClass:'sa-badge-network',
+                title:'No Network Connection',
+                desc:'Your device lost its network connection. Check your cable or Wi-Fi.',
+                detail: function(e){ return '<strong>Cause:</strong> Browser is offline (navigator.onLine = false)<br><strong>Detail:</strong> '+e; }
+            },
+            SERVER_CRASH: {
+                icon:'💥', iconClass:'sa-icon-crash',
+                badge:'Server Crash', badgeClass:'sa-badge-crash',
+                title:'Gateway Server Crashed',
+                desc:'The gateway server stopped responding. It may be restarting — please wait and retry.',
+                detail: function(e){ return '<strong>Cause:</strong> Server process exited or became unreachable<br><strong>Likely:</strong> Service crash · OOM · Hardware fault · Firmware update<br><strong>Detail:</strong> '+e; }
+            },
+            SERVER_DISCONNECT: {
+                icon:'🔌', iconClass:'sa-icon-crash',
+                badge:'Server Disconnected', badgeClass:'sa-badge-crash',
+                title:'Server Disconnected',
+                desc:'The gateway server closed the connection unexpectedly. It may be restarting.',
+                detail: function(e){ return '<strong>Cause:</strong> HTTP connection closed before response<br><strong>Likely:</strong> Server restart · Graceful shutdown · Network path interrupted<br><strong>Detail:</strong> '+e; }
+            },
+            TIMEOUT: {
+                icon:'⏱', iconClass:'sa-icon-timeout',
+                badge:'Timeout', badgeClass:'sa-badge-timeout',
+                title:'Request Timed Out',
+                desc:'The gateway did not respond within 8 seconds. It may be overloaded or starting up.',
+                detail: function(e){ return '<strong>Cause:</strong> No response within 8 s<br><strong>Likely:</strong> Server busy · Heavy load · Slow boot<br><strong>Detail:</strong> '+e; }
+            },
+            SERVER_ERROR: {
+                icon:'🛑', iconClass:'sa-icon-crash',
+                badge:'Server Error', badgeClass:'sa-badge-crash',
+                title:'Internal Server Error',
+                desc:'The gateway returned an unexpected server error. Please retry.',
+                detail: function(e){ return '<strong>Detail:</strong> '+e; }
+            }
+        };
+
+        /* ── Show overlay ── */
+        var _retryTimer = null, _retrySeconds = 10;
+
+        function showAlert(type, raw) {
+            var cfg = ERRS[type] || ERRS.SERVER_DISCONNECT;
+
+            var iconEl = document.getElementById('saIcon');
+            iconEl.textContent = cfg.icon;
+            iconEl.className   = 'sa-icon-wrap ' + cfg.iconClass;
+
+            var badge = document.getElementById('saBadge');
+            badge.textContent = cfg.badge;
+            badge.className   = 'sa-badge ' + cfg.badgeClass;
+
+            document.getElementById('saTitle').textContent  = cfg.title;
+            document.getElementById('saDesc').textContent   = cfg.desc;
+            document.getElementById('saDetail').innerHTML   = cfg.detail(raw || 'n/a');
+
+            document.getElementById('serverAlertOverlay').classList.add('show');
+            startCountdown();
+        }
+
+        function hideAlert() {
+            document.getElementById('serverAlertOverlay').classList.remove('show');
+            clearInterval(_retryTimer);
+            document.getElementById('sa-countdown').textContent = '';
+        }
+
+        function startCountdown() {
+            _retrySeconds = 10;
+            clearInterval(_retryTimer);
+            tick();
+            _retryTimer = setInterval(function () {
+                _retrySeconds--;
+                tick();
+                if (_retrySeconds <= 0) { clearInterval(_retryTimer); doRetry(); }
+            }, 1000);
+        }
+
+        function tick() {
+            var el = document.getElementById('sa-countdown');
+            if (el) el.innerHTML = 'Auto-retrying in <span>' + _retrySeconds + 's</span>\u2026';
+        }
+
+        function classifyError(err) {
+            if (!navigator.onLine) return 'NO_NETWORK';
+            var m = err && err.message ? err.message.toLowerCase() : '';
+            if (m.indexOf('failed to fetch') !== -1 || m.indexOf('networkerror') !== -1 || m.indexOf('network request') !== -1) return 'SERVER_CRASH';
+            if (m.indexOf('load failed') !== -1 || m.indexOf('could not connect') !== -1) return 'SERVER_DISCONNECT';
+            return 'SERVER_DISCONNECT';
+        }
+
+        /* ── Retry: re-check session without reloading the page ── */
+        function doRetry() {
+            hideAlert();
+            checkSession();
+        }
+        window.__saRetry = doRetry;
+
+        /* ── Session check (runs on load + every retry) ── */
+        function checkSession() {
+            var ctrl = new AbortController();
+            var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
+
+            fetch('/api/auth/status', { credentials: 'same-origin', signal: ctrl.signal })
+            .then(function (res) {
+                clearTimeout(tid);
+                if (res.ok) {
+                    // Session still valid — apply viewer/editor role
+                    hideAlert();
+                    applyRole();
+                } else if (res.status === 401 || res.status === 403) {
+                    // Session expired — clear cookies and go to login
+                    clearCookies();
+                    window.location.replace('/?expired=1');
+                } else if (res.status >= 500) {
+                    showAlert('SERVER_ERROR', 'HTTP ' + res.status + ' ' + res.statusText);
+                } else {
+                    clearCookies();
                     window.location.replace('/?expired=1');
                 }
-            } catch (e) {
-                // Cannot reach server - redirect to login
-                window.location.replace('/');
-            }
-        })();
+            })
+            .catch(function (err) {
+                clearTimeout(tid);
+                if (err && err.name === 'AbortError') { showAlert('TIMEOUT', 'Aborted after 8 s'); return; }
+                showAlert(classifyError(err), err ? err.message : 'Unknown error');
+            });
+        }
+
+        /* ── Apply viewer/editor role ── */
+        function applyRole() {
+            fetch('/api/auth/session-role', { credentials: 'same-origin' })
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (!data) return;
+                window.__sessionRole = data.role;
+                if (data.role === 'viewer') {
+                    document.body.classList.add('viewer-mode');
+                    document.getElementById('viewerBanner').classList.add('show');
+                    var mc = document.querySelector('.main-content');
+                    if (mc) mc.style.paddingTop = '46px';
+                    var target = document.getElementById('contentArea') || document.body;
+                    var obs = new MutationObserver(function(){
+                        if (!document.body.classList.contains('viewer-mode'))
+                            document.body.classList.add('viewer-mode');
+                    });
+                    obs.observe(target, { childList: true, subtree: true });
+                } else {
+                    window.__sessionRole = 'editor';
+                }
+            })
+            .catch(function(){});
+        }
+
+        function clearCookies() {
+            document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+
+        /* ── Go offline while page is open ── */
+        window.addEventListener('offline', function () {
+            showAlert('NO_NETWORK', 'navigator.onLine became false');
+        });
+
+        /* ── Periodic heartbeat every 30 s to detect crashes mid-session ── */
+        setInterval(function () {
+            if (document.getElementById('serverAlertOverlay').classList.contains('show')) return;
+            fetch('/api/auth/status', { credentials: 'same-origin' })
+            .then(function(r){
+                if (!r.ok) {
+                    if (r.status === 401 || r.status === 403) { clearCookies(); window.location.replace('/?expired=1'); }
+                    else showAlert('SERVER_ERROR', 'HTTP ' + r.status);
+                }
+            })
+            .catch(function(err){
+                showAlert(classifyError(err), err ? err.message : 'Heartbeat failed');
+            });
+        }, 30000);
+
+        /* ── Initial check on page load ── */
+        checkSession();
+
+    })();
     </script>
     <!-- Loading Indicator -->
     <div class="loading-indicator" id="loadingIndicator">
@@ -643,7 +984,7 @@
                     }
                 }
             } catch (e) {
-                // Silently ignore � page visibility is best-effort
+                // Silently ignore   page visibility is best-effort
             }
         })();
     </script>

@@ -1,4 +1,4 @@
-// modbus-mapping.js — Full version with group dropdown
+// modbus-mapping.js — Cleaned version (no VFD references)
 'use strict';
 
 (function() {
@@ -77,9 +77,8 @@ function _populateGroupDropdowns() {
         mbGroupSelect.innerHTML = '<option value="">No Group</option>';
         (_groups || []).forEach(g => {
             const option = document.createElement('option');
-            option.value = g.name; // Use group name as value
+            option.value = g.name;
             option.textContent = g.name;
-            // Add background color based on group color
             if (g.color) {
                 option.style.backgroundColor = g.color === 'blue' ? '#EFF6FF' : 
                                               g.color === 'green' ? '#F0FDF4' :
@@ -139,7 +138,6 @@ function _renderTagsTable() {
 
     tbody.innerHTML = '';
     rows.forEach((tag, rowIndex) => {
-        // Determine if it's a load cell tag (check protocol or type)
         const isLC = tag.protocol === 'loadcell' || tag.type === 'loadcell';
         const isExt = tag.type === 'external';
         const tr = document.createElement('tr');
@@ -157,18 +155,16 @@ function _renderTagsTable() {
         const unit = tag.unit || '—';
         const address = tag.register_address !== undefined ? tag.register_address : (tag.address !== undefined ? tag.address : '—');
         const registerType = tag.register_type || tag.registerType || '—';
-        // Format register type for display (capitalize first letter)
         const registerTypeDisplay = registerType.charAt(0).toUpperCase() + registerType.slice(1);
         const slaveId = tag.slave_id !== undefined ? tag.slave_id : (tag.slaveId !== undefined ? tag.slaveId : 1);
         const groupName = tag.group_name || tag.group || '—';
-        const enabled = tag.enabled !== undefined ? tag.enabled : true;
         const writable = tag.writable !== undefined ? tag.writable : false;
 
         if (isLC) {
             tr.innerHTML = `
                 <td class="text-slate-400 text-xs">${rowIndex + 1}</td>
                 <td class="font-medium text-slate-900">${_esc(deviceName)}</td>
-                <td><span class="protocol-badge loadcell">Load Cell</span></td>
+                <td class="text-slate-300">—</td>
                 <td class="font-mono text-xs text-slate-900">${_esc(tagName)}</td>
                 <td class="text-slate-300">—</td>
                 <td class="text-slate-300">—</td>
@@ -360,14 +356,12 @@ function _renderTagsBrowser() {
 // ─── PAGINATION CONTROLS ────────────────────────────────────────────────────
 
 function _renderPaginationControls(totalItems = 0) {
-    // Find or create the pagination container right after tagsList
     let paginationContainer = document.getElementById('browserPagination');
     if (!paginationContainer) {
         const tagsListEl = document.getElementById('tagsList');
         if (!tagsListEl) return;
         paginationContainer = document.createElement('div');
         paginationContainer.id = 'browserPagination';
-        // Insert immediately after tagsList inside the same p-6 div
         tagsListEl.insertAdjacentElement('afterend', paginationContainer);
     }
 
@@ -403,7 +397,6 @@ function _renderPaginationControls(totalItems = 0) {
         </div>
     `;
 
-    // Bind with real listeners — avoids the IIFE global scope problem entirely
     paginationContainer.querySelector('#_pgPrev')?.addEventListener('click', function() {
         if (_browserCurrentPage > 1) { _browserCurrentPage--; _renderTagsBrowser(); }
     });
@@ -425,23 +418,19 @@ function changeBrowserPage(newPage) {
 function highlightTagRow(tagId, tagType) {
     console.log(`Attempting to highlight tag ID: ${tagId}, type: ${tagType}`);
     
-    // Remove highlight from all rows
     document.querySelectorAll('.tag-table-row').forEach(row => {
         row.classList.remove('bg-yellow-100', 'border-l-4', 'border-yellow-400', 'font-bold');
         row.style.backgroundColor = '';
     });
 
-    // Find the row using type-prefixed ID (avoids loadcell/modbus ID collisions)
     let targetRow = tagType ? document.getElementById(`tag-row-${tagType}-${tagId}`) : null;
     
-    // Fallback: match by tagId + tagType dataset
     if (!targetRow && tagType) {
         targetRow = Array.from(document.querySelectorAll('.tag-table-row')).find(row =>
             String(row.dataset.tagId) === String(tagId) && row.dataset.tagType === tagType
         );
     }
     
-    // Last resort: match by tagId only
     if (!targetRow) {
         targetRow = Array.from(document.querySelectorAll('.tag-table-row')).find(row => 
             String(row.dataset.tagId) === String(tagId)
@@ -451,16 +440,13 @@ function highlightTagRow(tagId, tagType) {
     if (targetRow) {
         console.log(`Found row for tag ID ${tagId} (${tagType}), moving to top and highlighting`);
         
-        // Move this row to the top of its tbody
         const tbody = targetRow.parentElement;
         if (tbody && tbody.firstChild !== targetRow) {
             tbody.insertBefore(targetRow, tbody.firstChild);
         }
         
-        // Apply highlight
         targetRow.classList.add('bg-yellow-100', 'border-l-4', 'border-yellow-400', 'font-bold');
         
-        // Scroll the mapping section into view, then the row
         const mappingSection = document.querySelector('#mappingTableBody')?.closest('section');
         if (mappingSection) {
             mappingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -469,7 +455,6 @@ function highlightTagRow(tagId, tagType) {
             targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 300);
         
-        // Find tag info and toast
         const tag = (_tags || []).find(t =>
             String(t.id) === String(tagId) &&
             (tagType ? (t.type === tagType) : true)
@@ -496,8 +481,21 @@ function _updateDropdownFilters() {
         (_devices || []).forEach(d => {
             const o = document.createElement('option');
             o.value = d.id;
-            const _fProto = _pLabel(d.protocol);
-            o.textContent = _fProto !== '—' ? `${d.name} (${_fProto})` : d.name;
+            
+            // Clean device display: just name with protocol indicator
+            const protoLabel = _pLabel(d.protocol);
+            const deviceType = d.type || '';
+            const cleanType = deviceType.replace(/\s*\(.*?\)/, '').trim();
+            
+            if (d.protocol === 'loadcell') {
+                o.textContent = `${d.name} (Loadcell)`;
+            } else if (protoLabel !== '—') {
+                o.textContent = `${d.name} (${protoLabel})`;
+            } else if (cleanType) {
+                o.textContent = `${d.name} (${cleanType})`;
+            } else {
+                o.textContent = d.name;
+            }
             sel.appendChild(o);
         });
         sel.value = cur;
@@ -518,7 +516,6 @@ function _updateDropdownFilters() {
         sel.value = cur;
     });
 
-    // Also populate the modal group dropdowns
     _populateGroupDropdowns();
 }
 
@@ -527,29 +524,20 @@ function _updateDropdownFilters() {
 function _pLabel(p) {
     if (!p) return '—';
     
-    // Handle all possible protocol values
     const protocol = String(p).toLowerCase();
     
-    // Direct matches
-    if (protocol === 'tcp' || protocol === 'vfd-tcp' || protocol === 'ext-tcp' || protocol === 'modbus-tcp') {
+    // Standardize on Modbus TCP / Modbus RTU
+    if (protocol.includes('tcp')) {
         return 'Modbus TCP';
     }
     
-    if (protocol === 'rtu' || protocol === 'vfd-rtu' || protocol === 'ext-rtu' || protocol === 'modbus-rtu') {
+    if (protocol.includes('rtu')) {
         return 'Modbus RTU';
     }
     
     if (protocol === 'loadcell') {
         return '—';
     }
-    
-    if (protocol === 'external') {
-        return '—';
-    }
-    
-    // Check if string contains tcp or rtu
-    if (protocol.includes('tcp')) return 'Modbus TCP';
-    if (protocol.includes('rtu')) return 'Modbus RTU';
     
     return '—';
 }
@@ -559,8 +547,8 @@ function _pBadge(p) {
     
     const protocol = String(p).toLowerCase();
     
-    if (protocol.includes('tcp') || protocol === 'tcp') return 'modbus-tcp';
-    if (protocol.includes('rtu') || protocol === 'rtu') return 'modbus-rtu';
+    if (protocol.includes('tcp')) return 'modbus-tcp';
+    if (protocol.includes('rtu')) return 'modbus-rtu';
     
     return 'loadcell';
 }
@@ -596,8 +584,8 @@ function _bindStaticListeners() {
     document.getElementById('proceedToTagForm')?.addEventListener('click', _proceedToTagForm);
     document.getElementById('modbusFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
     document.getElementById('lcFormBack')?.addEventListener('click', () => _showStep('stepDeviceSelect'));
-    document.getElementById('modbusFormCancel')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('lcFormClose')?.addEventListener('click', _closeAddTagModal);
+    document.getElementById('modbusFormCancel')?.addEventListener('click', _closeAddTagModal);
     document.getElementById('modbusTagForm')?.addEventListener('submit', _handleModbusCreate);
     document.getElementById('addTagModal')?.addEventListener('click', e => { if (e.target.id === 'addTagModal') _closeAddTagModal(); });
 
@@ -637,10 +625,8 @@ function _openAddTagModal(preDevId) {
     _selectedDeviceId = null;
     _selectedDeviceData = null;
 
-    // Clear form
     _clearModbusForm('mb');
 
-    // Reset proceed btn
     const btn = document.getElementById('proceedToTagForm');
     if (btn) {
         btn.disabled = true;
@@ -648,7 +634,6 @@ function _openAddTagModal(preDevId) {
         btn.style.cursor = 'not-allowed';
     }
 
-    // Hide preview
     document.getElementById('modalSelectedPreview')?.classList.add('hidden');
 
     _buildModalDeviceList();
@@ -664,6 +649,8 @@ function _openAddTagModal(preDevId) {
     _showModal('addTagModal');
 }
 
+// ─── FIXED: Device Modal Display ─────────────────────────────────────────────
+
 function _buildModalDeviceList() {
     const list = document.getElementById('modalDeviceList');
     if (!list) return;
@@ -677,28 +664,39 @@ function _buildModalDeviceList() {
     _devices.forEach(dev => {
         const cnt = (_tags || []).filter(t => String(t.device_id) === String(dev.id)).length;
         const isLC = dev.protocol === 'loadcell';
-        const isExt = dev.protocol === 'ext-rtu' || dev.protocol === 'ext-tcp';
+        const isExt = !isLC && (dev.protocol === 'ext-rtu' || dev.protocol === 'ext-tcp' || dev.protocol === 'rtu' || dev.protocol === 'tcp');
         const el = document.createElement('div');
         el.className = 'modal-device-item';
         el.dataset.modalDeviceId = dev.id;
         const icon = isLC ? 'fa-scale-balanced text-green-600' : (isExt ? 'fa-plug text-emerald-600' : 'fa-ethernet text-blue-600');
-        const viewOnly = isLC ? '<span class="text-xs text-slate-400 italic">· view only</span>' : '';
-        // Device type: clean label — "VFD", "Loadcell", "External"
-        const rawType = dev.type || '';
-        const cleanType = rawType.replace(/\s*\(.*?\)/, '').trim(); // strip "(RTU)"/"(TCP)" etc.
-        const protoLabel = _pLabel(dev.protocol); // "Modbus RTU", "Modbus TCP", or "—"
+
+        // Build sub-row badges differently for loadcell vs modbus
+        let subRowHtml = '';
+        if (isLC) {
+            // Loadcell: device name + Loadcell type badge only — no protocol
+            subRowHtml = `
+                <span class="protocol-badge loadcell">Load Cell</span>
+                <span class="text-xs text-slate-400">${cnt} tag${cnt !== 1 ? 's' : ''}</span>`;
+        } else {
+            // Modbus: protocol badge + device type + tag count
+            const protoLabel = _pLabel(dev.protocol);
+            const deviceTypeLabel = isExt ? 'External' : '';
+            const deviceTypeBadge = deviceTypeLabel
+                ? `<span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium flex-shrink-0">${_esc(deviceTypeLabel)}</span>`
+                : '';
+            subRowHtml = `
+                ${protoLabel !== '—' ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${protoLabel}</span>` : ''}
+                ${deviceTypeBadge}
+                <span class="text-xs text-slate-400">${cnt} tag${cnt !== 1 ? 's' : ''}</span>`;
+        }
+
         el.innerHTML = `
             <div class="flex items-center gap-3 min-w-0 flex-1">
                 <i class="fa-solid ${icon} text-sm w-4 flex-shrink-0"></i>
                 <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-2">
-                        <span class="text-sm font-semibold text-slate-900 truncate">${_esc(dev.name)}</span>
-                        ${cleanType ? `<span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium flex-shrink-0">${_esc(cleanType)}</span>` : ''}
-                    </div>
+                    <div class="text-sm font-semibold text-slate-900 truncate">${_esc(dev.name)}</div>
                     <div class="flex items-center gap-1.5 mt-0.5">
-                        ${protoLabel !== '—' ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${protoLabel}</span>` : ''}
-                        <span class="text-xs text-slate-400">${cnt} tag${cnt !== 1 ? 's' : ''}</span>
-                        ${viewOnly}
+                        ${subRowHtml}
                     </div>
                 </div>
             </div>
@@ -727,9 +725,16 @@ function _selectDevice(devId, el) {
     if (prev) {
         prev.classList.remove('hidden');
         document.getElementById('previewDeviceName').textContent = dev.name;
-        const _previewProto = _pLabel(dev.protocol);
-        document.getElementById('previewDeviceProtocol').innerHTML =
-            _previewProto !== '—' ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${_previewProto}</span>` : '';
+        const isLCPreview = dev.protocol === 'loadcell';
+        if (isLCPreview) {
+            // Loadcell: show device type badge only, no protocol
+            document.getElementById('previewDeviceProtocol').innerHTML =
+                `<span class="protocol-badge loadcell">Load Cell</span>`;
+        } else {
+            const _previewProto = _pLabel(dev.protocol);
+            document.getElementById('previewDeviceProtocol').innerHTML =
+                _previewProto !== '—' ? `<span class="protocol-badge ${_pBadge(dev.protocol)}">${_previewProto}</span>` : '';
+        }
     }
 
     const btn = document.getElementById('proceedToTagForm');
@@ -746,13 +751,12 @@ function _proceedToTagForm() {
         return;
     }
     const proto = _selectedDeviceData.protocol;
-    const isVFD = proto && (proto.includes('tcp') || proto.includes('rtu'));
+    const isExternal = proto && proto !== 'loadcell' && (proto.includes('tcp') || proto.includes('rtu'));
 
-    if (isVFD) {
+    if (isExternal) {
         document.getElementById('modbusCtxDevice').textContent = _selectedDeviceData.name;
         document.getElementById('modbusCtxProtocol').textContent = _pLabel(proto);
         _clearModbusForm('mb');
-        // Auto-populate slave ID from device config
         const devSlaveId = _selectedDeviceData.slave_id || _selectedDeviceData.config?.slave_id || 1;
         const slaveInput = document.getElementById('mbSlaveId');
         const slaveDisplay = document.getElementById('mbSlaveIdDisplay');
@@ -809,7 +813,6 @@ async function _handleModbusCreate(e) {
         return;
     }
 
-    // Duplicate check (same device + slave + tag name)
     const newSlaveId = parseInt(document.getElementById('mbSlaveId')?.value) || 1;
     const dup = (_tags || []).some(t =>
         String(t.device_id) === String(_selectedDeviceId) &&
@@ -857,7 +860,7 @@ async function _handleModbusCreate(e) {
         if (resp.ok) {
             _closeAddTagModal();
             await _loadData();
-            _toast('Tag saved into VFD', 'success');
+            _toast('Tag saved successfully', 'success');
         } else {
             _toast(data.error || 'Failed to create tag', 'error');
         }
@@ -879,13 +882,11 @@ async function editTag(tagId, tagType) {
     }
 
     if (tagType === 'external') {
-        // External tags use same modbus endpoint
         _openEditModbusModal(tag);
         return;
     }
     if (tagType === 'loadcell') {
         _toast('Load cell tags can only edit unit', 'info');
-        // You could open a simple unit edit modal here
         return;
     }
     
@@ -917,7 +918,6 @@ function _openEditModbusModal(tag) {
     document.getElementById('editMbOffset').value = tag.offset || 0.0;
     document.getElementById('editMbUnit').value = tag.unit || '';
     
-    // Set the group dropdown value - use group name from tag.group or tag.group_name
     const groupValue = tag.group || tag.group_name || '';
     document.getElementById('editMbGroup').value = groupValue;
     
@@ -985,7 +985,7 @@ async function _handleModbusEdit(e) {
         if (resp.ok) {
             _closeEditModbus();
             await _loadData();
-            _toast('Tag data updated into VFD', 'success');
+            _toast('Tag updated successfully', 'success');
         } else {
             _toast(data.error || 'Failed to update tag', 'error');
         }
@@ -1002,15 +1002,6 @@ function _closeEditModbus() { _hideModal('editModbusModal'); }
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
 async function deleteTag(tagId, tagType) {
-    if (tagType === 'external') {
-        const resp = await fetch(`/api/datapoints/modbus/${tagId}`);
-        const tag = await resp.json();
-        if (!resp.ok) { _toast('Tag not found', 'error'); return; }
-        _editingTagId = tagId;
-        _populateEditForm(tag, 'external');
-        _showModal('editTagModal');
-        return;
-    }
     if (tagType === 'loadcell') {
         _toast('Load cell tags are auto-managed and cannot be deleted', 'info');
         return;
@@ -1154,7 +1145,6 @@ function _clearModbusForm(prefix) {
         if (el) el.value = v;
     });
     
-    // Reset selects
     const registerType = document.getElementById(`${prefix}RegisterType`);
     if (registerType) registerType.value = 'holding';
     
@@ -1167,11 +1157,9 @@ function _clearModbusForm(prefix) {
     const wordOrder = document.getElementById(`${prefix}WordOrder`);
     if (wordOrder) wordOrder.value = 'big';
     
-    // Reset group dropdown
     const groupSelect = document.getElementById(`${prefix}Group`);
     if (groupSelect) groupSelect.value = '';
     
-    // Reset checkbox
     const writable = document.getElementById(`${prefix}Writable`);
     if (writable) writable.checked = false;
 }
@@ -1222,7 +1210,6 @@ function _vis(id) {
 function _toast(msg, type = 'info') {
     console.log(`[${type.toUpperCase()}] ${msg}`);
 
-    // Remove existing toasts if too many
     const existing = document.querySelectorAll('.tm-toast');
     if (existing.length > 3) {
         existing[0].remove();
@@ -1290,20 +1277,17 @@ async function saveModbusConfig() {
     }
 
     try {
-        // Save modbus config (VFD + External share same modbus pipeline)
         const resp = await fetch('/api/pipeline/modbus-config/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
 
-        // Check if response is OK
         if (!resp.ok) {
             const text = await resp.text();
             console.error('[MODBUS-CFG] Server responded with:', resp.status, text);
             throw new Error(`Server error: ${resp.status}`);
         }
 
-        // Try to parse JSON
         let data;
         try {
             data = await resp.json();
@@ -1315,7 +1299,7 @@ async function saveModbusConfig() {
         if (data.success) {
             _toast('✓ Configuration saved' + (data.message ? ' — ' + data.message : ''), 'success');
         } else {
-            _toast(data.error || 'Failed to save data into VFD', 'error');
+            _toast(data.error || 'Failed to save tag', 'error');
         }
     } catch (err) {
         console.error('[MODBUS-CFG] Error:', err);
@@ -1431,12 +1415,8 @@ window.changeBrowserPage       = changeBrowserPage;
 window.saveModbusConfig        = saveModbusConfig;
 window._deleteTagGroup         = _deleteTagGroup;
 
-// Auto-init: fires when this script executes (fresh load or re-execution).
-// The router sometimes skips re-injection when the <script> tag is already in
-// the DOM, so we also register on window so the router can call us directly.
-// If the modbus-mapping page DOM is already present, init immediately.
+// Auto-init
 (function _autoInit() {
-    // A DOM element that only exists on the modbus-mapping page
     var probe = document.getElementById('mappingTableBody') ||
                 document.getElementById('tagsList')         ||
                 document.getElementById('addMappingBtn');

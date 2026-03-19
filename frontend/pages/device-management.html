@@ -24,7 +24,7 @@
                     <input type="radio" name="device-type" value="external" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                     <div class="ml-3">
                         <div class="font-medium text-sm text-slate-900">External Interface Device</div>
-                        <div class="text-xs text-slate-500 mt-0.5">External third-party hardware via Modbus</div>
+                        <div class="text-xs text-slate-500 mt-0.5">External third-party hardware</div>
                     </div>
                 </label>
             </div>
@@ -74,7 +74,7 @@
                             <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
                             <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
                         </select>
-                        <p class="text-xs text-slate-400 mt-1">IIO sysfs channel path (sysfs_hx711)</p>
+                        
                     </div>
 
                     <!-- Differential: fixed Channel 1 (no dropdown) -->
@@ -203,9 +203,9 @@
                 <!-- Device Type & Model Name -->
                 <div class="space-y-4 mb-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Type <span class="text-red-500">*</span></label>
-                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. vfd, sensor, meter" id="extDeviceTypeInit">
-                        <p class="text-xs text-slate-400 mt-1">Identifier for the type of external device (e.g. vfd)</p>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Type <span class="text-red-500">*</span></label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. VFD, Sensor, Meter" id="extDeviceTypeInit">
+                        <p class="text-xs text-slate-400 mt-1">Type of external device (e.g. VFD, Sensor, Meter)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Model Name <span class="text-red-500">*</span></label>
@@ -366,7 +366,7 @@
         <div class="mb-5 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <div class="flex items-center justify-between mb-3">
                 <div>
-                    <div class="text-xs text-slate-500 mb-1">Device Type</div>
+                    <div class="text-xs text-slate-500 mb-1">Device</div>
                     <span id="editDeviceTypeBadge" class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700">—</span>
                 </div>
                 <div>
@@ -430,7 +430,7 @@
                         <div class="flex items-center justify-between">
                             <h2 class="text-lg font-semibold text-slate-800 flex items-center">
                                 <i class="fa-solid fa-list mr-2 text-primary"></i> 
-                                <span class="mr-2">Device Overview Table</span>
+                                <span class="mr-2">Device Overview </span>
                                 <span class="text-xs font-normal text-slate-500">SECTION A</span>
                             </h2>
                             <!-- Refresh button -->
@@ -460,17 +460,18 @@
                     <div class="overflow-x-auto">
                         <table class="w-full" id="devicesTable">
                             <thead class="bg-slate-50 border-b border-border">
-                                <tr class="text-left text-xs text-slate-500 uppercase tracking-wider">
-                                    <th class="p-4 font-medium">Sl.No</th>
-                                    <th class="p-4 font-medium">Device ID</th>
-                                    <th class="p-4 font-medium">Device Name</th>
-                                    <th class="p-4 font-medium">Device Type</th>
-                                    <th class="p-4 font-medium">Protocol</th>
-                                    <th class="p-4 font-medium">Address/ID</th>
-                                    <th class="p-4 font-medium">Last Poll</th>
-                                    <th class="p-4 font-medium text-right">Actions</th>
-                                </tr>
-                            </thead>
+    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider">
+        <th class="p-4 font-medium">Sl.No</th>
+        <th class="p-4 font-medium">Device ID</th>
+        <th class="p-4 font-medium">Device Name</th>
+        <th class="p-4 font-medium">Device </th>
+        <th class="p-4 font-medium">Device Type</th>
+        <th class="p-4 font-medium">Protocol</th>
+        <th class="p-4 font-medium">Address/ID</th>
+        <th class="p-4 font-medium">Last Poll</th>
+        <th class="p-4 font-medium text-right">Actions</th>
+    </tr>
+</thead>
                             <tbody class="divide-y divide-border" id="devicesTableBody">
                                 <!-- Devices will be populated by JavaScript -->
                             </tbody>
@@ -528,7 +529,7 @@
                         <h2 class="text-lg font-semibold text-slate-800 flex items-center">
                             <i class="fa-solid fa-file-export mr-2 text-primary"></i> 
                             <span class="mr-2">Import / Export</span>
-                            <span class="text-xs font-normal text-slate-500">SECTION E</span>
+                            <span class="text-xs font-normal text-slate-500">SECTION B</span>
                         </h2>
                         <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
                             CSV Format

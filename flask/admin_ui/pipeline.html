@@ -190,53 +190,7 @@
           <div id="pushResult-loadcell" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
         </div>
 
-        <!-- RECEIVE SECTION -->
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <span class="mat" style="color:#f97316;font-size:18px;">download</span>
-            <span class="text-xs font-bold text-stone-600 uppercase tracking-wide">Live Data   Received from Service</span>
-            <span id="lcWsStatus" class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400">WS Disconnected</span>
-          </div>
-          <p class="text-xs text-stone-400 mb-4">Real-time values pushed back from the loadcell service via WebSocket.</p>
-          <div id="lcLiveCards" class="grid grid-cols-2 gap-3 mb-4">
-            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
-              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Weight</div>
-              <div id="lc-weight" class="text-2xl font-extrabold text-stone-700"> </div>
-              <div id="lc-unit" class="text-xs text-stone-400 mt-0.5"> </div>
-            </div>
-            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
-              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw ADC</div>
-              <div id="lc-raw" class="text-2xl font-extrabold text-stone-700"> </div>
-              <div class="text-xs text-stone-400 mt-0.5">raw counts</div>
-            </div>
-            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
-              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Status</div>
-              <div class="flex gap-2 mt-1 flex-wrap">
-                <span id="lc-tared" class="ver-badge ver-never">Tare:  </span>
-                <span id="lc-calibrated" class="ver-badge ver-never">Cal:  </span>
-              </div>
-            </div>
-            <div class="rounded-xl border border-stone-100 p-4 bg-stone-50">
-              <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Level</div>
-              <div id="lc-level" class="text-sm font-bold text-stone-500"> </div>
-              <div id="lc-level-bar" class="mt-2 h-2 rounded-full bg-stone-200 overflow-hidden">
-                <div id="lc-level-fill" class="h-full rounded-full transition-all" style="width:0%;background:#f97316;"></div>
-              </div>
-            </div>
-          </div>
-          <div class="text-[10px] font-bold uppercase tracking-wide text-stone-300 mb-1">Raw Datapoint Stream</div>
-          <div id="lcStreamLog" class="rounded-xl p-3 font-mono text-xs text-stone-500 space-y-0.5 overflow-y-auto"
-            style="background:#fafaf9;border:1px solid #e7e5e4;max-height:160px;">
-            <div class="text-stone-300">Waiting for data </div>
-          </div>
-          <button onclick="connectLcWs()" id="lcWsConnectBtn"
-            class="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border border-stone-200 text-stone-500 hover:border-orange-300 hover:text-orange-500 transition-all">
-            <span class="mat" style="font-size:15px;">sync</span> Connect Live Feed
-          </button>
-        </div>
-      </div>
-
-      <!-- IOT GATEWAY panel -->
+<!-- IOT GATEWAY panel -->
       <div class="cfg-panel" id="panel-iot_gateway">
         <div class="flex items-center gap-3 mb-3">
           <p class="text-xs text-stone-400">Push the current IoT Gateway configuration to the pipeline service.</p>
@@ -317,9 +271,9 @@
         </button>
       </div>
       <p class="text-xs text-stone-400 mb-5">
-        <strong>Permanent</strong> entries are always active (network/status � cannot be removed).
+        <strong>Permanent</strong> entries are always active (network/status   cannot be removed).
         Add a <strong>device name</strong> (e.g. <code class="bg-stone-100 px-1 rounded font-mono">load</code>) to whitelist all its datapoints.
-        Only named devices receive data � no auto-discovery.
+        Only named devices receive data   no auto-discovery.
       </p>
 
       <div class="grid grid-cols-2 gap-4 mb-5">
@@ -331,7 +285,7 @@
             <span class="ml-auto text-[9px] text-stone-300">always active</span>
           </div>
           <div id="wl-permanent" class="space-y-1">
-            <span class="text-xs text-stone-300">Loading�</span>
+            <span class="text-xs text-stone-300">Loading </span>
           </div>
         </div>
 
@@ -639,7 +593,7 @@
     document.querySelectorAll('.cfg-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('panel-' + type);
     if (panel) panel.classList.add('active');
-    if (type === 'loadcell') { loadLoadcellDevices(); connectLcWs(); }
+    if (type === 'loadcell') { loadLoadcellDevices(); }
     if (type === 'core')     loadCoreConfigs();
   }
 
@@ -818,82 +772,6 @@
     }
   }
 
-  // -- Loadcell WebSocket -----------------------------------------------
-  let lcWs = null;
-
-  function connectLcWs() {
-    if (lcWs && lcWs.readyState <= 1) { lcWs.close(); }
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    lcWs = new WebSocket(`${proto}://${location.host}/ws/pipeline/load_raw`);
-    const statusEl = document.getElementById('lcWsStatus');
-    const btn      = document.getElementById('lcWsConnectBtn');
-    lcWs.onopen = () => {
-      statusEl.textContent = 'WS Connected';
-      statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-600';
-      btn.innerHTML = '<span class="mat" style="font-size:15px;">stop_circle</span> Disconnect';
-      btn.onclick = () => { lcWs.close(); };
-    };
-    lcWs.onclose = () => {
-      statusEl.textContent = 'WS Disconnected';
-      statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-400';
-      btn.innerHTML = '<span class="mat" style="font-size:15px;">sync</span> Connect Live Feed';
-      btn.onclick = connectLcWs;
-    };
-    lcWs.onerror = () => {
-      statusEl.textContent = 'WS Error';
-      statusEl.className = 'ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-500';
-    };
-    lcWs.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        handleLcDatapoint(msg.datapoint, msg.value);
-        appendLcStream(msg.datapoint, msg.value);
-      } catch (_) {}
-    };
-  }
-
-  function handleLcDatapoint(dp, val) {
-    if (!dp) return;
-    if (dp === 'load_raw') { document.getElementById('lc-raw').textContent = val ?? ' '; return; }
-    if (dp.endsWith('.weight_kg') || dp.endsWith('.weight')) {
-      const v = parseFloat(val);
-      document.getElementById('lc-weight').textContent = isNaN(v) ? val : v.toFixed(3);
-    } else if (dp.endsWith('.unit')) {
-      document.getElementById('lc-unit').textContent = val || ' ';
-    } else if (dp.endsWith('.tared')) {
-      const el = document.getElementById('lc-tared');
-      el.textContent = 'Tare: ' + (val ? 'Yes' : 'No');
-      el.className = 'ver-badge ' + (val ? 'ver-ok' : 'ver-never');
-    } else if (dp.endsWith('.calibrated')) {
-      const el = document.getElementById('lc-calibrated');
-      el.textContent = 'Cal: ' + (val ? 'Yes' : 'No');
-      el.className = 'ver-badge ' + (val ? 'ver-ok' : 'ver-never');
-    } else if (dp.endsWith('.raw')) {
-      document.getElementById('lc-raw').textContent = val ?? ' ';
-    } else if (dp.endsWith('.capacity')) {
-      window._lcCapacity = parseFloat(val) || null;
-    }
-    const wNum = parseFloat(document.getElementById('lc-weight').textContent);
-    if (!isNaN(wNum) && window._lcCapacity) {
-      const pct = Math.min(100, Math.max(0, (wNum / window._lcCapacity) * 100));
-      document.getElementById('lc-level-fill').style.width = pct.toFixed(1) + '%';
-      document.getElementById('lc-level-fill').style.background = pct > 80 ? '#ef4444' : pct > 50 ? '#f97316' : '#22c55e';
-      document.getElementById('lc-level').textContent = pct.toFixed(1) + '%';
-    }
-  }
-
-  function appendLcStream(dp, val) {
-    const log = document.getElementById('lcStreamLog');
-    const ts  = new Date().toLocaleTimeString();
-    const line = document.createElement('div');
-    line.className = 'text-stone-400';
-    const displayVal = typeof val === 'object' ? JSON.stringify(val) : String(val ?? ' ');
-    line.innerHTML = `<span class="text-stone-300">${ts}</span> <span class="text-orange-400">${dp}</span> = <span class="text-stone-600">${displayVal}</span>`;
-    if (log.firstChild?.textContent === 'Waiting for data ') log.innerHTML = '';
-    log.insertBefore(line, log.firstChild);
-    while (log.children.length > 60) log.removeChild(log.lastChild);
-  }
-
   // -- Core config history ----------------------------------------------
   async function loadCoreConfigs() {
     const container = document.getElementById('coreConfigList');
@@ -1007,7 +885,7 @@
       // Permanent
       document.getElementById('wl-permanent').innerHTML = (d.permanent || []).length
         ? d.permanent.map(e => wlChip(e, 'stone', false)).join('')
-        : '<span class="text-xs text-stone-300">�</span>';
+        : '<span class="text-xs text-stone-300"> </span>';
 
       // Named devices panel
       const namedEl = document.getElementById('wl-named');
@@ -1035,7 +913,7 @@
       document.getElementById('wl-count').textContent = (d.active || []).length + ' entries';
       document.getElementById('wl-active').innerHTML = (d.active || []).length
         ? d.active.map(e => `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full" style="background:#dcfce7;color:#15803d;">${e}</span>`).join('')
-        : '<span class="text-xs text-stone-300">�</span>';
+        : '<span class="text-xs text-stone-300"> </span>';
 
     } catch (e) { console.warn('Whitelist load error:', e); }
   }
@@ -1093,7 +971,7 @@
     } catch (e) { toast('Error: ' + e.message, false); }
   }
 
-  // Legacy stub kept so any stale references don�t throw
+  // Legacy stub kept so any stale references don t throw
   async function addCustomEntry() { addDeviceName(); }
   async function removeCustomEntry(entry) {
     try {

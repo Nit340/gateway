@@ -118,44 +118,6 @@ def create_tables(cursor):
     ''')
 
     # -----------------------------------------------------------------------
-    # Modbus device
-    # -----------------------------------------------------------------------
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS vfd_device (
-            id                  TEXT    PRIMARY KEY,
-            name                TEXT    NOT NULL,
-            protocol_type       TEXT    NOT NULL DEFAULT 'rtu' CHECK(protocol_type IN ('tcp', 'rtu')),
-            device_type         TEXT    NOT NULL DEFAULT 'vfd' CHECK(device_type IN ('vfd')),
-            group_id            INTEGER,
-            service_id          INTEGER,
-
-            response_timeout_ms INTEGER DEFAULT 100,
-            byte_timeout_ms     INTEGER DEFAULT 100,
-            max_retries         INTEGER DEFAULT 2,
-            polling_interval_ms INTEGER DEFAULT 300,
-
-            -- TCP
-            ip_address          TEXT,
-            port                INTEGER DEFAULT 502,
-
-            -- RTU
-            serial_port         TEXT    DEFAULT '/dev/ttymxc5',
-            baud_rate           INTEGER DEFAULT 9600,
-            parity              TEXT    DEFAULT 'N',
-            data_bits           INTEGER DEFAULT 8,
-            stop_bits           INTEGER DEFAULT 1,
-
-            -- Modbus Slave ID (applies to both RTU and TCP)
-            slave_id            INTEGER DEFAULT 1,
-
-            enabled             BOOLEAN DEFAULT 1,
-            created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (service_id) REFERENCES services(id)
-        )
-    ''')
-
-    # -----------------------------------------------------------------------
     # Loadcell device
     # -----------------------------------------------------------------------
     cursor.execute('''
@@ -200,39 +162,6 @@ def create_tables(cursor):
             created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (service_id) REFERENCES services(id)
-        )
-    ''')
-
-    # -----------------------------------------------------------------------
-    # Modbus datapoints
-    # -----------------------------------------------------------------------
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS vfd_datapoints (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id        TEXT    NOT NULL,
-            name             TEXT    NOT NULL,
-            slave_id         INTEGER DEFAULT 1,
-            group_id         INTEGER,
-            "group"          TEXT,
-            register_address INTEGER NOT NULL,
-            register_type    TEXT    NOT NULL CHECK(register_type IN ('holding', 'input', 'coil', 'discrete')),
-            data_type        TEXT    NOT NULL CHECK(data_type IN ('int16', 'uint16', 'int32', 'uint32', 'float32', 'bool')),
-            byte_order       TEXT    DEFAULT 'big',
-            word_order       TEXT    DEFAULT 'big',
-            scale_factor     REAL    DEFAULT 1.0,
-            offset           REAL    DEFAULT 0.0,
-            unit             TEXT,
-            description      TEXT,
-            enabled          BOOLEAN DEFAULT 1,
-            writable         BOOLEAN DEFAULT 0,
-            retry_count      INTEGER DEFAULT 1,
-            timeout_ms       INTEGER DEFAULT 100,
-            register_count   INTEGER DEFAULT 1,
-            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(device_id, slave_id, name),
-            FOREIGN KEY (device_id) REFERENCES vfd_device(id) ON DELETE CASCADE,
-            FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE SET NULL
         )
     ''')
 
@@ -282,8 +211,6 @@ def create_tables(cursor):
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-
-
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cloud_connection_stats (
@@ -439,8 +366,6 @@ def create_tables(cursor):
         )
     ''')
 
-
-
     # -----------------------------------------------------------------------
     # WebUI Page Restrictions (per-user access control)
     # -----------------------------------------------------------------------
@@ -454,15 +379,14 @@ def create_tables(cursor):
 
     # -----------------------------------------------------------------------
     # Port / Path configuration
-    #   device_type : 'modbus' | 'loadcell'
-    #   port_number : 1-based index shown in the UI (Port 1, Port 2, �)
-    #   port_value  : actual system path stored in vfd_device.serial_port
-    #                 or loadcell_device.device_path
+    #   device_type : 'loadcell'
+    #   port_number : 1-based index shown in the UI (Port 1, Port 2, …)
+    #   port_value  : actual system path stored in loadcell_device.device_path
     # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS port_config (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_type TEXT    NOT NULL CHECK(device_type IN ('modbus', 'loadcell')),
+            device_type TEXT    NOT NULL CHECK(device_type IN ('loadcell')),
             port_number INTEGER NOT NULL,
             label       TEXT    NOT NULL,
             port_value  TEXT    NOT NULL,
@@ -475,6 +399,86 @@ def _migrate_existing_db(cursor):
     """Safe additive migrations for DBs created before schema updates.
     Only adds missing columns -- never drops or modifies existing data.
     """
+    # -----------------------------------------------------------------------
+    # MIGRATION: fix pipeline_service_targets CHECK constraint to include modbus
+    # The original CHECK only allowed ('loadcell', 'iot_gateway', 'core') which
+    # prevented the modbus row from ever being inserted.
+    # SQLite cannot ALTER a CHECK constraint, so we recreate the table.
+    # -----------------------------------------------------------------------
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='pipeline_service_targets'")
+    _pst_row = cursor.fetchone()
+    if _pst_row and "'modbus'" not in _pst_row[0] and 'modbus' not in _pst_row[0]:
+        print("[DB] Migration: rebuilding pipeline_service_targets to add modbus to CHECK constraint")
+        cursor.execute("ALTER TABLE pipeline_service_targets RENAME TO _pipeline_service_targets_old")
+        cursor.execute('''
+            CREATE TABLE pipeline_service_targets (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_type  TEXT    NOT NULL UNIQUE
+                                 CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway', 'core')),
+                service_name TEXT    NOT NULL DEFAULT '',
+                config_name  TEXT    NOT NULL DEFAULT '',
+                enabled      BOOLEAN DEFAULT 1,
+                description  TEXT    DEFAULT '',
+                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        cursor.execute('''
+            INSERT INTO pipeline_service_targets
+                (config_type, service_name, config_name, enabled, description, updated_at)
+            SELECT config_type, service_name, config_name, enabled, description, updated_at
+            FROM _pipeline_service_targets_old
+        ''')
+        cursor.execute("DROP TABLE _pipeline_service_targets_old")
+        print("[DB] Migration: pipeline_service_targets rebuilt OK")
+
+    # Ensure modbus row exists in pipeline_service_targets
+    cursor.execute("SELECT 1 FROM pipeline_service_targets WHERE config_type='modbus'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT OR IGNORE INTO pipeline_service_targets "
+            "(config_type, service_name, config_name, description, enabled) VALUES (?, ?, ?, ?, 1)",
+            ('modbus', 'modbus_service', 'modbus_config', 'Modbus pipeline service name')
+        )
+        print("[DB] Migration: inserted missing modbus row into pipeline_service_targets")
+
+    # -----------------------------------------------------------------------
+    # MIGRATION: fix pipeline_send_log CHECK constraint to include modbus
+    # -----------------------------------------------------------------------
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='pipeline_send_log'")
+    _psl_row = cursor.fetchone()
+    if _psl_row and "'modbus'" not in _psl_row[0] and 'modbus' not in _psl_row[0]:
+        print("[DB] Migration: rebuilding pipeline_send_log to add modbus to CHECK constraint")
+        cursor.execute("ALTER TABLE pipeline_send_log RENAME TO _pipeline_send_log_old")
+        cursor.execute('''
+            CREATE TABLE pipeline_send_log (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                config_type     TEXT    NOT NULL UNIQUE
+                                    CHECK(config_type IN ('modbus', 'loadcell', 'iot_gateway', 'core')),
+                last_version    INTEGER NOT NULL DEFAULT 0,
+                last_sent_at    TIMESTAMP,
+                last_service    TEXT    DEFAULT '',
+                last_status     TEXT    DEFAULT 'never',
+                last_message    TEXT    DEFAULT ''
+            )
+        ''')
+        cursor.execute('''
+            INSERT INTO pipeline_send_log
+                (config_type, last_version, last_sent_at, last_service, last_status, last_message)
+            SELECT config_type, last_version, last_sent_at, last_service, last_status, last_message
+            FROM _pipeline_send_log_old
+        ''')
+        cursor.execute("DROP TABLE _pipeline_send_log_old")
+        print("[DB] Migration: pipeline_send_log rebuilt OK")
+
+    # Ensure modbus row exists in pipeline_send_log
+    cursor.execute("SELECT 1 FROM pipeline_send_log WHERE config_type='modbus'")
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT OR IGNORE INTO pipeline_send_log (config_type, last_version, last_status) VALUES (?, 0, 'never')",
+            ('modbus',)
+        )
+        print("[DB] Migration: inserted missing modbus row into pipeline_send_log")
+
     # pipeline_service_targets: add enabled column if missing
     cursor.execute("PRAGMA table_info(pipeline_service_targets)")
     cols = {r[1] for r in cursor.fetchall()}
@@ -485,7 +489,6 @@ def _migrate_existing_db(cursor):
         cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN config_name TEXT NOT NULL DEFAULT ''")
         # Seed default config names for existing rows
         defaults = {
-            'modbus':      'modbus_config',
             'loadcell':    'loadcell_config',
             'iot_gateway': 'gateway_config',
             'core':        'iq_core',
@@ -579,20 +582,6 @@ def _migrate_existing_db(cursor):
             )
         ''')
         print("[DB] Migration: created rules table")
-
-
-    # vfd_device: add protocol_type, device_type, slave_id columns if missing
-    cursor.execute("PRAGMA table_info(vfd_device)")
-    vfd_cols = {r[1] for r in cursor.fetchall()}
-    if 'protocol_type' not in vfd_cols:
-        cursor.execute("ALTER TABLE vfd_device ADD COLUMN protocol_type TEXT NOT NULL DEFAULT 'rtu'")
-        print("[DB] Migration: added vfd_device.protocol_type")
-    if 'device_type' not in vfd_cols:
-        cursor.execute("ALTER TABLE vfd_device ADD COLUMN device_type TEXT NOT NULL DEFAULT 'vfd'")
-        print("[DB] Migration: added vfd_device.device_type")
-    if 'slave_id' not in vfd_cols:
-        cursor.execute("ALTER TABLE vfd_device ADD COLUMN slave_id INTEGER DEFAULT 1")
-        print("[DB] Migration: added vfd_device.slave_id")
 
     # loadcell_device: add lc_mode and device_path_ch2 if missing
     cursor.execute("PRAGMA table_info(loadcell_device)")
@@ -762,7 +751,6 @@ def _migrate_existing_db(cursor):
     cursor.execute("UPDATE port_config SET label='Channel 1' WHERE device_type='loadcell' AND label='Path 1'")
     cursor.execute("UPDATE port_config SET label='Channel 2' WHERE device_type='loadcell' AND label='Path 2'")
 
-
     # webui_user_page_restrictions: ensure table exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='webui_user_page_restrictions'")
     if not cursor.fetchone():
@@ -781,7 +769,7 @@ def _migrate_existing_db(cursor):
         cursor.execute('''
             CREATE TABLE port_config (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                device_type TEXT    NOT NULL CHECK(device_type IN ('modbus', 'loadcell')),
+                device_type TEXT    NOT NULL CHECK(device_type IN ('loadcell')),
                 port_number INTEGER NOT NULL,
                 label       TEXT    NOT NULL,
                 port_value  TEXT    NOT NULL,
@@ -789,8 +777,6 @@ def _migrate_existing_db(cursor):
             )
         ''')
         for device_type, port_number, label, port_value in [
-            ('modbus',   1, 'Port 1', '/dev/ttymxc5'),
-            ('modbus',   2, 'Port 2', '/dev/ttymxc2'),
             ('loadcell', 1, 'Channel 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
             ('loadcell', 2, 'Channel 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
         ]:
@@ -799,6 +785,41 @@ def _migrate_existing_db(cursor):
                 (device_type, port_number, label, port_value)
             )
         print("[DB] Migration: created port_config table with default entries")
+
+    # external_datapoints: add group_id column if missing
+    cursor.execute("PRAGMA table_info(external_datapoints)")
+    _ext_dp_cols = {r[1] for r in cursor.fetchall()}
+    if 'group_id' not in _ext_dp_cols:
+        cursor.execute(
+            'ALTER TABLE external_datapoints ADD COLUMN group_id INTEGER DEFAULT NULL '
+            'REFERENCES tag_groups(id) ON DELETE SET NULL'
+        )
+        print("[DB] Migration: added group_id to external_datapoints")
+
+    # loadcell_datapoints: add group_id column if missing
+    cursor.execute("PRAGMA table_info(loadcell_datapoints)")
+    _lc_dp_cols = {r[1] for r in cursor.fetchall()}
+    if 'group_id' not in _lc_dp_cols:
+        cursor.execute(
+            'ALTER TABLE loadcell_datapoints ADD COLUMN group_id INTEGER DEFAULT NULL '
+            'REFERENCES tag_groups(id) ON DELETE SET NULL'
+        )
+        print("[DB] Migration: added group_id to loadcell_datapoints")
+
+    # Compatibility views: vfd_datapoints / vfd_device were renamed to
+    # external_datapoints / external_device. Create read-only views so that
+    # any legacy code (rules.py, older pipeline queries) still works.
+    try:
+        cursor.execute("""
+            CREATE VIEW IF NOT EXISTS vfd_device AS
+            SELECT * FROM external_device
+        """)
+        cursor.execute("""
+            CREATE VIEW IF NOT EXISTS vfd_datapoints AS
+            SELECT * FROM external_datapoints
+        """)
+    except Exception as _ve:
+        print("[DB] Migration: vfd compat views skipped: {}".format(_ve))
 
 
 def _hash_password(plain):
@@ -814,8 +835,7 @@ def insert_default_data(cursor):
         cursor.execute('INSERT INTO general_configuration (id) VALUES (1)')
 
     # Default services
-    for name, desc in [('modbus', 'Modbus Protocol Service'),
-                        ('loadcell', 'Loadcell Service')]:
+    for name, desc in [('loadcell', 'Loadcell Service')]:
         cursor.execute('INSERT OR IGNORE INTO services (name, description) VALUES (?, ?)', (name, desc))
 
     # Default admin user  (admin / admin123)
@@ -832,10 +852,10 @@ def insert_default_data(cursor):
 
     # Default pipeline service targets
     for cfg_type, svc_name, cfg_name, desc in [
-        ('modbus',      'modbus_service',   'modbus_config',    'Modbus pipeline service name'),
-        ('loadcell',    'load_cell_service','loadcell_config',  'Load-cell pipeline service name'),
-        ('iot_gateway', 'iot-gateway',      'gateway_config',   'IoT gateway pipeline service name'),
-        ('core',        'ilx_craneiq_core',  'core_config',          'Core config pipeline service name'),
+        ('modbus',      'modbus_service',    'modbus_config',    'Modbus pipeline service name'),
+        ('loadcell',    'load_cell_service', 'loadcell_config',  'Load-cell pipeline service name'),
+        ('iot_gateway', 'iot-gateway',       'gateway_config',   'IoT gateway pipeline service name'),
+        ('core',        'ilx_craneiq_core',  'core_config',      'Core config pipeline service name'),
     ]:
         cursor.execute(
             'INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, config_name, description, enabled) VALUES (?, ?, ?, ?, 1)',
@@ -851,8 +871,6 @@ def insert_default_data(cursor):
 
     # Default port/path configuration
     for device_type, port_number, label, port_value in [
-        ('modbus',   1, 'Port 1', '/dev/ttymxc5'),
-        ('modbus',   2, 'Port 2', '/dev/ttymxc2'),
         ('loadcell', 1, 'Channel 1', '/sys/bus/iio/devices/iio:device0/in_voltage0_raw'),
         ('loadcell', 2, 'Channel 2', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw'),
     ]:
@@ -948,9 +966,8 @@ def set_pipeline_service_name(config_type, service_name, config_name=None):
 
 
 def get_pipeline_config_name(config_type):
-    """Return the configured pipeline config name for a config type (e.g. 'modbus_config')."""
+    """Return the configured pipeline config name for a config type (e.g. 'loadcell_config')."""
     _defaults = {
-        'modbus':      'modbus_config',
         'loadcell':    'loadcell_config',
         'iot_gateway': 'gateway_config',
         'core':        'iq_core',
@@ -1103,7 +1120,6 @@ def get_enabled_pipeline_targets():
     except Exception as e:
         print("[DB] get_enabled_pipeline_targets error: {}".format(e))
         return []
-
 
 
 # ---------------------------------------------------------------------------
@@ -1269,7 +1285,7 @@ def delete_tag_group(group_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('UPDATE vfd_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
+        cursor.execute('UPDATE loadcell_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
         cursor.execute('DELETE FROM tag_groups WHERE id = ?', (group_id,))
         conn.commit()
         conn.close()
@@ -1319,10 +1335,8 @@ def get_database_stats():
         cursor = conn.cursor()
         stats = {}
         for label, table in [
-            ('vfd_devices',            'vfd_device'),
             ('loadcell_devices',       'loadcell_device'),
             ('external_devices',       'external_device'),
-            ('vfd_datapoints',         'vfd_datapoints'),
             ('loadcell_datapoints',    'loadcell_datapoints'),
             ('external_datapoints',    'external_datapoints'),
             ('groups',                 'tag_groups'),
@@ -1332,9 +1346,8 @@ def get_database_stats():
             cursor.execute('SELECT COUNT(*) FROM {}'.format(table))
             stats[label] = cursor.fetchone()[0]
         conn.close()
-        stats['total_devices']    = stats['vfd_devices'] + stats['loadcell_devices'] + stats.get('external_devices', 0)
-        stats['total_datapoints'] = stats['vfd_datapoints'] + stats['loadcell_datapoints'] + stats.get('external_datapoints', 0)
-        stats['total_datapoints'] = stats['vfd_datapoints'] + stats['loadcell_datapoints']
+        stats['total_devices']    = stats['loadcell_devices'] + stats.get('external_devices', 0)
+        stats['total_datapoints'] = stats['loadcell_datapoints'] + stats.get('external_datapoints', 0)
         return stats
     except Exception as e:
         print("Error getting stats: {}".format(e))
@@ -1595,19 +1608,96 @@ def delete_rule(rule_id):
         return False
 
 
-def get_all_modbus_tags():
-    """Return all enabled modbus tag names as a flat list."""
+def get_all_loadcell_tags():
+    """Return all enabled loadcell tag names as a flat list."""
     try:
         conn = get_db_connection()
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute('SELECT name FROM vfd_datapoints WHERE enabled=1 ORDER BY name')
+        cur.execute('SELECT name FROM loadcell_datapoints WHERE enabled=1 ORDER BY name')
         tags = [row['name'] for row in cur.fetchall()]
         conn.close()
         return tags
     except Exception as e:
-        print("get_all_modbus_tags error: {}".format(e))
+        print("get_all_loadcell_tags error: {}".format(e))
         return []
+
+
+def get_all_available_tags():
+    """Return all available tags from every source as a list of dicts.
+
+    Each dict: {name, unit, device_id, device, source, dtype}
+
+    Sources:
+      'modbus'   -- external_datapoints / external_device  (was vfd_datapoints/vfd_device)
+      'loadcell' -- loadcell_datapoints / loadcell_device
+      'virtual'  -- virtual_datapoints / virtual_device (optional table)
+
+    This is the single source-of-truth used by both:
+      - GET /api/cloud-integration/available-tags  (mqtt_cloud.py)
+      - GET /api/rules/tags                        (rules.py)
+    """
+    def _map_dtype(data_type):
+        dt = (data_type or '').lower()
+        if 'bool' in dt:   return 'bool'
+        if 'float' in dt:  return 'float'
+        if 'int' in dt:    return 'int'
+        return 'float'
+
+    tags = []
+    try:
+        conn = get_db_connection()
+        cur  = conn.cursor()
+
+        # 1. External (Modbus/RTU/TCP) datapoints
+        try:
+            cur.execute(
+                "SELECT ed.name, COALESCE(ed.unit,''), ed.device_id,"
+                "       COALESCE(dev.name,''), 'modbus',"
+                "       COALESCE(ed.data_type,'float32')"
+                " FROM  external_datapoints ed"
+                " LEFT JOIN external_device dev ON dev.id = ed.device_id"
+                " WHERE ed.enabled = 1"
+                " ORDER BY ed.name"
+            )
+            tags += [{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],
+                      'source':r[4],'dtype':_map_dtype(r[5])} for r in cur.fetchall()]
+        except Exception as e:
+            print("get_all_available_tags [modbus] error: {}".format(e))
+
+        # 2. Loadcell datapoints
+        try:
+            cur.execute(
+                "SELECT ld.name, COALESCE(ld.unit,''), ld.device_id,"
+                "       COALESCE(lc.name,''), 'loadcell'"
+                " FROM  loadcell_datapoints ld"
+                " LEFT JOIN loadcell_device lc ON lc.id = ld.device_id"
+                " ORDER BY ld.name"
+            )
+            tags += [{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],
+                      'source':r[4],'dtype':'float'} for r in cur.fetchall()]
+        except Exception as e:
+            print("get_all_available_tags [loadcell] error: {}".format(e))
+
+        # 3. Virtual datapoints (optional — table may not exist)
+        try:
+            cur.execute(
+                "SELECT vd.name, COALESCE(vd.unit,''), vd.device_id,"
+                "       COALESCE(vdev.name,''), 'virtual'"
+                " FROM  virtual_datapoints vd"
+                " LEFT JOIN virtual_device vdev ON vdev.id = vd.device_id"
+                " ORDER BY vd.name"
+            )
+            tags += [{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],
+                      'source':r[4],'dtype':'float'} for r in cur.fetchall()]
+        except Exception:
+            pass  # virtual tables are optional
+
+        conn.close()
+    except Exception as e:
+        print("get_all_available_tags error: {}".format(e))
+
+    return tags
 
 
 # ---------------------------------------------------------------------------
@@ -1625,7 +1715,7 @@ else:
 
 
 # ---------------------------------------------------------------------------
-# WebUI Page Restrictions � per-user access control
+# WebUI Page Restrictions — per-user access control
 # ---------------------------------------------------------------------------
 
 # Master list of all pages in layout.html  (page_key, human label, sort_order)
@@ -1709,7 +1799,7 @@ def get_pages_for_user(user_id):
 # ---------------------------------------------------------------------------
 
 def get_port_config(device_type=None):
-    """Return port_config rows, optionally filtered by device_type ('modbus' or 'loadcell')."""
+    """Return port_config rows, optionally filtered by device_type ('loadcell')."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()

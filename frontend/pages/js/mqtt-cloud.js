@@ -324,13 +324,17 @@ function _renderMappingsTable(conn) {
                             <span class="font-semibold text-black text-base">${_esc(mapping.alias)}</span>
                             <span class="bg-white/20 text-black text-xs px-2 py-0.5 rounded-full">${points.length} tag${points.length !== 1 ? 's' : ''}</span>
                         </div>
-                        <div class="flex items-center gap-3">
-                            <button class="text-white/70 hover:text-white" onclick="window._toggleGroup('${groupId}')">
+                        <div class="flex items-center gap-2">
+                            <button class="text-white/70 hover:text-white" onclick="window._toggleGroup('${groupId}')" title="Collapse / expand">
                                 <i class="fa-solid fa-chevron-down text-sm"></i>
                             </button>
                             <button class="text-white/80 hover:text-white bg-white/15 hover:bg-white/25 rounded px-2 py-1 text-xs flex items-center gap-1"
-                                    onclick="window._openGroupTagsModal('${_esc(conn.id)}', ${idx})" title="Add tags to this group">
+                                    onclick="window._openGroupTagsModal('${_esc(conn.id)}', ${idx})" title="Add tags from device list">
                                 <i class="fa-solid fa-plus text-xs"></i> Add Tags
+                            </button>
+                            <button class="text-white/80 hover:text-white bg-white/15 hover:bg-white/25 rounded px-2 py-1 text-xs flex items-center gap-1"
+                                    onclick="window._editGroupName('${_esc(conn.id)}', ${idx}, '${_esc(mapping.alias)}')" title="Rename group">
+                                <i class="fa-solid fa-pen text-xs"></i> Edit
                             </button>
                             <button class="text-white/70 hover:text-red-200" onclick="window._cloudRemoveMapping('${_esc(conn.id)}',${idx})" title="Remove group">
                                 <i class="fa-solid fa-trash text-sm"></i>
@@ -801,6 +805,10 @@ function _wireAddTagsBtn(conn) {
         const el = _el(id);
         if (el) el.value = [...crypto.getRandomValues(new Uint8Array(12))].map(b=>'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b%72]).join('');
     };
+
+    // Expose custom-tag modal opener so mqtt-form.html button can call it
+    window.mqttFormLogic = window.mqttFormLogic || {};
+    window.mqttFormLogic.openCustomTagModal = () => _openCustomTagModal(conn);
 }
 
 // --- SAVE: MQTT CONNECTION ----------------------------------------------------
@@ -982,6 +990,166 @@ window._cloudRemoveTagFromMapping = async function (connId, mappingIdx, tagName)
         _toast(`Tag "${tagName}" removed`, 'success');
     } catch { _toast('Remove failed', 'error'); }
 };
+
+// --- RENAME GROUP -------------------------------------------------------------
+window._editGroupName = async function(connId, groupVisualIdx, currentAlias) {
+    const newAlias = prompt('Rename group:', currentAlias);
+    if (!newAlias || newAlias.trim() === '' || newAlias.trim() === currentAlias) return;
+
+    const conn = _connections.find(c => c.id === connId);
+    if (!conn) return;
+
+    const mappings = conn.config?.mappings || [];
+    const groups   = mappings.filter(m => !!m.alias);
+    const mapping  = groups[groupVisualIdx];
+    if (!mapping) return;
+
+    // Find real index in full mappings array
+    let realIdx = -1, gCount = 0;
+    for (let i = 0; i < mappings.length; i++) {
+        if (mappings[i].alias) {
+            if (gCount === groupVisualIdx) { realIdx = i; break; }
+            gCount++;
+        }
+    }
+    if (realIdx === -1) { _toast('Group not found', 'error'); return; }
+
+    const updatedMappings = mappings.map((m, i) =>
+        i === realIdx ? { ...m, alias: newAlias.trim() } : m
+    );
+
+    try {
+        await _api('PUT', `${API}/connections/${connId}`, { config: { mappings: updatedMappings } });
+        conn.config.mappings = updatedMappings;
+        await _selectConnection(connId);
+        _toast(`Group renamed to "${newAlias.trim()}"`, 'success');
+    } catch { _toast('Rename failed', 'error'); }
+};
+
+// --- CUSTOM TAG MODAL ---------------------------------------------------------
+// Opens a small modal to type a free-form tag name and add it as an individual mapping.
+function _openCustomTagModal(conn) {
+    // Remove any stale instance
+    const stale = _el('customTagModal');
+    if (stale) stale.remove();
+
+    const chOptions = _getPublishChannelOptions();
+    const chOptHtml = [
+        '<option value="">default channel</option>',
+        ...chOptions.filter(ch => ch.dir === 'publish').map(ch =>
+            `<option value="${_esc(ch.name)}">⬆ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`),
+        ...chOptions.filter(ch => ch.dir === 'subscribe').map(ch =>
+            `<option value="${_esc(ch.name)}">⬇ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`),
+    ].join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'customTagModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:420px;margin:0 16px;overflow:hidden;">
+            <!-- Header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #E2E8F0;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color:#8B5CF6;"></i>
+                    <span style="font-weight:600;font-size:14px;color:#1E293B;">Custom Tag</span>
+                </div>
+                <button id="closeCustomTagModal" style="background:none;border:none;cursor:pointer;color:#94A3B8;font-size:17px;line-height:1;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+                <p style="font-size:12px;color:#64748B;margin:0;">
+                    Define a tag with any name you choose. It will be added as an individual mapping.
+                </p>
+
+                <!-- Tag name -->
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:5px;">
+                        <i class="fa-solid fa-tag" style="color:#8B5CF6;margin-right:4px;"></i>Tag Name <span style="color:#F87171;">*</span>
+                    </label>
+                    <input id="customTagName" type="text" class="compact-input"
+                           style="width:100%;box-sizing:border-box;"
+                           placeholder="e.g. crane.load.weight, custom_sensor_01">
+                </div>
+
+                <!-- Data type -->
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:5px;">
+                        <i class="fa-solid fa-code" style="color:#94A3B8;margin-right:4px;"></i>Data Type
+                    </label>
+                    <select id="customTagDtype" class="compact-select" style="width:100%;box-sizing:border-box;">
+                        <option value="float" selected>float</option>
+                        <option value="int">int</option>
+                        <option value="string">string</option>
+                        <option value="bool">bool</option>
+                    </select>
+                </div>
+
+                <!-- Channel -->
+                <div>
+                    <label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:5px;">
+                        <i class="fa-solid fa-broadcast-tower" style="color:#94A3B8;margin-right:4px;"></i>Channel
+                    </label>
+                    <select id="customTagChannel" class="compact-select" style="width:100%;box-sizing:border-box;">${chOptHtml}</select>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 18px;border-top:1px solid #E2E8F0;background:#F8FAFC;">
+                <button id="cancelCustomTag" class="compact-button" style="border:1px solid #CBD5E1;color:#475569;background:#fff;">
+                    Cancel
+                </button>
+                <button id="confirmCustomTag" class="compact-button" style="background:#8B5CF6;color:#fff;">
+                    <i class="fa-solid fa-plus" style="margin-right:4px;"></i> Add Tag
+                </button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(modal);
+
+    // Focus the input
+    setTimeout(() => _el('customTagName')?.focus(), 50);
+
+    const close = () => { modal.remove(); document.body.style.overflow = ''; };
+
+    _el('closeCustomTagModal').onclick = close;
+    _el('cancelCustomTag').onclick     = close;
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function _esc_handler(e) {
+        if (e.key === 'Escape') { close(); document.removeEventListener('keydown', _esc_handler); }
+    });
+
+    _el('confirmCustomTag').onclick = async () => {
+        const tagName = (_el('customTagName')?.value || '').trim();
+        if (!tagName) {
+            _el('customTagName').style.borderColor = '#F87171';
+            _el('customTagName').focus();
+            return;
+        }
+        const dtype   = _el('customTagDtype')?.value  || 'float';
+        const channel = _el('customTagChannel')?.value || '';
+
+        const existingMappings = (_connections.find(c => c.id === conn.id)?.config?.mappings) || [];
+        const newEntry = { datapoints: { [dtype]: [tagName] } };
+        if (channel) newEntry.channel = channel;
+        const newMappings = [...existingMappings, newEntry];
+
+        const btn = _el('confirmCustomTag');
+        _setLoading(btn, true);
+        try {
+            await _api('PUT', `${API}/connections/${conn.id}`, { config: { mappings: newMappings } });
+            close();
+            await _selectConnection(conn.id);
+            _toast(`Custom tag "${tagName}" added`, 'success');
+        } catch {
+            _toast('Failed to add custom tag', 'error');
+        } finally {
+            _setLoading(btn, false);
+        }
+    };
+}
 
 // --- ADD TAGS MODAL -----------------------------------------------------------
 async function _openTagsModal(conn) {

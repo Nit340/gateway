@@ -302,13 +302,11 @@ console.log('general-config.js loaded');
     var _doScanWifi = function () {
         var btn  = el('wifi-scan-btn');
         var icon = el('wifi-scan-icon');
-        var lbl  = el('wifi-scan-label');
         var hint = el('wifi-ssid-hint');
 
         // Button loading state
         if (btn)  btn.disabled = true;
-        if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-xs';
-        if (lbl)  lbl.textContent = 'Searching...';
+        if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-sm';
         if (hint) hint.textContent = 'Searching for networks...';
 
         // Show panel with spinner while waiting
@@ -343,8 +341,7 @@ console.log('general-config.js loaded');
         .then(function () {
             // Always restore button
             if (btn)  btn.disabled = false;
-            if (icon) icon.className = 'fa-solid fa-rotate text-xs';
-            if (lbl)  lbl.textContent = 'Select Network';
+            if (icon) icon.className = 'fa-solid fa-rotate text-sm';
         });
     };
 
@@ -361,31 +358,23 @@ console.log('general-config.js loaded');
         var thumb = el('ac-thumb');
         var label = el('ac-label');
         var btn   = el('wifi-auto-connect-btn');
-        if (!track) return;
+        if (!track || !thumb) return;
 
         if (busy) {
-            track.style.background = '#93c5fd';   // light blue while connecting
+            track.style.background = '#93c5fd';
             thumb.style.transform  = 'translateX(12px)';
             if (label) label.textContent = 'Connecting…';
-            if (btn)   btn.setAttribute('aria-pressed', 'true');
+            if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.style.borderColor = '#93c5fd'; btn.style.color = '#2563eb'; }
         } else if (enabled) {
             track.style.background = '#2563eb';
             thumb.style.transform  = 'translateX(12px)';
             if (label) label.textContent = 'Auto';
-            if (btn) {
-                btn.setAttribute('aria-pressed', 'true');
-                btn.classList.remove('border-slate-300','text-slate-500','hover:bg-slate-50');
-                btn.classList.add('border-primary','text-primary','hover:bg-blue-50');
-            }
+            if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.style.borderColor = '#2563eb'; btn.style.color = '#2563eb'; btn.style.background = '#eff6ff'; }
         } else {
             track.style.background = '#cbd5e1';
             thumb.style.transform  = 'translateX(0px)';
             if (label) label.textContent = 'Auto';
-            if (btn) {
-                btn.setAttribute('aria-pressed', 'false');
-                btn.classList.remove('border-primary','text-primary','hover:bg-blue-50');
-                btn.classList.add('border-slate-300','text-slate-500','hover:bg-slate-50');
-            }
+            if (btn) { btn.setAttribute('aria-pressed', 'false'); btn.style.borderColor = '#cbd5e1'; btn.style.color = '#64748b'; btn.style.background = '#fff'; }
         }
     };
 
@@ -423,19 +412,28 @@ console.log('general-config.js loaded');
     };
 
     var _toggleAutoConnect = function () {
+        // Always toggle — never block the click
         if (_acEnabled) {
             _stopAutoConnect();
             return;
         }
-        var ssid = (el('wifi-ssid-value') || {}).value || '';
-        if (!ssid) { showNotification('Click Select Network and choose a network first', 'warning'); return; }
+        // Turn ON immediately so user sees it respond
         _acEnabled = true;
         _setAcUi(true, false);
-        _doOneConnect();                               // immediate first attempt
+
+        var ssid = (el('wifi-ssid-value') || {}).value || '';
+        if (!ssid) {
+            showNotification('Auto-connect ON — select a network to connect', 'warning');
+            return;
+        }
+        _doOneConnect();
         _acTimer = setInterval(function () {
             if (!_acEnabled) return;
-            // Auto-stop if WS says we're connected
-            if (isUp((_cache.wlan || {}).state)) { _stopAutoConnect(); showNotification('Auto-connect: already connected', 'success'); return; }
+            if (isUp((_cache.wlan || {}).state)) {
+                _stopAutoConnect();
+                showNotification('Auto-connect: already connected', 'success');
+                return;
+            }
             _doOneConnect();
         }, 15000);
     };
@@ -454,10 +452,9 @@ console.log('general-config.js loaded');
 
         // Auto-connect toggle button
         var acBtn = el('wifi-auto-connect-btn');
-        if (acBtn) {
-            var na = acBtn.cloneNode(true);
-            acBtn.parentNode.replaceChild(na, acBtn);
-            na.addEventListener('click', _toggleAutoConnect);
+        if (acBtn && !acBtn.dataset.acBound) {
+            acBtn.dataset.acBound = '1';
+            acBtn.addEventListener('click', _toggleAutoConnect);
         }
 
         // Close panel on outside click
@@ -1123,9 +1120,8 @@ console.log('general-config.js loaded');
     window.initGeneralConfig = function () {
         // Strong double-init guard - set both flags immediately
         if (window._generalConfigInitialized || window._generalConfigInitializing) return;
-        window._generalConfigInitialized  = true;
         window._generalConfigInitializing = true;
-        cleanup();
+        window._generalConfigInitialized  = true;
         initializeButtons();
         initializeNetworkToggles();
         initializePasswordToggles();

@@ -1,4 +1,4 @@
-# device_management.py - Device management API for Modbus and Loadcell
+# device_management.py - Device management API for External and Loadcell devices
 import asyncio
 import json
 import random
@@ -66,64 +66,20 @@ def get_db_connection():
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA foreign_keys = ON')
+    conn.row_factory = sqlite3.Row
     return conn
 
 # ============================================================================
-# GET ALL DEVICES (Both Modbus and Loadcell)
+# GET ALL DEVICES (External and Loadcell)
 # ============================================================================
 
 async def get_all_devices(request):
-    """GET all devices (modbus + loadcell) with real-time status"""
+    """GET all devices (external + loadcell) with real-time status"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
         devices = []
-        
-        # Get VFD devices
-        cursor.execute('''
-            SELECT m.id, m.name, m.protocol_type, m.device_type, m.ip_address, m.port, m.serial_port,
-                   m.enabled, s.name as service_name
-            FROM vfd_device m
-            LEFT JOIN services s ON m.service_id = s.id
-            ORDER BY m.id
-        ''')
-        
-        for row in cursor.fetchall():
-            device_id, name, protocol_type, device_type, ip, port, serial_port, enabled, service_name = row
-            
-            # Determine address display
-            if protocol_type == 'tcp':
-                address = "{}:{}".format(ip, port) if ip else "Not configured"
-                protocol = "vfd-tcp"
-            else:  # rtu
-                address = serial_port or "Not configured"
-                protocol = "vfd-rtu"
-            
-            # Get or initialize real-time status
-            if device_id not in device_status_tracker:
-                initialize_device_status(device_id, 'Offline')
-            
-            status = device_status_tracker[device_id]
-            
-            devices.append({
-                'id': device_id,
-                'name': name,
-                'type': 'VFD',
-                'device_type': device_type,     # always 'vfd'
-                'protocol_type': protocol_type, # 'rtu' or 'tcp'
-                'protocol': protocol,
-                'address': address,
-                'status': status['status'],
-                'lastPoll': status['last_poll'],
-                'enabled': bool(enabled),
-                'service': service_name,
-                'config': {
-                    'serial_port': serial_port if protocol_type == 'rtu' else None,
-                    'ip_address':  ip          if protocol_type == 'tcp' else None,
-                    'port':        port        if protocol_type == 'tcp' else None,
-                }
-            })
         
         # Get Loadcell devices
         cursor.execute('''
@@ -135,7 +91,13 @@ async def get_all_devices(request):
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, device_path_ch2, lc_mode, enabled, service_name = row
+            device_id = row[0]
+            name = row[1]
+            device_path = row[2]
+            device_path_ch2 = row[3]
+            lc_mode = row[4]
+            enabled = row[5]
+            service_name = row[6]
             
             # Get or initialize real-time status
             if device_id not in device_status_tracker:
@@ -177,7 +139,6 @@ async def get_all_devices(request):
                 }
             })
         
-        
         # Get External devices
         try:
             cursor.execute('''
@@ -191,34 +152,50 @@ async def get_all_devices(request):
                 ORDER BY id
             ''')
             for row in cursor.fetchall():
-                (device_id, name, enabled, ext_proto,
-                 device_type_val, model_name,
-                 slave_id, resp_timeout, byte_timeout,
-                 max_retries, polling_interval,
-                 serial_port, baud_rate, data_bits, parity, stop_bits,
-                 ip_address, port) = row
+                device_id = row[0]
+                name = row[1]
+                enabled = row[2]
+                ext_proto = row[3]
+                device_type_val = row[4]
+                model_name = row[5]
+                slave_id = row[6]
+                resp_timeout = row[7]
+                byte_timeout = row[8]
+                max_retries = row[9]
+                polling_interval = row[10]
+                serial_port = row[11]
+                baud_rate = row[12]
+                data_bits = row[13]
+                parity = row[14]
+                stop_bits = row[15]
+                ip_address = row[16]
+                port = row[17]
 
                 # Format address based on protocol
                 if ext_proto == 'ext-tcp':
                     address = "{}:{}".format(ip_address or 'Not configured', port or 502)
-                elif ext_proto == 'ext-rtu':
-                    port_config_list = get_port_config('modbus')
+                else:  # ext-rtu
+                    port_config_list = get_port_config('modbus') or []
                     address = serial_port or '/dev/ttymxc5'
                     for p in port_config_list:
-                        if p['port_value'] == serial_port:
-                            address = p['label']
+                        if p.get('port_value') == serial_port:
+                            address = p.get('label', serial_port)
                             break
-                else:
-                    address = 'N/A'
 
                 if device_id not in device_status_tracker:
                     initialize_device_status(device_id, 'Offline')
                 status = device_status_tracker[device_id]
 
+                # Determine display type - use device_type if available, otherwise fallback to 'External'
+                display_type = device_type_val or 'External'
+                # Capitalize first letter
+                if display_type:
+                    display_type = display_type.capitalize()
+
                 devices.append({
                     'id': device_id,
                     'name': name,
-                    'type': 'External',
+                    'type': display_type,  # This will show as "Vfd", "Meter", "Sensor", etc.
                     'protocol': ext_proto,
                     'address': address,
                     'status': status['status'],
@@ -265,70 +242,7 @@ async def get_device_details(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Try VFD first
-        cursor.execute('''
-            SELECT m.id, m.name, m.protocol_type, m.device_type,
-                   m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
-                   m.ip_address, m.port,
-                   m.serial_port, m.baud_rate, m.parity, m.data_bits, m.stop_bits,
-                   m.enabled, s.name as service_name,
-                   COALESCE(m.slave_id, 1) as slave_id
-            FROM vfd_device m
-            LEFT JOIN services s ON m.service_id = s.id
-            WHERE m.id = ?
-        ''', (device_id,))
-        
-        row = cursor.fetchone()
-        
-        if row:
-            # It's a VFD device
-            (dev_id, name, protocol_type, device_type, response_timeout_ms, byte_timeout_ms,
-             max_retries, polling_interval_ms, ip_address, port, serial_port, 
-             baud_rate, parity, data_bits, stop_bits, enabled, service_name, slave_id) = row
-            
-            # Get or initialize status
-            if device_id not in device_status_tracker:
-                initialize_device_status(device_id, 'Offline')
-            
-            status = device_status_tracker[device_id]
-            
-            details = {
-                'id': dev_id,
-                'name': name,
-                'type': 'VFD',
-                'device_type': device_type,       # always 'vfd'
-                'protocol_type': protocol_type,   # 'rtu' or 'tcp'
-                'service': service_name,
-                'enabled': bool(enabled),
-                'status': status['status'],
-                'lastPoll': status['last_poll'],
-                'config': {
-                    'slave_id': slave_id,
-                    'response_timeout_ms': response_timeout_ms,
-                    'byte_timeout_ms': byte_timeout_ms,
-                    'max_retries': max_retries,
-                    'polling_interval_ms': polling_interval_ms
-                }
-            }
-            
-            if protocol_type == 'tcp':
-                details['config']['ip_address'] = ip_address
-                details['config']['port'] = port
-                details['protocol'] = 'vfd-tcp'
-                details['protocol_type'] = 'tcp'
-            else:  # rtu
-                details['config']['serial_port'] = serial_port
-                details['config']['baud_rate'] = baud_rate
-                details['config']['parity'] = parity
-                details['config']['data_bits'] = data_bits
-                details['config']['stop_bits'] = stop_bits
-                details['protocol'] = 'vfd-rtu'
-                details['protocol_type'] = 'rtu'
-            
-            conn.close()
-            return web.json_response(details)
-        
-        # Try Loadcell
+        # Try Loadcell first
         cursor.execute('''
             SELECT l.id, l.name, l.device_path,
                    l.poll_ms, l.resolution_bits, l.effective_bits, l.signed, l.gain, l.vref,
@@ -354,15 +268,35 @@ async def get_device_details(request):
             
             status = device_status_tracker[device_id]
             
-            (dev_id, name, device_path,
-             poll_ms, resolution_bits, effective_bits, signed, gain, vref,
-             raw_min, raw_max,
-             capacity_min, capacity_max, unit,
-             load_name, capacity_name,
-             pipeline_server, pipeline_port, log_level,
-             tare_offset, known_weight, known_weight_raw,
-             raw_filters_json, weight_filters_json, levels_json,
-             enabled, service_name, lc_mode, device_path_ch2) = row
+            dev_id = row[0]
+            name = row[1]
+            device_path = row[2]
+            poll_ms = row[3]
+            resolution_bits = row[4]
+            effective_bits = row[5]
+            signed = row[6]
+            gain = row[7]
+            vref = row[8]
+            raw_min = row[9]
+            raw_max = row[10]
+            capacity_min = row[11]
+            capacity_max = row[12]
+            unit = row[13]
+            load_name = row[14]
+            capacity_name = row[15]
+            pipeline_server = row[16]
+            pipeline_port = row[17]
+            log_level = row[18]
+            tare_offset = row[19]
+            known_weight = row[20]
+            known_weight_raw = row[21]
+            raw_filters_json = row[22]
+            weight_filters_json = row[23]
+            levels_json = row[24]
+            enabled = row[25]
+            service_name = row[26]
+            lc_mode = row[27]
+            device_path_ch2 = row[28]
             
             import json as _json
             def _parse(v):
@@ -410,7 +344,6 @@ async def get_device_details(request):
             conn.close()
             return web.json_response(details)
         
-        
         # Try External device
         try:
             cursor.execute('''
@@ -425,12 +358,24 @@ async def get_device_details(request):
             ''', (device_id,))
             row = cursor.fetchone()
             if row:
-                (dev_id, name, enabled, ext_proto,
-                 device_type_val, model_name,
-                 slave_id, resp_timeout, byte_timeout,
-                 max_retries, polling_interval,
-                 serial_port, baud_rate, data_bits, parity, stop_bits,
-                 ip_address, port) = row
+                dev_id = row[0]
+                name = row[1]
+                enabled = row[2]
+                ext_proto = row[3]
+                device_type_val = row[4]
+                model_name = row[5]
+                slave_id = row[6]
+                resp_timeout = row[7]
+                byte_timeout = row[8]
+                max_retries = row[9]
+                polling_interval = row[10]
+                serial_port = row[11]
+                baud_rate = row[12]
+                data_bits = row[13]
+                parity = row[14]
+                stop_bits = row[15]
+                ip_address = row[16]
+                port = row[17]
 
                 if device_id not in device_status_tracker:
                     initialize_device_status(device_id, 'Offline')
@@ -480,7 +425,7 @@ async def get_device_details(request):
 # ============================================================================
 
 async def add_device(request):
-    """POST - Add a new device (Modbus or Loadcell)"""
+    """POST - Add a new device (External or Loadcell)"""
     try:
         data = await request.json()
         
@@ -528,24 +473,12 @@ async def add_device(request):
                 except ValueError:
                     continue
             device_id = 'EX{}'.format(max_num + 1)
-        else:  # modbus
-            cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
-            existing_ids = [row[0] for row in cursor.fetchall()]
-            
-            max_num = 0
-            for existing_id in existing_ids:
-                try:
-                    num = int(existing_id[2:])
-                    if num > max_num:
-                        max_num = num
-                except ValueError:
-                    continue
-            
-            device_id = 'VF{}'.format(max_num + 1)
+        else:
+            return web.json_response({'error': 'Invalid device type'}, status=400)
         
         # Get service_id
-        service_name = 'loadcell' if device_type == 'loadcell' else 'modbus'
-        service_id = get_service_by_name(service_name)
+        service_name = 'loadcell' if device_type == 'loadcell' else None
+        service_id = get_service_by_name(service_name) if service_name else None
         
         if device_type == 'loadcell':
             # Add Loadcell device
@@ -553,7 +486,7 @@ async def add_device(request):
             device_name = data.get('name', 'Loadcell Device')
             lc_mode = config.get('lc_mode', 'single_ended')
 
-            # Build tag prefix from device name: e.g. "load" -> load.weight, load.capacity, load.unit
+            # Build tag prefix from device name: e.g. "load" -> load.weight, load.capacity
             tag_prefix   = device_name.strip().lower().replace(' ', '_')
             tag_weight   = 'loadcells.{}.weight'.format(tag_prefix)
             tag_capacity = 'loadcells.{}.capacity'.format(tag_prefix)
@@ -594,10 +527,7 @@ async def add_device(request):
                 tag_capacity
             ))
 
-            # Automatically create datapoints prefixed with device name:
-            #   <name>.weight  (no unit - live reading)
-            #   <name>.capacity (unit: kg - max capacity)
-            #   <name>.unit    (no unit - unit label string)
+            # Automatically create datapoints
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
                 VALUES (?, ?, '')
@@ -634,13 +564,13 @@ async def add_device(request):
                 config.get('byte_timeout_ms', 100),
                 config.get('max_retries', 2),
                 config.get('polling_interval_ms', 300),
-                # RTU fields — only set for ext-rtu, NULL for TCP
+                # RTU fields — only set for ext-rtu
                 config.get('serial_port') if ext_protocol == 'ext-rtu' else None,
                 config.get('baud_rate')   if ext_protocol == 'ext-rtu' else None,
                 config.get('data_bits')   if ext_protocol == 'ext-rtu' else None,
                 config.get('parity')      if ext_protocol == 'ext-rtu' else None,
                 config.get('stop_bits')   if ext_protocol == 'ext-rtu' else None,
-                # TCP fields — only set for ext-tcp, NULL for RTU
+                # TCP fields — only set for ext-tcp
                 config.get('ip_address')  if ext_protocol == 'ext-tcp' else None,
                 config.get('port')        if ext_protocol == 'ext-tcp' else None,
             ))
@@ -674,59 +604,6 @@ async def add_device(request):
                     'port':       config.get('port', 502),
                 })
             _write_ext_device_file(device_id, file_payload)
-            # external_datapoints are managed via tag mapping page
-
-        else:  # VFD (TCP or RTU)
-            config = data.get('config', {})
-            
-            # Determine protocol_type: check explicit field first, then protocol string, then config
-            explicit_pt = data.get('protocol_type', '').lower()
-            protocol_lower = protocol.lower()
-            if explicit_pt in ('tcp', 'rtu'):
-                protocol_type = explicit_pt
-            elif 'tcp' in protocol_lower:
-                protocol_type = 'tcp'
-            elif 'rtu' in protocol_lower:
-                protocol_type = 'rtu'
-            else:
-                protocol_type = 'tcp' if config.get('ip_address') else 'rtu'
-            
-            print("Creating VFD device - Protocol: '{}', Type: '{}'".format(protocol, protocol_type))
-            
-            # Set default values matching your specified format
-            response_timeout_ms = config.get('response_timeout_ms', 100)
-            byte_timeout_ms = config.get('byte_timeout_ms', 100)
-            max_retries = config.get('max_retries', 2)
-            polling_interval_ms = config.get('polling_interval_ms', 300)
-            
-            cursor.execute('''
-                INSERT INTO vfd_device (
-                    id, name, protocol_type, device_type, service_id,
-                    response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
-                    ip_address, port,
-                    serial_port, baud_rate, parity, data_bits, stop_bits,
-                    slave_id
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                device_id,
-                data.get('name', 'VFD Device'),
-                protocol_type,
-                'vfd',
-                service_id,
-                response_timeout_ms,
-                byte_timeout_ms,
-                max_retries,
-                polling_interval_ms,
-                config.get('ip_address') if protocol_type == 'tcp' else None,
-                config.get('port', 502) if protocol_type == 'tcp' else None,
-                config.get('serial_port', '/dev/ttymxc5') if protocol_type == 'rtu' else None,
-                config.get('baud_rate', 9600) if protocol_type == 'rtu' else None,
-                config.get('parity', 'N') if protocol_type == 'rtu' else None,
-                config.get('data_bits', 8) if protocol_type == 'rtu' else None,
-                config.get('stop_bits', 1) if protocol_type == 'rtu' else None,
-                config.get('slave_id', 1)
-            ))
         
         conn.commit()
         conn.close()
@@ -759,11 +636,8 @@ async def update_device(request):
         
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Check device type
-        cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (device_id,))
-        is_modbus = cursor.fetchone() is not None
 
+        # Try External device
         try:
             cursor.execute('SELECT id FROM external_device WHERE id = ?', (device_id,))
             is_external = cursor.fetchone() is not None
@@ -840,68 +714,6 @@ async def update_device(request):
                     'port':       config.get('port', 502),
                 })
             _write_ext_device_file(device_id, file_payload)
-
-        elif is_modbus:
-            # Update Modbus device
-            config = data.get('config', {})
-            protocol_type = data.get('protocol_type', data.get('device_type', 'rtu'))
-            
-            update_fields = ['name = ?', 'protocol_type = ?']
-            values = [data.get('name'), protocol_type]
-            
-            # Common fields - using new column names
-            if 'slave_id' in config:
-                update_fields.append('slave_id = ?')
-                values.append(config['slave_id'])
-            if 'response_timeout_ms' in config:
-                update_fields.append('response_timeout_ms = ?')
-                values.append(config['response_timeout_ms'])
-            if 'byte_timeout_ms' in config:
-                update_fields.append('byte_timeout_ms = ?')
-                values.append(config['byte_timeout_ms'])
-            if 'max_retries' in config:
-                update_fields.append('max_retries = ?')
-                values.append(config['max_retries'])
-            if 'polling_interval_ms' in config:
-                update_fields.append('polling_interval_ms = ?')
-                values.append(config['polling_interval_ms'])
-            
-            # TCP specific
-            if protocol_type == 'tcp':
-                if 'ip_address' in config:
-                    update_fields.append('ip_address = ?')
-                    values.append(config['ip_address'])
-                if 'port' in config:
-                    update_fields.append('port = ?')
-                    values.append(config['port'])
-            
-            # RTU specific
-            if protocol_type == 'rtu':
-                if 'serial_port' in config:
-                    update_fields.append('serial_port = ?')
-                    values.append(config['serial_port'])
-                if 'baud_rate' in config:
-                    update_fields.append('baud_rate = ?')
-                    values.append(config['baud_rate'])
-                if 'parity' in config:
-                    update_fields.append('parity = ?')
-                    values.append(config['parity'])
-                if 'data_bits' in config:
-                    update_fields.append('data_bits = ?')
-                    values.append(config['data_bits'])
-                if 'stop_bits' in config:
-                    update_fields.append('stop_bits = ?')
-                    values.append(config['stop_bits'])
-            
-            values.append(device_id)
-            
-            query = '''
-                UPDATE vfd_device 
-                SET {fields}, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            '''.format(fields=', '.join(update_fields))
-            
-            cursor.execute(query, values)
         
         else:
             # Update Loadcell device
@@ -924,7 +736,7 @@ async def update_device(request):
                 update_fields.append('signed = ?')
                 values.append(1 if config['signed'] else 0)
             
-            # Calibration fields (flat or nested)
+            # Calibration fields
             for field in ('tare_offset', 'known_weight', 'known_weight_raw'):
                 if field in config:
                     update_fields.append('{} = ?'.format(field))
@@ -964,7 +776,6 @@ async def delete_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('DELETE FROM vfd_device WHERE id = ?', (device_id,))
         cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
         try:
             cursor.execute('DELETE FROM external_datapoints WHERE device_id = ?', (device_id,))
@@ -1031,8 +842,11 @@ async def disable_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('UPDATE vfd_device SET enabled = ? WHERE id = ?', (enabled, device_id))
         cursor.execute('UPDATE loadcell_device SET enabled = ? WHERE id = ?', (enabled, device_id))
+        try:
+            cursor.execute('UPDATE external_device SET enabled = ? WHERE id = ?', (enabled, device_id))
+        except Exception:
+            pass
         
         conn.commit()
         conn.close()
@@ -1063,21 +877,27 @@ async def duplicate_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if it's a Modbus device
-        cursor.execute('SELECT * FROM vfd_device WHERE id = ?', (device_id,))
-        modbus_row = cursor.fetchone()
+        # Check if it's a Loadcell device
+        cursor.execute('SELECT * FROM loadcell_device WHERE id = ?', (device_id,))
+        loadcell_row = cursor.fetchone()
         
-        if modbus_row:
+        if loadcell_row:
+            # Enforce max-2 for loadcell duplicates
+            cursor.execute('SELECT COUNT(*) FROM loadcell_device')
+            if cursor.fetchone()[0] >= 2:
+                conn.close()
+                return web.json_response({
+                    'success': False,
+                    'message': 'Maximum 2 Loadcell devices allowed. Delete an existing one first.'
+                }, status=400)
             # Get column names
-            cursor.execute('PRAGMA table_info(vfd_device)')
+            cursor.execute('PRAGMA table_info(loadcell_device)')
             columns = [col[1] for col in cursor.fetchall()]
+            old_device = dict(zip(columns, loadcell_row))
             
-            old_device = dict(zip(columns, modbus_row))
-            
-            # Generate new device ID
-            cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
+            # Generate new LC ID
+            cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
             existing_ids = [row[0] for row in cursor.fetchall()]
-            
             max_num = 0
             for existing_id in existing_ids:
                 try:
@@ -1086,74 +906,58 @@ async def duplicate_device(request):
                         max_num = num
                 except ValueError:
                     continue
+            new_device_id = 'LC{}'.format(max_num + 1)
             
-            new_device_id = 'VF{}'.format(max_num + 1)
-            
-            # Generate new device name with -001 suffix
-            base_name = old_device['name']
-            base_name_clean = re.sub(r'-\d+$', '', base_name)
-            
-            cursor.execute('SELECT name FROM vfd_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
+            # Generate new name
+            import re
+            base_name_clean = re.sub(r'-\d+$', '', old_device['name'])
+            cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
             existing_names = [row[0] for row in cursor.fetchall()]
-            
-            counter = 1
             numbers = []
             for name in existing_names:
                 match = re.search(r'-(\d+)$', name)
                 if match:
                     numbers.append(int(match.group(1)))
-            
-            if numbers:
-                counter = max(numbers) + 1
-            else:
-                counter = 1
-            
-            new_name = "{}-{}".format(base_name_clean, str(counter).zfill(3))
-            
-            # Insert new device
+            counter = (max(numbers) + 1) if numbers else 1
+            new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
+
+            # Build tag prefix for the duplicated device
+            new_tag_prefix   = new_name.strip().lower().replace(' ', '_')
+            new_tag_weight   = 'loadcells.{}.weight'.format(new_tag_prefix)
+            new_tag_capacity = 'loadcells.{}.capacity'.format(new_tag_prefix)
+
             cursor.execute('''
-                INSERT INTO vfd_device (
-                    id, name, protocol_type, device_type, service_id,
-                    response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
-                    ip_address, port, serial_port, baud_rate, parity,
-                    data_bits, stop_bits, enabled
+                INSERT INTO loadcell_device (
+                    id, name, service_id, device_path, device_path_ch2, lc_mode,
+                    poll_ms, resolution_bits, effective_bits, signed, gain, vref,
+                    raw_min, raw_max, capacity_min, capacity_max, unit,
+                    load_name, capacity_name, enabled
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                new_device_id, new_name,
-                old_device.get('protocol_type', 'rtu'),
-                'vfd',
-                old_device['service_id'],
-                old_device['response_timeout_ms'],
-                old_device['byte_timeout_ms'],
-                old_device['max_retries'],
-                old_device['polling_interval_ms'],
-                old_device['ip_address'], old_device['port'],
-                old_device['serial_port'], old_device['baud_rate'],
-                old_device['parity'], old_device['data_bits'],
-                old_device['stop_bits'], old_device['enabled']
+                new_device_id, new_name, old_device.get('service_id'),
+                old_device.get('device_path'),
+                old_device.get('device_path_ch2'),
+                old_device.get('lc_mode', 'single_ended'),
+                old_device.get('poll_ms'),
+                old_device.get('resolution_bits'), old_device.get('effective_bits'),
+                old_device.get('signed'), old_device.get('gain'), old_device.get('vref'),
+                old_device.get('raw_min'), old_device.get('raw_max'),
+                old_device.get('capacity_min'), old_device.get('capacity_max'),
+                old_device.get('unit'), new_tag_weight,
+                new_tag_capacity, old_device.get('enabled', 1)
             ))
             
-            # Duplicate all Modbus datapoints
-            cursor.execute('''
-                SELECT name, slave_id, register_address, register_type, data_type,
-                       byte_order, word_order, scale_factor, offset, unit, description
-                FROM vfd_datapoints
-                WHERE device_id = ?
-            ''', (device_id,))
-            
+            # Duplicate loadcell datapoints
+            cursor.execute('SELECT name, unit FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
             datapoints = cursor.fetchall()
             for dp in datapoints:
-                cursor.execute('''
-                    INSERT INTO vfd_datapoints (
-                        device_id, name, slave_id, register_address, register_type, data_type,
-                        byte_order, word_order, scale_factor, offset, unit, description
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (new_device_id,) + dp)
+                cursor.execute(
+                    'INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, ?)',
+                    (new_device_id, dp[0], dp[1])
+                )
             
             initialize_device_status(new_device_id, 'Online')
-            
             conn.commit()
             conn.close()
             
@@ -1164,229 +968,138 @@ async def duplicate_device(request):
                 'device_name': new_name,
                 'datapoints_copied': len(datapoints)
             })
-        
-        else:
-            # Check if it's a Loadcell device
-            cursor.execute('SELECT * FROM loadcell_device WHERE id = ?', (device_id,))
-            loadcell_row = cursor.fetchone()
-            
-            if loadcell_row:
-                # Enforce max-2 for loadcell duplicates
-                cursor.execute('SELECT COUNT(*) FROM loadcell_device')
-                if cursor.fetchone()[0] >= 2:
-                    conn.close()
-                    return web.json_response({
-                        'success': False,
-                        'message': 'Maximum 2 Loadcell devices allowed. Delete an existing one first.'
-                    }, status=400)
-                # Get column names
-                cursor.execute('PRAGMA table_info(loadcell_device)')
-                columns = [col[1] for col in cursor.fetchall()]
-                old_device = dict(zip(columns, loadcell_row))
-                
-                # Generate new LC ID
-                cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
-                existing_ids = [row[0] for row in cursor.fetchall()]
-                max_num = 0
-                for existing_id in existing_ids:
-                    try:
-                        num = int(existing_id[2:])
-                        if num > max_num:
-                            max_num = num
-                    except ValueError:
-                        continue
-                new_device_id = 'LC{}'.format(max_num + 1)
-                
-                # Generate new name
-                base_name_clean = re.sub(r'-\d+$', '', old_device['name'])
-                cursor.execute('SELECT name FROM loadcell_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
-                existing_names = [row[0] for row in cursor.fetchall()]
-                numbers = []
-                for name in existing_names:
-                    match = re.search(r'-(\d+)$', name)
-                    if match:
-                        numbers.append(int(match.group(1)))
-                counter = (max(numbers) + 1) if numbers else 1
-                new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
 
-                # Build tag prefix for the duplicated device
-                new_tag_prefix   = new_name.strip().lower().replace(' ', '_')
-                new_tag_weight   = 'loadcells.{}.weight'.format(new_tag_prefix)
-                new_tag_capacity = 'loadcells.{}.capacity'.format(new_tag_prefix)
+        # Check if it's an External device
+        try:
+            cursor.execute('SELECT * FROM external_device WHERE id = ?', (device_id,))
+            ext_row = cursor.fetchone()
+        except Exception:
+            ext_row = None
 
-                cursor.execute('''
-                    INSERT INTO loadcell_device (
-                        id, name, service_id, device_path, device_path_ch2, lc_mode,
-                        poll_ms, resolution_bits, effective_bits, signed, gain, vref,
-                        raw_min, raw_max, capacity_min, capacity_max, unit,
-                        load_name, capacity_name, enabled
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    new_device_id, new_name, old_device.get('service_id'),
-                    old_device.get('device_path'),
-                    old_device.get('device_path_ch2'),
-                    old_device.get('lc_mode', 'single_ended'),
-                    old_device.get('poll_ms'),
-                    old_device.get('resolution_bits'), old_device.get('effective_bits'),
-                    old_device.get('signed'), old_device.get('gain'), old_device.get('vref'),
-                    old_device.get('raw_min'), old_device.get('raw_max'),
-                    old_device.get('capacity_min'), old_device.get('capacity_max'),
-                    old_device.get('unit'), new_tag_weight,
-                    new_tag_capacity, old_device.get('enabled', 1)
-                ))
-                
-                # Duplicate loadcell datapoints
-                cursor.execute('SELECT name, unit FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
-                datapoints = cursor.fetchall()
-                for dp in datapoints:
-                    cursor.execute(
-                        'INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit) VALUES (?, ?, ?)',
-                        (new_device_id, dp[0], dp[1])
-                    )
-                
-                initialize_device_status(new_device_id, 'Online')
-                conn.commit()
-                conn.close()
-                
-                return web.json_response({
-                    'success': True,
-                    'message': 'Device duplicated successfully as {}'.format(new_name),
-                    'device_id': new_device_id,
-                    'device_name': new_name,
-                    'datapoints_copied': len(datapoints)
-                })
+        if ext_row:
+            cursor.execute('PRAGMA table_info(external_device)')
+            ext_cols = [col[1] for col in cursor.fetchall()]
+            old_ext = dict(zip(ext_cols, ext_row))
 
-            # Check if it's an External device
-            try:
-                cursor.execute('SELECT * FROM external_device WHERE id = ?', (device_id,))
-                ext_row = cursor.fetchone()
-            except Exception:
-                ext_row = None
-
-            if ext_row:
-                cursor.execute('PRAGMA table_info(external_device)')
-                ext_cols = [col[1] for col in cursor.fetchall()]
-                old_ext = dict(zip(ext_cols, ext_row))
-
-                # Generate new EX ID
-                cursor.execute('SELECT id FROM external_device WHERE id LIKE "EX%" ORDER BY id')
-                existing_ids = [row[0] for row in cursor.fetchall()]
-                max_num = 0
-                for eid in existing_ids:
-                    try:
-                        num = int(eid[2:])
-                        if num > max_num:
-                            max_num = num
-                    except ValueError:
-                        continue
-                new_device_id = 'EX{}'.format(max_num + 1)
-
-                # Generate new name
-                base_name_clean = re.sub(r'-\d+$', '', old_ext['name'])
-                cursor.execute('SELECT name FROM external_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
-                existing_names = [row[0] for row in cursor.fetchall()]
-                numbers = []
-                for name in existing_names:
-                    match = re.search(r'-(\d+)$', name)
-                    if match:
-                        numbers.append(int(match.group(1)))
-                counter = (max(numbers) + 1) if numbers else 1
-                new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
-
-                ext_proto = old_ext.get('protocol', 'ext-rtu')
-
-                cursor.execute('''
-                    INSERT INTO external_device (
-                        id, name, protocol,
-                        device_type, model_name,
-                        slave_id, response_timeout_ms, byte_timeout_ms,
-                        max_retries, polling_interval_ms,
-                        serial_port, baud_rate, data_bits, parity, stop_bits,
-                        ip_address, port, enabled
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
-                ''', (
-                    new_device_id, new_name, ext_proto,
-                    old_ext.get('device_type', ''),
-                    old_ext.get('model_name', ''),
-                    old_ext.get('slave_id', 1),
-                    old_ext.get('response_timeout_ms', 100),
-                    old_ext.get('byte_timeout_ms', 100),
-                    old_ext.get('max_retries', 2),
-                    old_ext.get('polling_interval_ms', 300),
-                    old_ext.get('serial_port') if ext_proto == 'ext-rtu' else None,
-                    old_ext.get('baud_rate')   if ext_proto == 'ext-rtu' else None,
-                    old_ext.get('data_bits')   if ext_proto == 'ext-rtu' else None,
-                    old_ext.get('parity')      if ext_proto == 'ext-rtu' else None,
-                    old_ext.get('stop_bits')   if ext_proto == 'ext-rtu' else None,
-                    old_ext.get('ip_address')  if ext_proto == 'ext-tcp' else None,
-                    old_ext.get('port')        if ext_proto == 'ext-tcp' else None,
-                ))
-
-                # Duplicate external datapoints
+            # Generate new EX ID
+            cursor.execute('SELECT id FROM external_device WHERE id LIKE "EX%" ORDER BY id')
+            existing_ids = [row[0] for row in cursor.fetchall()]
+            max_num = 0
+            for eid in existing_ids:
                 try:
+                    num = int(eid[2:])
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+            new_device_id = 'EX{}'.format(max_num + 1)
+
+            # Generate new name
+            import re
+            base_name_clean = re.sub(r'-\d+$', '', old_ext['name'])
+            cursor.execute('SELECT name FROM external_device WHERE name LIKE ?', ('{}%'.format(base_name_clean),))
+            existing_names = [row[0] for row in cursor.fetchall()]
+            numbers = []
+            for name in existing_names:
+                match = re.search(r'-(\d+)$', name)
+                if match:
+                    numbers.append(int(match.group(1)))
+            counter = (max(numbers) + 1) if numbers else 1
+            new_name = '{}-{}'.format(base_name_clean, str(counter).zfill(3))
+
+            ext_proto = old_ext.get('protocol', 'ext-rtu')
+
+            cursor.execute('''
+                INSERT INTO external_device (
+                    id, name, protocol,
+                    device_type, model_name,
+                    slave_id, response_timeout_ms, byte_timeout_ms,
+                    max_retries, polling_interval_ms,
+                    serial_port, baud_rate, data_bits, parity, stop_bits,
+                    ip_address, port, enabled
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+            ''', (
+                new_device_id, new_name, ext_proto,
+                old_ext.get('device_type', ''),
+                old_ext.get('model_name', ''),
+                old_ext.get('slave_id', 1),
+                old_ext.get('response_timeout_ms', 100),
+                old_ext.get('byte_timeout_ms', 100),
+                old_ext.get('max_retries', 2),
+                old_ext.get('polling_interval_ms', 300),
+                old_ext.get('serial_port') if ext_proto == 'ext-rtu' else None,
+                old_ext.get('baud_rate')   if ext_proto == 'ext-rtu' else None,
+                old_ext.get('data_bits')   if ext_proto == 'ext-rtu' else None,
+                old_ext.get('parity')      if ext_proto == 'ext-rtu' else None,
+                old_ext.get('stop_bits')   if ext_proto == 'ext-rtu' else None,
+                old_ext.get('ip_address')  if ext_proto == 'ext-tcp' else None,
+                old_ext.get('port')        if ext_proto == 'ext-tcp' else None,
+            ))
+
+            # Duplicate external datapoints
+            try:
+                cursor.execute('''
+                    SELECT name, slave_id, register_address, register_type, data_type,
+                           byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
+                    FROM external_datapoints WHERE device_id = ?
+                ''', (device_id,))
+                ext_dps = cursor.fetchall()
+                for dp in ext_dps:
                     cursor.execute('''
-                        SELECT name, slave_id, register_address, register_type, data_type,
-                               byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
-                        FROM external_datapoints WHERE device_id = ?
-                    ''', (device_id,))
-                    ext_dps = cursor.fetchall()
-                    for dp in ext_dps:
-                        cursor.execute('''
-                            INSERT OR IGNORE INTO external_datapoints (
-                                device_id, name, slave_id, register_address, register_type, data_type,
-                                byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
-                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                        ''', (new_device_id,) + dp)
-                except Exception:
-                    ext_dps = []
+                        INSERT OR IGNORE INTO external_datapoints (
+                            device_id, name, slave_id, register_address, register_type, data_type,
+                            byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ''', (new_device_id,) + dp)
+            except Exception:
+                ext_dps = []
 
-                # Write per-device JSON file
-                file_payload = {
-                    'id': new_device_id, 'name': new_name,
-                    'protocol': ext_proto,
-                    'device_type': old_ext.get('device_type', ''),
-                    'model_name': old_ext.get('model_name', ''),
-                    'slave_id': old_ext.get('slave_id', 1),
-                    'response_timeout_ms': old_ext.get('response_timeout_ms', 100),
-                    'byte_timeout_ms': old_ext.get('byte_timeout_ms', 100),
-                    'max_retries': old_ext.get('max_retries', 2),
-                    'polling_interval_ms': old_ext.get('polling_interval_ms', 300),
-                    'enabled': True,
-                    'created_at': datetime.utcnow().isoformat()
-                }
-                if ext_proto == 'ext-rtu':
-                    file_payload.update({
-                        'serial_port': old_ext.get('serial_port', '/dev/ttymxc5'),
-                        'baud_rate':   old_ext.get('baud_rate', 9600),
-                        'data_bits':   old_ext.get('data_bits', 8),
-                        'parity':      old_ext.get('parity', 'N'),
-                        'stop_bits':   old_ext.get('stop_bits', 1),
-                    })
-                else:
-                    file_payload.update({
-                        'ip_address': old_ext.get('ip_address', ''),
-                        'port':       old_ext.get('port', 502),
-                    })
-                _write_ext_device_file(new_device_id, file_payload)
-
-                initialize_device_status(new_device_id, 'Online')
-                conn.commit()
-                conn.close()
-
-                return web.json_response({
-                    'success': True,
-                    'message': 'Device duplicated successfully as {}'.format(new_name),
-                    'device_id': new_device_id,
-                    'device_name': new_name,
-                    'datapoints_copied': len(ext_dps) if ext_dps else 0
+            # Write per-device JSON file
+            file_payload = {
+                'id': new_device_id, 'name': new_name,
+                'protocol': ext_proto,
+                'device_type': old_ext.get('device_type', ''),
+                'model_name': old_ext.get('model_name', ''),
+                'slave_id': old_ext.get('slave_id', 1),
+                'response_timeout_ms': old_ext.get('response_timeout_ms', 100),
+                'byte_timeout_ms': old_ext.get('byte_timeout_ms', 100),
+                'max_retries': old_ext.get('max_retries', 2),
+                'polling_interval_ms': old_ext.get('polling_interval_ms', 300),
+                'enabled': True,
+                'created_at': datetime.utcnow().isoformat()
+            }
+            if ext_proto == 'ext-rtu':
+                file_payload.update({
+                    'serial_port': old_ext.get('serial_port', '/dev/ttymxc5'),
+                    'baud_rate':   old_ext.get('baud_rate', 9600),
+                    'data_bits':   old_ext.get('data_bits', 8),
+                    'parity':      old_ext.get('parity', 'N'),
+                    'stop_bits':   old_ext.get('stop_bits', 1),
                 })
+            else:
+                file_payload.update({
+                    'ip_address': old_ext.get('ip_address', ''),
+                    'port':       old_ext.get('port', 502),
+                })
+            _write_ext_device_file(new_device_id, file_payload)
 
+            initialize_device_status(new_device_id, 'Online')
+            conn.commit()
             conn.close()
+
             return web.json_response({
-                'success': False,
-                'message': 'Device not found'
-            }, status=404)
+                'success': True,
+                'message': 'Device duplicated successfully as {}'.format(new_name),
+                'device_id': new_device_id,
+                'device_name': new_name,
+                'datapoints_copied': len(ext_dps) if ext_dps else 0
+            })
+
+        conn.close()
+        return web.json_response({
+            'success': False,
+            'message': 'Device not found'
+        }, status=404)
         
     except Exception as e:
         print("Error duplicating device: {}".format(e))
@@ -1416,33 +1129,6 @@ async def export_devices_csv(request):
             'Device Path', 'Device Path CH2', 'Mode', 'Capacity', 'Unit', 'Enabled'
         ])
         
-        # Export VFD devices
-        cursor.execute('''
-            SELECT m.id, m.name, m.protocol_type,
-                   m.ip_address, m.port, m.serial_port,
-                   m.baud_rate, m.data_bits, m.parity, m.stop_bits,
-                   m.response_timeout_ms, m.byte_timeout_ms, m.max_retries, m.polling_interval_ms,
-                   m.enabled
-            FROM vfd_device m
-            ORDER BY m.id
-        ''')
-        
-        for row in cursor.fetchall():
-            (device_id, name, protocol_type, ip, port, serial,
-             baud, data_bits, parity, stop_bits,
-             resp_timeout, byte_timeout, max_retries, polling_interval,
-             enabled) = row
-            
-            protocol = 'vfd-tcp' if protocol_type == 'tcp' else 'vfd-rtu'
-            
-            writer.writerow([
-                device_id, name, 'VFD', protocol,
-                ip or '', port or '', serial or '',
-                baud or '', data_bits or '', parity or '', stop_bits or '',
-                resp_timeout or '', byte_timeout or '', max_retries or '', polling_interval or '',
-                '', '', '', '', '', '1' if enabled else '0'
-            ])
-        
         # Export Loadcell devices
         cursor.execute('''
             SELECT l.id, l.name, l.device_path, l.lc_mode,
@@ -1452,7 +1138,13 @@ async def export_devices_csv(request):
         ''')
         
         for row in cursor.fetchall():
-            device_id, name, device_path, lc_mode, capacity_max, unit, enabled = row
+            device_id = row[0]
+            name = row[1]
+            device_path = row[2]
+            lc_mode = row[3]
+            capacity_max = row[4]
+            unit = row[5]
+            enabled = row[6]
             writer.writerow([
                 device_id, name, 'Loadcell', 'loadcell',
                 '', '', '',
@@ -1475,19 +1167,34 @@ async def export_devices_csv(request):
                 ORDER BY id
             ''')
             for row in cursor.fetchall():
-                (dev_id, name, proto,
-                 device_type, model_name,
-                 slave_id, resp_to, byte_to, max_ret, poll_iv,
-                 serial_port, baud, data_bits, parity, stop_bits,
-                 ip, port, enabled) = row
+                dev_id = row[0]
+                name = row[1]
+                proto = row[2]
+                device_type = row[3]
+                model_name = row[4]
+                slave_id = row[5]
+                resp_to = row[6]
+                byte_to = row[7]
+                max_ret = row[8]
+                poll_iv = row[9]
+                serial_port = row[10]
+                baud = row[11]
+                data_bits = row[12]
+                parity = row[13]
+                stop_bits = row[14]
+                ip = row[15]
+                port = row[16]
+                enabled = row[17]
+                
                 writer.writerow([
-                    dev_id, name, 'External', proto,
+                    dev_id, name, device_type or 'External', proto,
                     ip or '', port or '', serial_port or '',
                     baud or '', data_bits or '', parity or '', stop_bits or '',
                     resp_to or '', byte_to or '', max_ret or '', poll_iv or '',
                     '', '', '', '', '', '1' if enabled else '0'
                 ])
-        except Exception:
+        except Exception as e:
+            print("Error exporting external devices: {}".format(e))
             pass
         
         conn.close()
@@ -1548,7 +1255,7 @@ async def import_devices_csv(request):
                 if device_type.lower() == 'loadcell':
                     cursor.execute('SELECT id, name FROM loadcell_device WHERE name = ?', (name,))
                 else:
-                    cursor.execute('SELECT id, name FROM vfd_device WHERE name = ?', (name,))
+                    cursor.execute('SELECT id, name FROM external_device WHERE name = ?', (name,))
                 
                 existing = cursor.fetchone()
                 
@@ -1604,8 +1311,8 @@ async def import_devices_csv(request):
                 
                 if device_type.lower() == 'loadcell':
                     # Check loadcell limit
-                    if existing_loadcell_count >= 1:
-                        errors.append("Row {}: Cannot import - only 1 Loadcell device allowed".format(row_num))
+                    if existing_loadcell_count >= 2:
+                        errors.append("Row {}: Cannot import - only 2 Loadcell devices allowed".format(row_num))
                         continue
                     
                     # Generate new LC ID
@@ -1665,8 +1372,8 @@ async def import_devices_csv(request):
                     existing_loadcell_count += 1
                     imported_count += 1
                     
-                else:  # VFD device
-                    cursor.execute('SELECT id FROM vfd_device WHERE id LIKE "VF%" ORDER BY id')
+                else:  # External device
+                    cursor.execute('SELECT id FROM external_device WHERE id LIKE "EX%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
                     max_num = 0
                     for existing_id in existing_ids:
@@ -1676,10 +1383,10 @@ async def import_devices_csv(request):
                                 max_num = num
                         except ValueError:
                             continue
-                    device_id = 'VF{}'.format(max_num + 1)
+                    device_id = 'EX{}'.format(max_num + 1)
                     
-                    service_id = get_service_by_name('modbus')
-                    protocol_type = 'tcp' if 'tcp' in protocol else 'rtu'
+                    device_type_val = row.get('Type', 'External').strip()
+                    model_name = row.get('Model Name', '').strip()
                     enabled = row.get('Enabled', '1').strip() == '1'
                     
                     # Get timeout values with defaults
@@ -1688,20 +1395,21 @@ async def import_devices_csv(request):
                     max_retries = int(row.get('Max Retries', '2') or '2')
                     polling_interval = int(row.get('Polling Interval (ms)', '300') or '300')
                     
-                    if protocol_type == 'tcp':
+                    if 'tcp' in protocol:
                         ip_address = row.get('IP Address', '').strip()
                         port = int(row.get('Port', '502') or '502')
                         
                         cursor.execute('''
-                            INSERT INTO vfd_device (
-                                id, name, protocol_type, device_type, service_id,
-                                response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
+                            INSERT INTO external_device (
+                                id, name, protocol, device_type, model_name,
+                                slave_id, response_timeout_ms, byte_timeout_ms,
+                                max_retries, polling_interval_ms,
                                 ip_address, port, enabled
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
-                            device_id, name, protocol_type, 'vfd', service_id,
-                            resp_timeout, byte_timeout, max_retries, polling_interval,
+                            device_id, name, 'ext-tcp', device_type_val, model_name,
+                            1, resp_timeout, byte_timeout, max_retries, polling_interval,
                             ip_address, port, enabled
                         ))
                     else:  # RTU
@@ -1712,16 +1420,17 @@ async def import_devices_csv(request):
                         stop_bits = int(row.get('Stop Bits', '1') or '1')
                         
                         cursor.execute('''
-                            INSERT INTO vfd_device (
-                                id, name, protocol_type, device_type, service_id,
-                                response_timeout_ms, byte_timeout_ms, max_retries, polling_interval_ms,
-                                serial_port, baud_rate, parity, data_bits, stop_bits, enabled
+                            INSERT INTO external_device (
+                                id, name, protocol, device_type, model_name,
+                                slave_id, response_timeout_ms, byte_timeout_ms,
+                                max_retries, polling_interval_ms,
+                                serial_port, baud_rate, data_bits, parity, stop_bits, enabled
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
-                            device_id, name, protocol_type, 'vfd', service_id,
-                            resp_timeout, byte_timeout, max_retries, polling_interval,
-                            serial_port, baud_rate, parity, data_bits, stop_bits, enabled
+                            device_id, name, 'ext-rtu', device_type_val, model_name,
+                            1, resp_timeout, byte_timeout, max_retries, polling_interval,
+                            serial_port, baud_rate, data_bits, parity, stop_bits, enabled
                         ))
                     
                     imported_count += 1
@@ -1771,7 +1480,7 @@ async def download_csv_template(request):
         writer = csv.writer(output)
         
         writer.writerow([
-            'ID', 'Name', 'Type', 'Protocol',
+            'ID', 'Name', 'Type', 'Protocol', 'Model Name',
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
@@ -1779,7 +1488,7 @@ async def download_csv_template(request):
         ])
         
         writer.writerow([
-            '', 'Example Modbus TCP', 'VFD', 'vfd-tcp',
+            '', 'Example External TCP', 'VFD', 'ext-tcp', 'ACS880',
             '192.168.1.100', '502', '',
             '', '', '', '',
             '100', '100', '2', '300',
@@ -1787,7 +1496,7 @@ async def download_csv_template(request):
         ])
         
         writer.writerow([
-            '', 'Example Modbus RTU', 'VFD', 'vfd-rtu',
+            '', 'Example External RTU', 'Meter', 'ext-rtu', 'Siemens S120',
             '', '', '/dev/ttymxc5',
             '9600', '8', 'N', '1',
             '100', '100', '2', '300',
@@ -1795,7 +1504,7 @@ async def download_csv_template(request):
         ])
         
         writer.writerow([
-            '', 'Example Loadcell Single', 'Loadcell', 'loadcell',
+            '', 'Example Loadcell Single', 'Loadcell', 'loadcell', '',
             '', '', '',
             '', '', '', '',
             '', '', '', '',
@@ -1804,7 +1513,7 @@ async def download_csv_template(request):
         ])
         
         writer.writerow([
-            '', 'Example Loadcell Differential', 'Loadcell', 'loadcell',
+            '', 'Example Loadcell Differential', 'Loadcell', 'loadcell', '',
             '', '', '',
             '', '', '', '',
             '', '', '', '',
@@ -1839,36 +1548,13 @@ async def get_device_datapoints(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT id FROM vfd_device WHERE id = ?', (device_id,))
-        is_modbus = cursor.fetchone() is not None
-        
         datapoints = []
         
-        if is_modbus:
-            cursor.execute('''
-                SELECT id, name, register_address, register_type, data_type,
-                       byte_order, word_order, scale_factor, offset, unit, description
-                FROM vfd_datapoints
-                WHERE device_id = ?
-                ORDER BY name
-            ''', (device_id,))
-            
-            for row in cursor.fetchall():
-                datapoints.append({
-                    'id': row[0],
-                    'name': row[1],
-                    'register_address': row[2],
-                    'register_type': row[3],
-                    'data_type': row[4],
-                    'byte_order': row[5],
-                    'word_order': row[6],
-                    'scale_factor': row[7],
-                    'offset': row[8],
-                    'unit': row[9],
-                    'description': row[10],
-                    'type': 'VFD'
-                })
-        else:
+        # Check if it's a loadcell device
+        cursor.execute('SELECT id FROM loadcell_device WHERE id = ?', (device_id,))
+        is_loadcell = cursor.fetchone() is not None
+        
+        if is_loadcell:
             cursor.execute('''
                 SELECT id, name
                 FROM loadcell_datapoints
@@ -1882,6 +1568,30 @@ async def get_device_datapoints(request):
                     'name': row[1],
                     'type': 'Loadcell'
                 })
+        else:
+            # Try external datapoints
+            try:
+                cursor.execute('''
+                    SELECT id, name, register_address, register_type, data_type,
+                           unit, description
+                    FROM external_datapoints
+                    WHERE device_id = ?
+                    ORDER BY name
+                ''', (device_id,))
+                
+                for row in cursor.fetchall():
+                    datapoints.append({
+                        'id': row[0],
+                        'name': row[1],
+                        'register_address': row[2],
+                        'register_type': row[3],
+                        'data_type': row[4],
+                        'unit': row[5],
+                        'description': row[6],
+                        'type': 'External'
+                    })
+            except Exception as e:
+                print("Error fetching external datapoints: {}".format(e))
         
         conn.close()
         return web.json_response({'datapoints': datapoints})
@@ -1915,6 +1625,7 @@ async def update_device_status_api(request):
     except Exception as e:
         print("Error updating device status: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
+
 # ============================================================================
 # PORT / PATH CONFIGURATION
 # ============================================================================

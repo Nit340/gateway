@@ -608,7 +608,8 @@ async def get_all_tag_groups(request):
         cursor = conn.cursor()
         cursor.execute('''
             SELECT id, name, color, description,
-                   (SELECT COUNT(*) FROM vfd_datapoints WHERE group_id = dg.id) as tag_count
+                   (SELECT COUNT(*) FROM external_datapoints WHERE group_id = dg.id) +
+                   (SELECT COUNT(*) FROM loadcell_datapoints WHERE group_id = dg.id) as tag_count
             FROM tag_groups dg
             ORDER BY name
         ''')
@@ -688,7 +689,8 @@ async def delete_tag_group(request):
         group_id = request.match_info['group_id']
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        cursor.execute('UPDATE vfd_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
+        cursor.execute('UPDATE external_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
+        cursor.execute('UPDATE loadcell_datapoints SET group_id = NULL WHERE group_id = ?', (group_id,))
         cursor.execute('DELETE FROM tag_groups WHERE id = ?', (group_id,))
         conn.commit()
         conn.close()
@@ -699,15 +701,20 @@ async def delete_tag_group(request):
 
 
 async def assign_tags_to_group(request):
-    """POST - Assign tag IDs to a group"""
+    """POST - Assign tag IDs to a group (supports external and loadcell tags)"""
     try:
         group_id = request.match_info['group_id']
         data = await request.json()
         tag_ids = data.get('tag_ids', [])
+        tag_type = data.get('type', 'external')  # 'external' or 'loadcell'
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
-        for tag_id in tag_ids:
-            cursor.execute('UPDATE vfd_datapoints SET group_id = ? WHERE id = ?', (group_id, tag_id))
+        if tag_type == 'loadcell':
+            for tag_id in tag_ids:
+                cursor.execute('UPDATE loadcell_datapoints SET group_id = ? WHERE id = ?', (group_id, tag_id))
+        else:
+            for tag_id in tag_ids:
+                cursor.execute('UPDATE external_datapoints SET group_id = ? WHERE id = ?', (group_id, tag_id))
         conn.commit()
         conn.close()
         return web.json_response({'success': True, 'message': '{} tag(s) assigned'.format(len(tag_ids))})

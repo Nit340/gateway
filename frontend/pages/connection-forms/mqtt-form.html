@@ -202,11 +202,20 @@
     <div class="form-section">
         <div class="flex items-center justify-between mb-4">
             <h5 class="form-section-title">Tag Mappings</h5>
-            <button type="button" 
-                    onclick="window.mqttFormLogic?.showAddTagModal()"
-                    class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
-                <i class="fa-solid fa-plus mr-1"></i> Add Tags
-            </button>
+            <div class="flex items-center gap-2">
+                <button type="button"
+                        onclick="window.mqttFormLogic?.showAddTagModal()"
+                        class="compact-button bg-primary hover:bg-primaryHover text-white text-xs">
+                    <i class="fa-solid fa-plus mr-1"></i> Add Tags
+                </button>
+                <button type="button"
+                        onclick="window.mqttFormLogic?.openCustomTagModal()"
+                        class="compact-button text-xs"
+                        style="background:#8B5CF6;color:#fff;border:none;"
+                        title="Create a tag with a custom name">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Custom Tag
+                </button>
+            </div>
         </div>
         
         <!-- Stats Bar -->

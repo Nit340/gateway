@@ -212,31 +212,14 @@ async def _remove_tag(req):
     except Exception as e: return _err(str(e),500)
 
 async def _available_tags(req):
-    # Maps vfd_datapoints.data_type -> simplified dtype for the frontend
-    def _map_dtype(data_type):
-        dt = (data_type or '').lower()
-        if 'bool' in dt:   return 'bool'
-        if 'float' in dt:  return 'float'
-        if 'int' in dt:    return 'int'
-        return 'float'
+    # Delegate to the shared DB helper so rules.py and mqtt_cloud.py
+    # always return the same tag list from the same source.
     try:
-        db=get_db_connection(); cur=db.cursor()
-        cur.execute('''SELECT md.name,COALESCE(md.unit,''),md.device_id,COALESCE(dev.name,''),'modbus',COALESCE(md.data_type,'float32')
-                       FROM vfd_datapoints md LEFT JOIN vfd_device dev ON dev.id=md.device_id WHERE md.enabled=1''')
-        tags=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4],'dtype':_map_dtype(r[5])} for r in cur.fetchall()]
-        cur.execute('''SELECT ld.name,'',ld.device_id,COALESCE(lc.name,''),'loadcell'
-                       FROM loadcell_datapoints ld LEFT JOIN loadcell_device lc ON lc.id=ld.device_id''')
-        tags+=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4],'dtype':'float'} for r in cur.fetchall()]
-        # Include virtual datapoints
-        try:
-            cur.execute('''SELECT vd.name,COALESCE(vd.unit,''),vd.device_id,COALESCE(vdev.name,''),'virtual'
-                           FROM virtual_datapoints vd LEFT JOIN virtual_device vdev ON vdev.id=vd.device_id''')
-            tags+=[{'name':r[0],'unit':r[1],'deviceId':r[2],'device':r[3],'source':r[4],'dtype':'float'} for r in cur.fetchall()]
-        except Exception as e:
-            print('[MQTT] virtual_datapoints query error: {}'.format(e))
-        db.close()
-        return _ok({'tags':tags,'total':len(tags)})
-    except Exception as e: return _err(str(e),500)
+        from database import get_all_available_tags
+        tags = get_all_available_tags()
+        return _ok({'tags': tags, 'total': len(tags)})
+    except Exception as e:
+        return _err(str(e), 500)
 
 async def _save_all(req):
     try:

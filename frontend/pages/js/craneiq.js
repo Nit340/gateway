@@ -460,39 +460,22 @@
 
     function connect() {
         if (!selectedDevice) { alert('No Load Cell device found.'); return; }
-
-        var btn = el('pipeline-connect-btn');
-        if (btn) { btn.textContent = 'Connecting...'; btn.disabled = true; }
-
-        fetch('/api/pipeline/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                host: selectedDevice.pipeline_server || '127.0.0.1',
-                port: selectedDevice.pipeline_port   || 7000
-            })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.success) {
-                connected = true;
-                setConnectionUI(true);
-                openWS();
-            } else {
-                alert('Connection failed: ' + (data.error || 'unknown'));
-                resetBtn();
-            }
-        })
-        .catch(function(e) { alert('Error: ' + e.message); resetBtn(); });
+        // UI-only connect: just open the WebSocket for live data display.
+        // The pipeline thread runs permanently in the background -- we do NOT
+        // call /api/pipeline/connect or /api/pipeline/disconnect from here.
+        connected = true;
+        setConnectionUI(true);
+        openWS();
     }
 
     function disconnect() {
-        closeWS();
-        fetch('/api/pipeline/disconnect', { method: 'POST' }).catch(function(){});
+        // UI-only disconnect: close the WebSocket and reset display.
+        // Does NOT touch the pipeline thread or call any pipeline API.
         connected = false;
         currentRaw = null;
         capturedZero = null;
         capturedWeightRaw = null;
+        closeWS();
         setConnectionUI(false);
     }
 
@@ -536,11 +519,36 @@
         if (mr) mr.textContent = display;   // keep modal in sync
     }
 
+    // Reconnect state -- exponential back-off capped at 15 s
+    var _wsReconnectTimer  = null;
+    var _wsReconnectDelay  = 2000;   // ms, doubles on each failure up to _WS_MAX_DELAY
+    var _WS_MAX_DELAY      = 15000;
+    var _wsConnected       = false;  // tracks whether the WS handshake succeeded
+
+    function _scheduleWsReconnect() {
+        if (!connected) return;          // user disconnected -- do not reconnect
+        if (_wsReconnectTimer) return;   // already scheduled
+        _wsReconnectTimer = setTimeout(function() {
+            _wsReconnectTimer = null;
+            if (connected) openWS();
+        }, _wsReconnectDelay);
+        // Exponential back-off with a cap
+        _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, _WS_MAX_DELAY);
+    }
+
+    function _resetWsBackoff() {
+        _wsReconnectDelay = 2000;
+    }
+
     function openWS() {
         closeWS();
         var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        _wsConnected = false;
         pipelineWs = new WebSocket(proto + '://' + location.host + '/ws/pipeline/load_raw');
+
         pipelineWs.onopen = function() {
+            _wsConnected = true;
+            _resetWsBackoff();
             // Fallback: if the backend had no buffered value yet (load_raw was None when
             // we connected), poll the REST status endpoint to pick up the latest value.
             fetch('/api/pipeline/status')
@@ -553,20 +561,70 @@
                 })
                 .catch(function() {});
         };
+
         pipelineWs.onmessage = function(evt) {
             try {
                 var msg = JSON.parse(evt.data);
                 if (msg.datapoint === (rawDatapoint || 'load_raw')) {
                     updateRawDisplay(msg.value);
                 }
+                // Handle any whitelisted datapoint updates (weight, capacity, etc.)
+                if (msg.datapoint && msg.datapoint.startsWith('loadcells.')) {
+                    _handleLoadcellDp(msg.datapoint, msg.value);
+                }
             } catch(e) {}
         };
-        pipelineWs.onerror = function() {};
-        pipelineWs.onclose = function() { if (connected) setTimeout(openWS, 2000); };
+
+        pipelineWs.onerror = function(e) {
+            // Log but do not crash -- onclose will fire right after and handle reconnect
+            console.warn('[WS] error event', e);
+        };
+
+        pipelineWs.onclose = function(evt) {
+            _wsConnected = false;
+            // evt.code 1000 = normal close (we called closeWS intentionally),
+            // anything else is unexpected -- schedule a reconnect.
+            if (connected && evt.code !== 1000) {
+                _scheduleWsReconnect();
+            }
+        };
     }
 
     function closeWS() {
-        if (pipelineWs) { pipelineWs.onclose = null; pipelineWs.close(); pipelineWs = null; }
+        if (_wsReconnectTimer) {
+            clearTimeout(_wsReconnectTimer);
+            _wsReconnectTimer = null;
+        }
+        _resetWsBackoff();
+        if (pipelineWs) {
+            pipelineWs.onclose = null;   // prevent reconnect on intentional close
+            pipelineWs.onerror = null;
+            pipelineWs.close(1000, 'user disconnect');
+            pipelineWs = null;
+        }
+        _wsConnected = false;
+    }
+
+    // Handle live loadcell datapoint updates arriving over WebSocket.
+    // Only updates display fields -- never triggers any pipeline operation.
+    function _handleLoadcellDp(dp, value) {
+        if (!selectedDevice) return;
+        var prefix = 'loadcells.' + selectedDevice.name + '.';
+        if (!dp.startsWith(prefix)) return;
+        var field = dp.slice(prefix.length);
+        if (field === 'weight_kg') {
+            var wv = el('lc-weight-value');
+            if (wv) wv.textContent = (value !== null && value !== undefined)
+                ? parseFloat(value).toFixed(2) : '--';
+        } else if (field === 'capacity') {
+            var cv = el('lc-capacity-value');
+            if (cv) cv.textContent = (value !== null && value !== undefined)
+                ? parseFloat(value).toFixed(0) : '--';
+        } else if (field === 'tared') {
+            var tv = el('lc-tared-value');
+            if (tv) tv.textContent = (value !== null && value !== undefined)
+                ? parseFloat(value).toFixed(2) : '--';
+        }
     }
 
     // ---- Calibration modal ----

@@ -1,4 +1,4 @@
-// device-management.js - Complete Fixed Version with Updated Modbus Parameters
+// device-management.js - Added new "Device Init" column
 
 (function() {
     'use strict';
@@ -123,6 +123,7 @@
                 border-radius: 6px;
                 font-size: 0.75rem;
                 font-weight: 600;
+                display: inline-block;
             }
             
             .type-modbus-tcp {
@@ -148,6 +149,31 @@
             .type-external {
                 background-color: #F0FDF4;
                 color: #166534;
+            }
+            
+            .type-vfd {
+                background-color: #E0F2FE;
+                color: #0369A1;
+            }
+            
+            .type-sensor {
+                background-color: #FCE7F3;
+                color: #9D174D;
+            }
+            
+            .type-meter {
+                background-color: #FEF9C3;
+                color: #854D0E;
+            }
+            
+            .type-plc {
+                background-color: #F3E8FF;
+                color: #6B21A8;
+            }
+            
+            .type-drive {
+                background-color: #FFE4E6;
+                color: #B91C1C;
             }
             
             .ext-protocol-config {
@@ -415,9 +441,7 @@
 
     function getDeviceOnlineStatus(device) {
         const protocol = (device.protocol || '').toLowerCase();
-        if (protocol === 'vfd-rtu' || protocol === 'vfd-tcp' ||
-            protocol === 'rtu'     || protocol === 'tcp' ||
-            protocol === 'ext-rtu' || protocol === 'ext-tcp') {
+        if (protocol === 'ext-rtu' || protocol === 'ext-tcp') {
             return pipelineStatus.modbus_service ? 'Online' : 'Offline';
         }
         if (protocol === 'loadcell') {
@@ -431,9 +455,7 @@
 
     function getServiceGroup(device) {
         const protocol = (device.protocol || '').toLowerCase();
-        if (protocol === 'vfd-rtu' || protocol === 'vfd-tcp' ||
-            protocol === 'rtu'     || protocol === 'tcp' ||
-            protocol === 'ext-rtu' || protocol === 'ext-tcp')   return 'modbus';
+        if (protocol === 'ext-rtu' || protocol === 'ext-tcp')   return 'modbus';
         if (protocol === 'loadcell')                        return 'loadcell';
         if (protocol === 'virtual')                         return 'virtual';
         return null;
@@ -504,14 +526,16 @@
             filteredDevices = devices.filter(device =>
                 device.name.toLowerCase().includes(searchTerm) ||
                 (device.type && device.type.toLowerCase().includes(searchTerm)) ||
-                (device.protocol && device.protocol.toLowerCase().includes(searchTerm))
+                (device.protocol && device.protocol.toLowerCase().includes(searchTerm)) ||
+                (device.config && device.config.device_type && 
+                 device.config.device_type.toLowerCase().includes(searchTerm))
             );
         }
         
         if (filteredDevices.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="px-6 py-8 text-center text-slate-500">
+                    <td colspan="10" class="px-6 py-8 text-center text-slate-500">
                         <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
                         <p>${searchTerm ? 'No devices match your search' : 'No devices found'}</p>
                     </td>
@@ -529,6 +553,7 @@
             const rowIndex = idx + 1;
             
             const deviceTypeBadge = getDeviceTypeBadge(device);
+            const deviceInitType = getDeviceInitType(device);
             const protocolBadge = getProtocolBadge(device);
             const address = getDeviceAddress(device);
             
@@ -544,6 +569,9 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     ${deviceTypeBadge}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-slate-700">${escapeHtml(deviceInitType)}</div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     ${protocolBadge}
@@ -575,16 +603,83 @@
         applyStatusToTable();
     }
 
+    function getDeviceInitType(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+        
+        // For external devices, return the device_type from config
+        if (protocol === 'ext-rtu' || protocol === 'ext-tcp') {
+            if (device.config && device.config.device_type) {
+                return device.config.device_type.charAt(0).toUpperCase() + 
+                       device.config.device_type.slice(1);
+            }
+            return '—';
+        }
+        
+        // For loadcell devices, show Loadcell
+        if (protocol === 'loadcell') {
+            return 'Loadcell';
+        }
+        
+        return '—';
+    }
+
+    function getDeviceTypeBadge(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+        let badgeClass = 'device-type-badge ';
+        let typeText = '';
+        
+        if (protocol === 'loadcell') {
+            badgeClass += 'type-loadcell';
+            typeText = 'Loadcell';
+        } else if (protocol === 'ext-rtu' || protocol === 'ext-tcp') {
+            // For external devices, show "External" as the device type
+            badgeClass += 'type-external';
+            typeText = 'External';
+        } else if (protocol === 'virtual') {
+            badgeClass += 'type-virtual';
+            typeText = 'Virtual';
+        } else {
+            badgeClass += 'type-modbus-tcp';
+            typeText = device.type || 'Unknown';
+        }
+        
+        return `<span class="${badgeClass}">${escapeHtml(typeText)}</span>`;
+    }
+
+    function getProtocolBadge(device) {
+        const protocol = (device.protocol || '').toLowerCase();
+
+        if (protocol === 'loadcell' || protocol === 'virtual') {
+            return `<span class="text-sm text-slate-400">—</span>`;
+        }
+
+        let badgeClass = 'device-type-badge ';
+        let protoText = '';
+
+        if (protocol === 'ext-tcp') {
+            badgeClass += 'type-modbus-tcp';
+            protoText = 'Modbus TCP';
+        } else if (protocol === 'ext-rtu') {
+            badgeClass += 'type-modbus-rtu';
+            protoText = 'Modbus RTU';
+        } else {
+            badgeClass += 'type-modbus-tcp';
+            protoText = device.protocol || '—';
+        }
+
+        return `<span class="${badgeClass}">${protoText}</span>`;
+    }
+
     function getAddressTooltip(device) {
         const protocol = (device.protocol || '').toLowerCase();
-        if (protocol === 'vfd-tcp' || protocol === 'ext-tcp') {
+        if (protocol === 'ext-tcp') {
             return 'TCP/IP Address:Port';
-        } else if (protocol === 'vfd-rtu' || protocol === 'ext-rtu') {
+        } else if (protocol === 'ext-rtu') {
             return 'Serial Port';
         } else if (protocol === 'loadcell') {
             const config = device.config || {};
             if (config.lc_mode === 'differential') {
-                return 'Differential Mode - Selected cahnnel';
+                return 'Differential Mode - Selected channel';
             } else {
                 return 'Single Point Mode - Selected channel';
             }
@@ -593,14 +688,14 @@
     }
 
     function getDeviceAddress(device) {
-        if (device.protocol === 'vfd-tcp' || device.protocol === 'ext-tcp') {
+        if (device.protocol === 'ext-tcp') {
             const config = device.config || {};
             const ip = config.ip_address || device.address || 'Not configured';
             const port = config.port || '502';
             // Don't add port if it's already in the address
             if (ip.includes(':')) return ip;
             return `${ip}:${port}`;
-        } else if (device.protocol === 'vfd-rtu' || device.protocol === 'ext-rtu') {
+        } else if (device.protocol === 'ext-rtu') {
             const config = device.config || {};
             const serialPort = config.serial_port || device.address || '/dev/ttymxc5';
             // Get friendly port label from portConfig
@@ -618,65 +713,6 @@
             }
         }
         return device.address || 'Not configured';
-    }
-
-    function getDeviceTypeBadge(device) {
-        const protocol = (device.protocol || '').toLowerCase();
-        let badgeClass = 'device-type-badge ';
-        let typeText = '';
-        
-        if (protocol === 'vfd-tcp' || protocol === 'vfd-rtu' || protocol === 'tcp' || protocol === 'rtu') {
-            badgeClass += 'type-modbus-tcp';
-            typeText = 'VFD';
-        } else if (protocol === 'loadcell') {
-            badgeClass += 'type-loadcell';
-            typeText = 'Loadcell';
-        } else if (protocol === 'virtual') {
-            badgeClass += 'type-virtual';
-            typeText = 'Virtual';
-        } else if (protocol === 'external' || protocol === 'ext-rtu' || protocol === 'ext-tcp') {
-            badgeClass += 'type-external';
-            typeText = 'External';
-        } else {
-            badgeClass += 'type-modbus-tcp';
-            typeText = device.type || 'Unknown';
-        }
-        
-        return `<span class="${badgeClass}">${typeText}</span>`;
-    }
-
-    function getProtocolBadge(device) {
-        const protocol = (device.protocol || '').toLowerCase();
-        let badgeClass = 'device-type-badge ';
-        let protoText = '';
-        
-        if (protocol === 'vfd-tcp' || protocol === 'tcp') {
-            badgeClass += 'type-modbus-tcp';
-            protoText = 'Modbus TCP';
-        } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
-            badgeClass += 'type-modbus-rtu';
-            protoText = 'Modbus RTU';
-        } else if (protocol === 'loadcell') {
-            badgeClass += 'type-loadcell';
-            protoText = '—';
-        } else if (protocol === 'virtual') {
-            badgeClass += 'type-virtual';
-            protoText = '—';
-        } else if (protocol === 'ext-rtu') {
-            badgeClass += 'type-external';
-            protoText = 'Modbus RTU';
-        } else if (protocol === 'ext-tcp') {
-            badgeClass += 'type-external';
-            protoText = 'Modbus TCP';
-        } else if (protocol === 'external') {
-            badgeClass += 'type-external';
-            protoText = '—';
-        } else {
-            badgeClass += 'type-modbus-tcp';
-            protoText = device.protocol || '—';
-        }
-        
-        return `<span class="${badgeClass}">${protoText}</span>`;
     }
 
     function getStatusBadge(device) {
@@ -699,25 +735,25 @@
         const protocol = (device.protocol || '').toLowerCase();
         let typeStyle = { bg: 'bg-slate-100', text: 'text-slate-700', label: device.type || 'Unknown' };
         
-        if (protocol === 'vfd-tcp' || protocol === 'tcp') {
-            typeStyle = { bg: 'bg-blue-50', text: 'text-blue-700', label: 'VFD', proto: 'Modbus TCP' };
-        } else if (protocol === 'vfd-rtu' || protocol === 'rtu') {
-            typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'VFD', proto: 'Modbus RTU' };
-        } else if (protocol === 'loadcell') {
-            typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell', proto: 'IIO Channel' };
+        if (protocol === 'loadcell') {
+            typeStyle = { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Loadcell', proto: null };
         } else if (protocol === 'virtual') {
             typeStyle = { bg: 'bg-indigo-50', text: 'text-indigo-700', label: 'Virtual', proto: '—' };
-        } else if (protocol === 'ext-rtu') {
-            typeStyle = { bg: 'bg-green-50', text: 'text-green-700', label: 'External', proto: 'Modbus RTU' };
-        } else if (protocol === 'ext-tcp') {
-            typeStyle = { bg: 'bg-blue-50', text: 'text-blue-700', label: 'External', proto: 'Modbus TCP' };
-        } else if (protocol === 'external') {
-            typeStyle = { bg: 'bg-slate-50', text: 'text-slate-700', label: 'External', proto: '—' };
+        } else if (protocol === 'ext-rtu' || protocol === 'ext-tcp') {
+            typeStyle = { 
+                bg: protocol === 'ext-rtu' ? 'bg-green-50' : 'bg-blue-50', 
+                text: protocol === 'ext-rtu' ? 'text-green-700' : 'text-blue-700', 
+                label: 'External',
+                proto: protocol === 'ext-rtu' ? 'Modbus RTU' : 'Modbus TCP'
+            };
         }
         
+        // Get the device init type for display
+        const deviceInitType = getDeviceInitType(device);
+        
         const config = device.config || {};
-        const isTCP = protocol === 'vfd-tcp' || protocol === 'tcp' || protocol === 'ext-tcp';
-        const isRTU = protocol === 'vfd-rtu' || protocol === 'rtu' || protocol === 'ext-rtu';
+        const isTCP = protocol === 'ext-tcp';
+        const isRTU = protocol === 'ext-rtu';
         
         let detailsHtml = `
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -733,28 +769,52 @@
                                     <div class="text-sm font-medium text-slate-900">${escapeHtml(device.name)}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Device Type</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Device</div>
                                     <div><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeStyle.bg} ${typeStyle.text}">${typeStyle.label}</span></div>
                                 </div>
-                                ${protocol !== 'loadcell' ? `<div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
-                                    <div class="text-sm text-slate-700">${typeStyle.proto || escapeHtml(device.protocol || '—')}</div>
-                                </div>` : ''}
-                                ${(protocol === 'ext-rtu' || protocol === 'ext-tcp') && config.device_type ? `<div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Type</div>
-                                    <div class="text-sm text-slate-700">${escapeHtml(config.device_type)}</div>
-                                </div>` : ''}
-                                ${(protocol === 'ext-rtu' || protocol === 'ext-tcp') && config.model_name ? `<div>
+        `;
+        
+        // Add device init type for external devices
+        if ((isRTU || isTCP) && deviceInitType !== '—') {
+            detailsHtml += `
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Device Type</div>
+                                    <div class="text-sm font-medium text-slate-900">${escapeHtml(deviceInitType)}</div>
+                                </div>
+            `;
+        }
+        
+        // Add model name for external devices if available
+        if ((isRTU || isTCP) && config.model_name) {
+            detailsHtml += `
+                                <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Model Name</div>
                                     <div class="text-sm text-slate-700">${escapeHtml(config.model_name)}</div>
-                                </div>` : ''}
+                                </div>
+            `;
+        }
+        
+        detailsHtml += `
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Device ID</div>
                                     <div class="text-sm font-mono text-slate-600">${escapeHtml(device.id)}</div>
-                                </div>
+                                </div>`;
+
+        if (isRTU || isTCP) {
+            detailsHtml += `
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Last Polled</div>
-                                    <div class="text-sm text-slate-700">${escapeHtml(device.lastPoll || 'Never')}</div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Protocol</div>
+                                    <div class="text-sm text-slate-700">${typeStyle.proto || escapeHtml(device.protocol || '—')}</div>
+                                </div>`;
+        }
+
+        detailsHtml += `
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Status</div>
+                                    <div class="flex items-center">
+                                        <span class="status-dot ${statusStyle.dot} mr-2"></span>
+                                        <span class="text-sm ${statusStyle.text}">${statusStyle.label}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1000,6 +1060,8 @@
             panel.classList.add('active');
             populatePortDropdowns();
             document.getElementById('deviceNameInput').value = '';
+            document.getElementById('extDeviceTypeInit').value = '';
+            document.getElementById('extModelName').value = '';
 
             // Enforce max-2 for loadcell
             const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
@@ -1024,6 +1086,7 @@
 
             // Wire ext-protocol radios
             panel.querySelectorAll('input[name="ext-protocol"]').forEach(r => {
+                r.removeEventListener('change', handleExtProtocolChange);
                 r.addEventListener('change', handleExtProtocolChange);
             });
 
@@ -1143,7 +1206,7 @@
                 config: {}
             };
             
-            // Resolve protocol for this request (no VFD)
+            // Resolve protocol for this request
             if (deviceType === 'loadcell') {
                 requestData.type = 'loadcell';
                 requestData.protocol = 'loadcell';
@@ -1187,6 +1250,13 @@
                 const extProto = document.querySelector('#addDevicePanel input[name="ext-protocol"]:checked')?.value || 'ext-rtu';
                 const extDeviceTypeInit = document.getElementById('extDeviceTypeInit')?.value?.trim() || '';
                 const extModelName = document.getElementById('extModelName')?.value?.trim() || '';
+                
+                if (!extDeviceTypeInit) {
+                    showNotification('Please enter a Device Type (e.g., VFD, Sensor, Meter)', 'error');
+                    isSaving = false;
+                    return;
+                }
+                
                 if (extProto === 'ext-rtu') {
                     requestData.type = 'external';
                     requestData.protocol = 'ext-rtu';
@@ -1204,7 +1274,6 @@
                         byte_timeout_ms: parseInt(document.getElementById('extRtuByteTimeout')?.value) || 100,
                         max_retries: parseInt(document.getElementById('extRtuMaxRetries')?.value) || 2,
                         polling_interval_ms: parseInt(document.getElementById('extRtuPollingInterval')?.value) || 300
-                        // NOTE: no ip_address, no port — RTU uses serial only
                     };
                 } else {
                     requestData.type = 'external';
@@ -1220,7 +1289,6 @@
                         byte_timeout_ms: parseInt(document.getElementById('extTcpByteTimeout')?.value) || 100,
                         max_retries: parseInt(document.getElementById('extTcpMaxRetries')?.value) || 2,
                         polling_interval_ms: parseInt(document.getElementById('extTcpPollingInterval')?.value) || 300
-                        // NOTE: no serial_port, baud_rate, parity etc — TCP uses IP only
                     };
                 }
             }
@@ -1265,17 +1333,17 @@
             <div class="flex items-center h-9 px-3 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-medium">${val}</div>
             <input type="hidden" id="${id}" value="${val}"></div>`;
 
-        if (proto === 'vfd-rtu' || proto === 'ext-rtu') {
+        if (proto === 'ext-rtu') {
             const portOpts = portConfig.modbus.length
                 ? portConfig.modbus.map(p => ({v: p.port_value, l: p.label}))
                 : [{v:'/dev/ttymxc5', l:'Port 1'},{v:'/dev/ttymxc2', l:'Port 2'}];
-            const extFields = proto === 'ext-rtu' ? `
-                <div class="grid grid-cols-2 gap-4">
-                    ${inp('editDeviceType','Type', cfg.device_type||cfg.device_type_init||'')}
-                    ${inp('editModelName','Model Name', cfg.model_name||'')}
-                </div>` : '';
+            
             return `<div class="space-y-4">
-                ${extFields}
+                <div class="grid grid-cols-2 gap-4">
+                    ${inp('editDeviceType','Device Type', cfg.device_type||cfg.device_type_init||'')}
+                    ${inp('editModelName','Model Name', cfg.model_name||'')}
+                </div>
+                <p class="text-xs text-slate-400 -mt-2 mb-2">Device Type will appear in the "Device Type" column (e.g., VFD, Sensor, Meter)</p>
                 ${inp('editSlaveId','Slave ID', cfg.slave_id||1,'number','min="1" max="247"')}
                 ${sel('editSerialPort','Serial Port', cfg.serial_port||'/dev/ttymxc5', portOpts)}
                 <p class="text-xs text-slate-400 mt-1 mb-2">This will be displayed as the Address/ID in the table view</p>
@@ -1295,14 +1363,13 @@
                 ${inp('editPollingInterval','Polling Interval (ms)', cfg.polling_interval_ms||300,'number','min="10" max="10000"')}
             </div>`;
         }
-        if (proto === 'vfd-tcp' || proto === 'ext-tcp') {
-            const extFields = proto === 'ext-tcp' ? `
-                <div class="grid grid-cols-2 gap-4">
-                    ${inp('editDeviceType','Type', cfg.device_type||cfg.device_type_init||'')}
-                    ${inp('editModelName','Model Name', cfg.model_name||'')}
-                </div>` : '';
+        if (proto === 'ext-tcp') {
             return `<div class="space-y-4">
-                ${extFields}
+                <div class="grid grid-cols-2 gap-4">
+                    ${inp('editDeviceType','Device Type', cfg.device_type||cfg.device_type_init||'')}
+                    ${inp('editModelName','Model Name', cfg.model_name||'')}
+                </div>
+                <p class="text-xs text-slate-400 -mt-2 mb-2">Device Type will appear in the "Device Type" column (e.g., VFD, Sensor, Meter)</p>
                 ${inp('editSlaveId','Slave ID', cfg.slave_id||1,'number','min="1" max="247"')}
                 <div class="grid grid-cols-2 gap-4">
                     ${inp('editTcpIp','IP Address', cfg.ip_address||'192.168.1.100')}
@@ -1510,8 +1577,6 @@
                 }
                 
                 const typeLabels = {
-                    'vfd-tcp': 'VFD',
-                    'vfd-rtu': 'VFD',
                     'loadcell': 'Loadcell',
                     'ext-rtu': 'External',
                     'ext-tcp': 'External',
@@ -1519,8 +1584,6 @@
                 };
                 
                 const protocolLabels = {
-                    'vfd-tcp': 'Modbus TCP',
-                    'vfd-rtu': 'Modbus RTU',
                     'loadcell': '—',
                     'ext-rtu': 'Modbus RTU',
                     'ext-tcp': 'Modbus TCP',
@@ -1533,16 +1596,20 @@
                 }
                 
                 const protocolBadge = document.getElementById('editDeviceProtocolBadge');
+                const protocolBadgeWrapper = protocolBadge ? protocolBadge.closest('div') : null;
                 if (protocolBadge) {
                     protocolBadge.textContent = protocolLabels[proto] || proto.toUpperCase();
+                }
+                if (protocolBadgeWrapper) {
+                    protocolBadgeWrapper.style.display = proto === 'loadcell' ? 'none' : '';
                 }
 
                 // Update address hint
                 const addressHint = document.getElementById('editDeviceAddressHint');
                 if (addressHint) {
-                    if (proto === 'vfd-tcp' || proto === 'ext-tcp') {
+                    if (proto === 'ext-tcp') {
                         addressHint.textContent = 'Address will be displayed as IP:Port in the table view';
-                    } else if (proto === 'vfd-rtu' || proto === 'ext-rtu') {
+                    } else if (proto === 'ext-rtu') {
                         addressHint.textContent = 'Serial port selection determines the Address/ID display';
                     } else if (proto === 'loadcell') {
                         addressHint.textContent = 'Channel selection determines the Address/ID display';
@@ -1862,7 +1929,7 @@
     
     function showDuplicateConfirmation(duplicates, newDevicesCount) {
         return new Promise((resolve) => {
-            const duplicateNames = duplicates.map(d => `� ${d.name} (${d.type})`).slice(0, 10).join('\n');
+            const duplicateNames = duplicates.map(d => `• ${d.name} (${d.type})`).slice(0, 10).join('\n');
             const moreText = duplicates.length > 10 ? `\n... and ${duplicates.length - 10} more` : '';
             
             const message = `Found ${duplicates.length} duplicate device(s) with the same name:\n\n${duplicateNames}${moreText}\n\n${newDevicesCount} new device(s) will be imported.\n\nHow would you like to proceed?`;

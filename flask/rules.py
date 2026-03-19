@@ -1,5 +1,16 @@
 # -*- coding: utf-8 -*-
 # rules.py - Rules Engine API
+#
+# UI REMOVED: The rules page (rules.html) is no longer used.
+# All config is built purely from the database.
+#
+# LOADCELL AUTO-DISCOVERY:
+#   The loadcell section of core_config is built automatically at runtime
+#   by reading the first enabled row from loadcell_device.
+#   - datapoint_name      <- loadcell_device.name  (e.g. "load_weight")
+#   - unit_datapoint_name <- loadcell_device.name + "_unit" (e.g. "load_unit")
+#   No UI config is needed for this. The background job fires every time
+#   rules are triggered (Apply Rules button, or startup auto-send).
 
 import json
 import os
@@ -71,8 +82,6 @@ async def rules_save_handler(request):
         conn = get_db()
         cur  = conn.cursor()
 
-        # Use SELECT + UPDATE/INSERT instead of ON CONFLICT(...) DO UPDATE,
-        # which requires SQLite >= 3.24 (not available in Python 3.5 environments).
         rule_id     = rule['id']
         name        = rule.get('name', '')
         rule_type   = rule.get('ruleType', 'group')
@@ -104,7 +113,6 @@ async def rules_save_handler(request):
         conn.commit()
         conn.close()
 
-        # Save only -- pipeline is triggered separately via Trigger JSON Pipeline button
         return web.json_response({'success': True})
 
     except Exception as e:
@@ -131,12 +139,7 @@ async def rules_delete_handler(request):
 # POST /api/rules/pipeline/trigger
 #
 # Reads ALL enabled rules from DB, builds a single combined core_config JSON
-# matching ilx_craneiq_core-config.json exactly, then sends a SEPARATE
-# datapoint_update call per service section:
-#
-#   datapoint_update(core_svc, "modbus",           json(modbus_section))
-#   datapoint_update(core_svc, "loadcell",         json(loadcell_section))
-#   datapoint_update(core_svc, "emergency_output", json(emergency_section))  <- if any
+# and sends it to the core pipeline service.
 # ---------------------------------------------------------------------------
 async def rules_pipeline_trigger_handler(request):
     try:
@@ -167,10 +170,55 @@ def _collect_all_enabled_rules():
     return rows
 
 
+def _get_loadcell_datapoint_names():
+    """
+    Auto-discover loadcell datapoint names from the first enabled
+    loadcell_device row.
+
+    Returns (datapoint_name, unit_datapoint_name):
+      - datapoint_name:       the device's pipeline-facing name
+                              (e.g. "load_weight")
+      - unit_datapoint_name:  device name + "_unit"
+                              (e.g. "load_unit")
+
+    These values are derived entirely from the DB -- no UI config required.
+    If no device is found, safe defaults ("load_weight", "load_unit") are used.
+    """
+    try:
+        conn = get_db()
+        cur  = conn.cursor()
+        # load_name is the operator-facing label stored in loadcell_device;
+        # fall back to the device name itself if load_name is blank.
+        cur.execute('''
+            SELECT
+                COALESCE(NULLIF(TRIM(load_name), ''), name) AS dp_name,
+                COALESCE(NULLIF(TRIM(capacity_name), ''), name || '_unit') AS unit_name
+            FROM loadcell_device
+            WHERE enabled = 1
+            ORDER BY created_at ASC
+            LIMIT 1
+        ''')
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            dp_name   = row['dp_name']   or 'load_weight'
+            unit_name = row['unit_name'] or 'load_unit'
+            print('[RULES] loadcell auto-discovery: datapoint_name="{}" unit_datapoint_name="{}"'.format(
+                dp_name, unit_name))
+            return dp_name, unit_name
+    except Exception as e:
+        print('[RULES] loadcell auto-discovery error: {} -- using defaults'.format(e))
+    return 'load_weight', 'load_unit'
+
+
 def _build_combined_core_config(rules):
     """
     Build the full core_config dict from all enabled rules.
-    Matches ilx_craneiq_core-config.json exactly:
+
+    The loadcell section is built AUTOMATICALLY from the loadcell_device DB --
+    no UI input is needed for datapoint_name or unit_datapoint_name.
+
+    Resulting shape matches ilx_craneiq_core-config.json exactly:
 
     {
       "service_name": "ilx_craneiq_core",
@@ -178,19 +226,15 @@ def _build_combined_core_config(rules):
       "services": {
         "modbus": {
           "service_name": "modbus_service",
-          "groups": [
-            { "datapoint": "hoist_group", "name": "hoist_group", "members": ["hoist_up","hoist_down"] },
-            { "datapoint": "ct_group",    "name": "ct_group",    "members": ["ct_left","ct_right"] },
-            { "datapoint": "lt_group",    "name": "lt_group",    "members": ["lt_forward","lt_backward"] }
-          ]
+          "groups": [...]
         },
         "loadcell": {
-          "service_name": "load_cell_service",
-          "datapoint_name": "load_weight",
-          "unit_datapoint_name": "load_unit"
+          "service_name":        "load_cell_service",
+          "datapoint_name":      <auto from DB>,
+          "unit_datapoint_name": <auto from DB>
         },
-        "emergency_output": {          <- only if an emergency rule exists
-          "service_name": "gpio_service",
+        "emergency_output": {     <- only if an emergency rule exists
+          "service_name":   "gpio_service",
           "datapoint_name": "relay2"
         }
       },
@@ -198,46 +242,16 @@ def _build_combined_core_config(rules):
     }
     """
 
-    # -- Modbus groups: merge hoist/ct/lt across all group rules ----------
-    # Each alias maps to one group entry; members merged if multiple rules use same alias.
-    merged = {}  # dp_name -> { datapoint, name, members: [] }
+    # -- Modbus groups: static from ilx_craneiq_core-config.json ----------
+    # These are fixed hardware groups and do not change based on rules.
+    modbus_groups = [
+        {"datapoint": "hoist_group", "name": "hoist_up",  "members": ["hoist_up", "hoist_down"]},
+        {"datapoint": "ct_group",    "name": "ct_group",   "members": ["ct_left", "ct_right"]},
+        {"datapoint": "lt_group",    "name": "lt_group",   "members": ["lt_forward", "lt_backward"]},
+    ]
 
-    for rule in rules:
-        if rule.get('rule_type') != 'group':
-            continue
-        for alias, gdata in rule.get('groups', {}).items():
-            if not gdata.get('enabled', True):
-                continue
-            members = gdata.get('datapoints', [])
-            if not members:
-                continue
-            # Build datapoint name matching sample: "hoist_group", "ct_group", "lt_group"
-            dp_name = alias if alias.endswith('_group') else alias + '_group'
-            if dp_name not in merged:
-                merged[dp_name] = {
-                    'datapoint': dp_name,
-                    'name':      dp_name,
-                    'members':   [],
-                }
-            for m in members:
-                if m not in merged[dp_name]['members']:
-                    merged[dp_name]['members'].append(m)
-
-    modbus_groups = list(merged.values())
-
-    # -- Loadcell datapoint names from loadcell_device DB -----------------
-    lc_datapoint_name      = 'load_weight'
-    lc_unit_datapoint_name = 'load_unit'
-    try:
-        conn = get_db()
-        cur  = conn.cursor()
-        cur.execute('SELECT name FROM loadcell_device WHERE enabled=1 ORDER BY id LIMIT 1')
-        row = cur.fetchone()
-        if row:
-            lc_datapoint_name = row['name']
-        conn.close()
-    except Exception:
-        pass
+    # -- Loadcell: fully automatic from DB, no UI config required ---------
+    lc_datapoint_name, lc_unit_datapoint_name = _get_loadcell_datapoint_names()
 
     # -- Emergency output from first enabled emergency rule ----------------
     emergency_output = None
@@ -284,10 +298,16 @@ def _build_combined_core_config(rules):
 
 async def _build_and_send_core_config():
     """
-    Build combined core_config, save to disk + DB, then send a separate
-    datapoint_update per service section (modbus, loadcell, emergency_output).
+    Build combined core_config from DB, persist it, then send via pipeline.
+
+    This is the single entry-point used by:
+      - POST /api/rules/pipeline/trigger  (Apply Rules button)
+      - pipeline auto-send on startup
     """
     from pipeline import pipeline_state, get_pipeline_service_name
+    from pipeline import Config, get_pipeline_config_name
+    from pipeline import record_pipeline_send_success, record_pipeline_send_failure
+    from pipeline import get_next_pipeline_version
 
     rules       = _collect_all_enabled_rules()
     core_config = _build_combined_core_config(rules)
@@ -295,18 +315,24 @@ async def _build_and_send_core_config():
 
     print('\n' + '='*60)
     print('[CORE-CFG] Trigger -- {} enabled rule(s)'.format(len(rules)))
+    print('[CORE-CFG] loadcell: datapoint_name="{}"  unit_datapoint_name="{}"'.format(
+        core_config['services']['loadcell']['datapoint_name'],
+        core_config['services']['loadcell']['unit_datapoint_name'],
+    ))
     print('='*60)
-    print(config_json)
 
-    # -- Save to disk ------------------------------------------------------
+    # -- Persist to disk ---------------------------------------------------
     config_dir  = 'core_configs'
     os.makedirs(config_dir, exist_ok=True)
     ts          = datetime.now().strftime('%Y%m%d_%H%M%S')
     ts_file     = os.path.join(config_dir, 'core_config_{}.json'.format(ts))
     latest_file = os.path.join(config_dir, 'core_config_latest.json')
     for path in (ts_file, latest_file):
-        with open(path, 'w') as fh:
-            fh.write(config_json)
+        try:
+            with open(path, 'w') as fh:
+                fh.write(config_json)
+        except Exception as write_e:
+            print('[CORE-CFG] File write warning ({}): {}'.format(path, write_e))
     print('[CORE-CFG] Saved: {}'.format(ts_file))
 
     # -- Persist to core_configs DB table ----------------------------------
@@ -332,7 +358,7 @@ async def _build_and_send_core_config():
     except Exception as db_e:
         print('[CORE-CFG] DB persist warning: {}'.format(db_e))
 
-    # -- Pipeline send -- one datapoint_update per service section ----------
+    # -- Pipeline send -----------------------------------------------------
     core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
 
     with pipeline_state['lock']:
@@ -341,7 +367,7 @@ async def _build_and_send_core_config():
         services  = set(pipeline_state.get('connected_services', set()))
 
     if not (connected and client and core_svc in services):
-        # Queue as pending -- pipeline.py SERVICE_ADDED will dispatch on reconnect
+        # Queue as pending -- pipeline.py SERVICE_ADDED will dispatch when ready
         with pipeline_state['lock']:
             pipeline_state['core_config_pending'] = config_json
         print('[CORE-CFG] Not connected -- queued as pending for "{}"'.format(core_svc))
@@ -353,11 +379,8 @@ async def _build_and_send_core_config():
             'file_saved':  ts_file,
         }
 
-    # Send the full config as a single publish_config call
-    from pipeline import get_pipeline_config_name, record_pipeline_send_success, record_pipeline_send_failure, get_next_pipeline_version
-    from pipeline import Config
-
     new_version = get_next_pipeline_version('core')
+    ok = False
     try:
         ok = client.publish_config(Config(
             name    = get_pipeline_config_name('core'),
@@ -371,17 +394,18 @@ async def _build_and_send_core_config():
             with pipeline_state['lock']:
                 pipeline_state['core_config']         = config_json
                 pipeline_state['core_config_pending'] = None
+                pipeline_state['core_config_version'] = new_version
             print('[CORE-CFG] publish_config -> {} (v{}) OK'.format(core_svc, new_version))
         else:
             record_pipeline_send_failure('core', 'publish_config returned False')
             with pipeline_state['lock']:
                 pipeline_state['core_config_pending'] = config_json
-            print('[CORE-CFG] publish_config -> {} FAILED -- queued as pending'.format(core_svc))
+            print('[CORE-CFG] publish_config FAILED -- queued as pending')
     except Exception as e:
         print('[CORE-CFG] publish_config error: {}'.format(e))
+        record_pipeline_send_failure('core', str(e))
         with pipeline_state['lock']:
             pipeline_state['core_config_pending'] = config_json
-        ok = False
 
     return {
         'sent':        ok,

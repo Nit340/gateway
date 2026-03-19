@@ -425,19 +425,17 @@
                         <input type="radio" name="network-mode" value="lte" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                         <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
                     </label>
-              
+
                     <!-- Auto-Connect toggle -->
                     <button type="button" id="wifi-auto-connect-btn"
                         title="Auto Connect"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 text-slate-500 bg-white hover:bg-slate-50 transition-all"
+                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 text-slate-500 bg-white hover:bg-slate-50 transition-all"
                         aria-pressed="false">
-                        <!-- Track -->
                         <span id="ac-track"
                             style="display:inline-flex;align-items:center;width:28px;height:16px;border-radius:9999px;padding:2px;background:#cbd5e1;transition:background .25s;flex-shrink:0;">
                             <span id="ac-thumb"
                                 style="width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .25s;transform:translateX(0px);display:block;"></span>
                         </span>
-                        <i class="fa-solid fa-plug-circle-bolt text-xs"></i>
                         <span id="ac-label">Auto</span>
                     </button>
                 </div>
@@ -510,9 +508,9 @@
                                 <span id="wifi-ssid-label" class="truncate text-slate-800"></span>
                             </div>
                             <button type="button" id="wifi-scan-btn"
-                                class="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-primary text-primary bg-white hover:bg-blue-50 transition-colors whitespace-nowrap">
-                                <i class="fa-solid fa-rotate text-xs" id="wifi-scan-icon"></i>
-                                <span id="wifi-scan-label">Select Network</span>
+                                title="Select Network"
+                                class="flex items-center justify-center w-10 h-9 rounded-lg border border-primary text-primary bg-white hover:bg-blue-50 transition-colors flex-shrink-0">
+                                <i class="fa-solid fa-rotate text-sm" id="wifi-scan-icon"></i>
                             </button>
                         </div>
                         <input type="hidden" name="wifi-ssid" id="wifi-ssid-value" value="Univa-Guest">
