@@ -693,7 +693,7 @@ async def api_webui_sessions_get(request):
     result = []
     for s in sessions:
         u = user_rows.get(s['username'], {})
-        result.append({**s, 'user_id': u.get('id'), 'display_name': u.get('display_name', s['username']), 'role': u.get('role', 'user'), 'max_sessions': u.get('max_sessions', 1)})
+        result.append(dict(s, **{'user_id': u.get('id'), 'display_name': u.get('display_name', s['username']), 'role': u.get('role', 'user'), 'max_sessions': u.get('max_sessions', 1)}))
     return web.json_response({'sessions': result})
 
 
@@ -731,6 +731,202 @@ async def api_webui_user_max_sessions_put(request):
     if ok:
         return web.json_response({'success': True, 'max_sessions': max_s})
     return web.json_response({'success': False, 'error': 'Failed to update'}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# Core Config JSON Upload API
+# ---------------------------------------------------------------------------
+async def api_core_config_upload(request):
+    """POST /api/pipeline/core-config/upload
+    Upload and save core config JSON, optionally send to pipeline.
+    """
+    _require_admin(request)
+    try:
+        body = await request.json()
+        config_json = body.get('config_json', '')
+        send_to_pipeline = body.get('send_to_pipeline', True)
+        
+        if not config_json:
+            return web.json_response({'success': False, 'error': 'Missing config_json'}, status=400)
+        
+        # Validate JSON
+        try:
+            config = json.loads(config_json)
+        except json.JSONDecodeError as e:
+            return web.json_response({'success': False, 'error': 'Invalid JSON: {}'.format(e)}, status=400)
+        
+        # Basic validation
+        if 'service_name' not in config and 'services' not in config:
+            return web.json_response({
+                'success': False, 
+                'error': 'Config must have service_name or services section'
+            }, status=400)
+        
+        # Save to core_configs table
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Ensure table exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                version      INTEGER NOT NULL DEFAULT 1,
+                device_names TEXT,
+                service_name TEXT,
+                config_json  TEXT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Extract device names from config if possible
+        device_names = []
+        if 'services' in config:
+            for svc_name, svc_config in config['services'].items():
+                if svc_name == 'modbus' and 'groups' in svc_config:
+                    for group in svc_config['groups']:
+                        if 'members' in group:
+                            device_names.extend(group['members'])
+        
+        # Get next version
+        cursor.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
+        next_version = cursor.fetchone()[0] + 1
+        
+        service_name = config.get('service_name', 'ilx_craneiq_core')
+        
+        cursor.execute(
+            'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
+            (next_version, json.dumps(device_names), service_name, config_json)
+        )
+        conn.commit()
+        conn.close()
+        
+        print("[CORE-CFG] Uploaded config v{} from JSON".format(next_version))
+        
+        # Optionally send to pipeline
+        sent = False
+        queued = False
+        if send_to_pipeline:
+            try:
+                from pipeline import pipeline_state, get_pipeline_service_name, get_pipeline_config_name
+                from pipeline import record_pipeline_send_success, record_pipeline_send_failure
+                from pipeline import get_next_pipeline_version as get_ver
+                from pipeline import Config
+                
+                core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
+                cfg_name = get_pipeline_config_name('core')
+                
+                with pipeline_state.get('lock', None):
+                    # If we can't get lock, try without it
+                    client = pipeline_state.get('client')
+                    connected = pipeline_state.get('connected', False)
+                    services = set(pipeline_state.get('connected_services', set()))
+                
+                if connected and client and core_svc in services:
+                    new_version = get_ver('core')
+                    ok = client.publish_config(Config(
+                        name=cfg_name,
+                        value=config_json,
+                        version=new_version,
+                        service=core_svc,
+                    ))
+                    if ok:
+                        record_pipeline_send_success('core', new_version, core_svc, 
+                                                     'Uploaded JSON v{}'.format(next_version))
+                        sent = True
+                    else:
+                        record_pipeline_send_failure('core', 'publish_config returned False')
+                        queued = True
+                else:
+                    # Queue for later
+                    with pipeline_state['lock']:
+                        pipeline_state['core_config_pending'] = config_json
+                    queued = True
+                    print('[CORE-CFG] Not connected -- queued for "{}"'.format(core_svc))
+            except Exception as e:
+                print('[CORE-CFG] Upload send error: {}'.format(e))
+                record_pipeline_send_failure('core', str(e))
+                queued = True
+        
+        return web.json_response({
+            'success': True,
+            'sent': sent,
+            'queued': queued,
+            'version': next_version,
+            'message': 'Config saved to DB' + 
+                       (' and sent to pipeline' if sent else 
+                        (' and queued for pipeline' if queued else ''))
+        })
+        
+    except Exception as e:
+        print('[CORE-CFG] Upload error: {}'.format(e))
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_core_configs_list(request):
+    """GET /api/pipeline/core-configs -- list all saved core configs"""
+    _require_admin(request)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, version, device_names, service_name, config_json, created_at
+            FROM core_configs
+            ORDER BY version DESC
+        ''')
+        
+        configs = []
+        for row in cursor.fetchall():
+            configs.append({
+                'id': row[0],
+                'version': row[1],
+                'device_names': json.loads(row[2]) if row[2] else [],
+                'service_name': row[3],
+                'config': json.loads(row[4]) if row[4] else {},
+                'created_at': row[5]
+            })
+        
+        conn.close()
+        return web.json_response({'success': True, 'configs': configs})
+        
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+async def api_core_config_latest(request):
+    """GET /api/pipeline/core-config/latest -- get the latest core config"""
+    _require_admin(request)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, version, device_names, service_name, config_json, created_at
+            FROM core_configs
+            ORDER BY version DESC
+            LIMIT 1
+        ''')
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return web.json_response({
+                'success': True,
+                'config': {
+                    'id': row[0],
+                    'version': row[1],
+                    'device_names': json.loads(row[2]) if row[2] else [],
+                    'service_name': row[3],
+                    'config': json.loads(row[4]) if row[4] else {},
+                    'created_at': row[5]
+                }
+            })
+        else:
+            return web.json_response({'success': True, 'config': None})
+        
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
 def create_app():
@@ -802,6 +998,7 @@ def create_app():
     app.router.add_post('/api/auth/logout', webui_logout_api)
     app.router.add_get('/api/auth/status', webui_session_status)
     app.router.add_get('/api/auth/session-role', webui_session_role)
+    
     # Patch register_auth_routes: temporarily wrap add_route/add_get/add_post
     # so duplicate registrations from auth.py are silently skipped
     _owned = {'/api/auth/login', '/api/auth/logout', '/api/auth/status', '/api/auth/session-role'}
@@ -857,6 +1054,11 @@ def create_app():
     app.router.add_get('/api/devices/{device_id}/datapoints', get_device_datapoints)
 
     register_pipeline_routes(app)
+
+    # Core Config JSON Upload endpoints
+    app.router.add_post('/api/pipeline/core-config/upload', api_core_config_upload)
+    app.router.add_get('/api/pipeline/core-configs', api_core_configs_list)
+    app.router.add_get('/api/pipeline/core-config/latest', api_core_config_latest)
 
     async def db_redirect(request):
         raise web.HTTPFound('/admin/database')

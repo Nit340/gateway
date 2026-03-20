@@ -11,13 +11,17 @@
 #   - unit_datapoint_name <- loadcell_device.name + "_unit" (e.g. "load_unit")
 #   No UI config is needed for this. The background job fires every time
 #   rules are triggered (Apply Rules button, or startup auto-send).
+#
+# CORE CONFIG PERSISTENCE:
+#   Every core config (auto-generated or manually uploaded) is saved to
+#   core_configs table with version tracking.
 
 import json
 import os
 import sqlite3
 from datetime import datetime
 from aiohttp import web
-from database import DB_FILE
+from database import DB_FILE, get_db_connection
 
 
 def get_db():
@@ -32,12 +36,12 @@ def get_db():
 async def rules_tags_handler(request):
     try:
         conn = get_db()
-        cur  = conn.cursor()
+        cur = conn.cursor()
         cur.execute('''
             SELECT dp.name,
                    COALESCE(d.name, dp.device_id) AS device_name
-            FROM vfd_datapoints dp
-            LEFT JOIN vfd_device d ON d.id = dp.device_id
+            FROM external_datapoints dp
+            LEFT JOIN external_device d ON d.id = dp.device_id
             WHERE dp.enabled=1 ORDER BY dp.name
         ''')
         tags = [{'name': r['name'], 'device_name': r['device_name']} for r in cur.fetchall()]
@@ -53,7 +57,7 @@ async def rules_tags_handler(request):
 async def rules_list_handler(request):
     try:
         conn = get_db()
-        cur  = conn.cursor()
+        cur = conn.cursor()
         cur.execute('SELECT * FROM rules ORDER BY created_at DESC')
         rows = []
         for row in cur.fetchall():
@@ -80,16 +84,16 @@ async def rules_save_handler(request):
             return web.json_response({'success': False, 'error': 'Missing rule'})
 
         conn = get_db()
-        cur  = conn.cursor()
+        cur = conn.cursor()
 
-        rule_id     = rule['id']
-        name        = rule.get('name', '')
-        rule_type   = rule.get('ruleType', 'group')
-        priority    = rule.get('priority', 'medium')
+        rule_id = rule['id']
+        name = rule.get('name', '')
+        rule_type = rule.get('ruleType', 'group')
+        priority = rule.get('priority', 'medium')
         description = rule.get('description', '')
-        enabled     = 1 if rule.get('enabled', True) else 0
+        enabled = 1 if rule.get('enabled', True) else 0
         groups_json = json.dumps(rule.get('groups', {}))
-        relay_dp    = rule.get('relayDatapoint', '')
+        relay_dp = rule.get('relayDatapoint', '')
 
         cur.execute('SELECT id FROM rules WHERE id=?', (rule_id,))
         if cur.fetchone():
@@ -126,7 +130,7 @@ async def rules_delete_handler(request):
     rule_id = request.match_info.get('rule_id')
     try:
         conn = get_db()
-        cur  = conn.cursor()
+        cur = conn.cursor()
         cur.execute('DELETE FROM rules WHERE id=?', (rule_id,))
         conn.commit()
         conn.close()
@@ -150,13 +154,218 @@ async def rules_pipeline_trigger_handler(request):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/rules/core-config/upload
+#
+# Upload and save core config JSON, optionally send to pipeline.
+# ---------------------------------------------------------------------------
+async def core_config_upload_handler(request):
+    """POST /api/rules/core-config/upload
+    Upload and save core config JSON, optionally send to pipeline.
+    """
+    try:
+        body = await request.json()
+        config_json = body.get('config_json', '')
+        send_to_pipeline = body.get('send_to_pipeline', True)
+        
+        if not config_json:
+            return web.json_response({'success': False, 'error': 'Missing config_json'}, status=400)
+        
+        # Validate JSON
+        try:
+            config = json.loads(config_json)
+        except json.JSONDecodeError as e:
+            return web.json_response({'success': False, 'error': 'Invalid JSON: {}'.format(e)}, status=400)
+        
+        # Basic validation
+        if 'service_name' not in config and 'services' not in config:
+            return web.json_response({
+                'success': False, 
+                'error': 'Config must have service_name or services section'
+            }, status=400)
+        
+        # Save to core_configs table
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        # Ensure table exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                version      INTEGER NOT NULL DEFAULT 1,
+                device_names TEXT,
+                service_name TEXT,
+                config_json  TEXT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Extract device names from config if possible
+        device_names = []
+        if 'services' in config:
+            for svc_name, svc_config in config['services'].items():
+                if svc_name == 'modbus' and 'groups' in svc_config:
+                    for group in svc_config['groups']:
+                        if 'members' in group:
+                            device_names.extend(group['members'])
+        
+        # Get next version
+        cursor.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
+        next_version = cursor.fetchone()[0] + 1
+        
+        service_name = config.get('service_name', 'ilx_craneiq_core')
+        
+        cursor.execute(
+            'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
+            (next_version, json.dumps(device_names), service_name, config_json)
+        )
+        conn.commit()
+        conn.close()
+        
+        print("[CORE-CFG] Uploaded config v{} from JSON".format(next_version))
+        
+        # Optionally send to pipeline
+        sent = False
+        queued = False
+        if send_to_pipeline:
+            try:
+                from pipeline import pipeline_state, get_pipeline_service_name, get_pipeline_config_name
+                from pipeline import record_pipeline_send_success, record_pipeline_send_failure
+                from pipeline import get_next_pipeline_version as get_ver
+                from pipeline import Config
+                
+                core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
+                cfg_name = get_pipeline_config_name('core')
+                
+                with pipeline_state.get('lock', None):
+                    # If we can't get lock, try without it
+                    client = pipeline_state.get('client')
+                    connected = pipeline_state.get('connected', False)
+                    services = set(pipeline_state.get('connected_services', set()))
+                
+                if connected and client and core_svc in services:
+                    new_version = get_ver('core')
+                    ok = client.publish_config(Config(
+                        name=cfg_name,
+                        value=config_json,
+                        version=new_version,
+                        service=core_svc,
+                    ))
+                    if ok:
+                        record_pipeline_send_success('core', new_version, core_svc, 
+                                                     'Uploaded JSON v{}'.format(next_version))
+                        sent = True
+                    else:
+                        record_pipeline_send_failure('core', 'publish_config returned False')
+                        queued = True
+                else:
+                    # Queue for later
+                    with pipeline_state['lock']:
+                        pipeline_state['core_config_pending'] = config_json
+                    queued = True
+                    print('[CORE-CFG] Not connected -- queued for "{}"'.format(core_svc))
+            except Exception as e:
+                print('[CORE-CFG] Upload send error: {}'.format(e))
+                record_pipeline_send_failure('core', str(e))
+                queued = True
+        
+        return web.json_response({
+            'success': True,
+            'sent': sent,
+            'queued': queued,
+            'version': next_version,
+            'message': 'Config saved to DB' + 
+                       (' and sent to pipeline' if sent else 
+                        (' and queued for pipeline' if queued else ''))
+        })
+        
+    except Exception as e:
+        print('[CORE-CFG] Upload error: {}'.format(e))
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/rules/core-configs
+#
+# List all saved core configs
+# ---------------------------------------------------------------------------
+async def core_configs_list_handler(request):
+    """GET /api/rules/core-configs - List all saved core configs"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, version, device_names, service_name, config_json, created_at
+            FROM core_configs
+            ORDER BY version DESC
+        ''')
+        
+        configs = []
+        for row in cursor.fetchall():
+            configs.append({
+                'id': row[0],
+                'version': row[1],
+                'device_names': json.loads(row[2]) if row[2] else [],
+                'service_name': row[3],
+                'config': json.loads(row[4]) if row[4] else {},
+                'created_at': row[5]
+            })
+        
+        conn.close()
+        return web.json_response({'success': True, 'configs': configs})
+        
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/rules/core-config/latest
+#
+# Get the latest core config
+# ---------------------------------------------------------------------------
+async def core_config_latest_handler(request):
+    """GET /api/rules/core-config/latest - Get the latest core config"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, version, device_names, service_name, config_json, created_at
+            FROM core_configs
+            ORDER BY version DESC
+            LIMIT 1
+        ''')
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return web.json_response({
+                'success': True,
+                'config': {
+                    'id': row[0],
+                    'version': row[1],
+                    'device_names': json.loads(row[2]) if row[2] else [],
+                    'service_name': row[3],
+                    'config': json.loads(row[4]) if row[4] else {},
+                    'created_at': row[5]
+                }
+            })
+        else:
+            return web.json_response({'success': True, 'config': None})
+        
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 def _collect_all_enabled_rules():
     """Return all enabled rules from DB as list of dicts."""
     conn = get_db()
-    cur  = conn.cursor()
+    cur = conn.cursor()
     cur.execute("SELECT * FROM rules WHERE enabled=1 ORDER BY created_at ASC")
     rows = []
     for row in cur.fetchall():
@@ -186,7 +395,7 @@ def _get_loadcell_datapoint_names():
     """
     try:
         conn = get_db()
-        cur  = conn.cursor()
+        cur = conn.cursor()
         # load_name is the operator-facing label stored in loadcell_device;
         # fall back to the device name itself if load_name is blank.
         cur.execute('''
@@ -201,7 +410,7 @@ def _get_loadcell_datapoint_names():
         row = cur.fetchone()
         conn.close()
         if row:
-            dp_name   = row['dp_name']   or 'load_weight'
+            dp_name = row['dp_name'] or 'load_weight'
             unit_name = row['unit_name'] or 'load_unit'
             print('[RULES] loadcell auto-discovery: datapoint_name="{}" unit_datapoint_name="{}"'.format(
                 dp_name, unit_name))
@@ -296,6 +505,50 @@ def _build_combined_core_config(rules):
     return core_config
 
 
+def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_craneiq_core'):
+    """
+    Save core config to database with version tracking.
+    Returns the version number.
+    """
+    conn = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        
+        # Ensure table exists
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                version      INTEGER NOT NULL DEFAULT 1,
+                device_names TEXT,
+                service_name TEXT,
+                config_json  TEXT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Get next version
+        cur.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
+        next_version = cur.fetchone()[0] + 1
+        
+        device_names_json = json.dumps(device_names) if device_names else '[]'
+        
+        cur.execute(
+            'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
+            (next_version, device_names_json, service_name, config_json)
+        )
+        conn.commit()
+        print('[CORE-CFG] Saved to DB v{}'.format(next_version))
+        return next_version
+        
+    except Exception as db_e:
+        print('[CORE-CFG] DB persist warning: {}'.format(db_e))
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
 async def _build_and_send_core_config():
     """
     Build combined core_config from DB, persist it, then send via pipeline.
@@ -309,7 +562,7 @@ async def _build_and_send_core_config():
     from pipeline import record_pipeline_send_success, record_pipeline_send_failure
     from pipeline import get_next_pipeline_version
 
-    rules       = _collect_all_enabled_rules()
+    rules = _collect_all_enabled_rules()
     core_config = _build_combined_core_config(rules)
     config_json = json.dumps(core_config, indent=2)
 
@@ -321,11 +574,23 @@ async def _build_and_send_core_config():
     ))
     print('='*60)
 
-    # -- Persist to disk ---------------------------------------------------
-    config_dir  = 'core_configs'
+    # -- Extract device names for DB storage --
+    device_names = []
+    if 'services' in core_config:
+        for svc_name, svc_config in core_config['services'].items():
+            if svc_name == 'modbus' and 'groups' in svc_config:
+                for group in svc_config['groups']:
+                    if 'members' in group:
+                        device_names.extend(group['members'])
+
+    # -- Persist to core_configs DB table (ALWAYS do this) --
+    db_version = _save_core_config_to_db(config_json, device_names, core_config.get('service_name', 'ilx_craneiq_core'))
+    
+    # -- Persist to disk (backup) --
+    config_dir = 'core_configs'
     os.makedirs(config_dir, exist_ok=True)
-    ts          = datetime.now().strftime('%Y%m%d_%H%M%S')
-    ts_file     = os.path.join(config_dir, 'core_config_{}.json'.format(ts))
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    ts_file = os.path.join(config_dir, 'core_config_{}.json'.format(ts))
     latest_file = os.path.join(config_dir, 'core_config_latest.json')
     for path in (ts_file, latest_file):
         try:
@@ -335,36 +600,13 @@ async def _build_and_send_core_config():
             print('[CORE-CFG] File write warning ({}): {}'.format(path, write_e))
     print('[CORE-CFG] Saved: {}'.format(ts_file))
 
-    # -- Persist to core_configs DB table ----------------------------------
-    try:
-        conn = get_db()
-        cur  = conn.cursor()
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS core_configs (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                version      INTEGER NOT NULL DEFAULT 1,
-                device_names TEXT,
-                service_name TEXT,
-                config_json  TEXT NOT NULL,
-                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        cur.execute(
-            'INSERT INTO core_configs (version, service_name, config_json) VALUES (?,?,?)',
-            (1, 'ilx_craneiq_core', config_json)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as db_e:
-        print('[CORE-CFG] DB persist warning: {}'.format(db_e))
-
-    # -- Pipeline send -----------------------------------------------------
+    # -- Pipeline send --
     core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
 
     with pipeline_state['lock']:
-        client    = pipeline_state.get('client')
+        client = pipeline_state.get('client')
         connected = pipeline_state.get('connected', False)
-        services  = set(pipeline_state.get('connected_services', set()))
+        services = set(pipeline_state.get('connected_services', set()))
 
     if not (connected and client and core_svc in services):
         # Queue as pending -- pipeline.py SERVICE_ADDED will dispatch when ready
@@ -373,10 +615,12 @@ async def _build_and_send_core_config():
         print('[CORE-CFG] Not connected -- queued as pending for "{}"'.format(core_svc))
         return {
             'sent':        False,
+            'queued':      True,
             'pending':     True,
             'service':     core_svc,
             'rules_count': len(rules),
             'file_saved':  ts_file,
+            'db_version':  db_version,
         }
 
     new_version = get_next_pipeline_version('core')
@@ -409,9 +653,11 @@ async def _build_and_send_core_config():
 
     return {
         'sent':        ok,
+        'queued':      not ok,
         'service':     core_svc,
         'rules_count': len(rules),
         'file_saved':  ts_file,
+        'db_version':  db_version,
     }
 
 
@@ -424,4 +670,10 @@ def register_rules_routes(app):
     app.router.add_post  ('/api/rules/save',             rules_save_handler)
     app.router.add_delete('/api/rules/{rule_id}',        rules_delete_handler)
     app.router.add_post  ('/api/rules/pipeline/trigger', rules_pipeline_trigger_handler)
+    
+    # Core config JSON upload and management endpoints
+    app.router.add_post  ('/api/rules/core-config/upload', core_config_upload_handler)
+    app.router.add_get   ('/api/rules/core-configs',      core_configs_list_handler)
+    app.router.add_get   ('/api/rules/core-config/latest', core_config_latest_handler)
+    
     print('[Rules] Routes registered OK')

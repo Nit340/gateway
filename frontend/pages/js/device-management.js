@@ -1,4 +1,4 @@
-// device-management.js - Added new "Device Init" column
+// device-management.js - Full version with Loadcell limit enforcement and fixed import/export
 
 (function() {
     'use strict';
@@ -14,13 +14,12 @@
     }
 
     // ==================== STATE ====================
-    let userRole = 'user'; // 'admin' | 'user'  — fetched from /api/auth/session-role
+    let userRole = 'user';
     let devices = [];
     let selectedDeviceId = null;
     let isSaving = false;
     let currentViewingDeviceId = null;
     let currentViewingDevice = null;
-    // Port/path config loaded from backend (port_config table)
     let portConfig = { modbus: [], loadcell: [] };
     let eventListenersBoundToNode = null;
     let isRefreshing = false;
@@ -152,31 +151,6 @@
                 color: #166534;
             }
             
-            .type-vfd {
-                background-color: #E0F2FE;
-                color: #0369A1;
-            }
-            
-            .type-sensor {
-                background-color: #FCE7F3;
-                color: #9D174D;
-            }
-            
-            .type-meter {
-                background-color: #FEF9C3;
-                color: #854D0E;
-            }
-            
-            .type-plc {
-                background-color: #F3E8FF;
-                color: #6B21A8;
-            }
-            
-            .type-drive {
-                background-color: #FFE4E6;
-                color: #B91C1C;
-            }
-            
             .ext-protocol-config {
                 display: block;
             }
@@ -190,7 +164,6 @@
                 to { opacity: 1; }
             }
             
-            /* View Details specific styles */
             .device-details-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -240,13 +213,6 @@
             
             .config-table tr:last-child td {
                 border-bottom: none;
-            }
-            
-            /* Refresh button styles */
-            .refresh-btn-container {
-                display: flex;
-                align-items: center;
-                gap: 8px;
             }
             
             .refresh-btn {
@@ -311,7 +277,6 @@
             const res = await fetch('/api/auth/session-role', { credentials: 'same-origin' });
             if (res.ok) {
                 const data = await res.json();
-                // user_role is 'admin' or 'user'; fall back to window.__userRole set by layout
                 userRole = (data.user_role || data.role || window.__userRole || 'user').toLowerCase();
             }
         } catch (e) {
@@ -325,36 +290,12 @@
         return userRole === 'admin';
     }
 
-    /**
-     * Applies role-based access control to the Device Management page.
-     *
-     * Admin:
-     *   - All controls fully enabled (default state)
-     *   - ADC "Protected" fields are unlocked (read/write)
-     *   - "Add Device" button visible & clickable
-     *   - Edit / Delete actions in table and detail view visible
-     *
-     * Non-Admin (viewer/user):
-     *   - "Add Device" button hidden
-     *   - Edit / Delete buttons hidden in detail panel
-     *   - ADC "Protected" fields remain readonly (existing HTML behaviour)
-     *   - Table Edit/Delete action buttons hidden
-     */
     function applyRoleAccess() {
         const admin = isAdmin();
-
-        // ── ADC Protected fields (loadcell Add Device panel) ───
-        // Admin: unlocked/editable; Non-admin: readonly (locked)
         _setAdcFieldsEditable(admin);
     }
 
-    /**
-     * Unlock / lock the ADC "Protected" fields in the Add Device panel.
-     * When admin=true the fields become normal editable inputs.
-     * When admin=false they stay locked (readonly / disabled).
-     */
     function _setAdcFieldsEditable(admin) {
-        // IDs of protected ADC inputs in the Add Device panel
         const protectedInputs = ['lcResolutionBits', 'lcEffectiveBits', 'lcGain', 'lcVref', 'lcRawMin', 'lcRawMax'];
         const protectedSelects = ['lcSigned'];
 
@@ -383,7 +324,6 @@
             }
         });
 
-        // Update the "Protected" badge label for admins
         const protectedBadges = document.querySelectorAll('#addDevicePanel .fa-lock');
         protectedBadges.forEach(icon => {
             const badge = icon.closest('span');
@@ -400,10 +340,6 @@
         });
     }
 
-    /**
-     * Same as _setAdcFieldsEditable but targets the Edit Device panel.
-     * Called after the edit panel is populated with device data.
-     */
     function _setEditPanelAdcFieldsEditable(admin) {
         const editProtectedInputs = ['editLcResolutionBits', 'editLcEffectiveBits', 'editLcGain', 'editLcVref', 'editLcRawMin', 'editLcRawMax'];
         const editProtectedSelects = ['editLcSigned'];
@@ -433,7 +369,6 @@
             }
         });
 
-        // Update badges in edit panel
         const editBadges = document.querySelectorAll('#editDevicePanel .fa-lock, #editDeviceConfigFields .fa-lock');
         editBadges.forEach(icon => {
             const badge = icon.closest('span');
@@ -450,12 +385,13 @@
         });
     }
 
+    // ==================== LOAD PORT CONFIG ====================
     async function loadPortConfig() {
         try {
             const res = await fetch('/api/port-config');
             const data = await res.json();
             if (data.success && data.ports) {
-                portConfig.modbus   = data.ports.filter(p => p.device_type === 'modbus');
+                portConfig.modbus = data.ports.filter(p => p.device_type === 'modbus');
                 portConfig.loadcell = data.ports.filter(p => p.device_type === 'loadcell');
                 populatePortDropdowns();
             }
@@ -465,7 +401,6 @@
     }
 
     function populatePortDropdowns() {
-        // Modbus RTU serial port dropdown
         const serialPortEl = document.getElementById('serialPort');
         if (serialPortEl && portConfig.modbus.length) {
             serialPortEl.innerHTML = portConfig.modbus.map(p =>
@@ -473,7 +408,6 @@
             ).join('');
         }
 
-        // External RTU serial port dropdown
         const extSerialPortEl = document.getElementById('extSerialPort');
         if (extSerialPortEl && portConfig.modbus.length) {
             extSerialPortEl.innerHTML = portConfig.modbus.map(p =>
@@ -481,7 +415,6 @@
             ).join('');
         }
 
-        // Loadcell single-ended: single channel dropdown
         const devicePathEl = document.getElementById('devicePath');
         if (devicePathEl && portConfig.loadcell.length) {
             devicePathEl.innerHTML = portConfig.loadcell.map(p =>
@@ -547,18 +480,16 @@
     window.cleanupDeviceManagement = function() {
         eventListenersBoundToNode = null;
         if (_statusPollInterval) { clearInterval(_statusPollInterval); _statusPollInterval = null; }
-        console.log('? Device Management cleaned up');
+        console.log('Device Management cleaned up');
     };
 
     // ==================== SERVICE STATUS POLLING ====================
-    // In-memory store: { modbus: Date|null, loadcell: Date|null, virtual: Date|null }
     const lastConnectedAt = { modbus: null, loadcell: null, virtual: null };
     let _statusPollInterval = null;
 
     function startStatusPolling() {
         fetchAndApplyPipelineStatus();
         _statusPollInterval = setInterval(fetchAndApplyPipelineStatus, 5000);
-        // Refresh "X ago" text every 30s without re-fetching
         setInterval(applyStatusToTable, 30000);
     }
 
@@ -566,24 +497,16 @@
         try {
             const res = await fetch('/api/pipeline/status');
             const data = await res.json();
-            const prev = {
-                modbus:   !!pipelineStatus.modbus_service,
-                loadcell: !!pipelineStatus.loadcell_service,
-                virtual:  pipelineStatus.services.includes('network_status'),
-            };
             pipelineStatus = {
-                modbus_service:   data.modbus_service   || null,
+                modbus_service: data.modbus_service || null,
                 loadcell_service: data.loadcell_service || null,
-                services:         data.services         || [],
+                services: data.services || [],
             };
             const now = new Date();
-            // Record timestamp whenever a service comes Online (or stays Online)
-            if (pipelineStatus.modbus_service)                              lastConnectedAt.modbus   = now;
-            if (pipelineStatus.loadcell_service)                            lastConnectedAt.loadcell = now;
-            if (pipelineStatus.services.includes('network_status'))         lastConnectedAt.virtual  = now;
-        } catch (e) {
-            // keep last known state on error
-        }
+            if (pipelineStatus.modbus_service) lastConnectedAt.modbus = now;
+            if (pipelineStatus.loadcell_service) lastConnectedAt.loadcell = now;
+            if (pipelineStatus.services.includes('network_status')) lastConnectedAt.virtual = now;
+        } catch (e) {}
         applyStatusToTable();
     }
 
@@ -599,30 +522,6 @@
             return pipelineStatus.services.includes('network_status') ? 'Online' : 'Offline';
         }
         return 'Offline';
-    }
-
-    function getServiceGroup(device) {
-        const protocol = (device.protocol || '').toLowerCase();
-        if (protocol === 'ext-rtu' || protocol === 'ext-tcp')   return 'modbus';
-        if (protocol === 'loadcell')                        return 'loadcell';
-        if (protocol === 'virtual')                         return 'virtual';
-        return null;
-    }
-
-    function formatTimeAgo(date) {
-        if (!date) return null;
-        const secs = Math.floor((Date.now() - date.getTime()) / 1000);
-        if (secs < 5)   return 'just now';
-        if (secs < 60)  return `${secs}s ago`;
-        const mins = Math.floor(secs / 60);
-        if (mins < 60)  return `${mins}m ago`;
-        const hrs = Math.floor(mins / 60);
-        if (hrs  < 24)  return `${hrs}h ago`;
-        return `${Math.floor(hrs / 24)}d ago`;
-    }
-
-    function buildLastPollHtml(device) {
-        return '';
     }
 
     function buildStatusBadgeHtml(status) {
@@ -642,9 +541,10 @@
         devices.forEach(device => {
             const row = document.getElementById(`device-${device.id}`);
             if (!row) return;
-            const pollCell = row.querySelector('.device-poll-cell');
-            if (pollCell) {
-                pollCell.innerHTML = buildLastPollHtml(device);
+            const statusCell = row.querySelector('.device-status-cell');
+            if (statusCell) {
+                const status = getDeviceOnlineStatus(device);
+                statusCell.innerHTML = buildStatusBadgeHtml(status);
             }
         });
     }
@@ -670,7 +570,7 @@
         if (filteredDevices.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="10" class="px-6 py-8 text-center text-slate-500">
+                    <td colspan="9" class="px-6 py-8 text-center text-slate-500">
                         <i class="fa-solid fa-inbox text-3xl mb-2 block"></i>
                         <p>${searchTerm ? 'No devices match your search' : 'No devices found'}</p>
                     </td>
@@ -691,6 +591,8 @@
             const deviceInitType = getDeviceInitType(device);
             const protocolBadge = getProtocolBadge(device);
             const address = getDeviceAddress(device);
+            const status = getDeviceOnlineStatus(device);
+            const statusBadge = buildStatusBadgeHtml(status);
             
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -714,7 +616,9 @@
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-slate-700 font-mono text-xs" title="${getAddressTooltip(device)}">${escapeHtml(address)}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 device-poll-cell">&nbsp;</td>
+                <td class="px-6 py-4 whitespace-nowrap device-status-cell">
+                    ${statusBadge}
+                </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button class="text-green-600 hover:text-green-800 mr-3" onclick="window.deviceManagement.viewDeviceInline('${device.id}')" title="View Details">
                         <i class="fa-solid fa-eye"></i>
@@ -733,15 +637,11 @@
             
             tbody.appendChild(row);
         });
-
-        // Apply live service status to all rows immediately
-        applyStatusToTable();
     }
 
     function getDeviceInitType(device) {
         const protocol = (device.protocol || '').toLowerCase();
         
-        // For external devices, return the device_type from config
         if (protocol === 'ext-rtu' || protocol === 'ext-tcp') {
             if (device.config && device.config.device_type) {
                 return device.config.device_type.charAt(0).toUpperCase() + 
@@ -750,7 +650,6 @@
             return '—';
         }
         
-        // For loadcell devices, show Loadcell
         if (protocol === 'loadcell') {
             return 'Loadcell';
         }
@@ -767,7 +666,6 @@
             badgeClass += 'type-loadcell';
             typeText = 'Loadcell';
         } else if (protocol === 'ext-rtu' || protocol === 'ext-tcp') {
-            // For external devices, show "External" as the device type
             badgeClass += 'type-external';
             typeText = 'External';
         } else if (protocol === 'virtual') {
@@ -814,7 +712,7 @@
         } else if (protocol === 'loadcell') {
             const config = device.config || {};
             if (config.lc_mode === 'differential') {
-                return 'Differential Mode - Selected channel';
+                return 'Differential Mode - Fixed Channel 1';
             } else {
                 return 'Single Point Mode - Selected channel';
             }
@@ -827,13 +725,11 @@
             const config = device.config || {};
             const ip = config.ip_address || device.address || 'Not configured';
             const port = config.port || '502';
-            // Don't add port if it's already in the address
             if (ip.includes(':')) return ip;
             return `${ip}:${port}`;
         } else if (device.protocol === 'ext-rtu') {
             const config = device.config || {};
             const serialPort = config.serial_port || device.address || '/dev/ttymxc5';
-            // Get friendly port label from portConfig
             const entry = portConfig.modbus.find(p => p.port_value === serialPort);
             return entry ? entry.label : (serialPort === '/dev/ttymxc2' ? 'Port 2' : 'Port 1');
         } else if (device.protocol === 'loadcell') {
@@ -843,24 +739,16 @@
                 const entry = portConfig.loadcell.find(p => p.port_value === config.device_path);
                 return entry ? entry.label : 'Channel 1';
             } else {
-                // Differential: fixed Channel 1
                 return 'Channel 1';
             }
         }
         return device.address || 'Not configured';
     }
 
-    function getStatusBadge(device) {
-        const status = getDeviceOnlineStatus(device);
-        return buildStatusBadgeHtml(status);
-    }
-
     // ==================== VIEW DEVICE DETAILS ====================
     function renderDeviceDetails(device) {
         const contentDiv = document.getElementById('deviceDetailsContent');
         if (!contentDiv) return;
-        
-        console.log('Rendering device details:', device);
         
         const status = getDeviceOnlineStatus(device);
         const statusStyle = status === 'Online'
@@ -883,9 +771,7 @@
             };
         }
         
-        // Get the device init type for display
         const deviceInitType = getDeviceInitType(device);
-        
         const config = device.config || {};
         const isTCP = protocol === 'ext-tcp';
         const isRTU = protocol === 'ext-rtu';
@@ -909,7 +795,6 @@
                                 </div>
         `;
         
-        // Add device init type for external devices
         if ((isRTU || isTCP) && deviceInitType !== '—') {
             detailsHtml += `
                                 <div>
@@ -919,7 +804,6 @@
             `;
         }
         
-        // Add model name for external devices if available
         if ((isRTU || isTCP) && config.model_name) {
             detailsHtml += `
                                 <div>
@@ -1145,7 +1029,6 @@
         contentDiv.innerHTML = detailsHtml;
     }
 
-    // ==================== INLINE VIEW FUNCTIONS ====================
     function closeInlineView() {
         const section = document.getElementById('section-details');
         if (section) {
@@ -1159,35 +1042,7 @@
         }
     }
 
-    // ==================== DUPLICATE DEVICE FUNCTION ====================
-    async function duplicateDevice(deviceId) {
-        try {
-            console.log(`Duplicating device: ${deviceId}`);
-            
-            const response = await fetch(`/api/devices/${deviceId}/duplicate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                showNotification(result.message, 'success');
-                console.log(`Device duplicated: ${result.device_name} (ID: ${result.device_id})`);
-                
-                closeInlineView();
-                await refreshData();
-            } else {
-                showNotification('Failed to duplicate device: ' + (result.message || result.error), 'error');
-            }
-            
-        } catch (error) {
-            console.error('Error duplicating device:', error);
-            showNotification('Error duplicating device: ' + error.message, 'error');
-        }
-    }
-
-    // ==================== ADD/EDIT DEVICE ====================
+    // ==================== ADD DEVICE ====================
     function openAddDevicePanel() {
         selectedDeviceId = null;
         const panel = document.getElementById('addDevicePanel');
@@ -1198,7 +1053,6 @@
             document.getElementById('extDeviceTypeInit').value = '';
             document.getElementById('extModelName').value = '';
 
-            // Enforce max-2 for loadcell
             const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
 
             const lcRadio = panel.querySelector('input[name="device-type"][value="loadcell"]');
@@ -1208,30 +1062,32 @@
                 if (lcLabel) {
                     lcLabel.title = loadcellCount >= 2 ? 'Maximum 2 Loadcell devices allowed' : '';
                     lcLabel.style.opacity = loadcellCount >= 2 ? '0.45' : '';
-                    lcLabel.style.cursor  = loadcellCount >= 2 ? 'not-allowed' : '';
+                    lcLabel.style.cursor = loadcellCount >= 2 ? 'not-allowed' : '';
                 }
             }
 
-            // Reset loadcell mode to single_ended by default
+            const deviceTypeRadios = panel.querySelectorAll('input[name="device-type"]');
+            deviceTypeRadios.forEach(radio => {
+                radio.removeEventListener('change', handleDeviceTypeChangeWithLimit);
+                radio.addEventListener('change', handleDeviceTypeChangeWithLimit);
+            });
+
             const singleEndedRadio = panel.querySelector('input[name="lc-mode"][value="single_ended"]');
             if (singleEndedRadio) {
                 singleEndedRadio.checked = true;
                 handleLcModeChange();
             }
 
-            // Wire ext-protocol radios
             panel.querySelectorAll('input[name="ext-protocol"]').forEach(r => {
                 r.removeEventListener('change', handleExtProtocolChange);
                 r.addEventListener('change', handleExtProtocolChange);
             });
 
-            // Default to loadcell
             const lcDefaultRadio = panel.querySelector('input[name="device-type"][value="loadcell"]');
             if (lcDefaultRadio && !lcDefaultRadio.disabled) {
                 lcDefaultRadio.checked = true;
                 switchDeviceType('loadcell');
             } else {
-                // If loadcell is at max, default to external
                 const extRadio = panel.querySelector('input[name="device-type"][value="external"]');
                 if (extRadio) {
                     extRadio.checked = true;
@@ -1239,6 +1095,23 @@
                 }
             }
         }
+    }
+
+    function handleDeviceTypeChangeWithLimit(event) {
+        const selectedValue = event.target.value;
+        const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
+        
+        if (selectedValue === 'loadcell' && loadcellCount >= 2) {
+            showNotification('Maximum 2 Loadcell devices allowed. Please delete an existing one first.', 'warning');
+            const extRadio = document.querySelector('#addDevicePanel input[name="device-type"][value="external"]');
+            if (extRadio) {
+                extRadio.checked = true;
+                switchDeviceType('external');
+            }
+            return;
+        }
+        
+        switchDeviceType(selectedValue);
     }
 
     function closeAddDevicePanel() {
@@ -1255,10 +1128,9 @@
         const configs = (panel || document).querySelectorAll('.protocol-config');
         configs.forEach(config => config.classList.remove('active'));
 
-        // Map type to config div ID
         const configIdMap = {
-            'loadcell':  'loadcell-config',
-            'external':  'external-config',
+            'loadcell': 'loadcell-config',
+            'external': 'external-config',
         };
         const configDivId = configIdMap[type] || (type + '-config');
         const selectedConfig = document.getElementById(configDivId);
@@ -1266,7 +1138,6 @@
             selectedConfig.classList.add('active');
         }
 
-        // Wire loadcell mode radios
         if (type === 'loadcell') {
             document.querySelectorAll('input[name="lc-mode"]').forEach(r => {
                 r.removeEventListener('change', handleLcModeChange);
@@ -1275,7 +1146,6 @@
             handleLcModeChange();
         }
 
-        // Wire external protocol radios
         if (type === 'external') {
             document.querySelectorAll('input[name="ext-protocol"]').forEach(r => {
                 r.removeEventListener('change', handleExtProtocolChange);
@@ -1291,17 +1161,14 @@
         const tcpEl = document.getElementById('ext-tcp-config');
         if (rtuEl) rtuEl.style.display = proto === 'ext-rtu' ? 'block' : 'none';
         if (tcpEl) tcpEl.style.display = proto === 'ext-tcp' ? 'block' : 'none';
-        
-        console.log(`External protocol changed to: ${proto}`);
     }
 
     function handleLcModeChange() {
         const mode = document.querySelector('input[name="lc-mode"]:checked')?.value || 'single_ended';
         const singleEl = document.getElementById('lcSingleEndedChannels');
-        const diffEl   = document.getElementById('lcDifferentialInfo');
+        const diffEl = document.getElementById('lcDifferentialInfo');
         if (singleEl) singleEl.style.display = mode === 'single_ended' ? 'block' : 'none';
-        if (diffEl)   diffEl.style.display   = mode === 'differential'  ? 'block' : 'none';
-        console.log('Loadcell mode changed to:', mode);
+        if (diffEl) diffEl.style.display = mode === 'differential' ? 'block' : 'none';
     }
 
     async function saveDevice() {
@@ -1316,7 +1183,6 @@
                 return;
             }
             
-            const panel = document.getElementById('addDevicePanel');
             let deviceType = document.querySelector('#addDevicePanel input[name="device-type"]:checked')?.value;
             if (!deviceType) {
                 showNotification('Please select a device type', 'error');
@@ -1324,7 +1190,6 @@
                 return;
             }
             
-            // Enforce max-2 for loadcell (only on add, not edit)
             if (!selectedDeviceId) {
                 if (deviceType === 'loadcell') {
                     const existing = devices.filter(d => d.protocol === 'loadcell').length;
@@ -1341,7 +1206,6 @@
                 config: {}
             };
             
-            // Resolve protocol for this request
             if (deviceType === 'loadcell') {
                 requestData.type = 'loadcell';
                 requestData.protocol = 'loadcell';
@@ -1349,23 +1213,17 @@
 
                 const defaultCh1 = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
 
-                let devicePath, devicePathCh2;
+                let devicePath;
                 if (lcMode === 'single_ended') {
-                    // Single dropdown: user picks which channel to use
-                    devicePath    = document.getElementById('devicePath')?.value || defaultCh1;
-                    devicePathCh2 = null;
+                    devicePath = document.getElementById('devicePath')?.value || defaultCh1;
                 } else {
-                    // Differential: fixed Channel 1, no second channel
-                    devicePath    = defaultCh1;
-                    devicePathCh2 = null;
+                    devicePath = defaultCh1;
                 }
                 
                 requestData.config = {
                     lc_mode: lcMode,
                     device_path: devicePath,
-                    device_path_ch2: devicePathCh2,
                     poll_ms: parseInt(document.getElementById('lcPollMs')?.value) || 10,
-                    // ADC hardware parameters (fixed, not user-editable)
                     resolution_bits: 24,
                     effective_bits: 14,
                     signed: false,
@@ -1373,11 +1231,9 @@
                     vref: 5,
                     raw_min: 0,
                     raw_max: 16383,
-                    // Capacity specification
                     capacity_min: parseFloat(document.getElementById('lcCapacityMin')?.value) || 0,
                     capacity_max: parseFloat(document.getElementById('lcCapacityMax')?.value) || 1000,
                     unit: document.getElementById('lcUnit')?.value?.trim() || 'kg',
-                    // Auto-generated names (not user input)
                     load_name: 'load_weight',
                     capacity_name: 'capacity'
                 };
@@ -1428,8 +1284,6 @@
                 }
             }
             
-            console.log('Adding new device:', requestData);
-
             const response = await fetch('/api/devices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1463,10 +1317,6 @@
         const inp = (id, label, val, type='text', extra='') => `
             <div><label class="block text-sm font-medium text-slate-700 mb-1">${label}</label>
             <input type="${type}" id="${id}" value="${val ?? ''}" ${extra} class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"></div>`;
-        const ro = (id, label, val) => `
-            <div><label class="block text-sm font-medium text-slate-600 mb-1">${label}</label>
-            <div class="flex items-center h-9 px-3 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-medium">${val}</div>
-            <input type="hidden" id="${id}" value="${val}"></div>`;
 
         if (proto === 'ext-rtu') {
             const portOpts = portConfig.modbus.length
@@ -1557,7 +1407,6 @@
         return '<p class="text-sm text-slate-500">No editable configuration for this device type.</p>';
     }
 
-    
     async function saveEditDevice() {
         if (isSaving) return;
         isSaving = true;
@@ -1566,38 +1415,31 @@
             if (!deviceName) { showNotification('Please enter a device name', 'error'); isSaving = false; return; }
             if (!selectedDeviceId) { showNotification('No device selected for edit', 'error'); isSaving = false; return; }
 
-            // Gather config from edit modal fields
             const cfg = {};
             const g = id => document.getElementById(id);
-            // External device identity (top-level fields)
-            const editDeviceType  = g('editDeviceType')?.value?.trim()  || '';
-            const editModelName   = g('editModelName')?.value?.trim()   || '';
-            // Common
+            const editDeviceType = g('editDeviceType')?.value?.trim() || '';
+            const editModelName = g('editModelName')?.value?.trim() || '';
+            
             if (g('editSlaveId')) cfg.slave_id = parseInt(g('editSlaveId').value) || 1;
             if (g('editResponseTimeout')) cfg.response_timeout_ms = parseInt(g('editResponseTimeout').value) || 100;
             if (g('editByteTimeout')) cfg.byte_timeout_ms = parseInt(g('editByteTimeout').value) || 100;
             if (g('editMaxRetries')) cfg.max_retries = parseInt(g('editMaxRetries').value) || 2;
             if (g('editPollingInterval')) cfg.polling_interval_ms = parseInt(g('editPollingInterval').value) || 300;
-            // RTU
             if (g('editSerialPort')) cfg.serial_port = g('editSerialPort').value;
             if (g('editBaudRate')) cfg.baud_rate = parseInt(g('editBaudRate').value) || 9600;
             if (g('editDataBits')) cfg.data_bits = parseInt(g('editDataBits').value) || 8;
             if (g('editParity')) cfg.parity = g('editParity').value || 'N';
             if (g('editStopBits')) cfg.stop_bits = parseInt(g('editStopBits').value) || 1;
-            // TCP
             if (g('editTcpIp')) cfg.ip_address = g('editTcpIp').value;
             if (g('editTcpPort')) cfg.port = parseInt(g('editTcpPort').value) || 502;
-            // Loadcell
+            
             if (g('editLcMode')) {
                 cfg.lc_mode = g('editLcMode').value;
                 const defaultCh1 = portConfig.loadcell[0]?.port_value ?? '/sys/bus/iio/devices/iio:device0/in_voltage0_raw';
                 if (cfg.lc_mode === 'single_ended') {
-                    cfg.device_path     = g('editDevicePath')?.value || defaultCh1;
-                    cfg.device_path_ch2 = null;
+                    cfg.device_path = g('editDevicePath')?.value || defaultCh1;
                 } else {
-                    // Differential: fixed Channel 1
-                    cfg.device_path     = defaultCh1;
-                    cfg.device_path_ch2 = null;
+                    cfg.device_path = defaultCh1;
                 }
             }
             if (g('editPollMs')) cfg.poll_ms = parseInt(g('editPollMs').value) || 10;
@@ -1665,8 +1507,6 @@
                 const response = await fetch(`/api/devices/${deviceId}/details`);
                 const device = await response.json();
                 
-                console.log('Device details API response:', device);
-                
                 if (!device || device.error) {
                     showNotification('Device not found', 'error');
                     return;
@@ -1700,12 +1540,6 @@
                 const proto = (device.protocol || '').toLowerCase();
                 const config = device.config || {};
 
-                // Populate read-only header
-                const subtitleEl = document.getElementById('editModalSubtitle');
-                if (subtitleEl) {
-                    subtitleEl.textContent = device.name;
-                }
-                
                 const deviceIdEl = document.getElementById('editDeviceIdDisplay');
                 if (deviceIdEl) {
                     deviceIdEl.textContent = device.id;
@@ -1739,7 +1573,6 @@
                     protocolBadgeWrapper.style.display = proto === 'loadcell' ? 'none' : '';
                 }
 
-                // Update address hint
                 const addressHint = document.getElementById('editDeviceAddressHint');
                 if (addressHint) {
                     if (proto === 'ext-tcp') {
@@ -1751,22 +1584,18 @@
                     }
                 }
 
-                // Populate name
                 const nameInput = document.getElementById('editDeviceNameInput');
                 if (nameInput) {
                     nameInput.value = device.name || '';
                 }
 
-                // Build config fields based on protocol
                 const cfgDiv = document.getElementById('editDeviceConfigFields');
                 if (cfgDiv) {
                     cfgDiv.innerHTML = _buildEditConfigFields(proto, config);
                 }
 
-                // Apply role access to edit panel ADC fields
                 _setEditPanelAdcFieldsEditable(isAdmin());
 
-                // Open the panel
                 const panel = document.getElementById('editDevicePanel');
                 if (panel) {
                     panel.classList.add('active');
@@ -1811,6 +1640,15 @@
 
         duplicateDeviceFromTable: async function(deviceId) {
             const device = devices.find(d => String(d.id) === String(deviceId));
+            
+            if (device && device.protocol === 'loadcell') {
+                const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
+                if (loadcellCount >= 2) {
+                    showNotification('Cannot duplicate Loadcell device - maximum limit of 2 Loadcell devices already reached.', 'error');
+                    return;
+                }
+            }
+            
             const deviceName = device ? device.name : 'this device';
             const confirmed = await showDuplicateDeviceConfirmModal(deviceName);
             if (!confirmed) return;
@@ -1819,6 +1657,26 @@
 
         refreshData: refreshData
     };
+
+    async function duplicateDevice(deviceId) {
+        try {
+            showNotification('Duplicating device and tags...', 'info');
+            const response = await fetch(`/api/devices/${deviceId}/duplicate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showNotification('Device duplicated successfully with all tags (-001 suffix)', 'success');
+                await refreshData();
+            } else {
+                showNotification('Failed to duplicate device: ' + (result.message || result.error || 'Unknown error'), 'error');
+            }
+        } catch (error) {
+            console.error('Error duplicating device:', error);
+            showNotification('Error duplicating device: ' + error.message, 'error');
+        }
+    }
 
     // ==================== CONFIRMATION MODALS ====================
     function showDeleteConfirmModal(deviceName) {
@@ -1885,26 +1743,6 @@
         });
     }
 
-    async function duplicateDevice(deviceId) {
-        try {
-            showNotification('Duplicating device and tags...', 'info');
-            const response = await fetch(`/api/devices/${deviceId}/duplicate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const result = await response.json();
-            if (response.ok && result.success) {
-                showNotification('Device duplicated successfully with all tags (-001 suffix)', 'success');
-                await refreshData();
-            } else {
-                showNotification('Failed to duplicate device: ' + (result.message || result.error || 'Unknown error'), 'error');
-            }
-        } catch (error) {
-            console.error('Error duplicating device:', error);
-            showNotification('Error duplicating device: ' + error.message, 'error');
-        }
-    }
-
     // ==================== IMPORT / EXPORT ====================
     async function exportDevices() {
         try {
@@ -1960,64 +1798,185 @@
         }
         
         try {
-            showNotification('Checking for duplicates...', 'info');
-            
-            const statusDiv = document.getElementById('importStatus');
-            const statusText = document.getElementById('statusText');
-            const statusCount = document.getElementById('statusCount');
-            const progressBar = document.getElementById('progressBar');
-            
-            if (statusDiv) {
-                statusDiv.classList.remove('hidden');
-                statusText.textContent = 'Checking...';
-                statusCount.textContent = '0/0 devices';
-                progressBar.style.width = '0%';
+            const text = await file.text();
+            const lines = text.split('\n');
+            if (lines.length < 2) {
+                showNotification('CSV file is empty', 'error');
+                return;
             }
             
-            const formData = new FormData();
-            formData.append('file', file);
+            const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
             
-            const response = await fetch('/api/devices/import/csv', {
-                method: 'POST',
-                body: formData
-            });
+            const nameIndex = headers.findIndex(h => h === 'name');
+            const deviceTypeIndex = headers.findIndex(h => h === 'device type');
+            const protocolIndex = headers.findIndex(h => h === 'protocol');
             
-            const result = await response.json();
+            if (nameIndex === -1) {
+                showNotification('CSV must have a "Name" column', 'error');
+                return;
+            }
             
-            if (result.requires_confirmation && result.duplicates && result.duplicates.length > 0) {
-                const action = await showDuplicateConfirmation(result.duplicates, result.new_devices_count);
+            // Parse all rows
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                
+                const row = [];
+                let inQuote = false;
+                let current = '';
+                const cols = lines[i].split('');
+                
+                for (let j = 0; j < cols.length; j++) {
+                    const char = cols[j];
+                    if (char === '"') {
+                        inQuote = !inQuote;
+                    } else if (char === ',' && !inQuote) {
+                        row.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                row.push(current.trim());
+                
+                const cleanRow = row.map(cell => cell.replace(/^["']|["']$/g, ''));
+                
+                if (cleanRow.length > nameIndex && cleanRow[nameIndex]) {
+                    rows.push(cleanRow);
+                }
+            }
+            
+            if (rows.length === 0) {
+                showNotification('No valid data found in CSV', 'error');
+                return;
+            }
+            
+            const currentLoadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
+            let loadcellToImport = 0;
+            const importDevicesList = [];
+            
+            for (const row of rows) {
+                const name = row[nameIndex] || '';
+                const deviceType = deviceTypeIndex >= 0 ? (row[deviceTypeIndex] || '').toLowerCase() : '';
+                const protocol = protocolIndex >= 0 ? (row[protocolIndex] || '').toLowerCase() : '';
+                
+                const isLoadcell = deviceType === 'loadcell' || protocol === 'loadcell';
+                
+                importDevicesList.push({
+                    name: name,
+                    deviceType: deviceType,
+                    protocol: protocol,
+                    isLoadcell: isLoadcell,
+                    rowData: row
+                });
+                
+                if (isLoadcell) {
+                    loadcellToImport++;
+                }
+            }
+            
+            if (currentLoadcellCount + loadcellToImport > 2) {
+                showNotification(`Cannot import - would exceed maximum of 2 Loadcell devices. Currently have ${currentLoadcellCount}, trying to import ${loadcellToImport}.`, 'error');
+                return;
+            }
+            
+            const existingDeviceNames = new Set(devices.map(d => d.name.toLowerCase()));
+            const duplicates = [];
+            const newDevices = [];
+            
+            for (const dev of importDevicesList) {
+                if (existingDeviceNames.has(dev.name.toLowerCase())) {
+                    duplicates.push({
+                        name: dev.name,
+                        type: dev.isLoadcell ? 'Loadcell' : 'External'
+                    });
+                } else {
+                    newDevices.push(dev);
+                }
+            }
+            
+            if (duplicates.length > 0) {
+                const action = await showDuplicateConfirmation(duplicates, newDevices.length);
                 
                 if (action === 'cancel') {
                     showNotification('Import cancelled', 'info');
-                    if (statusDiv) statusDiv.classList.add('hidden');
                     return;
                 }
                 
-                const formData2 = new FormData();
-                formData2.append('file', file);
+                const formData = new FormData();
+                formData.append('file', file);
                 
-                const confirmUrl = action === 'skip' 
-                    ? '/api/devices/import/csv?skip_existing=true'
-                    : '/api/devices/import/csv?replace_existing=true';
+                const statusDiv = document.getElementById('importStatus');
+                const statusText = document.getElementById('statusText');
+                const statusCount = document.getElementById('statusCount');
+                const progressBar = document.getElementById('progressBar');
                 
-                statusText.textContent = 'Importing...';
-                
-                const response2 = await fetch(confirmUrl, {
-                    method: 'POST',
-                    body: formData2
-                });
-                
-                const result2 = await response2.json();
-                
-                if (response2.ok && result2.success) {
-                    handleImportSuccess(result2, fileInput, statusDiv, statusText, statusCount, progressBar);
-                } else {
-                    throw new Error(result2.error || 'Import failed');
+                if (statusDiv) {
+                    statusDiv.classList.remove('hidden');
+                    statusText.textContent = 'Importing...';
+                    statusCount.textContent = `0/${rows.length} devices`;
+                    progressBar.style.width = '0%';
                 }
-            } else if (response.ok && result.success) {
-                handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
+                
+                let url = '/api/devices/import/csv';
+                if (action === 'skip') {
+                    url = '/api/devices/import/csv?skip_existing=true';
+                } else if (action === 'replace') {
+                    url = '/api/devices/import/csv?replace_existing=true';
+                }
+                
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && result.success) {
+                        handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
+                    } else {
+                        throw new Error(result.error || result.message || 'Import failed');
+                    }
+                } catch (error) {
+                    console.error('Import error:', error);
+                    showNotification(`Import failed: ${error.message}`, 'error');
+                    if (statusDiv) statusDiv.classList.add('hidden');
+                }
             } else {
-                throw new Error(result.error || 'Import failed');
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const statusDiv = document.getElementById('importStatus');
+                const statusText = document.getElementById('statusText');
+                const statusCount = document.getElementById('statusCount');
+                const progressBar = document.getElementById('progressBar');
+                
+                if (statusDiv) {
+                    statusDiv.classList.remove('hidden');
+                    statusText.textContent = 'Importing...';
+                    statusCount.textContent = `0/${rows.length} devices`;
+                    progressBar.style.width = '0%';
+                }
+                
+                try {
+                    const response = await fetch('/api/devices/import/csv', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && result.success) {
+                        handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
+                    } else {
+                        throw new Error(result.error || result.message || 'Import failed');
+                    }
+                } catch (error) {
+                    console.error('Import error:', error);
+                    showNotification(`Import failed: ${error.message}`, 'error');
+                    if (statusDiv) statusDiv.classList.add('hidden');
+                }
             }
             
         } catch (error) {
@@ -2030,7 +1989,7 @@
             }
         }
     }
-    
+
     function handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar) {
         if (progressBar) {
             progressBar.style.width = '100%';
@@ -2064,13 +2023,11 @@
             }
         }, 3000);
     }
-    
+
     function showDuplicateConfirmation(duplicates, newDevicesCount) {
         return new Promise((resolve) => {
             const duplicateNames = duplicates.map(d => `• ${d.name} (${d.type})`).slice(0, 10).join('\n');
             const moreText = duplicates.length > 10 ? `\n... and ${duplicates.length - 10} more` : '';
-            
-            const message = `Found ${duplicates.length} duplicate device(s) with the same name:\n\n${duplicateNames}${moreText}\n\n${newDevicesCount} new device(s) will be imported.\n\nHow would you like to proceed?`;
             
             const overlay = document.createElement('div');
             overlay.style.cssText = `
@@ -2084,29 +2041,44 @@
                 align-items: center;
                 justify-content: center;
                 z-index: 10000;
+                padding: 20px;
             `;
             
             const dialog = document.createElement('div');
             dialog.style.cssText = `
                 background: white;
                 padding: 24px;
-                border-radius: 8px;
+                border-radius: 12px;
                 max-width: 500px;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                width: 100%;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
             `;
             
             dialog.innerHTML = `
-                <h3 style="margin: 0 0 16px 0; color: #f59e0b;">Duplicate Devices Found</h3>
-                <p style="white-space: pre-wrap; margin: 16px 0; font-family: monospace; font-size: 13px; color: #666;">${escapeHtml(message)}</p>
-                <div style="display: flex; gap: 12px; margin-top: 20px;">
-                    <button id="replaceBtn" style="flex: 1; padding: 10px 16px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 40px; height: 40px; background: #FEF3C7; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-triangle-exclamation" style="color: #D97706; font-size: 20px;"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1E293B;">Duplicate Devices Found</h3>
+                        <p style="margin: 2px 0 0; font-size: 13px; color: #64748B;">${duplicates.length} device(s) with same name</p>
+                    </div>
+                </div>
+                <div style="background: #F8FAFC; border-radius: 8px; padding: 12px; margin-bottom: 16px; max-height: 200px; overflow-y: auto;">
+                    <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #475569;">Duplicate devices:</p>
+                    <p style="margin: 0; font-size: 12px; font-family: monospace; color: #334155; white-space: pre-wrap;">${escapeHtml(duplicateNames)}${escapeHtml(moreText)}</p>
+                </div>
+                <p style="font-size: 14px; color: #374151; margin: 0 0 8px 0;">${newDevicesCount} new device(s) will be imported.</p>
+                <p style="font-size: 14px; color: #374151; margin: 0 0 20px 0;">How would you like to proceed?</p>
+                <div style="display: flex; gap: 12px;">
+                    <button id="replaceBtn" style="flex: 1; padding: 10px 16px; background: #EF4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
                         Replace Existing
                     </button>
-                    <button id="skipBtn" style="flex: 1; padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                    <button id="skipBtn" style="flex: 1; padding: 10px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
                         Skip Duplicates
                     </button>
-                    <button id="cancelBtn" style="flex: 1; padding: 10px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-                        Cancel Import
+                    <button id="cancelBtn" style="flex: 1; padding: 10px 16px; background: #6B7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;">
+                        Cancel
                     </button>
                 </div>
             `;
@@ -2118,19 +2090,30 @@
             const skipBtn = dialog.querySelector('#skipBtn');
             const cancelBtn = dialog.querySelector('#cancelBtn');
             
+            const cleanup = () => {
+                if (overlay.parentNode) overlay.remove();
+            };
+            
             replaceBtn.onclick = () => {
-                document.body.removeChild(overlay);
+                cleanup();
                 resolve('replace');
             };
             
             skipBtn.onclick = () => {
-                document.body.removeChild(overlay);
+                cleanup();
                 resolve('skip');
             };
             
             cancelBtn.onclick = () => {
-                document.body.removeChild(overlay);
+                cleanup();
                 resolve('cancel');
+            };
+            
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    cleanup();
+                    resolve('cancel');
+                }
             };
         });
     }
@@ -2186,6 +2169,7 @@
         
         if (fileInput && !fileInput.hasListener) {
             fileInput.addEventListener('change', function() {
+                const importBtn = document.getElementById('importBtn');
                 if (importBtn) {
                     importBtn.disabled = !this.files || this.files.length === 0;
                 }
@@ -2268,8 +2252,6 @@
             saveDeviceBtn.addEventListener('click', saveDevice);
         }
         
-        const addDevicePanel = document.getElementById('addDevicePanel');
-        // Wire ext-protocol radios in setup
         document.querySelectorAll('#addDevicePanel input[name="ext-protocol"]').forEach(r => {
             r.addEventListener('change', handleExtProtocolChange);
         });
@@ -2325,6 +2307,13 @@
             duplicateDeviceBtn.addEventListener('click', async function() {
                 if (currentViewingDeviceId) {
                     const device = devices.find(d => String(d.id) === String(currentViewingDeviceId));
+                    if (device && device.protocol === 'loadcell') {
+                        const loadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
+                        if (loadcellCount >= 2) {
+                            showNotification('Cannot duplicate Loadcell device - maximum limit of 2 Loadcell devices already reached.', 'error');
+                            return;
+                        }
+                    }
                     const deviceName = device ? device.name : 'this device';
                     const confirmed = await showDuplicateDeviceConfirmModal(deviceName);
                     if (confirmed) {
@@ -2348,14 +2337,13 @@
         const cancelEditBtn = document.getElementById('cancelEditBtn');
         if (cancelEditBtn) cancelEditBtn.addEventListener('click', closeEditPanel);
 
-        // Wire editLcMode change in edit panel
         document.addEventListener('change', function(e) {
             if (e.target && e.target.id === 'editLcMode') {
                 const mode = e.target.value;
                 const s = document.getElementById('editLcChSingle');
                 const d = document.getElementById('editLcChDiff');
-                if (s) s.style.display = mode === 'single_ended'  ? '' : 'none';
-                if (d) d.style.display = mode === 'differential'  ? '' : 'none';
+                if (s) s.style.display = mode === 'single_ended' ? '' : 'none';
+                if (d) d.style.display = mode === 'differential' ? '' : 'none';
             }
         });
 

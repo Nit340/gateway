@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Crane Monitor   Pipeline</title>
+<title>Crane Monitor - Pipeline</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
@@ -47,6 +47,8 @@
   .order-row.disabled { opacity:0.45; }
   .order-num { width:22px; height:22px; border-radius:6px; background:#f97316; color:white; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .order-row.disabled .order-num { background:#d4d4d4; }
+  .json-upload-area { background:#fef9e8; border:1px solid #fed7aa; transition:all .2s; }
+  .json-upload-area.drag-over { background:#fff2e0; border-color:#f97316; border-width:2px; }
 </style>
 </head>
 <body class="bg-stone-50 min-h-screen flex">
@@ -104,14 +106,14 @@
           </div>
           <p class="text-xs text-stone-400 mb-4">
             Enabled targets are sent <strong>in the numbered order</strong> on every backend start/restart.
-            Drag rows to reorder   saved to DB immediately.
+            Drag rows to reorder - saved to DB immediately.
           </p>
 
           <!-- Drag-to-reorder list -->
           <div id="sendOrderList" class="space-y-2 mb-3 select-none">
-            <span class="text-xs text-stone-300">Loading </span>
+            <span class="text-xs text-stone-300">Loading...</span>
           </div>
-          <div id="orderSaveStatus" class="hidden text-xs font-semibold text-green-600 mb-3">? Order saved to database</div>
+          <div id="orderSaveStatus" class="hidden text-xs font-semibold text-green-600 mb-3">✓ Order saved to database</div>
           <div id="autoSendResult" class="hidden rounded-xl p-3 space-y-1.5 text-xs font-mono" style="background:#fafaf9;border:1px solid #e7e5e4;"></div>
         </div>
 
@@ -127,7 +129,7 @@
     <!-- CONNECTION STATUS -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
       <div class="text-sm font-bold text-stone-700 mb-3">Connection Status</div>
-      <div id="statusBody" class="text-sm text-stone-500">Loading </div>
+      <div id="statusBody" class="text-sm text-stone-500">Loading...</div>
       <div id="servicesList" class="mt-3"></div>
     </div>
 
@@ -137,9 +139,9 @@
       <p class="text-xs text-stone-400 mb-5">
         Set the <strong>service name</strong> (from <code class="bg-stone-100 px-1 rounded">SERVICE_ADDED</code> events) and the
         <strong>config name</strong> (the key sent to the pipeline service, e.g. <code class="bg-stone-100 px-1 rounded">modbus_config</code>).
-        Both are stored in the database   nothing is hardcoded. Version numbers are also tracked per config in the DB.
+        Both are stored in the database - nothing is hardcoded. Version numbers are also tracked per config in the DB.
       </p>
-      <div id="targetsForm" class="space-y-0">Loading </div>
+      <div id="targetsForm" class="space-y-0">Loading...</div>
       <button onclick="saveTargets()"
         class="mt-5 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white active:scale-95"
         style="background:#ea580c;box-shadow:0 4px 14px rgba(234,88,12,0.2);">
@@ -147,13 +149,13 @@
       </button>
     </div>
 
-    <!-- CONFIG MANAGER   dynamic tabs -->
+    <!-- CONFIG MANAGER - dynamic tabs -->
     <div class="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
       <div class="text-sm font-bold text-stone-700 mb-1">Config Manager</div>
       <p class="text-xs text-stone-400 mb-4">Push configuration per service type. The config name used for each push is what you set above.</p>
 
       <div id="cfgTabBar" class="flex flex-wrap gap-2 mb-5 pb-4 border-b border-stone-100">
-        <span class="text-xs text-stone-300">Loading </span>
+        <span class="text-xs text-stone-300">Loading...</span>
       </div>
 
       <!-- MODBUS panel -->
@@ -181,7 +183,7 @@
             Select a device and push its filter &amp; calibration config to the loadcell pipeline service.
           </p>
           <div id="loadcellDeviceList" class="space-y-2 mb-4">
-            <span class="text-xs text-stone-300">Loading devices </span>
+            <span class="text-xs text-stone-300">Loading devices...</span>
           </div>
           <button onclick="pushLoadcellConfig()"
             class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
@@ -189,8 +191,9 @@
           </button>
           <div id="pushResult-loadcell" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
         </div>
+      </div>
 
-<!-- IOT GATEWAY panel -->
+      <!-- IOT GATEWAY panel -->
       <div class="cfg-panel" id="panel-iot_gateway">
         <div class="flex items-center gap-3 mb-3">
           <p class="text-xs text-stone-400">Push the current IoT Gateway configuration to the pipeline service.</p>
@@ -203,8 +206,55 @@
         <div id="pushResult-iot_gateway" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
       </div>
 
-      <!-- CORE panel   NO file upload, just config name display + push/resend -->
+      <!-- CORE panel with JSON upload -->
       <div class="cfg-panel" id="panel-core">
+        <!-- JSON Upload Section -->
+        <div class="mb-6 p-5 rounded-xl json-upload-area" id="jsonUploadArea" style="background:#fef9e8; border:1px solid #fed7aa;">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="mat" style="color:#f97316;font-size:22px;">upload_file</span>
+            <span class="text-sm font-bold text-stone-700">Upload Core Config JSON</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-orange-400 bg-orange-100 px-2 py-0.5 rounded-full ml-auto">Manual upload</span>
+          </div>
+          <p class="text-xs text-stone-500 mb-4">
+            Upload a JSON file to replace the current core configuration. 
+            The config will be validated, saved to database, and optionally sent to the pipeline.
+          </p>
+          
+          <div class="flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[200px]">
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">JSON File</label>
+              <input type="file" id="coreJsonFile" accept=".json" 
+                class="block w-full text-xs text-stone-500
+                  file:mr-3 file:py-2 file:px-4 file:rounded-lg file:text-xs file:font-semibold
+                  file:bg-orange-50 file:text-orange-600 file:border file:border-orange-200
+                  hover:file:bg-orange-100 file:cursor-pointer"/>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="validateCoreConfigJson()" 
+                class="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold border border-orange-200 text-orange-600 hover:bg-orange-50 transition-all">
+                <span class="mat" style="font-size:14px;">check_circle</span> Validate
+              </button>
+              <button onclick="uploadCoreConfigJson(true)" 
+                class="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all">
+                <span class="mat" style="font-size:14px;">send</span> Save & Send
+              </button>
+              <button onclick="uploadCoreConfigJson(false)" 
+                class="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold border border-orange-200 text-orange-600 hover:bg-orange-50 transition-all">
+                <span class="mat" style="font-size:14px;">database</span> Save Only
+              </button>
+            </div>
+          </div>
+          
+          <!-- Drag & Drop hint -->
+          <div class="mt-3 text-[10px] text-stone-400 flex items-center gap-1">
+            <span class="mat" style="font-size:12px;">drag_click</span>
+            Or drag & drop a JSON file anywhere in this area
+          </div>
+          
+          <div id="jsonUploadResult" class="hidden mt-3 p-2 rounded-lg text-xs"></div>
+        </div>
+
+        <!-- Config Info -->
         <div class="flex items-center gap-3 mb-4">
           <p class="text-xs text-stone-400">
             Forward the stored core config to the core pipeline service.
@@ -216,13 +266,17 @@
         <!-- Upload history -->
         <div class="mb-6">
           <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Upload History</div>
-          <div id="coreConfigList" class="text-xs text-stone-300">Loading </div>
+          <div id="coreConfigList" class="text-xs text-stone-300">Loading...</div>
         </div>
 
         <div class="flex gap-3 flex-wrap">
           <button onclick="resendCoreConfig()"
             class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
             <span class="mat" style="font-size:17px;">replay</span> Resend Latest
+          </button>
+          <button onclick="downloadLatestCoreConfig()"
+            class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+            <span class="mat" style="font-size:17px;">download</span> Download Latest
           </button>
         </div>
         <div id="pushResult-core" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
@@ -235,7 +289,7 @@
       <div class="flex items-center gap-3 mb-4">
         <div class="text-sm font-bold text-stone-700">Send Version Log</div>
         <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-50 px-2 py-0.5 rounded-full">
-          Version increments on confirmed send only   stored in DB
+          Version increments on confirmed send only - stored in DB
         </span>
       </div>
       <div class="overflow-x-auto">
@@ -252,7 +306,7 @@
             </tr>
           </thead>
           <tbody id="sendLogRows">
-            <tr><td colspan="7" class="py-6 text-center text-stone-300">Loading </td></tr>
+            <tr><td colspan="7" class="py-6 text-center text-stone-300">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -271,9 +325,9 @@
         </button>
       </div>
       <p class="text-xs text-stone-400 mb-5">
-        <strong>Permanent</strong> entries are always active (network/status   cannot be removed).
+        <strong>Permanent</strong> entries are always active (network/status - cannot be removed).
         Add a <strong>device name</strong> (e.g. <code class="bg-stone-100 px-1 rounded font-mono">load</code>) to whitelist all its datapoints.
-        Only named devices receive data   no auto-discovery.
+        Only named devices receive data - no auto-discovery.
       </p>
 
       <div class="grid grid-cols-2 gap-4 mb-5">
@@ -285,7 +339,7 @@
             <span class="ml-auto text-[9px] text-stone-300">always active</span>
           </div>
           <div id="wl-permanent" class="space-y-1">
-            <span class="text-xs text-stone-300">Loading </span>
+            <span class="text-xs text-stone-300">Loading...</span>
           </div>
         </div>
 
@@ -321,7 +375,7 @@
           <span id="wl-count" class="ml-auto text-[10px] font-bold text-stone-300"></span>
         </div>
         <div id="wl-active" class="flex flex-wrap gap-1.5">
-          <span class="text-xs text-stone-300">Loading </span>
+          <span class="text-xs text-stone-300">Loading...</span>
         </div>
       </div>
     </div>
@@ -374,7 +428,7 @@
           <div><span class="font-semibold text-stone-600">Pending loadcell:</span>
             ${d.has_pending_loadcell ? '<span class="text-orange-500 font-bold">Queued</span>' : 'None'}</div>
           <div><span class="font-semibold text-stone-600">Load raw:</span>
-            <span class="font-mono">${d.load_raw !== null && d.load_raw !== undefined ? d.load_raw : ' '}</span></div>
+            <span class="font-mono">${d.load_raw !== null && d.load_raw !== undefined ? d.load_raw : '—'}</span></div>
         </div>`;
       const svcs = d.services || [];
       document.getElementById('servicesList').innerHTML = svcs.length
@@ -400,7 +454,7 @@
     container.innerHTML = _sendOrder.map((ct, idx) => {
       const t        = targetsData.find(x => x.config_type === ct) || {};
       const enabled  = t.enabled ?? false;
-      const svcName  = t.service_name || ' ';
+      const svcName  = t.service_name || '—';
       const cfgName  = t.config_name  || defaultCfgName(ct);
       return `<div class="order-row ${enabled ? '' : 'disabled'}" draggable="true"
                    id="order-row-${ct}" data-ct="${ct}"
@@ -412,9 +466,9 @@
         <span class="mat" style="font-size:16px;color:${enabled?'#f97316':'#d4d4d4'};flex-shrink:0;">${tabIcon(ct)}</span>
         <div class="flex-1 min-w-0">
           <div class="text-xs font-bold text-stone-700">${tabLabel(ct)}</div>
-          <div class="text-[10px] text-stone-400 font-mono truncate">${svcName}   <span style="color:#f97316;">${cfgName}</span></div>
+          <div class="text-[10px] text-stone-400 font-mono truncate">${svcName} · <span style="color:#f97316;">${cfgName}</span></div>
         </div>
-        <label class="toggle flex-shrink-0" title="${enabled ? 'Enabled   click to disable' : 'Disabled   click to enable'}">
+        <label class="toggle flex-shrink-0" title="${enabled ? 'Enabled - click to disable' : 'Disabled - click to enable'}">
           <input type="checkbox" ${enabled ? 'checked' : ''}
             onchange="toggleOrderRowEnabled('${ct}', this.checked)" onclick="event.stopPropagation()"/>
           <span class="toggle-slider"></span>
@@ -516,7 +570,7 @@
                 <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400">Service Name</th>
                 <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400">Config Name</th>
                 <th class="text-left py-2.5 px-4 font-bold uppercase tracking-wide text-stone-400 w-24">Version (DB)</th>
-              </tr>
+               </tr>
             </thead>
             <tbody>
               ${ALL_TYPES.map((ct, i) => {
@@ -524,7 +578,7 @@
                 const log = logByType[ct] || {};
                 const ver = log.last_version > 0
                   ? `<span class="ver-badge ver-ok">v${log.last_version}</span>`
-                  : `<span class="ver-badge ver-never"> </span>`;
+                  : `<span class="ver-badge ver-never">—</span>`;
                 const cfgName = t.config_name || defaultCfgName(ct);
                 return `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-stone-50/50'}" style="border-bottom:1px solid #f5f5f4;">
                   <td class="py-3 px-4">
@@ -533,25 +587,25 @@
                         onchange="toggleOrderRowEnabled('${ct}', this.checked)"/>
                       <span class="toggle-slider"></span>
                     </label>
-                  </td>
+                   </td>
                   <td class="py-3 px-4">
                     <span class="flex items-center gap-1.5 font-bold text-stone-700">
                       <span class="mat" style="font-size:15px;color:#f97316;">${tabIcon(ct)}</span>
                       ${tabLabel(ct)}
                     </span>
                     <div class="text-[10px] text-stone-300 mt-0.5">${TAB_META[ct]?.desc || ''}</div>
-                  </td>
+                   </td>
                   <td class="py-3 px-4">
                     <input class="field w-full" id="target-${ct}" type="text"
                       value="${t.service_name || ''}" placeholder="e.g. modbus_service"/>
-                  </td>
+                   </td>
                   <td class="py-3 px-4">
                     <input class="field w-full font-mono" id="target-cfgname-${ct}" type="text"
                       value="${cfgName}" placeholder="e.g. ${defaultCfgName(ct)}"
                       oninput="updateCfgNamePill('${ct}', this.value)"/>
-                  </td>
+                   </td>
                   <td class="py-3 px-4">${ver}</td>
-                </tr>`;
+                 </tr>`;
               }).join('')}
             </tbody>
           </table>
@@ -594,24 +648,7 @@
     const panel = document.getElementById('panel-' + type);
     if (panel) panel.classList.add('active');
     if (type === 'loadcell') { loadLoadcellDevices(); }
-    if (type === 'core')     loadCoreConfigs();
-  }
-
-  function syncAutoToggle(cfgType, val) {
-    const t = targetsData.find(x => x.config_type === cfgType);
-    if (t) t.enabled = val;
-  }
-
-  async function saveTargetEnabled(cfgType, enabled) {
-    const t = targetsData.find(x => x.config_type === cfgType);
-    const svcName  = t ? (document.getElementById('target-' + cfgType)?.value.trim() || t.service_name || '') : '';
-    const cfgName  = document.getElementById('target-cfgname-' + cfgType)?.value.trim() || defaultCfgName(cfgType);
-    await fetch('/api/admin/pipeline-targets', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config_type: cfgType, service_name: svcName, config_name: cfgName, enabled })
-    });
-    if (t) t.enabled = enabled;
-    renderSendOrderList();
+    if (type === 'core')     { loadCoreConfigs(); }
   }
 
   async function saveTargets() {
@@ -639,28 +676,28 @@
     btn.disabled = true; btn.style.opacity = '0.65';
     btn.classList.remove('pulse-btn');
     res.classList.remove('hidden');
-    res.innerHTML = '<span class="text-stone-400">? Sending in order </span>';
+    res.innerHTML = '<span class="text-stone-400">⏳ Sending in order...</span>';
     try {
       const d = await fetch('/api/pipeline/auto-send', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       const results = d.results || [];
       if (!results.length) {
-        res.innerHTML = '<span style="color:#d97706;">? No enabled targets. Enable at least one in the list above.</span>';
+        res.innerHTML = '<span style="color:#d97706;">⚠️ No enabled targets. Enable at least one in the list above.</span>';
       } else {
         res.innerHTML = results.map(r => {
-          const icon  = r.pipeline_sent ? '?' : (r.success ? '?' : '?');
+          const icon  = r.pipeline_sent ? '✅' : (r.success ? '⏳' : '❌');
           const color = r.pipeline_sent ? '#15803d' : (r.success ? '#d97706' : '#dc2626');
           return `<div style="color:${color};">
             <span style="color:#aaa;margin-right:4px;">#${r.send_order||'?'}</span>
             ${icon} <strong>${tabLabel(r.config_type).toUpperCase()}</strong>` +
-            ` ? <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v' + r.version : ''}` +
-            `   ${r.message || ''}</div>`;
+            ` → <span style="color:#78716c;">${r.service_name || '?'}</span>${r.version ? ' v' + r.version : ''}` +
+            `  ${r.message || ''}</div>`;
         }).join('');
         toast(d.auto_sent ? 'Sent!' : 'Queued (service not yet connected)');
       }
     } catch (e) {
-      res.innerHTML = `<span style="color:#dc2626;">? Error: ${e.message}</span>`;
+      res.innerHTML = `<span style="color:#dc2626;">❌ Error: ${e.message}</span>`;
       toast('Send failed', false);
     } finally {
       btn.disabled = false; btn.style.opacity = '1';
@@ -680,19 +717,19 @@
     const el = document.getElementById('pushResult-' + panelKey);
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
-    el.textContent = 'Sending ';
+    el.textContent = '⏳ Sending...';
     try {
       const d = await fetch(PUSH_EP[type], {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
         (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (d.success ? '? ' : '? ') +
+      el.textContent = (d.success ? '✅ ' : '❌ ') +
         (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
       loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '? Network error: ' + e.message;
+      el.textContent = '❌ Network error: ' + e.message;
     }
   }
 
@@ -722,16 +759,16 @@
   function renderLoadcellList() {
     document.getElementById('loadcellDeviceList').innerHTML = loadcellDevices.map(dev => `
       <div class="lc-card ${dev.id === selectedLoadcellId ? 'selected' : ''}"
-        id="lc-card-${dev.id}" onclick="selectLoadcell(${dev.id})">
+        id="lc-card-${dev.id}" onclick="selectLoadcell('${dev.id}')">
         <input type="radio" name="lcDevice" value="${dev.id}"
           ${dev.id === selectedLoadcellId ? 'checked' : ''} class="accent-orange-500 flex-shrink-0"/>
         <div class="flex-1 min-w-0">
           <div class="text-sm font-bold text-stone-800">${dev.name}</div>
           <div class="text-xs text-stone-400 mt-0.5">
-            Path: <span class="font-mono">${dev.device_path || ' '}</span> &nbsp; &nbsp;
-            Capacity: ${dev.capacity_min ?? 0} ${dev.capacity_max ?? '?'} ${dev.unit || 'kg'} &nbsp; &nbsp;
-            Tare: ${dev.tare_offset ?? ' '} &nbsp; &nbsp;
-            Poll: ${dev.poll_ms ?? ' '} ms
+            Path: <span class="font-mono">${dev.device_path || '—'}</span> &nbsp; &nbsp;
+            Capacity: ${dev.capacity_min ?? 0} - ${dev.capacity_max ?? '?'} ${dev.unit || 'kg'} &nbsp; &nbsp;
+            Tare: ${dev.tare_offset ?? '—'} &nbsp; &nbsp;
+            Poll: ${dev.poll_ms ?? '—'} ms
           </div>
         </div>
         <span class="text-[10px] font-mono text-stone-300 flex-shrink-0">id:${dev.id}</span>
@@ -748,7 +785,7 @@
     const el = document.getElementById('pushResult-loadcell');
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
-    el.textContent = 'Building & sending ';
+    el.textContent = '⏳ Building & sending...';
     try {
       const dev = loadcellDevices.find(d => d.id === selectedLoadcellId);
       const d = await fetch('/api/pipeline/filters', {
@@ -763,12 +800,12 @@
       }).then(r => r.json());
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
         (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (d.success ? '? ' : '? ') +
+      el.textContent = (d.success ? '✅ ' : '❌ ') +
         (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
       loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '? Network error: ' + e.message;
+      el.textContent = '❌ Network error: ' + e.message;
     }
   }
 
@@ -789,18 +826,18 @@
             <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Devices</th>
             <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Service Name in Config</th>
             <th class="text-left py-2 px-3 font-bold text-stone-400 uppercase tracking-wide">Uploaded At</th>
-          </tr></thead>
+           </tr></thead>
           <tbody>
             ${configs.map((c, i) => `
               <tr class="border-b border-stone-50 hover:bg-stone-50">
                 <td class="py-2 px-3">
                   <span class="ver-badge ver-ok">v${c.version}</span>
                   ${i === 0 ? '<span class="ver-badge ver-queue ml-1">latest</span>' : ''}
-                </td>
-                <td class="py-2 px-3 font-mono">${(c.device_names || []).join(', ') || ' '}</td>
-                <td class="py-2 px-3 text-stone-400">${c.service_name || ' '}</td>
-                <td class="py-2 px-3 text-stone-400">${c.created_at ? new Date(c.created_at).toLocaleString() : ' '}</td>
-              </tr>`).join('')}
+                 </td>
+                <td class="py-2 px-3 font-mono">${(c.device_names || []).join(', ') || '—'}</td>
+                <td class="py-2 px-3 text-stone-400">${c.service_name || '—'}</td>
+                <td class="py-2 px-3 text-stone-400">${c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</td>
+               </tr>`).join('')}
           </tbody>
         </table>
       </div>`;
@@ -813,19 +850,209 @@
     const el = document.getElementById('pushResult-core');
     el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-stone-50 text-stone-500';
     el.classList.remove('hidden');
-    el.textContent = 'Resending latest config ';
+    el.textContent = '⏳ Resending latest config...';
     try {
       const d = await fetch('/api/pipeline/core-config/resend', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
       }).then(r => r.json());
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium ' +
         (d.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-      el.textContent = (d.success ? '? ' : '? ') +
+      el.textContent = (d.success ? '✅ ' : '❌ ') +
         (d.pipeline_message || d.error || '') + (d.version ? ' (v' + d.version + ')' : '');
       loadStatus(); loadSendLog();
     } catch (e) {
       el.className = 'mt-4 p-3 rounded-xl text-sm font-medium bg-red-50 text-red-600';
-      el.textContent = '? Network error: ' + e.message;
+      el.textContent = '❌ Network error: ' + e.message;
+    }
+  }
+
+  async function downloadLatestCoreConfig() {
+    try {
+      const d = await fetch('/api/pipeline/core-config/latest').then(r => r.json());
+      if (!d.success || !d.config) {
+        toast('No config available to download', false);
+        return;
+      }
+      const config = d.config.config;
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `core_config_v${d.config.version}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast(`Downloaded config v${d.config.version}`);
+    } catch (e) {
+      toast('Download failed: ' + e.message, false);
+    }
+  }
+
+  // -- JSON Upload Functions --------------------------------------------
+  let _uploadedJsonContent = null;
+  let _uploadedJsonValid = false;
+
+  // Setup drag & drop for JSON upload area
+  function setupDragAndDrop() {
+    const dropArea = document.getElementById('jsonUploadArea');
+    if (!dropArea) return;
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, () => {
+        dropArea.classList.add('drag-over');
+      }, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, () => {
+        dropArea.classList.remove('drag-over');
+      }, false);
+    });
+    
+    dropArea.addEventListener('drop', handleDrop, false);
+    
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.json')) {
+          document.getElementById('coreJsonFile').files = files;
+          validateCoreConfigJson();
+        } else {
+          showJsonResult('❌ Please drop a JSON file', false);
+        }
+      }
+    }
+  }
+
+  function validateCoreConfigJson() {
+    const fileInput = document.getElementById('coreJsonFile');
+    const resultDiv = document.getElementById('jsonUploadResult');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+      showJsonResult('Please select a JSON file first', false);
+      return;
+    }
+    
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+      try {
+        const content = e.target.result;
+        const config = JSON.parse(content);
+        
+        // Basic validation
+        const errors = [];
+        if (!config.service_name && !config.services) {
+          errors.push('Missing service_name or services section');
+        }
+        if (config.services) {
+          if (config.services.modbus && !config.services.modbus.service_name) {
+            errors.push('modbus service missing service_name');
+          }
+          if (config.services.loadcell && !config.services.loadcell.service_name) {
+            errors.push('loadcell service missing service_name');
+          }
+        }
+        
+        if (errors.length > 0) {
+          showJsonResult('❌ Validation failed:\n' + errors.join('\n'), false);
+          _uploadedJsonValid = false;
+          _uploadedJsonContent = null;
+        } else {
+          const summary = [
+            '✅ Valid JSON config!',
+            `Service: ${config.service_name || 'N/A'}`,
+            `Services: ${Object.keys(config.services || {}).join(', ') || 'none'}`
+          ].join('\n');
+          showJsonResult(summary, true);
+          _uploadedJsonValid = true;
+          _uploadedJsonContent = content;
+        }
+      } catch (err) {
+        showJsonResult('❌ Invalid JSON: ' + err.message, false);
+        _uploadedJsonValid = false;
+        _uploadedJsonContent = null;
+      }
+    };
+    
+    reader.onerror = function() {
+      showJsonResult('❌ Error reading file', false);
+      _uploadedJsonValid = false;
+      _uploadedJsonContent = null;
+    };
+    
+    reader.readAsText(file);
+  }
+
+  function showJsonResult(msg, isSuccess) {
+    const resultDiv = document.getElementById('jsonUploadResult');
+    resultDiv.classList.remove('hidden');
+    resultDiv.className = 'mt-3 p-2 rounded-lg text-xs whitespace-pre-wrap ' + 
+      (isSuccess ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
+    resultDiv.textContent = msg;
+    setTimeout(() => {
+      if (resultDiv && !resultDiv.matches(':hover')) {
+        resultDiv.classList.add('hidden');
+      }
+    }, 8000);
+  }
+
+  async function uploadCoreConfigJson(sendToPipeline = true) {
+    if (!_uploadedJsonValid || !_uploadedJsonContent) {
+      showJsonResult('Please validate the JSON file first', false);
+      return;
+    }
+    
+    const resultDiv = document.getElementById('jsonUploadResult');
+    resultDiv.className = 'mt-3 p-2 rounded-lg text-xs bg-stone-50 text-stone-500';
+    resultDiv.classList.remove('hidden');
+    resultDiv.textContent = sendToPipeline ? '⏳ Saving and sending to pipeline...' : '💾 Saving to database...';
+    
+    try {
+      const response = await fetch('/api/pipeline/core-config/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config_json: _uploadedJsonContent,
+          send_to_pipeline: sendToPipeline
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        showJsonResult(
+          '✅ ' + (data.sent ? 'Config saved and sent!' : (data.queued ? 'Config saved and queued for pipeline!' : 'Config saved to database!')) +
+          (data.version ? ' (v' + data.version + ')' : ''),
+          true
+        );
+        // Refresh the config history
+        if (typeof loadCoreConfigs === 'function') loadCoreConfigs();
+        if (typeof loadSendLog === 'function') loadSendLog();
+        if (typeof loadStatus === 'function') loadStatus();
+        
+        // Clear file input
+        document.getElementById('coreJsonFile').value = '';
+        _uploadedJsonContent = null;
+        _uploadedJsonValid = false;
+      } else {
+        showJsonResult('❌ Upload failed: ' + (data.error || 'Unknown error'), false);
+      }
+    } catch (err) {
+      showJsonResult('❌ Network error: ' + err.message, false);
     }
   }
 
@@ -851,9 +1078,9 @@
                     l.last_status === 'failed'  ? 'ver-fail' : 'ver-queue';
         const ver = l.last_version > 0
           ? `<span class="ver-badge ver-ok">v${l.last_version}</span>`
-          : '<span class="ver-badge ver-never"> </span>';
-        const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : ' ';
-        const msg = (l.last_message || '').slice(0, 60) + ((l.last_message||'').length > 60 ? ' ' : '');
+          : '<span class="ver-badge ver-never">—</span>';
+        const ts  = l.last_sent_at ? new Date(l.last_sent_at).toLocaleString() : '—';
+        const msg = (l.last_message || '').slice(0, 60) + ((l.last_message||'').length > 60 ? '…' : '');
         const tgt = tgtMap[l.config_type] || {};
         const cfgName = tgt.config_name || defaultCfgName(l.config_type);
         return `<tr class="border-b border-stone-50 hover:bg-stone-50">
@@ -861,10 +1088,10 @@
           <td class="py-2.5 pr-4 font-mono text-orange-500">${cfgName}</td>
           <td class="py-2.5 pr-4">${ver}</td>
           <td class="py-2.5 pr-4"><span class="ver-badge ${sc}">${l.last_status}</span></td>
-          <td class="py-2.5 pr-4 font-mono text-stone-500">${l.last_service || ' '}</td>
+          <td class="py-2.5 pr-4 font-mono text-stone-500">${l.last_service || '—'}</td>
           <td class="py-2.5 pr-4 text-stone-400 whitespace-nowrap">${ts}</td>
-          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message||'').replace(/"/g,'&quot;')}">${msg||' '}</td>
-        </tr>`;
+          <td class="py-2.5 text-stone-400 max-w-xs" title="${(l.last_message||'').replace(/"/g,'&quot;')}">${msg||'—'}</td>
+         </tr>`;
       }).join('');
     } catch (e) {
       document.getElementById('sendLogRows').innerHTML =
@@ -885,7 +1112,7 @@
       // Permanent
       document.getElementById('wl-permanent').innerHTML = (d.permanent || []).length
         ? d.permanent.map(e => wlChip(e, 'stone', false)).join('')
-        : '<span class="text-xs text-stone-300"> </span>';
+        : '<span class="text-xs text-stone-300">—</span>';
 
       // Named devices panel
       const namedEl = document.getElementById('wl-named');
@@ -913,11 +1140,10 @@
       document.getElementById('wl-count').textContent = (d.active || []).length + ' entries';
       document.getElementById('wl-active').innerHTML = (d.active || []).length
         ? d.active.map(e => `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full" style="background:#dcfce7;color:#15803d;">${e}</span>`).join('')
-        : '<span class="text-xs text-stone-300"> </span>';
+        : '<span class="text-xs text-stone-300">—</span>';
 
     } catch (e) { console.warn('Whitelist load error:', e); }
   }
-
 
   function wlChip(entry, color, removable) {
     const colors = {
@@ -971,8 +1197,6 @@
     } catch (e) { toast('Error: ' + e.message, false); }
   }
 
-  // Legacy stub kept so any stale references don t throw
-  async function addCustomEntry() { addDeviceName(); }
   async function removeCustomEntry(entry) {
     try {
       const d = await fetch('/api/pipeline/whitelist/custom', {
@@ -989,8 +1213,10 @@
     } catch (e) { toast('Error: ' + e.message, false); }
   }
 
+  // Initialize everything
   loadAll();
   loadWhitelist();
+  setupDragAndDrop();
 </script>
 </body>
 </html>
