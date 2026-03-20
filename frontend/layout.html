@@ -282,28 +282,54 @@
         #viewerBanner {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0;
+            inset: 0;
             z-index: 9999;
-            background: #FEF3C7;
-            border-bottom: 2px solid #F59E0B;
-            padding: 10px 20px;
-            font-size: 13px;
-            font-weight: 600;
-            color: #92400E;
+            background: rgba(0,0,0,0.45);
             align-items: center;
-            gap: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            justify-content: center;
         }
         #viewerBanner.show { display: flex; }
-        #viewerBanner i { font-size: 15px; color: #D97706; flex-shrink: 0; }
-        #viewerBanner .vb-close {
-            margin-left: auto;
-            cursor: pointer;
-            color: #92400E;
-            opacity: 0.6;
-            font-size: 14px;
+        #viewerBanner .vb-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+            padding: 36px 32px 28px;
+            max-width: 400px;
+            width: 92%;
+            text-align: center;
+            animation: vbSlideIn 0.25s ease;
         }
-        #viewerBanner .vb-close:hover { opacity: 1; }
+        @keyframes vbSlideIn {
+            from { opacity: 0; transform: translateY(-14px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0)     scale(1);    }
+        }
+        #viewerBanner .vb-icon {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: #FFFBEB;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 18px;
+            font-size: 24px;
+        }
+        #viewerBanner .vb-title {
+            font-size: 17px; font-weight: 700;
+            color: #1E293B; margin-bottom: 8px;
+        }
+        #viewerBanner .vb-desc {
+            font-size: 13px; color: #64748B;
+            line-height: 1.6; margin-bottom: 24px;
+        }
+        #viewerBanner .vb-close {
+            display: inline-flex; align-items: center; justify-content: center;
+            gap: 6px;
+            padding: 9px 24px;
+            background: #F59E0B; color: white;
+            border: none; border-radius: 8px;
+            font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+        #viewerBanner .vb-close:hover { background: #D97706; }
 
         /* Viewer mode: disable all interactive controls in the page content area */
         body.viewer-mode #contentArea input,
@@ -425,14 +451,14 @@
 <body>
     <!-- Viewer / Read-Only Banner (shown when this is not the first session) -->
     <div id="viewerBanner">
-        <i class="fa-solid fa-eye"></i>
-        <span>
-            <strong>View-Only Mode</strong> — Another user is currently editing.
-            You can browse but cannot make changes.
-        </span>
-        <span class="vb-close" onclick="document.getElementById('viewerBanner').classList.remove('show')" title="Dismiss">
-            <i class="fa-solid fa-xmark"></i>
-        </span>
+        <div class="vb-card">
+            <div class="vb-icon">👁</div>
+            <div class="vb-title">View-Only Mode</div>
+            <div class="vb-desc">Another user is currently editing.<br>You can browse but cannot make changes.</div>
+            <button class="vb-close" onclick="document.getElementById('viewerBanner').classList.remove('show')">
+                <i class="fa-solid fa-check"></i> Got it
+            </button>
+        </div>
     </div>
     <!-- ── Server Connection Alert Overlay ── -->
     <div id="serverAlertOverlay">
@@ -594,8 +620,6 @@
                 if (data.role === 'viewer') {
                     document.body.classList.add('viewer-mode');
                     document.getElementById('viewerBanner').classList.add('show');
-                    var mc = document.querySelector('.main-content');
-                    if (mc) mc.style.paddingTop = '46px';
                     var target = document.getElementById('contentArea') || document.body;
                     var obs = new MutationObserver(function(){
                         if (!document.body.classList.contains('viewer-mode'))
@@ -787,7 +811,7 @@
                     </div>
                     <div class="user-info">
                         <h4 id="sidebarUsername">Admin User</h4>
-                        <p>System Administrator</p>
+                        <p id="sidebarUserRole">System Administrator</p>
                     </div>
                     <button
                         onclick="handleLogout()"
@@ -948,12 +972,23 @@
 
         window.handleLogout = handleLogout;
 
-        // --- Per-user Access Control: hide pages + section titles ---
+        // --- Expose user_role globally so page scripts can read it immediately ---
+        // Also handles per-user page visibility restrictions.
         (async function applyPageVisibility() {
             try {
                 const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
                 if (!res.ok) return;
                 const data = await res.json();
+
+                // ── Expose role globally for page scripts (e.g. device-management.js) ──
+                window.__userRole = (data.user_role || 'user').toLowerCase();
+
+                // Update sidebar footer role label
+                const roleLabel = document.getElementById('sidebarUserRole');
+                if (roleLabel) {
+                    roleLabel.textContent = window.__userRole === 'admin' ? 'Administrator' : 'System User';
+                }
+
                 const hidden = data.hidden_pages || [];
                 if (!hidden.length) return;
 

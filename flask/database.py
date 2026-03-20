@@ -174,10 +174,12 @@ def create_tables(cursor):
             device_id  TEXT    NOT NULL,
             name       TEXT    NOT NULL,
             unit       TEXT    DEFAULT '',
+            group_id   INTEGER DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, name),
-            FOREIGN KEY (device_id) REFERENCES loadcell_device(id) ON DELETE CASCADE
+            FOREIGN KEY (device_id) REFERENCES loadcell_device(id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE SET NULL
         )
     ''')
 
@@ -360,10 +362,15 @@ def create_tables(cursor):
             description      TEXT    DEFAULT '',
             enabled          BOOLEAN DEFAULT 1,
             writable         BOOLEAN DEFAULT 0,
+            retry_count      INTEGER DEFAULT 3,
+            timeout_ms       INTEGER DEFAULT 100,
+            register_count   INTEGER DEFAULT 1,
+            group_id         INTEGER DEFAULT NULL,
             created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(device_id, name),
-            FOREIGN KEY (device_id) REFERENCES external_device(id) ON DELETE CASCADE
+            FOREIGN KEY (device_id) REFERENCES external_device(id) ON DELETE CASCADE,
+            FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE SET NULL
         )
     ''')
 
@@ -521,6 +528,40 @@ def _migrate_existing_db(cursor):
                 'INSERT OR IGNORE INTO pipeline_send_log (config_type) VALUES (?)', (cfg_type,)
             )
         print("[DB] Migration: created pipeline_send_log table")
+
+    # -----------------------------------------------------------------------
+    # MIGRATION: Add missing columns to external_datapoints
+    # -----------------------------------------------------------------------
+    cursor.execute("PRAGMA table_info(external_datapoints)")
+    ext_cols = {r[1] for r in cursor.fetchall()}
+    
+    missing_ext_cols = [
+        ('retry_count', 'INTEGER DEFAULT 3'),
+        ('timeout_ms', 'INTEGER DEFAULT 100'),
+        ('register_count', 'INTEGER DEFAULT 1'),
+        ('group_id', 'INTEGER DEFAULT NULL'),
+    ]
+    
+    for col_name, col_def in missing_ext_cols:
+        if col_name not in ext_cols:
+            try:
+                cursor.execute('ALTER TABLE external_datapoints ADD COLUMN {} {}'.format(col_name, col_def))
+                print("[DB] Migration: added external_datapoints.{}".format(col_name))
+            except Exception as e:
+                print("[DB] Migration warning: could not add {}: {}".format(col_name, e))
+    
+    # -----------------------------------------------------------------------
+    # MIGRATION: Add missing columns to loadcell_datapoints
+    # -----------------------------------------------------------------------
+    cursor.execute("PRAGMA table_info(loadcell_datapoints)")
+    lc_cols = {r[1] for r in cursor.fetchall()}
+    
+    if 'group_id' not in lc_cols:
+        try:
+            cursor.execute('ALTER TABLE loadcell_datapoints ADD COLUMN group_id INTEGER DEFAULT NULL')
+            print("[DB] Migration: added loadcell_datapoints.group_id")
+        except Exception as e:
+            print("[DB] Migration warning: could not add group_id to loadcell_datapoints: {}".format(e))
 
     # webui_users: add max_sessions column if missing (migration for existing DBs)
     cursor.execute("PRAGMA table_info(webui_users)")

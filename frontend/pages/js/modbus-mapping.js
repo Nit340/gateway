@@ -124,7 +124,7 @@ function _renderTagsTable() {
     const grpId = document.getElementById('groupFilter')?.value || '';
     let rows = _tags || [];
     if (devId) rows = rows.filter(t => String(t.device_id) === String(devId));
-    if (grpId) rows = rows.filter(t => String(t.group_id) === String(grpId));
+    if (grpId) rows = rows.filter(t => (t.group_name || t.group || '') === grpId);
 
     if (count) count.textContent = rows.length;
 
@@ -216,7 +216,7 @@ function _renderTagsBrowser() {
     const grpId = document.getElementById('tagGroupFilter')?.value || '';
     let rows = _tags || [];
     if (devId) rows = rows.filter(t => String(t.device_id) === String(devId));
-    if (grpId) rows = rows.filter(t => String(t.group_id) === String(grpId));
+    if (grpId) rows = rows.filter(t => (t.group_name || t.group || '') === grpId);
     
     if (q) {
         rows = rows.filter(t => {
@@ -270,9 +270,9 @@ function _renderTagsBrowser() {
         const slaveId = tag.slave_id !== undefined ? tag.slave_id : (tag.slaveId !== undefined ? tag.slaveId : 1);
         const groupName = tag.group_name || tag.group || null;
         const writable = tag.writable !== undefined ? tag.writable : false;
-        const retryCount = tag.retry_count || tag.retryCount || 1;
-        const timeoutMs = tag.timeout_ms || tag.timeoutMs || 100;
-        const registerCount = tag.register_count || tag.registerCount || 1;
+        const retryCount = tag.retry_count ?? tag.retryCount ?? 1;
+        const timeoutMs = tag.timeout_ms ?? tag.timeoutMs ?? 100;
+        const registerCount = tag.register_count ?? tag.registerCount ?? 1;
         
         let badgeClass = _pBadge(tag.protocol) || 'modbus-tcp';
         if (isLC) badgeClass = 'loadcell';
@@ -501,7 +501,7 @@ function _updateDropdownFilters() {
         sel.value = cur;
     });
 
-    // Group filter dropdowns
+    // Group filter dropdowns — use group name as value since tags store group as name string
     ['groupFilter', 'tagGroupFilter'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
@@ -509,7 +509,7 @@ function _updateDropdownFilters() {
         sel.innerHTML = '<option value="">All Groups</option>';
         (_groups || []).forEach(g => {
             const o = document.createElement('option');
-            o.value = g.id;
+            o.value = g.name;   // ← use name, not id
             o.textContent = g.name;
             sel.appendChild(o);
         });
@@ -626,6 +626,7 @@ function _openAddTagModal(preDevId) {
     _selectedDeviceData = null;
 
     _clearModbusForm('mb');
+    _populateGroupDropdowns();   // ← refresh groups every time modal opens
 
     const btn = document.getElementById('proceedToTagForm');
     if (btn) {

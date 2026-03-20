@@ -38,11 +38,17 @@ async def get_all_datapoints(request):
                     ed.enabled,
                     ed.slave_id         AS tag_slave_id,
                     ed.writable,
+                    ed.retry_count,
+                    ed.timeout_ms,
+                    ed.register_count,
+                    ed.group_id,
                     e.name              AS device_name,
                     e.protocol          AS ext_protocol,
-                    e.slave_id          AS device_slave_id
+                    e.slave_id          AS device_slave_id,
+                    tg.name             AS group_name
                 FROM external_datapoints ed
                 JOIN external_device e ON ed.device_id = e.id
+                LEFT JOIN tag_groups tg ON ed.group_id = tg.id
                 ORDER BY ed.device_id, ed.slave_id, ed.name
             ''')
             for row in cursor.fetchall():
@@ -75,16 +81,16 @@ async def get_all_datapoints(request):
                     'enabled': bool(r['enabled']),
                     'slave_id': r['tag_slave_id'] if r['tag_slave_id'] is not None else (r['device_slave_id'] or 1),
                     'slaveId': r['tag_slave_id'] if r['tag_slave_id'] is not None else (r['device_slave_id'] or 1),
-                    'group_id': None,
-                    'group_name': '',
-                    'group': '',
+                    'group_id': r['group_id'],
+                    'group_name': r['group_name'] or '',
+                    'group': r['group_name'] or '',
                     'writable': bool(r['writable']) if r['writable'] is not None else False,
-                    'retry_count': 1,
-                    'retryCount': 1,
-                    'timeout_ms': 100,
-                    'timeoutMs': 100,
-                    'register_count': 1,
-                    'registerCount': 1,
+                    'retry_count': r.get('retry_count', 1),
+                    'retryCount': r.get('retry_count', 1),
+                    'timeout_ms': r.get('timeout_ms', 100),
+                    'timeoutMs': r.get('timeout_ms', 100),
+                    'register_count': r.get('register_count', 1),
+                    'registerCount': r.get('register_count', 1),
                     'type': 'external',
                     'protocol': proto,
                     'protocol_type': protocol_type,
@@ -103,9 +109,12 @@ async def get_all_datapoints(request):
                 l.capacity_max as capacity,
                 l.unit as device_unit,
                 l.load_name,
-                l.capacity_name
+                l.capacity_name,
+                ld.group_id,
+                tg.name AS group_name
             FROM loadcell_datapoints ld
             JOIN loadcell_device l ON ld.device_id = l.id
+            LEFT JOIN tag_groups tg ON ld.group_id = tg.id
             ORDER BY ld.device_id, ld.name
         ''')
         for row in cursor.fetchall():
@@ -126,7 +135,10 @@ async def get_all_datapoints(request):
                 'description': "Loadcell {}".format(r['name']),
                 'enabled': True,
                 'type': 'loadcell',
-                'protocol': 'loadcell'
+                'protocol': 'loadcell',
+                'group_id': r['group_id'],
+                'group_name': r['group_name'] or '',
+                'group': r['group_name'] or '',
             })
 
         conn.close()
@@ -137,6 +149,8 @@ async def get_all_datapoints(request):
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
+
+
 async def add_modbus_datapoint(request):
     """POST - Add Modbus datapoint tag to an external device"""
     try:
@@ -166,18 +180,42 @@ async def add_modbus_datapoint(request):
             conn.close()
             return web.json_response({'error': 'Tag name already exists for this device'}, status=400)
 
+        # Handle group field - convert group name to group_id
+        group_id = None
+        group_name = data.get('group', '')
+        if group_name:
+            cursor.execute('SELECT id FROM tag_groups WHERE name = ?', (group_name,))
+            grp = cursor.fetchone()
+            if grp:
+                group_id = grp[0]
+            else:
+                print("Group '{}' not found, ignoring".format(group_name))
+
         cursor.execute('''
             INSERT INTO external_datapoints (
                 device_id, name, slave_id, register_address, register_type, data_type,
-                byte_order, word_order, scale_factor, offset, unit, description, enabled, writable
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                byte_order, word_order, scale_factor, offset, unit, description, enabled, writable,
+                retry_count, timeout_ms, register_count, group_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            device_id, data.get('tag_name'), data.get('slave_id', 1),
-            data.get('register_address'), data.get('register_type', 'holding'),
-            data.get('data_type', 'uint16'), data.get('byte_order', 'big'),
-            data.get('word_order', 'big'), data.get('scale_factor', 1.0),
-            data.get('offset', 0.0), data.get('unit', ''), data.get('description', ''),
-            data.get('enabled', True), data.get('writable', False)
+            device_id, 
+            data.get('tag_name'), 
+            data.get('slave_id', 1),
+            data.get('register_address'), 
+            data.get('register_type', 'holding'),
+            data.get('data_type', 'uint16'), 
+            data.get('byte_order', 'big'),
+            data.get('word_order', 'big'), 
+            data.get('scale_factor', 1.0),
+            data.get('offset', 0.0), 
+            data.get('unit', ''), 
+            data.get('description', ''),
+            data.get('enabled', True), 
+            data.get('writable', False),
+            data.get('retry_count', 1), 
+            data.get('timeout_ms', 100),
+            data.get('register_count', 1), 
+            group_id
         ))
 
         datapoint_id = cursor.lastrowid
@@ -191,6 +229,8 @@ async def add_modbus_datapoint(request):
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
+
+
 async def update_modbus_datapoint(request):
     """PUT - Update Modbus tag"""
     try:
@@ -237,20 +277,23 @@ async def update_modbus_datapoint(request):
                 update_fields.append('{} = ?'.format(db_field))
                 values.append(data[key])
         
-        # Handle group field separately (quoted)
+        # Handle group field - update group_id based on group name
         if 'group' in data:
-            update_fields.append('"group" = ?')
-            values.append(data['group'] or '')
-            
-            # Also try to update group_id if group name matches a device group
+            # Try to find group_id by group name
             if data['group']:
                 cursor.execute('SELECT id FROM tag_groups WHERE name = ?', (data['group'],))
                 grp = cursor.fetchone()
                 if grp:
                     update_fields.append('group_id = ?')
                     values.append(grp[0])
+                else:
+                    # Group name not found, set group_id to NULL
+                    update_fields.append('group_id = ?')
+                    values.append(None)
             else:
-                update_fields.append('group_id = NULL')
+                # If group is empty/null, clear the group_id
+                update_fields.append('group_id = ?')
+                values.append(None)
         
         if not update_fields:
             conn.close()
@@ -278,6 +321,7 @@ async def update_modbus_datapoint(request):
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
+
 
 # ============================================================================
 # DELETE TAG
@@ -323,6 +367,7 @@ async def delete_datapoint(request):
     except Exception as e:
         print("Error deleting tag: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
+
 
 # ============================================================================
 # GET AVAILABLE DEVICES FOR TAG CREATION
@@ -382,6 +427,8 @@ async def get_available_devices(request):
     except Exception as e:
         print("Error getting available devices: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
+
+
 async def get_protocol_form(request):
     """GET form schema for creating tag by protocol"""
     try:
@@ -557,6 +604,7 @@ async def get_protocol_form(request):
         print("Error getting protocol form: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
+
 # ============================================================================
 # UPDATE LOADCELL DATAPOINT (unit only)
 # ============================================================================
@@ -596,6 +644,7 @@ async def update_loadcell_datapoint(request):
     except Exception as e:
         print("Error updating loadcell tag: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
+
 
 # ============================================================================
 # TAG GROUPS (tag_groups table - managed from tag mapping page)

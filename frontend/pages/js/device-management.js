@@ -14,6 +14,7 @@
     }
 
     // ==================== STATE ====================
+    let userRole = 'user'; // 'admin' | 'user'  — fetched from /api/auth/session-role
     let devices = [];
     let selectedDeviceId = null;
     let isSaving = false;
@@ -293,13 +294,160 @@
     async function initApp() {
         console.log('Initializing Device Management...');
 
+        await fetchUserRole();
         await loadPortConfig();
         await loadDevices();
         renderDevicesTable();
         setupEventListeners();
+        applyRoleAccess();
         startStatusPolling();
 
         console.log('Device Management initialized successfully');
+    }
+
+    // ==================== ROLE BASED ACCESS ====================
+    async function fetchUserRole() {
+        try {
+            const res = await fetch('/api/auth/session-role', { credentials: 'same-origin' });
+            if (res.ok) {
+                const data = await res.json();
+                // user_role is 'admin' or 'user'; fall back to window.__userRole set by layout
+                userRole = (data.user_role || data.role || window.__userRole || 'user').toLowerCase();
+            }
+        } catch (e) {
+            userRole = (window.__userRole || 'user').toLowerCase();
+        }
+        window.__userRole = userRole;
+        console.log('[DeviceMgmt] userRole =', userRole);
+    }
+
+    function isAdmin() {
+        return userRole === 'admin';
+    }
+
+    /**
+     * Applies role-based access control to the Device Management page.
+     *
+     * Admin:
+     *   - All controls fully enabled (default state)
+     *   - ADC "Protected" fields are unlocked (read/write)
+     *   - "Add Device" button visible & clickable
+     *   - Edit / Delete actions in table and detail view visible
+     *
+     * Non-Admin (viewer/user):
+     *   - "Add Device" button hidden
+     *   - Edit / Delete buttons hidden in detail panel
+     *   - ADC "Protected" fields remain readonly (existing HTML behaviour)
+     *   - Table Edit/Delete action buttons hidden
+     */
+    function applyRoleAccess() {
+        const admin = isAdmin();
+
+        // ── ADC Protected fields (loadcell Add Device panel) ───
+        // Admin: unlocked/editable; Non-admin: readonly (locked)
+        _setAdcFieldsEditable(admin);
+    }
+
+    /**
+     * Unlock / lock the ADC "Protected" fields in the Add Device panel.
+     * When admin=true the fields become normal editable inputs.
+     * When admin=false they stay locked (readonly / disabled).
+     */
+    function _setAdcFieldsEditable(admin) {
+        // IDs of protected ADC inputs in the Add Device panel
+        const protectedInputs = ['lcResolutionBits', 'lcEffectiveBits', 'lcGain', 'lcVref', 'lcRawMin', 'lcRawMax'];
+        const protectedSelects = ['lcSigned'];
+
+        protectedInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (admin) {
+                el.removeAttribute('readonly');
+                el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+                el.classList.add('focus:ring-2', 'focus:ring-primary', 'focus:border-primary');
+            } else {
+                el.setAttribute('readonly', true);
+                el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+            }
+        });
+
+        protectedSelects.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (admin) {
+                el.removeAttribute('disabled');
+                el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+            } else {
+                el.setAttribute('disabled', true);
+                el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+            }
+        });
+
+        // Update the "Protected" badge label for admins
+        const protectedBadges = document.querySelectorAll('#addDevicePanel .fa-lock');
+        protectedBadges.forEach(icon => {
+            const badge = icon.closest('span');
+            if (!badge) return;
+            if (admin) {
+                badge.innerHTML = '<i class="fa-solid fa-lock-open text-xs"></i> Admin Editable';
+                badge.classList.remove('bg-amber-50', 'border-amber-200', 'text-amber-700');
+                badge.classList.add('bg-blue-50', 'border-blue-200', 'text-blue-700');
+            } else {
+                badge.innerHTML = '<i class="fa-solid fa-lock text-xs"></i> Protected';
+                badge.classList.remove('bg-blue-50', 'border-blue-200', 'text-blue-700');
+                badge.classList.add('bg-amber-50', 'border-amber-200', 'text-amber-700');
+            }
+        });
+    }
+
+    /**
+     * Same as _setAdcFieldsEditable but targets the Edit Device panel.
+     * Called after the edit panel is populated with device data.
+     */
+    function _setEditPanelAdcFieldsEditable(admin) {
+        const editProtectedInputs = ['editLcResolutionBits', 'editLcEffectiveBits', 'editLcGain', 'editLcVref', 'editLcRawMin', 'editLcRawMax'];
+        const editProtectedSelects = ['editLcSigned'];
+
+        editProtectedInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (admin) {
+                el.removeAttribute('readonly');
+                el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+                el.classList.add('focus:ring-2', 'focus:ring-primary', 'focus:border-primary');
+            } else {
+                el.setAttribute('readonly', true);
+                el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+            }
+        });
+
+        editProtectedSelects.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (admin) {
+                el.removeAttribute('disabled');
+                el.classList.remove('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+            } else {
+                el.setAttribute('disabled', true);
+                el.classList.add('bg-slate-100', 'text-slate-500', 'cursor-not-allowed');
+            }
+        });
+
+        // Update badges in edit panel
+        const editBadges = document.querySelectorAll('#editDevicePanel .fa-lock, #editDeviceConfigFields .fa-lock');
+        editBadges.forEach(icon => {
+            const badge = icon.closest('span');
+            if (!badge) return;
+            if (admin) {
+                badge.innerHTML = '<i class="fa-solid fa-lock-open text-xs"></i> Admin Editable';
+                badge.classList.remove('bg-amber-50', 'border-amber-200', 'text-amber-700');
+                badge.classList.add('bg-blue-50', 'border-blue-200', 'text-blue-700');
+            } else {
+                badge.innerHTML = '<i class="fa-solid fa-lock text-xs"></i> Protected';
+                badge.classList.remove('bg-blue-50', 'border-blue-200', 'text-blue-700');
+                badge.classList.add('bg-amber-50', 'border-amber-200', 'text-amber-700');
+            }
+        });
     }
 
     async function loadPortConfig() {
@@ -474,20 +622,7 @@
     }
 
     function buildLastPollHtml(device) {
-        const status = getDeviceOnlineStatus(device);
-        if (status === 'Online') {
-            return `<div class="flex items-center gap-1.5">
-                <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-ping opacity-75"></span>
-                <span class="text-xs font-medium text-green-600">Live</span>
-            </div>`;
-        }
-        const group = getServiceGroup(device);
-        const lastSeen = group ? lastConnectedAt[group] : null;
-        const ago = formatTimeAgo(lastSeen);
-        if (ago) {
-            return `<span class="text-xs text-slate-400">Last: ${ago}</span>`;
-        }
-        return `<span class="text-xs text-slate-400">—</span>`;
+        return '';
     }
 
     function buildStatusBadgeHtml(status) {
@@ -1627,6 +1762,9 @@
                 if (cfgDiv) {
                     cfgDiv.innerHTML = _buildEditConfigFields(proto, config);
                 }
+
+                // Apply role access to edit panel ADC fields
+                _setEditPanelAdcFieldsEditable(isAdmin());
 
                 // Open the panel
                 const panel = document.getElementById('editDevicePanel');
