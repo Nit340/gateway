@@ -347,7 +347,10 @@ async def api_webui_users_post(request):
     _require_admin(request)
     try:
         body = await request.json()
-        uid = create_webui_user(body['username'], body['password'], body.get('display_name', ''))
+        role = body.get('role', 'user')
+        if role not in ('admin', 'user'):
+            return web.json_response({'success': False, 'error': "role must be 'admin' or 'user'"}, status=400)
+        uid = create_webui_user(body['username'], body['password'], body.get('display_name', ''), role)
         if uid:
             return web.json_response({'success': True, 'id': uid})
         return web.json_response({'success': False, 'error': 'Could not create user (duplicate?)'}, status=400)
@@ -397,7 +400,7 @@ async def webui_login_api(request):
         WEBUI_USER_TOKENS[user['username']] = []
     WEBUI_USER_TOKENS[user['username']].append(token)
 
-    resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name']})
+    resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name'], 'role': user['role']})
     resp.set_cookie('gw_webui_session', token, httponly=True, path='/', max_age=30*24*3600)
     return resp
 
@@ -433,28 +436,30 @@ async def webui_session_status(request):
         from database import get_db_connection as _gdc
         conn = _gdc()
         cur  = conn.cursor()
-        cur.execute('SELECT id FROM webui_users WHERE username=?', (username,))
+        cur.execute('SELECT id, role FROM webui_users WHERE username=?', (username,))
         row = cur.fetchone()
         conn.close()
-        user_id = row[0] if row else None
+        user_id   = row[0] if row else None
+        user_role = row[1] if row else 'user'
         hidden_pages = get_user_page_restrictions(user_id) if user_id else []
     except Exception:
         hidden_pages = []
+        user_role = 'user'
     return web.json_response({
         'authenticated': True,
         'username': username,
+        'role': user_role,
         'hidden_pages': hidden_pages,
     })
 
 async def webui_session_role(request):
     """GET /api/auth/session-role
-    Returns whether the current session is the 'editor' (first login) or a 'viewer'.
-    The editor is the token at index 0 of WEBUI_USER_TOKENS[username].
-    All other active tokens for the same user are viewers (read-only).
+    Returns the user's DB role ('admin' or 'user') and whether the current
+    session is the 'editor' (first login) or a 'viewer' (read-only).
     """
     token = request.cookies.get('gw_webui_session')
     if not token or token not in WEBUI_SESSIONS:
-        return web.json_response({'authenticated': False, 'role': 'viewer'}, status=401)
+        return web.json_response({'authenticated': False, 'role': 'viewer', 'user_role': 'user'}, status=401)
 
     info = WEBUI_SESSIONS[token]
     username = info['username'] if isinstance(info, dict) else info
@@ -465,7 +470,19 @@ async def webui_session_role(request):
     active_tokens = [t for t in user_tokens if t in WEBUI_SESSIONS]
     role = 'editor' if (active_tokens and active_tokens[0] == token) else 'viewer'
 
-    return web.json_response({'authenticated': True, 'username': username, 'role': role})
+    # Fetch DB-level role ('admin' or 'user')
+    try:
+        from database import get_db_connection as _gdc
+        _conn = _gdc()
+        _cur  = _conn.cursor()
+        _cur.execute('SELECT role FROM webui_users WHERE username=?', (username,))
+        _row  = _cur.fetchone()
+        _conn.close()
+        user_role = _row[0] if _row else 'user'
+    except Exception:
+        user_role = 'user'
+
+    return web.json_response({'authenticated': True, 'username': username, 'role': role, 'user_role': user_role})
 
 
 async def database_viewer_handler(request):
@@ -668,15 +685,15 @@ async def api_webui_sessions_get(request):
         from database import get_db_connection as _gdc2
         conn = _gdc2()
         cur = conn.cursor()
-        cur.execute('SELECT id, username, display_name, max_sessions FROM webui_users')
-        user_rows = {r[1]: {'id': r[0], 'display_name': r[2], 'max_sessions': r[3] or 1} for r in cur.fetchall()}
+        cur.execute('SELECT id, username, display_name, role, max_sessions FROM webui_users')
+        user_rows = {r[1]: {'id': r[0], 'display_name': r[2], 'role': r[3] or 'user', 'max_sessions': r[4] or 1} for r in cur.fetchall()}
         conn.close()
     except Exception:
         user_rows = {}
     result = []
     for s in sessions:
         u = user_rows.get(s['username'], {})
-        result.append({**s, 'user_id': u.get('id'), 'display_name': u.get('display_name', s['username']), 'max_sessions': u.get('max_sessions', 1)})
+        result.append({**s, 'user_id': u.get('id'), 'display_name': u.get('display_name', s['username']), 'role': u.get('role', 'user'), 'max_sessions': u.get('max_sessions', 1)})
     return web.json_response({'sessions': result})
 
 

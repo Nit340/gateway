@@ -266,6 +266,7 @@ def create_tables(cursor):
             username   TEXT    NOT NULL UNIQUE,
             password   TEXT    NOT NULL,          -- SHA-256 hex digest
             display_name TEXT  DEFAULT '',
+            role       TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
             enabled    BOOLEAN DEFAULT 1,
             max_sessions INTEGER DEFAULT 1,
             last_login TIMESTAMP,
@@ -846,8 +847,8 @@ def insert_default_data(cursor):
 
     # Default WebUI user
     cursor.execute(
-        'INSERT OR IGNORE INTO webui_users (username, password, display_name) VALUES (?, ?, ?)',
-        ('admin', _hash_password('admin'), 'Crane Operator')
+        'INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
+        ('admin', _hash_password('admin'), 'Crane Operator', 'admin')
     )
 
     # Default pipeline service targets
@@ -910,7 +911,7 @@ def verify_webui_user(username, password):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            'SELECT id, username, display_name FROM webui_users WHERE username=? AND password=? AND enabled=1',
+            'SELECT id, username, display_name, role FROM webui_users WHERE username=? AND password=? AND enabled=1',
             (username, _hash_password(password))
         )
         row = cursor.fetchone()
@@ -918,7 +919,7 @@ def verify_webui_user(username, password):
             cursor.execute('UPDATE webui_users SET last_login=CURRENT_TIMESTAMP WHERE id=?', (row[0],))
             conn.commit()
         conn.close()
-        return {'id': row[0], 'username': row[1], 'display_name': row[2]} if row else None
+        return {'id': row[0], 'username': row[1], 'display_name': row[2], 'role': row[3]} if row else None
     except Exception as e:
         print("[DB] verify_webui_user error: {}".format(e))
         return None
@@ -1466,23 +1467,23 @@ def get_all_webui_users():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT id, username, display_name, enabled, last_login, created_at FROM webui_users ORDER BY username')
+        cursor.execute('SELECT id, username, display_name, role, enabled, last_login, created_at FROM webui_users ORDER BY username')
         rows = cursor.fetchall()
         conn.close()
-        return [{'id': r[0], 'username': r[1], 'display_name': r[2], 'enabled': r[3],
-                 'last_login': r[4], 'created_at': r[5]} for r in rows]
+        return [{'id': r[0], 'username': r[1], 'display_name': r[2], 'role': r[3], 'enabled': r[4],
+                 'last_login': r[5], 'created_at': r[6]} for r in rows]
     except Exception as e:
         print("Error getting webui users: {}".format(e))
         return []
 
 
-def create_webui_user(username, password, display_name=''):
+def create_webui_user(username, password, display_name='', role='user'):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO webui_users (username, password, display_name) VALUES (?, ?, ?)',
-            (username, _hash_password(password), display_name)
+            'INSERT INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
+            (username, _hash_password(password), display_name, role)
         )
         uid = cursor.lastrowid
         conn.commit()
@@ -1501,6 +1502,7 @@ def update_webui_user(user_id, data):
         if 'username'     in data: sets.append('username=?');     values.append(data['username'])
         if 'password'     in data: sets.append('password=?');     values.append(_hash_password(data['password']))
         if 'display_name' in data: sets.append('display_name=?'); values.append(data['display_name'])
+        if 'role'         in data: sets.append('role=?');         values.append(data['role'])
         if 'enabled'      in data: sets.append('enabled=?');      values.append(1 if data['enabled'] else 0)
         if sets:
             values.append(user_id)

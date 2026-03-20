@@ -351,15 +351,15 @@ function _renderMappingsTable(conn) {
                                     style="min-width:160px"
                                     data-conn="${_esc(conn.id)}" data-group-idx="${idx}"
                                     onchange="window._updateGroupChannel('${_esc(conn.id)}', ${idx}, this.value)">
-                                <option value="">  default channel  </option>
-                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label=" Publish">` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                <option value="">⚙️ default channel</option>
+                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label="📤 Publish">` : ''}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>↗️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label=" Subscribe">` : ''}
-                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="📥 Subscribe">` : ''}
+                                ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>↙️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
                                 ${currentChannel && !pubChannelOptions.find(c => c.name === currentChannel)
-                                    ? `<option value="${_esc(currentChannel)}" selected>${_esc(currentChannel)}</option>` : ''}
+                                    ? `<option value="${_esc(currentChannel)}" selected>📌 ${_esc(currentChannel)}</option>` : ''}
                             </select>
                         </div>
                         <div class="flex items-center gap-2">
@@ -477,15 +477,15 @@ function _renderMappingsTable(conn) {
                 <td class="p-2">
                     <select class="compact-select text-xs tag-channel" data-mapping-idx="${item.mappingIdx}"
                             onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
-                        <option value="">  default  </option>
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label=" Publish">` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        <option value="">⚙️ default</option>
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label="📤 Publish">` : ''}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>↗️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label=" Subscribe">` : ''}
-                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}> ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="📥 Subscribe">` : ''}
+                        ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>↙️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
                         ${item.channel && !pubChannelOptionsInd.find(c => c.name === item.channel)
-                            ? `<option value="${_esc(item.channel)}" selected>${_esc(item.channel)}</option>` : ''}
+                            ? `<option value="${_esc(item.channel)}" selected>📌 ${_esc(item.channel)}</option>` : ''}
                     </select>
                 </td>
                 <td class="p-2 text-center">
@@ -1160,11 +1160,15 @@ async function _openTagsModal(conn) {
     // Inject mode controls (group vs individual) + channel select
     const chOptions = _getPublishChannelOptions();
     const chOptHtml = [
-        '<option value=""> default channel </option>',
+        '<option value="">⚙️ default channel</option>',
+        chOptions.filter(ch => ch.dir === 'publish').length ? '<optgroup label="📤 Publish">' : '',
         ...chOptions.filter(ch => ch.dir === 'publish').map(ch =>
-            `<option value="${_esc(ch.name)}">? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
+            `<option value="${_esc(ch.name)}">↗️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
+        chOptions.filter(ch => ch.dir === 'publish').length ? '</optgroup>' : '',
+        chOptions.filter(ch => ch.dir === 'subscribe').length ? '<optgroup label="📥 Subscribe">' : '',
         ...chOptions.filter(ch => ch.dir === 'subscribe').map(ch =>
-            `<option value="${_esc(ch.name)}">? ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
+            `<option value="${_esc(ch.name)}">↙️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
+        chOptions.filter(ch => ch.dir === 'subscribe').length ? '</optgroup>' : '',
     ].join('');
 
     if (!_el('modal-mapping-controls')) {
