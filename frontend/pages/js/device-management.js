@@ -388,7 +388,7 @@
     // ==================== LOAD PORT CONFIG ====================
     async function loadPortConfig() {
         try {
-            const res = await fetch('/api/port-config');
+            const res = await fetch('/api/port-config', { credentials: 'same-origin' });
             const data = await res.json();
             if (data.success && data.ports) {
                 portConfig.modbus = data.ports.filter(p => p.device_type === 'modbus');
@@ -426,7 +426,7 @@
     // ==================== DATA LOADING ====================
     async function loadDevices() {
         try {
-            const response = await fetch('/api/devices');
+            const response = await fetch('/api/devices', { credentials: 'same-origin' });
             const data = await response.json();
             
             if (data.devices) {
@@ -495,7 +495,7 @@
 
     async function fetchAndApplyPipelineStatus() {
         try {
-            const res = await fetch('/api/pipeline/status');
+            const res = await fetch('/api/pipeline/status', { credentials: 'same-origin' });
             const data = await res.json();
             pipelineStatus = {
                 modbus_service: data.modbus_service || null,
@@ -538,15 +538,7 @@
     }
 
     function applyStatusToTable() {
-        devices.forEach(device => {
-            const row = document.getElementById(`device-${device.id}`);
-            if (!row) return;
-            const statusCell = row.querySelector('.device-status-cell');
-            if (statusCell) {
-                const status = getDeviceOnlineStatus(device);
-                statusCell.innerHTML = buildStatusBadgeHtml(status);
-            }
-        });
+        // Last Poll column is intentionally left blank
     }
 
     // ==================== RENDERING ====================
@@ -616,9 +608,7 @@
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-slate-700 font-mono text-xs" title="${getAddressTooltip(device)}">${escapeHtml(address)}</div>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap device-status-cell">
-                    ${statusBadge}
-                </td>
+                <td class="px-6 py-4 whitespace-nowrap device-status-cell"></td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button class="text-green-600 hover:text-green-800 mr-3" onclick="window.deviceManagement.viewDeviceInline('${device.id}')" title="View Details">
                         <i class="fa-solid fa-eye"></i>
@@ -1224,13 +1214,13 @@
                     lc_mode: lcMode,
                     device_path: devicePath,
                     poll_ms: parseInt(document.getElementById('lcPollMs')?.value) || 10,
-                    resolution_bits: 24,
-                    effective_bits: 14,
-                    signed: false,
-                    gain: 1,
-                    vref: 5,
-                    raw_min: 0,
-                    raw_max: 16383,
+                    resolution_bits: parseInt(document.getElementById('lcResolutionBits')?.value) || 24,
+                    effective_bits: parseInt(document.getElementById('lcEffectiveBits')?.value) || 14,
+                    signed: document.getElementById('lcSigned')?.value === 'true',
+                    gain: parseFloat(document.getElementById('lcGain')?.value) ?? 1,
+                    vref: parseFloat(document.getElementById('lcVref')?.value) ?? 5,
+                    raw_min: parseInt(document.getElementById('lcRawMin')?.value) ?? 0,
+                    raw_max: parseInt(document.getElementById('lcRawMax')?.value) ?? 16383,
                     capacity_min: parseFloat(document.getElementById('lcCapacityMin')?.value) || 0,
                     capacity_max: parseFloat(document.getElementById('lcCapacityMax')?.value) || 1000,
                     unit: document.getElementById('lcUnit')?.value?.trim() || 'kg',
@@ -1286,6 +1276,7 @@
             
             const response = await fetch('/api/devices', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
             });
@@ -1392,15 +1383,97 @@
                     </div>
                 </div>`;
 
+            const adminLockBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 font-medium" title="Sensitive ADC hardware configuration. Users are not permitted to change these values."><i class="fa-solid fa-lock text-xs"></i> Protected</span>`;
+
             return `<div class="space-y-4">
                 ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'}])}
                 ${singleChannel}
                 ${diffInfo}
                 ${inp('editPollMs','Poll Interval (ms)', cfg.poll_ms||10,'number','min="1" max="1000"')}
-                <div class="grid grid-cols-3 gap-3">
-                    ${inp('editCapacityMin','Capacity Min', cfg.capacity_min||0,'number','step="0.1"')}
-                    ${inp('editCapacityMax','Capacity Max', cfg.capacity_max||1000,'number','step="0.1"')}
-                    ${inp('editUnit','Unit', cfg.unit||'kg')}
+
+                <!-- ADC Hardware Parameters (Protected) -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ADC Hardware Parameters</p>
+                        ${adminLockBadge}
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                        <p class="text-xs text-amber-700 flex items-start gap-1.5">
+                            <i class="fa-solid fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
+                            <span>These are sensitive ADC hardware configuration values. Users are <strong>not permitted</strong> to modify them. Contact your Administrator if changes are required.</span>
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Resolution Bits</label>
+                            <input type="number" value="${cfg.resolution_bits ?? 24}" readonly id="editLcResolutionBits"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Effective Bits</label>
+                            <input type="number" value="${cfg.effective_bits ?? 14}" readonly id="editLcEffectiveBits"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Signed / Unsigned</label>
+                            <select disabled id="editLcSigned"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                                <option value="false" ${!cfg.signed?'selected':''}>Unsigned</option>
+                                <option value="true" ${cfg.signed?'selected':''}>Signed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Gain</label>
+                            <input type="number" value="${cfg.gain ?? 1}" readonly id="editLcGain"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Vref (V)</label>
+                            <input type="number" value="${cfg.vref ?? 5}" readonly id="editLcVref"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Value Range (Protected) -->
+                <div>
+                    <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Raw Value Range</p>
+                        ${adminLockBadge}
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Raw Min</label>
+                            <input type="number" value="${cfg.raw_min ?? 0}" readonly id="editLcRawMin"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Raw Max</label>
+                            <input type="number" value="${cfg.raw_max ?? 16383}" readonly id="editLcRawMax"
+                                class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                                title="Sensitive ADC configuration — not user-editable">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capacity Specification -->
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 border-b border-slate-100 pb-2">Capacity Specification</p>
+                    <div class="grid grid-cols-3 gap-3">
+                        ${inp('editCapacityMin','Min', cfg.capacity_min||0,'number','step="0.1"')}
+                        ${inp('editCapacityMax','Max', cfg.capacity_max||1000,'number','step="0.1"')}
+                        ${inp('editUnit','Unit', cfg.unit||'kg')}
+                    </div>
+                    <p class="mt-2 text-xs text-slate-400">
+                        <i class="fa-solid fa-circle-info mr-1"></i>
+                        <em>load_name</em> and <em>capacity_name</em> are auto-generated.
+                    </p>
                 </div>
             </div>`;
         }
@@ -1446,9 +1519,18 @@
             if (g('editCapacityMin')) cfg.capacity_min = parseFloat(g('editCapacityMin').value) || 0;
             if (g('editCapacityMax')) cfg.capacity_max = parseFloat(g('editCapacityMax').value) || 1000;
             if (g('editUnit')) cfg.unit = g('editUnit').value?.trim() || 'kg';
+            // ADC protected fields (admin-only, always persisted)
+            if (g('editLcResolutionBits')) cfg.resolution_bits = parseInt(g('editLcResolutionBits').value) || 24;
+            if (g('editLcEffectiveBits')) cfg.effective_bits = parseInt(g('editLcEffectiveBits').value) || 14;
+            if (g('editLcSigned')) cfg.signed = g('editLcSigned').value === 'true';
+            if (g('editLcGain')) cfg.gain = parseFloat(g('editLcGain').value) ?? 1;
+            if (g('editLcVref')) cfg.vref = parseFloat(g('editLcVref').value) ?? 5;
+            if (g('editLcRawMin')) cfg.raw_min = parseInt(g('editLcRawMin').value) ?? 0;
+            if (g('editLcRawMax')) cfg.raw_max = parseInt(g('editLcRawMax').value) ?? 16383;
 
             const response = await fetch(`/api/devices/${selectedDeviceId}`, {
                 method: 'PUT',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: deviceName,
@@ -1504,7 +1586,7 @@
                     selectedNameEl.textContent = 'Loading...';
                 }
                 
-                const response = await fetch(`/api/devices/${deviceId}/details`);
+                const response = await fetch(`/api/devices/${deviceId}/details`, { credentials: 'same-origin' });
                 const device = await response.json();
                 
                 if (!device || device.error) {
@@ -1529,7 +1611,7 @@
 
         editDevice: async function(deviceId) {
             try {
-                const response = await fetch(`/api/devices/${deviceId}/details`);
+                const response = await fetch(`/api/devices/${deviceId}/details`, { credentials: 'same-origin' });
                 const device = await response.json();
                 if (!device || device.error) { 
                     showNotification('Device not found', 'error'); 
@@ -1616,7 +1698,8 @@
             
             try {
                 const response = await fetch(`/api/devices/${deviceId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    credentials: 'same-origin'
                 });
                 
                 const result = await response.json();
@@ -1663,6 +1746,7 @@
             showNotification('Duplicating device and tags...', 'info');
             const response = await fetch(`/api/devices/${deviceId}/duplicate`, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' }
             });
             const result = await response.json();
@@ -1748,7 +1832,7 @@
         try {
             showNotification('Preparing export...', 'info');
             
-            const response = await fetch('/api/devices/export/csv');
+            const response = await fetch('/api/devices/export/csv', { credentials: 'same-origin' });
             
             if (!response.ok) {
                 throw new Error('Export failed');
@@ -1850,12 +1934,30 @@
                 showNotification('No valid data found in CSV', 'error');
                 return;
             }
-            
+
+            // Deduplicate within the CSV itself (keep first occurrence)
+            const seenCsvNames = new Set();
+            const uniqueRows = [];
+            const intraCsvDupes = [];
+            for (const row of rows) {
+                const nameKey = (row[nameIndex] || '').toLowerCase();
+                if (seenCsvNames.has(nameKey)) {
+                    intraCsvDupes.push(row[nameIndex]);
+                } else {
+                    seenCsvNames.add(nameKey);
+                    uniqueRows.push(row);
+                }
+            }
+            if (intraCsvDupes.length > 0) {
+                showNotification(`Removed ${intraCsvDupes.length} duplicate row(s) from CSV (kept first occurrence): ${intraCsvDupes.slice(0,3).join(', ')}${intraCsvDupes.length > 3 ? '...' : ''}`, 'warning', 5000);
+            }
+
+            // Build device list from deduplicated rows
             const currentLoadcellCount = devices.filter(d => d.protocol === 'loadcell').length;
             let loadcellToImport = 0;
             const importDevicesList = [];
             
-            for (const row of rows) {
+            for (const row of uniqueRows) {
                 const name = row[nameIndex] || '';
                 const deviceType = deviceTypeIndex >= 0 ? (row[deviceTypeIndex] || '').toLowerCase() : '';
                 const protocol = protocolIndex >= 0 ? (row[protocolIndex] || '').toLowerCase() : '';
@@ -1863,120 +1965,98 @@
                 const isLoadcell = deviceType === 'loadcell' || protocol === 'loadcell';
                 
                 importDevicesList.push({
-                    name: name,
-                    deviceType: deviceType,
-                    protocol: protocol,
-                    isLoadcell: isLoadcell,
+                    name,
+                    deviceType,
+                    protocol,
+                    isLoadcell,
                     rowData: row
                 });
                 
-                if (isLoadcell) {
-                    loadcellToImport++;
-                }
+                if (isLoadcell) loadcellToImport++;
             }
             
-            if (currentLoadcellCount + loadcellToImport > 2) {
-                showNotification(`Cannot import - would exceed maximum of 2 Loadcell devices. Currently have ${currentLoadcellCount}, trying to import ${loadcellToImport}.`, 'error');
-                return;
-            }
-            
+            // Check against existing devices
             const existingDeviceNames = new Set(devices.map(d => d.name.toLowerCase()));
             const duplicates = [];
             const newDevices = [];
             
             for (const dev of importDevicesList) {
                 if (existingDeviceNames.has(dev.name.toLowerCase())) {
-                    duplicates.push({
-                        name: dev.name,
-                        type: dev.isLoadcell ? 'Loadcell' : 'External'
-                    });
+                    duplicates.push({ name: dev.name, type: dev.isLoadcell ? 'Loadcell' : 'External' });
                 } else {
                     newDevices.push(dev);
                 }
             }
+
+            // Determine effective loadcell count based on action user will choose
+            // For 'skip': only newDevices loadcells are added
+            // For 'replace': duplicate loadcells replace existing ones (net change = newLC in new - replaced LC count)
+            const newLoadcells = newDevices.filter(d => d.isLoadcell).length;
+            if (currentLoadcellCount + newLoadcells > 2) {
+                showNotification(`Cannot import — would exceed maximum of 2 Loadcell devices. Currently have ${currentLoadcellCount}, trying to add ${newLoadcells} new.`, 'error');
+                return;
+            }
             
+            // Determine duplicate action
+            let action = 'none';
             if (duplicates.length > 0) {
-                const action = await showDuplicateConfirmation(duplicates, newDevices.length);
-                
+                action = await showDuplicateConfirmation(duplicates, newDevices.length);
                 if (action === 'cancel') {
                     showNotification('Import cancelled', 'info');
                     return;
                 }
-                
+                // For 'replace': also check loadcell limit including replaced ones
+                if (action === 'replace') {
+                    const replacedLoadcells = duplicates.filter(d => d.type === 'Loadcell').length;
+                    const totalLoadcellsAfterReplace = currentLoadcellCount - replacedLoadcells + loadcellToImport;
+                    if (totalLoadcellsAfterReplace > 2) {
+                        showNotification(`Cannot replace — would exceed maximum of 2 Loadcell devices after replacement.`, 'error');
+                        return;
+                    }
+                }
+            }
+            
+            // Build status UI
+            const statusDiv = document.getElementById('importStatus');
+            const statusText = document.getElementById('statusText');
+            const statusCount = document.getElementById('statusCount');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (statusDiv) {
+                statusDiv.classList.remove('hidden');
+                if (statusText) statusText.textContent = 'Importing...';
+                if (statusCount) statusCount.textContent = `0/${uniqueRows.length} devices`;
+                if (progressBar) progressBar.style.width = '0%';
+            }
+            
+            let url = '/api/devices/import/csv';
+            if (action === 'skip') {
+                url = '/api/devices/import/csv?skip_existing=true';
+            } else if (action === 'replace') {
+                url = '/api/devices/import/csv?replace_existing=true';
+            }
+            
+            try {
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                const statusDiv = document.getElementById('importStatus');
-                const statusText = document.getElementById('statusText');
-                const statusCount = document.getElementById('statusCount');
-                const progressBar = document.getElementById('progressBar');
+                const response = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
                 
-                if (statusDiv) {
-                    statusDiv.classList.remove('hidden');
-                    statusText.textContent = 'Importing...';
-                    statusCount.textContent = `0/${rows.length} devices`;
-                    progressBar.style.width = '0%';
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
+                } else {
+                    throw new Error(result.error || result.message || 'Import failed');
                 }
-                
-                let url = '/api/devices/import/csv';
-                if (action === 'skip') {
-                    url = '/api/devices/import/csv?skip_existing=true';
-                } else if (action === 'replace') {
-                    url = '/api/devices/import/csv?replace_existing=true';
-                }
-                
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok && result.success) {
-                        handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
-                    } else {
-                        throw new Error(result.error || result.message || 'Import failed');
-                    }
-                } catch (error) {
-                    console.error('Import error:', error);
-                    showNotification(`Import failed: ${error.message}`, 'error');
-                    if (statusDiv) statusDiv.classList.add('hidden');
-                }
-            } else {
-                const formData = new FormData();
-                formData.append('file', file);
-                
-                const statusDiv = document.getElementById('importStatus');
-                const statusText = document.getElementById('statusText');
-                const statusCount = document.getElementById('statusCount');
-                const progressBar = document.getElementById('progressBar');
-                
-                if (statusDiv) {
-                    statusDiv.classList.remove('hidden');
-                    statusText.textContent = 'Importing...';
-                    statusCount.textContent = `0/${rows.length} devices`;
-                    progressBar.style.width = '0%';
-                }
-                
-                try {
-                    const response = await fetch('/api/devices/import/csv', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok && result.success) {
-                        handleImportSuccess(result, fileInput, statusDiv, statusText, statusCount, progressBar);
-                    } else {
-                        throw new Error(result.error || result.message || 'Import failed');
-                    }
-                } catch (error) {
-                    console.error('Import error:', error);
-                    showNotification(`Import failed: ${error.message}`, 'error');
-                    if (statusDiv) statusDiv.classList.add('hidden');
-                }
+            } catch (error) {
+                console.error('Import error:', error);
+                showNotification(`Import failed: ${error.message}`, 'error');
+                if (statusDiv) statusDiv.classList.add('hidden');
             }
             
         } catch (error) {
@@ -1984,9 +2064,7 @@
             showNotification(`Import failed: ${error.message}`, 'error');
             
             const statusDiv = document.getElementById('importStatus');
-            if (statusDiv) {
-                statusDiv.classList.add('hidden');
-            }
+            if (statusDiv) statusDiv.classList.add('hidden');
         }
     }
 
@@ -2015,7 +2093,14 @@
         
         refreshData();
         
-        if (fileInput) fileInput.value = '';
+        if (fileInput) {
+            fileInput.value = '';
+            // Reset drop area label and button text
+            const dropAreaLabel = document.querySelector('#dropArea p.text-sm');
+            const browseFilesBtn = document.getElementById('browseFilesBtn');
+            if (dropAreaLabel) dropAreaLabel.textContent = 'Drag & drop CSV file here';
+            if (browseFilesBtn) browseFilesBtn.textContent = 'Browse Files';
+        }
         
         setTimeout(() => {
             if (statusDiv) {
@@ -2120,7 +2205,7 @@
 
     async function downloadCsvTemplate() {
         try {
-            const response = await fetch('/api/devices/template/csv');
+            const response = await fetch('/api/devices/template/csv', { credentials: 'same-origin' });
             
             if (!response.ok) {
                 throw new Error('Failed to download template');
@@ -2173,13 +2258,24 @@
                 if (importBtn) {
                     importBtn.disabled = !this.files || this.files.length === 0;
                 }
+                // Show selected filename in drop area
+                const dropAreaLabel = document.querySelector('#dropArea p.text-sm');
+                const browseFilesBtn = document.getElementById('browseFilesBtn');
+                if (this.files && this.files.length > 0) {
+                    if (dropAreaLabel) dropAreaLabel.textContent = this.files[0].name;
+                    if (browseFilesBtn) browseFilesBtn.textContent = 'Change File';
+                } else {
+                    if (dropAreaLabel) dropAreaLabel.textContent = 'Drag & drop CSV file here';
+                    if (browseFilesBtn) browseFilesBtn.textContent = 'Browse Files';
+                }
             });
             fileInput.hasListener = true;
         }
         
         const browseBtn = document.getElementById('browseFilesBtn');
         if (browseBtn && !browseBtn.hasListener) {
-            browseBtn.addEventListener('click', () => {
+            browseBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // prevent event from bubbling up to dropArea
                 fileInput?.click();
             });
             browseBtn.hasListener = true;
@@ -2188,8 +2284,12 @@
         const dropArea = document.getElementById('dropArea');
         
         if (dropArea && !dropArea.hasListener) {
-            dropArea.addEventListener('click', () => {
-                fileInput?.click();
+            dropArea.addEventListener('click', (e) => {
+                // Only trigger file dialog if the click is directly on the dropArea,
+                // not from a child button (like browseFilesBtn) which handles its own click
+                if (e.target === dropArea || (e.target !== browseBtn && !browseBtn?.contains(e.target))) {
+                    fileInput?.click();
+                }
             });
             
             dropArea.addEventListener('dragover', (e) => {

@@ -63,42 +63,58 @@ network_status_websockets = set()
 # ============================================================================
 
 async def websocket_handler(request):
-    """Handle WebSocket connections for real-time updates."""
-    # Auth check
+    """Handle WebSocket connections for real-time updates.
+
+    Supports multiple simultaneous tabs/pages for the same user.
+    Each browser tab gets its own independent WebSocket connection which
+    is tracked in connected_websockets (a plain set).  There is no
+    per-user limit here; all active connections receive broadcasts.
+    """
+    # --- Auth: require a valid webui session cookie ---
     user = ws_auth(request)
     if user is None:
         return web.Response(status=401, text='Unauthorized')
 
-    ws = web.WebSocketResponse()
+    # heartbeat_timeout: if no message (including pong) is received for
+    # this many seconds the connection is considered dead and closed.
+    ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
 
     connected_websockets.add(ws)
-    print("WebSocket connected (user={}). Total clients: {}".format(user, len(connected_websockets)))
+    print("WebSocket connected (user={}). Total clients: {}".format(
+        user, len(connected_websockets)))
 
     try:
-        # Send initial state to the newly connected client
-        await ws.send_str(json.dumps({
-            'type': 'initial',
-            'current_date': realtime_state['current_date'],
-            'current_time': realtime_state['current_time'],
-            'wifi_signal_strength': realtime_state.get('wifi_signal_strength', 3)
-        }))
+        # Send initial state to the newly connected client.
+        # Guard with ws.closed so a race between prepare() and the first
+        # send doesn't crash the handler when the tab is closed immediately.
+        if not ws.closed:
+            await ws.send_str(json.dumps({
+                'type': 'initial',
+                'current_date': realtime_state['current_date'],
+                'current_time': realtime_state['current_time'],
+                'wifi_signal_strength': realtime_state.get('wifi_signal_strength', 3),
+            }))
 
-        while True:
-            msg = await ws.receive()
-
-            if msg.type == MsgType.close:
+        async for msg in ws:
+            if msg.type in (MsgType.close, MsgType.closing):
                 break
             elif msg.type == MsgType.error:
-                print('WebSocket error (user={}): {}'.format(user, ws.exception()))
+                # ws.exception() is None when the remote simply closed.
+                exc = ws.exception()
+                if exc:
+                    print('WebSocket protocol error (user={}): {}'.format(user, exc))
                 break
             elif msg.type == MsgType.ping:
-                await ws.pong()
+                # aiohttp auto-replies with pong when heartbeat= is set,
+                # but handle it explicitly too for safety.
+                await ws.pong(msg.data)
             elif msg.type == MsgType.text:
                 try:
                     data = json.loads(msg.data)
+                    msg_type = data.get('type')
 
-                    if data.get('type') == 'sync_time':
+                    if msg_type == 'sync_time':
                         new_date = datetime.datetime.now().strftime('%Y-%m-%d')
                         new_time = datetime.datetime.now().strftime('%H:%M')
 
@@ -109,59 +125,79 @@ async def websocket_handler(request):
                             await broadcast_to_clients({
                                 'type': 'time_update',
                                 'current_date': new_date,
-                                'current_time': new_time
+                                'current_time': new_time,
                             })
 
-                        await ws.send_str(json.dumps({
-                            'type': 'time_synced',
-                            'current_date': realtime_state['current_date'],
-                            'current_time': realtime_state['current_time']
-                        }))
+                        if not ws.closed:
+                            await ws.send_str(json.dumps({
+                                'type': 'time_synced',
+                                'current_date': realtime_state['current_date'],
+                                'current_time': realtime_state['current_time'],
+                            }))
 
-                    elif data.get('type') == 'get_wifi_signal':
-                        # Return current wifi signal strength
+                    elif msg_type == 'get_wifi_signal':
                         strength = realtime_state.get('wifi_signal_strength', 3)
-                        await ws.send_str(json.dumps({
-                            'type': 'wifi_signal_update',
-                            'strength': strength
-                        }))
+                        if not ws.closed:
+                            await ws.send_str(json.dumps({
+                                'type': 'wifi_signal_update',
+                                'strength': strength,
+                            }))
 
-                    elif data.get('type') == 'ping':
-                        await ws.send_str(json.dumps({'type': 'pong'}))
+                    elif msg_type == 'ping':
+                        if not ws.closed:
+                            await ws.send_str(json.dumps({'type': 'pong'}))
 
                 except (ValueError, KeyError):
-                    await ws.send_str(json.dumps({
-                        'type': 'error',
-                        'message': 'Invalid JSON format'
-                    }))
+                    if not ws.closed:
+                        await ws.send_str(json.dumps({
+                            'type': 'error',
+                            'message': 'Invalid JSON format',
+                        }))
 
+    except asyncio.CancelledError:
+        # Server is shutting down – clean exit, no noisy traceback.
+        pass
+    except ConnectionResetError:
+        # Browser closed the tab abruptly.
+        pass
     except Exception as e:
-        print("WebSocket error (user={}): {}".format(user, e))
+        print("WebSocket unexpected error (user={}): {}: {}".format(
+            user, type(e).__name__, e))
     finally:
         connected_websockets.discard(ws)
-        print("WebSocket disconnected (user={}). Total clients: {}".format(user, len(connected_websockets)))
+        print("WebSocket disconnected (user={}). Total clients: {}".format(
+            user, len(connected_websockets)))
 
     return ws
 
 
 async def broadcast_to_clients(data):
-    """Broadcast a dict to all connected WebSocket clients."""
+    """Broadcast a dict to all connected WebSocket clients.
+
+    Uses asyncio.gather so a slow or dead socket does not block the others.
+    Sockets that are already closed are skipped before attempting a send.
+    """
     if not connected_websockets:
         return
     payload = json.dumps(data)
-    await asyncio.gather(
-        *[_safe_send(ws, payload) for ws in list(connected_websockets) if not ws.closed],
-        return_exceptions=True
-    )
+    targets = [ws for ws in list(connected_websockets) if not ws.closed]
+    if targets:
+        await asyncio.gather(
+            *[_safe_send(ws, payload) for ws in targets],
+            return_exceptions=True,
+        )
 
 
 async def _safe_send(ws, payload):
-    """Send payload to one WebSocket; discard on failure."""
+    """Send payload to one WebSocket; remove it from the set on any failure."""
     try:
         if not ws.closed:
             await ws.send_str(payload)
-    except Exception as e:
-        print("Error sending to WebSocket: {}".format(e))
+    except asyncio.CancelledError:
+        connected_websockets.discard(ws)
+        raise
+    except Exception:
+        # Connection already gone – silently remove it.
         connected_websockets.discard(ws)
 
 
@@ -274,8 +310,10 @@ async def _safe_send_ns(ws, payload: str) -> None:
     try:
         if not ws.closed:
             await ws.send_str(payload)
-    except Exception as e:
-        print("[NET-STATUS] WS send error: {}".format(e))
+    except asyncio.CancelledError:
+        network_status_websockets.discard(ws)
+        raise
+    except Exception:
         network_status_websockets.discard(ws)
 
 
@@ -290,12 +328,15 @@ async def network_status_websocket_handler(request):
     WebSocket endpoint that streams live network-status data from the pipeline.
     The client connects and immediately receives the current snapshot, then gets
     pushed updates whenever the pipeline publishes new network_status/* data.
+
+    Multiple browser tabs for the same user are fully supported: each tab
+    receives its own independent stream.
     """
     user = ws_auth(request)
     if user is None:
         return web.Response(status=401, text="Unauthorized")
 
-    ws = web.WebSocketResponse()
+    ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
     network_status_websockets.add(ws)
     print("[NET-STATUS] WS connected (user={}). Total: {}".format(
@@ -303,34 +344,44 @@ async def network_status_websocket_handler(request):
 
     try:
         # Send current snapshot immediately on connect
-        await ws.send_str(json.dumps({
-            "type": "network_status_initial",
-            "data": _build_network_status_snapshot(),
-        }))
+        if not ws.closed:
+            await ws.send_str(json.dumps({
+                "type": "network_status_initial",
+                "data": _build_network_status_snapshot(),
+            }))
 
         async for msg in ws:
-            if msg.type == MsgType.close:
+            if msg.type in (MsgType.close, MsgType.closing):
                 break
             elif msg.type == MsgType.error:
-                print("[NET-STATUS] WS error (user={}): {}".format(user, ws.exception()))
+                exc = ws.exception()
+                if exc:
+                    print("[NET-STATUS] WS protocol error (user={}): {}".format(user, exc))
                 break
             elif msg.type == MsgType.ping:
-                await ws.pong()
+                await ws.pong(msg.data)
             elif msg.type == MsgType.text:
                 try:
                     data = json.loads(msg.data)
                     if data.get("type") == "ping":
-                        await ws.send_str(json.dumps({"type": "pong"}))
+                        if not ws.closed:
+                            await ws.send_str(json.dumps({"type": "pong"}))
                     elif data.get("type") == "get_snapshot":
-                        await ws.send_str(json.dumps({
-                            "type": "network_status_initial",
-                            "data": _build_network_status_snapshot(),
-                        }))
+                        if not ws.closed:
+                            await ws.send_str(json.dumps({
+                                "type": "network_status_initial",
+                                "data": _build_network_status_snapshot(),
+                            }))
                 except (ValueError, KeyError):
                     pass
 
+    except asyncio.CancelledError:
+        pass
+    except ConnectionResetError:
+        pass
     except Exception as e:
-        print("[NET-STATUS] WS error (user={}): {}".format(user, e))
+        print("[NET-STATUS] WS unexpected error (user={}): {}: {}".format(
+            user, type(e).__name__, e))
     finally:
         network_status_websockets.discard(ws)
         print("[NET-STATUS] WS disconnected (user={}). Total: {}".format(

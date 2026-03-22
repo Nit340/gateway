@@ -15,6 +15,29 @@ from general import device_status_tracker
 from database import DB_FILE, get_service_by_name, get_port_config
 from general import initialize_device_status, remove_device_status, update_device_status
 
+# ---------------------------------------------------------------------------
+# Auth helper — validates the gw_webui_session cookie against main.py's
+# WEBUI_SESSIONS store.  Returns the username on success, raises HTTP 401
+# on failure so all device API routes are protected the same way.
+# ---------------------------------------------------------------------------
+def _require_webui_session(request):
+    """Raise HTTP 401 unless the request carries a valid webui session cookie."""
+    try:
+        from main import WEBUI_SESSIONS
+    except ImportError:
+        # main hasn't fully started yet — deny for safety
+        raise web.HTTPUnauthorized(reason='Session store unavailable')
+
+    token = request.cookies.get('gw_webui_session')
+    if not token:
+        raise web.HTTPUnauthorized(reason='No session cookie')
+
+    session = WEBUI_SESSIONS.get(token)
+    if not session:
+        raise web.HTTPUnauthorized(reason='Session expired or invalid')
+
+    return session.get('username') if isinstance(session, dict) else session
+
 # ============================================================================
 # EXTERNAL DEVICE FILE STORAGE
 # Each external device is stored as an individual JSON file:
@@ -75,6 +98,7 @@ def get_db_connection():
 
 async def get_all_devices(request):
     """GET all devices (external + loadcell) with real-time status"""
+    _require_webui_session(request)
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -236,6 +260,7 @@ async def get_all_devices(request):
 
 async def get_device_details(request):
     """GET device details by ID with real-time status"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         
@@ -426,6 +451,7 @@ async def get_device_details(request):
 
 async def add_device(request):
     """POST - Add a new device (External or Loadcell)"""
+    _require_webui_session(request)
     try:
         data = await request.json()
         
@@ -630,6 +656,7 @@ async def add_device(request):
 
 async def update_device(request):
     """PUT - Update device"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         data = await request.json()
@@ -770,6 +797,7 @@ async def update_device(request):
 
 async def delete_device(request):
     """DELETE - Delete device"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         
@@ -809,6 +837,7 @@ async def delete_device(request):
 
 async def test_device(request):
     """POST - Test device connection"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         
@@ -834,6 +863,7 @@ async def test_device(request):
 
 async def disable_device(request):
     """POST - Enable/Disable device"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         data = await request.json()
@@ -871,6 +901,7 @@ async def disable_device(request):
 
 async def duplicate_device(request):
     """POST - Duplicate device with all its datapoints"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         
@@ -1113,6 +1144,7 @@ async def duplicate_device(request):
 
 async def export_devices_csv(request):
     """GET - Export all devices to CSV"""
+    _require_webui_session(request)
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1122,17 +1154,17 @@ async def export_devices_csv(request):
         
         # Write header
         writer.writerow([
-            'ID', 'Name', 'Type', 'Protocol',
+            'ID', 'Name', 'Type', 'Protocol', 'Model Name',
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Device Path CH2', 'Mode', 'Capacity', 'Unit', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 'Capacity Min', 'Capacity Max', 'Unit', 'Enabled'
         ])
         
         # Export Loadcell devices
         cursor.execute('''
-            SELECT l.id, l.name, l.device_path, l.lc_mode,
-                   l.capacity_max, l.unit, l.enabled
+            SELECT l.id, l.name, l.device_path, l.device_path_ch2, l.lc_mode,
+                   l.capacity_min, l.capacity_max, l.unit, l.enabled
             FROM loadcell_device l
             ORDER BY l.id
         ''')
@@ -1141,17 +1173,21 @@ async def export_devices_csv(request):
             device_id = row[0]
             name = row[1]
             device_path = row[2]
-            lc_mode = row[3]
-            capacity_max = row[4]
-            unit = row[5]
-            enabled = row[6]
+            device_path_ch2 = row[3]
+            lc_mode = row[4]
+            capacity_min = row[5]
+            capacity_max = row[6]
+            unit = row[7]
+            enabled = row[8]
             writer.writerow([
-                device_id, name, 'Loadcell', 'loadcell',
+                device_id, name, 'Loadcell', 'loadcell', '',
                 '', '', '',
                 '', '', '', '',
                 '', '', '', '',
-                device_path or '', '', lc_mode or 'single_ended',
-                capacity_max or 1000, unit or 'kg', '1' if enabled else '0'
+                device_path or '', device_path_ch2 or '', lc_mode or 'single_ended',
+                capacity_min if capacity_min is not None else 0,
+                capacity_max if capacity_max is not None else 1000,
+                unit or 'kg', '1' if enabled else '0'
             ])
 
         # Export External devices
@@ -1187,11 +1223,11 @@ async def export_devices_csv(request):
                 enabled = row[17]
                 
                 writer.writerow([
-                    dev_id, name, device_type or 'External', proto,
+                    dev_id, name, device_type or 'External', proto, model_name or '',
                     ip or '', port or '', serial_port or '',
                     baud or '', data_bits or '', parity or '', stop_bits or '',
                     resp_to or '', byte_to or '', max_ret or '', poll_iv or '',
-                    '', '', '', '', '', '1' if enabled else '0'
+                    '', '', '', '', '', '', '1' if enabled else '0'
                 ])
         except Exception as e:
             print("Error exporting external devices: {}".format(e))
@@ -1223,6 +1259,7 @@ async def export_devices_csv(request):
 
 async def import_devices_csv(request):
     """POST - Import devices from CSV with duplicate detection"""
+    _require_webui_session(request)
     try:
         reader = await request.multipart()
         field = await reader.next()
@@ -1310,6 +1347,23 @@ async def import_devices_csv(request):
                     continue
                 
                 if device_type.lower() == 'loadcell':
+                    # Check if duplicate exists
+                    cursor.execute('SELECT id FROM loadcell_device WHERE name = ?', (name,))
+                    existing_lc = cursor.fetchone()
+                    
+                    if existing_lc:
+                        if skip_existing:
+                            skipped_count += 1
+                            continue
+                        elif replace_existing:
+                            # Delete old device (cascade deletes datapoints)
+                            cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (existing_lc[0],))
+                            existing_loadcell_count -= 1
+                            replaced_count += 1
+                        else:
+                            skipped_count += 1
+                            continue
+
                     # Check loadcell limit
                     if existing_loadcell_count >= 2:
                         errors.append("Row {}: Cannot import - only 2 Loadcell devices allowed".format(row_num))
@@ -1353,7 +1407,8 @@ async def import_devices_csv(request):
                         device_path, device_path_ch2, lc_mode,
                         10, 24, 14, 0, 1, 5,
                         0, 16383,
-                        float(row.get('Capacity', 1000) or 1000),
+                        float(row.get('Capacity Min', row.get('Capacity', 0)) or 0),
+                        float(row.get('Capacity Max', row.get('Capacity', 1000)) or 1000),
                         row.get('Unit', 'kg') or 'kg',
                         tag_weight, tag_capacity,
                         1 if row.get('Enabled', '1') == '1' else 0
@@ -1370,9 +1425,25 @@ async def import_devices_csv(request):
                     ''', (device_id, tag_capacity))
                     
                     existing_loadcell_count += 1
-                    imported_count += 1
+                    if not (replace_existing and existing_lc):
+                        imported_count += 1
                     
                 else:  # External device
+                    # Check if duplicate exists
+                    cursor.execute('SELECT id FROM external_device WHERE name = ?', (name,))
+                    existing_ext = cursor.fetchone()
+                    
+                    if existing_ext:
+                        if skip_existing:
+                            skipped_count += 1
+                            continue
+                        elif replace_existing:
+                            cursor.execute('DELETE FROM external_device WHERE id = ?', (existing_ext[0],))
+                            replaced_count += 1
+                        else:
+                            skipped_count += 1
+                            continue
+
                     cursor.execute('SELECT id FROM external_device WHERE id LIKE "EX%" ORDER BY id')
                     existing_ids = [r[0] for r in cursor.fetchall()]
                     max_num = 0
@@ -1433,7 +1504,8 @@ async def import_devices_csv(request):
                             serial_port, baud_rate, data_bits, parity, stop_bits, enabled
                         ))
                     
-                    imported_count += 1
+                    if not (replace_existing and existing_ext):
+                        imported_count += 1
                 
                 initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                 
@@ -1475,6 +1547,7 @@ async def import_devices_csv(request):
 
 async def download_csv_template(request):
     """GET - Download CSV template for device import"""
+    _require_webui_session(request)
     try:
         output = io.StringIO()
         writer = csv.writer(output)
@@ -1484,7 +1557,7 @@ async def download_csv_template(request):
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Device Path CH2', 'Mode', 'Capacity', 'Unit', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 'Capacity Min', 'Capacity Max', 'Unit', 'Enabled'
         ])
         
         writer.writerow([
@@ -1492,7 +1565,7 @@ async def download_csv_template(request):
             '192.168.1.100', '502', '',
             '', '', '', '',
             '100', '100', '2', '300',
-            '', '', '', '', '', '1'
+            '', '', '', '', '', '', '1'
         ])
         
         writer.writerow([
@@ -1500,7 +1573,7 @@ async def download_csv_template(request):
             '', '', '/dev/ttymxc5',
             '9600', '8', 'N', '1',
             '100', '100', '2', '300',
-            '', '', '', '', '', '1'
+            '', '', '', '', '', '', '1'
         ])
         
         writer.writerow([
@@ -1509,7 +1582,7 @@ async def download_csv_template(request):
             '', '', '', '',
             '', '', '', '',
             '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '', 'single_ended',
-            '1000', 'kg', '1'
+            '0', '1000', 'kg', '1'
         ])
         
         writer.writerow([
@@ -1518,7 +1591,7 @@ async def download_csv_template(request):
             '', '', '', '',
             '', '', '', '',
             '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw', 'differential',
-            '2000', 'kg', '1'
+            '0', '2000', 'kg', '1'
         ])
         
         csv_content = output.getvalue()
@@ -1542,6 +1615,7 @@ async def download_csv_template(request):
 
 async def get_device_datapoints(request):
     """GET datapoints for a specific device"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         
@@ -1606,6 +1680,7 @@ async def get_device_datapoints(request):
 
 async def update_device_status_api(request):
     """POST - Manually update device status (for testing)"""
+    _require_webui_session(request)
     try:
         device_id = request.match_info['device_id']
         data = await request.json()
@@ -1634,6 +1709,7 @@ async def get_port_config_api(request):
     """GET /api/port-config  - return all port/path entries from port_config table.
     Optionally filter by ?type=modbus or ?type=loadcell
     """
+    _require_webui_session(request)
     try:
         device_type = request.rel_url.query.get('type', None)
         rows = get_port_config(device_type)

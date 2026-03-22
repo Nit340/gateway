@@ -18,7 +18,7 @@
 
     // ---- Auto-load single LC device on init ----
     function loadDevice() {
-        fetch('/api/pipeline/loadcell-devices')
+        fetch('/api/pipeline/loadcell-devices', { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             var devices = data.devices || [];
@@ -355,6 +355,7 @@
 
         fetch('/api/pipeline/filters', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 device_id:      selectedDevice.id,
@@ -431,6 +432,7 @@
         loadRawEnabled = !loadRawEnabled;
         fetch('/api/pipeline/load-raw-toggle', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled: loadRawEnabled })
         })
@@ -551,7 +553,7 @@
             _resetWsBackoff();
             // Fallback: if the backend had no buffered value yet (load_raw was None when
             // we connected), poll the REST status endpoint to pick up the latest value.
-            fetch('/api/pipeline/status')
+            fetch('/api/pipeline/status', { credentials: 'same-origin' })
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     var rawKey = rawDatapoint || 'load_raw';
@@ -697,6 +699,7 @@
 
         fetch('/api/pipeline/calibration', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 device_id:        selectedDevice.id,
@@ -736,7 +739,7 @@
         loadDevice();
         initStaticUI();
         // Sync load_raw toggle state from backend
-        fetch('/api/pipeline/load-raw-toggle')
+        fetch('/api/pipeline/load-raw-toggle', { credentials: 'same-origin' })
             .then(function(r) { return r.json(); })
             .then(function(d) { setLoadRawToggleUI(d.load_raw_enabled || false); })
             .catch(function() { setLoadRawToggleUI(false); });

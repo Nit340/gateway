@@ -1,23 +1,58 @@
 # -*- coding: utf-8 -*-
-# auth.py - Authentication disabled, all routes open
+# auth.py - Session-based authentication helpers
 # Routes are registered in main.py
 
+import logging
 from aiohttp import web
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# WebSocket auth helper - always returns a default user (no auth)
+# WebSocket auth helper
+# Reads the gw_webui_session cookie and returns the real username from
+# WEBUI_SESSIONS (maintained in main.py).  Returns None if the session
+# is missing or expired so callers can reject the WebSocket upgrade.
 # ---------------------------------------------------------------------------
 def ws_auth(request):
-    """Auth disabled - always returns default user."""
-    return 'guest'
+    """
+    Validate the WebSocket request against the active webui session store.
+
+    Returns the username string on success, or None if unauthenticated.
+    The WebSocket handlers in general.py check for None and return HTTP 401.
+    """
+    # Import here to avoid a circular import at module load time.
+    # main.py imports auth.py, so we defer the reverse import until runtime.
+    try:
+        from main import WEBUI_SESSIONS
+    except ImportError:
+        # Safety fallback: if main hasn't started yet just deny.
+        logger.warning("[AUTH] ws_auth: could not import WEBUI_SESSIONS from main")
+        return None
+
+    token = request.cookies.get('gw_webui_session')
+    if not token:
+        return None
+
+    session = WEBUI_SESSIONS.get(token)
+    if not session:
+        return None
+
+    # Session values are stored as dicts: {'username': ..., 'logged_in_at': ...}
+    if isinstance(session, dict):
+        return session.get('username')
+
+    # Older plain-string format (shouldn't exist after login refactor, but safe)
+    return session if isinstance(session, str) else None
 
 
 # ---------------------------------------------------------------------------
-# Handler functions - always succeed
+# HTTP handler functions
 # ---------------------------------------------------------------------------
 async def login_handler(request):
-    return web.json_response({'success': True, 'username': 'guest'})
+    # The real login is handled by webui_login_api in main.py.
+    # This stub is kept so register_auth_routes() doesn't break if called
+    # before main.py patches the router.
+    return web.json_response({'success': False, 'error': 'Use /api/auth/login'}, status=400)
 
 
 async def logout_handler(request):
@@ -25,13 +60,34 @@ async def logout_handler(request):
 
 
 async def auth_status_handler(request):
-    return web.json_response({'authenticated': True, 'username': 'guest'})
+    """
+    GET /api/auth/status
+    Returns authenticated=True only when a valid webui session cookie exists.
+    The full version (with hidden_pages, role, etc.) is in main.webui_session_status;
+    this is a lightweight fallback in case that route is not yet registered.
+    """
+    try:
+        from main import WEBUI_SESSIONS
+        token = request.cookies.get('gw_webui_session')
+        if token and token in WEBUI_SESSIONS:
+            sess = WEBUI_SESSIONS[token]
+            username = sess.get('username') if isinstance(sess, dict) else sess
+            return web.json_response({'authenticated': True, 'username': username})
+    except ImportError:
+        pass
+    return web.json_response({'authenticated': False}, status=401)
 
 
 # ---------------------------------------------------------------------------
 # Route registration - called from main.py
 # ---------------------------------------------------------------------------
 def register_auth_routes(app):
-    """Register all auth routes onto an aiohttp Application."""
-    # login and logout are registered in main.py with single-session enforcement
+    """Register auth routes onto an aiohttp Application.
+
+    NOTE: main.py registers /api/auth/login, /api/auth/logout, and
+    /api/auth/status with its own richer handlers *before* calling this
+    function, and patches app.router to skip duplicates.  The add_get call
+    below is therefore a no-op for /api/auth/status when main.py is in charge,
+    which is the desired behaviour.
+    """
     app.router.add_get('/api/auth/status', auth_status_handler)
