@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-# main.py
+import sys
+import io
+
+# Force UTF-8 encoding for stdout
+if sys.stdout.encoding != 'UTF-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# main.py (OPTIMIZED)
 import asyncio
 import json
 import logging
@@ -9,8 +15,9 @@ import sqlite3
 
 from aiohttp import web
 
+# OPTIMIZATION: Import ensure_db_initialized instead of init_database
 from database import (
-    init_database, DB_FILE, get_database_stats, get_db_connection,
+    ensure_db_initialized, DB_FILE, get_database_stats, get_db_connection,
     verify_admin_user, verify_webui_user,
     get_all_admin_users, create_admin_user, update_admin_user, delete_admin_user,
     get_all_webui_users, create_webui_user, update_webui_user, delete_webui_user,
@@ -35,6 +42,28 @@ from tag_mapping import (
 )
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
+
+# ---------------------------------------------------------------------------
+# ws_auth - defined here in main.py so it always has direct access to
+# WEBUI_SESSIONS without any cross-module import issues.
+# general.py imports ws_auth from auth.py, but we monkey-patch it below
+# in create_app() to point to this version instead.
+# ---------------------------------------------------------------------------
+def _ws_auth_main(request):
+    """
+    Read gw_webui_session cookie and return username from WEBUI_SESSIONS.
+    Defined in main.py so it accesses WEBUI_SESSIONS directly - no import needed.
+    Returns username string on success, None if unauthenticated.
+    """
+    token = request.cookies.get('gw_webui_session')
+    if not token:
+        return None
+    session = WEBUI_SESSIONS.get(token)
+    if not session:
+        return None
+    if isinstance(session, dict):
+        return session.get('username')
+    return session if isinstance(session, str) else None
 from rules import register_rules_routes
 from pipeline import (
     register_pipeline_routes, start_pipeline_background,
@@ -930,14 +959,31 @@ async def api_core_config_latest(request):
 
 
 def create_app():
-    # -------------------------------------------------------------------
-    # FIX: pass auth_middleware to web.Application so it runs on every
-    # request.  aiohttp 2.x uses the factory style (app, handler) which
-    # is exactly what auth_middleware in auth.py implements.
-    # Without this the middleware never executes, request['user'] is
-    # never set, and ws_auth() cannot validate the session cookie on
-    # WebSocket upgrade requests.
-    # -------------------------------------------------------------------
+    # Monkey-patch ws_auth in every module that uses it so they all call
+    # _ws_auth_main which has direct access to WEBUI_SESSIONS in this module.
+    # This fixes the stale-import problem: auth.py's ws_auth does
+    # "from main import WEBUI_SESSIONS" which copies the dict reference at
+    # import time. If the dict is replaced or module reloaded the copy goes
+    # stale. _ws_auth_main reads WEBUI_SESSIONS directly from this scope.
+    import auth as _auth_mod
+    import general as _general_mod
+    import pipeline as _pipeline_mod
+    import device_management as _dm_mod
+    _auth_mod.ws_auth     = _ws_auth_main
+    _general_mod.ws_auth  = _ws_auth_main
+    _pipeline_mod.ws_auth = _ws_auth_main
+
+    # Also patch device_management._require_webui_session for the same reason.
+    def _require_webui_session_main(request):
+        token = request.cookies.get('gw_webui_session')
+        if not token:
+            raise web.HTTPUnauthorized(reason='No session cookie')
+        session = WEBUI_SESSIONS.get(token)
+        if not session:
+            raise web.HTTPUnauthorized(reason='Session expired or invalid')
+        return session.get('username') if isinstance(session, dict) else session
+    _dm_mod._require_webui_session = _require_webui_session_main
+
     app = web.Application()
 
     app.router.add_get('/admin/login', admin_login_page)
@@ -1064,16 +1110,35 @@ def create_app():
         raise web.HTTPFound('/admin/database')
     app.router.add_get('/db', db_redirect)
 
+    async def debug_sessions(request):
+        """GET /api/debug/sessions - show active WEBUI_SESSIONS (dev only)"""
+        sessions_info = {}
+        for token, info in WEBUI_SESSIONS.items():
+            username = info.get('username') if isinstance(info, dict) else info
+            sessions_info[token[:12] + '...'] = username
+        cookie_token = request.cookies.get('gw_webui_session', '')
+        found = cookie_token in WEBUI_SESSIONS
+        return web.json_response({
+            'total_sessions': len(WEBUI_SESSIONS),
+            'sessions': sessions_info,
+            'cookie_token_prefix': cookie_token[:12] + '...' if cookie_token else 'NO COOKIE',
+            'cookie_found_in_sessions': found,
+            'ws_auth_result': _ws_auth_main(request),
+        })
+    app.router.add_get('/api/debug/sessions', debug_sessions)
+
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     return app
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("  Gateway Admin Server Starting")
+    print("  Gateway Admin Server Starting (OPTIMIZED)")
     print("=" * 60)
     print("\nInitializing database...")
-    init_database()
+    # OPTIMIZATION: Call ensure_db_initialized instead of init_database
+    # This runs only once and supports lazy initialization
+    ensure_db_initialized()
     print("\nAdmin Panel : http://0.0.0.0:8082/admin")
     print("Default login: admin / admin123")
     print("=" * 60 + "\n")

@@ -21,18 +21,22 @@ from general import initialize_device_status, remove_device_status, update_devic
 # on failure so all device API routes are protected the same way.
 # ---------------------------------------------------------------------------
 def _require_webui_session(request):
-    """Raise HTTP 401 unless the request carries a valid webui session cookie."""
+    """Raise HTTP 401 unless the request carries a valid webui session cookie.
+
+    Accesses main.WEBUI_SESSIONS via the module object (not a copied import)
+    so it always reads the live dict regardless of when main.py initialised.
+    """
     try:
-        from main import WEBUI_SESSIONS
-    except ImportError:
-        # main hasn't fully started yet — deny for safety
+        import main as _main
+        sessions = _main.WEBUI_SESSIONS
+    except (ImportError, AttributeError):
         raise web.HTTPUnauthorized(reason='Session store unavailable')
 
     token = request.cookies.get('gw_webui_session')
     if not token:
         raise web.HTTPUnauthorized(reason='No session cookie')
 
-    session = WEBUI_SESSIONS.get(token)
+    session = sessions.get(token)
     if not session:
         raise web.HTTPUnauthorized(reason='Session expired or invalid')
 

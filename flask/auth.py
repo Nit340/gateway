@@ -19,29 +19,31 @@ def ws_auth(request):
 
     Returns the username string on success, or None if unauthenticated.
     The WebSocket handlers in general.py check for None and return HTTP 401.
+
+    IMPORTANT: we access main.WEBUI_SESSIONS through the module object, never
+    via 'from main import WEBUI_SESSIONS'.  A direct import copies the reference
+    at import time -- if main.py ever reassigns the dict the copy goes stale and
+    every lookup returns None.  Accessing it as an attribute on the module always
+    reads the live object.
     """
-    # Import here to avoid a circular import at module load time.
-    # main.py imports auth.py, so we defer the reverse import until runtime.
     try:
-        from main import WEBUI_SESSIONS
-    except ImportError:
-        # Safety fallback: if main hasn't started yet just deny.
-        logger.warning("[AUTH] ws_auth: could not import WEBUI_SESSIONS from main")
+        import main as _main
+        sessions = _main.WEBUI_SESSIONS
+    except (ImportError, AttributeError):
+        logger.warning("[AUTH] ws_auth: could not access main.WEBUI_SESSIONS")
         return None
 
     token = request.cookies.get('gw_webui_session')
     if not token:
         return None
 
-    session = WEBUI_SESSIONS.get(token)
+    session = sessions.get(token)
     if not session:
         return None
 
-    # Session values are stored as dicts: {'username': ..., 'logged_in_at': ...}
     if isinstance(session, dict):
         return session.get('username')
 
-    # Older plain-string format (shouldn't exist after login refactor, but safe)
     return session if isinstance(session, str) else None
 
 
@@ -63,17 +65,16 @@ async def auth_status_handler(request):
     """
     GET /api/auth/status
     Returns authenticated=True only when a valid webui session cookie exists.
-    The full version (with hidden_pages, role, etc.) is in main.webui_session_status;
-    this is a lightweight fallback in case that route is not yet registered.
     """
     try:
-        from main import WEBUI_SESSIONS
+        import main as _main
+        sessions = _main.WEBUI_SESSIONS
         token = request.cookies.get('gw_webui_session')
-        if token and token in WEBUI_SESSIONS:
-            sess = WEBUI_SESSIONS[token]
+        if token and token in sessions:
+            sess = sessions[token]
             username = sess.get('username') if isinstance(sess, dict) else sess
             return web.json_response({'authenticated': True, 'username': username})
-    except ImportError:
+    except (ImportError, AttributeError):
         pass
     return web.json_response({'authenticated': False}, status=401)
 

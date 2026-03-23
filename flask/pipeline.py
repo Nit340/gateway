@@ -2392,7 +2392,146 @@ async def send_modbus_config_now():
         return _json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
     except Exception:
         return {"success": False, "error": "could not parse response"}
+# Add to pipeline.py - new save endpoint that updates the latest config
+async def pipeline_core_config_save_handler(request):
+    """POST /api/pipeline/core-config/save
+    Save core config JSON to the latest version in DB (overwrites, no version increment)
+    Optionally send to pipeline.
+    """
+    print("\n" + "="*70)
+    print("[CORE-CFG] Save JSON (update latest)")
+    print("="*70)
 
+    try:
+        body = await request.json()
+    except Exception as e:
+        return web.json_response({"success": False, "error": "Invalid JSON: {}".format(e)}, status=400)
+
+    config_json = body.get('config_json', '')
+    send_to_pipeline = body.get('send_to_pipeline', True)
+    
+    if not config_json:
+        return web.json_response({"success": False, "error": "Missing config_json"}, status=400)
+    
+    # Validate JSON
+    try:
+        config = json.loads(config_json)
+    except json.JSONDecodeError as e:
+        return web.json_response({"success": False, "error": "Invalid JSON: {}".format(e)}, status=400)
+    
+    # Extract device names
+    device_names = []
+    if 'services' in config:
+        for svc_name, svc_config in config['services'].items():
+            if svc_name == 'modbus' and 'groups' in svc_config:
+                for group in svc_config['groups']:
+                    if 'members' in group:
+                        device_names.extend(group['members'])
+    
+    service_name = config.get('service_name', 'ilx_craneiq_core')
+    
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Ensure table exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS core_configs (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                version      INTEGER NOT NULL DEFAULT 1,
+                device_names TEXT,
+                service_name TEXT,
+                config_json  TEXT NOT NULL,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Get the latest version
+        cursor.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
+        latest_version = cursor.fetchone()[0]
+        
+        if latest_version == 0:
+            # No existing config - insert new
+            cursor.execute(
+                'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
+                (1, json.dumps(device_names), service_name, config_json)
+            )
+            new_version = 1
+            print("[CORE-CFG] Created first config version 1")
+        else:
+            # Update the latest config - keep same version
+            cursor.execute(
+                'UPDATE core_configs SET device_names = ?, service_name = ?, config_json = ?, created_at = CURRENT_TIMESTAMP WHERE version = ?',
+                (json.dumps(device_names), service_name, config_json, latest_version)
+            )
+            new_version = latest_version
+            print("[CORE-CFG] Updated config v{}".format(new_version))
+        
+        conn.commit()
+        conn.close()
+        print("[CORE-CFG] Saved to DB (v{})".format(new_version))
+        
+    except Exception as db_err:
+        logging.error("[CORE-CFG] DB persist error: %s", db_err)
+        return web.json_response({"success": False, "error": "DB error: {}".format(db_err)}, status=500)
+    
+    # Send to pipeline if requested
+    pipeline_sent = False
+    pipeline_message = "Not sent"
+    target_service = None
+    
+    if send_to_pipeline:
+        with pipeline_state["lock"]:
+            client = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+        
+        if connected and client:
+            target_service = _find_core_service()
+            if target_service:
+                try:
+                    # Use the same version (no increment)
+                    ok = client.publish_config(Config(
+                        name=get_pipeline_config_name("core"),
+                        value=config_json,
+                        version=new_version,
+                        service=target_service,
+                    ))
+                    if ok:
+                        pipeline_sent = True
+                        pipeline_message = "Sent to {} (v{})".format(target_service, new_version)
+                        record_pipeline_send_success("core", new_version, target_service, pipeline_message)
+                        with pipeline_state["lock"]:
+                            pipeline_state["core_config"] = config_json
+                            pipeline_state["core_config_pending"] = None
+                    else:
+                        pipeline_message = "publish_config failed -- queued as pending"
+                        record_pipeline_send_failure("core", pipeline_message)
+                        with pipeline_state["lock"]:
+                            pipeline_state["core_config_pending"] = config_json
+                except Exception as exc:
+                    pipeline_message = "Error: {} -- queued as pending".format(exc)
+                    record_pipeline_send_failure("core", pipeline_message)
+                    with pipeline_state["lock"]:
+                        pipeline_state["core_config_pending"] = config_json
+            else:
+                pipeline_message = "Service not connected -- queued as pending"
+                record_pipeline_send_failure("core", pipeline_message)
+                with pipeline_state["lock"]:
+                    pipeline_state["core_config_pending"] = config_json
+        else:
+            pipeline_message = "Pipeline not connected -- queued as pending"
+            record_pipeline_send_failure("core", pipeline_message)
+            with pipeline_state["lock"]:
+                pipeline_state["core_config_pending"] = config_json
+    
+    return web.json_response({
+        "success": True,
+        "pipeline_sent": pipeline_sent,
+        "pipeline_message": pipeline_message,
+        "target_service": target_service,
+        "version": new_version,
+        "device_names": device_names,
+    })
 
 async def pipeline_modbus_config_handler(request):
     """POST /api/pipeline/modbus-config -- legacy alias"""
@@ -3026,7 +3165,7 @@ def register_pipeline_routes(app):
     # -- Load-raw toggle ---------------------------------------------------
     app.router.add_get ('/api/pipeline/load-raw-toggle', pipeline_load_raw_state_handler)
     app.router.add_post('/api/pipeline/load-raw-toggle', pipeline_load_raw_toggle_handler)
-
+    app.router.add_post('/api/pipeline/core-config/save', pipeline_core_config_save_handler)
     # Register whitelisted device names from DB (permanent devices only),
     # then build the initial whitelist with raw OFF.
     try:

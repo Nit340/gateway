@@ -34,6 +34,27 @@ console.log('general-config.js loaded');
     var isUp = function (v)  { return v===1||v===true||v==='1'; };
 
     // =========================================================================
+    // FIELD TIMESTAMP TRACKING FOR STALE DATA DETECTION
+    // =========================================================================
+    var _fieldTimestamps = {};
+    var _FIELD_TIMEOUT = 30000; // 30 seconds - fields older than this are shown as "--"
+    
+    var updateFieldTimestamp = function(datapoint) {
+        _fieldTimestamps[datapoint] = Date.now();
+    };
+    
+    var isFieldStale = function(datapoint) {
+        var ts = _fieldTimestamps[datapoint];
+        if (!ts) return true;
+        return (Date.now() - ts) > _FIELD_TIMEOUT;
+    };
+    
+    var markAllFieldsStale = function() {
+        // Clear all timestamps so next render shows "--" until new data arrives
+        _fieldTimestamps = {};
+    };
+
+    // =========================================================================
     // PASSWORD TOGGLES
     // =========================================================================
     var initializePasswordToggles = function () {
@@ -102,6 +123,67 @@ console.log('general-config.js loaded');
             }
         });
     };
+    
+    // =========================================================================
+    // UPDATE CACHE FROM DELTA (single field update)
+    // =========================================================================
+    var updateCacheFromDelta = function(datapoint, value, path) {
+        updateFieldTimestamp(datapoint);
+        
+        // If path is provided, use it for structured update
+        if (path) {
+            var type = path.type;  // 'lte', 'wlan', 'lan'
+            var device = path.device;  // 'eth0', 'eth1' for lan
+            var field = path.field;
+            
+            if (type === 'lte' && _cache.lte) {
+                _cache.lte[field] = value;
+                console.log('[CACHE] Updated LTE.' + field + ' =', value);
+            } else if (type === 'wlan' && _cache.wlan) {
+                _cache.wlan[field] = value;
+                console.log('[CACHE] Updated WLAN.' + field + ' =', value);
+            } else if (type === 'lan' && _cache.lan) {
+                if (device && _cache.lan[device]) {
+                    _cache.lan[device][field] = value;
+                    console.log('[CACHE] Updated LAN.' + device + '.' + field + ' =', value);
+                } else if (_cache.lan[field] !== undefined) {
+                    _cache.lan[field] = value;
+                    console.log('[CACHE] Updated LAN.' + field + ' =', value);
+                }
+            }
+            return true;
+        }
+        
+        // Fallback: parse datapoint string if path not provided
+        var parts = datapoint.split('.');
+        if (parts.length >= 3 && parts[0] === 'net') {
+            var iface = parts[1];  // 'lte', 'wlan', 'lan'
+            var field = parts[2];  // 'signal_pct', 'operator_name', etc.
+            
+            if (iface === 'lte' && _cache.lte) {
+                _cache.lte[field] = value;
+                console.log('[CACHE] Updated LTE.' + field + ' =', value);
+            } else if (iface === 'wlan' && _cache.wlan) {
+                _cache.wlan[field] = value;
+                console.log('[CACHE] Updated WLAN.' + field + ' =', value);
+            } else if (iface === 'lan' && _cache.lan) {
+                if (parts.length >= 4) {
+                    var eth = parts[2];  // 'eth0' or 'eth1'
+                    var subfield = parts[3];
+                    if (_cache.lan[eth]) {
+                        _cache.lan[eth][subfield] = value;
+                        console.log('[CACHE] Updated LAN.' + eth + '.' + subfield + ' =', value);
+                    }
+                } else if (_cache.lan[field] !== undefined) {
+                    _cache.lan[field] = value;
+                    console.log('[CACHE] Updated LAN.' + field + ' =', value);
+                }
+            }
+            return true;
+        }
+        
+        return false;
+    };
 
     // =========================================================================
     // RENDER ETHERNET
@@ -115,17 +197,26 @@ console.log('general-config.js loaded');
     };
 
     var renderEthernet = function () {
-        // Panel always visible - no guard needed
         var e0 = _cache.lan.eth0 || {};
         var e1 = _cache.lan.eth1 || {};
-        txt('eth0-ip',  e0.ip  || '--');
-        txt('eth0-mac', e0.mac || '--');
-        stateBadge('eth0-state-badge', isUp(e0.state));
-        txt('eth1-ip',  e1.ip  || '--');
-        txt('eth1-mac', e1.mac || '--');
-        stateBadge('eth1-state-badge', isUp(e1.state));
-        // Update global MAC if eth0 connected
-        if (isUp(e0.state) && e0.mac) {
+        
+        // Check for stale data - show "--" if field hasn't updated recently
+        txt('eth0-ip',  (e0.ip && !isFieldStale('net.lan.eth0.ip')) ? e0.ip : '--');
+        txt('eth0-mac', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac : '--');
+        
+        var eth0State = e0.state;
+        if (isFieldStale('net.lan.eth0.state')) eth0State = null;
+        stateBadge('eth0-state-badge', isUp(eth0State));
+        
+        txt('eth1-ip',  (e1.ip && !isFieldStale('net.lan.eth1.ip')) ? e1.ip : '--');
+        txt('eth1-mac', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac : '--');
+        
+        var eth1State = e1.state;
+        if (isFieldStale('net.lan.eth1.state')) eth1State = null;
+        stateBadge('eth1-state-badge', isUp(eth1State));
+        
+        // Update global MAC if eth0 connected and not stale
+        if (isUp(eth0State) && e0.mac && !isFieldStale('net.lan.eth0.mac')) {
             var m = $('[data-mac-address]'); if (m) m.textContent = e0.mac;
         }
     };
@@ -152,22 +243,32 @@ console.log('general-config.js loaded');
     };
 
     var renderWifi = function () {
-        // Panel always visible - no guard needed
         var w = _cache.wlan;
-        stateBadge('wifi-state-badge', isUp(w.state));
+        
+        // Check for stale data
+        var state = w.state;
+        if (isFieldStale('net.wlan.state')) state = null;
+        stateBadge('wifi-state-badge', isUp(state));
+        
         // signal_quality is dBm (signed negative number)
-        if (w.signal_quality !== undefined && w.signal_quality !== null) {
+        if (w.signal_quality !== undefined && w.signal_quality !== null && !isFieldStale('net.wlan.signal')) {
             updateWifiBars(w.signal_quality);
             var e = el('wifi-signal-dbm');
             if (e) e.textContent = w.signal_quality + ' dBm';
+        } else {
+            var e = el('wifi-signal-dbm');
+            if (e) e.textContent = '--';
         }
-        txt('wifi-ip',   w.ip        || '--');
-        txt('wifi-mac',  w.mac       || '--');
-        txt('wifi-bssid',w.bssid     || '--');
-        var freq = w.frequency ? w.frequency + ' MHz' : '--';
+        
+        txt('wifi-ip',   (w.ip && !isFieldStale('net.wlan.ip')) ? w.ip : '--');
+        txt('wifi-mac',  (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac : '--');
+        txt('wifi-bssid', (w.bssid && !isFieldStale('net.wlan.bssid')) ? w.bssid : '--');
+        
+        var freq = (w.frequency && !isFieldStale('net.wlan.frequency')) ? w.frequency + ' MHz' : '--';
         txt('wifi-freq', freq);
+        
         // Sync label with live wlan.ssid (only if user hasn't already picked one)
-        if (w.ssid) {
+        if (w.ssid && !isFieldStale('net.wlan.ssid')) {
             var hid = el('wifi-ssid-value');
             var lbl = el('wifi-ssid-label');
             if (hid && (!hid.value || hid.value === 'Univa-Guest')) {
@@ -175,8 +276,9 @@ console.log('general-config.js loaded');
                 if (lbl) lbl.textContent = w.ssid;
             }
         }
+        
         // Update global MAC
-        if (isUp(w.state) && w.mac) {
+        if (isUp(state) && w.mac && !isFieldStale('net.wlan.mac')) {
             var m = $('[data-mac-address]'); if (m) m.textContent = w.mac;
         }
     };
@@ -491,7 +593,7 @@ console.log('general-config.js loaded');
         var l = _cache.lte;
 
         // power_state check
-        if (l.power !== undefined) {
+        if (l.power !== undefined && !isFieldStale('net.lte.power')) {
             if (!isUp(l.power)) {
                 // Hardware off   show alert, hide live panel
                 show('lte-power-off-alert');
@@ -500,13 +602,24 @@ console.log('general-config.js loaded');
             } else {
                 hide('lte-power-off-alert');
             }
+        } else if (l.power === undefined) {
+            // No power data yet - show alert until we get data
+            show('lte-power-off-alert');
+            hide('lte-live-panel');
+            return;
         }
 
         show('lte-live-panel');
-        stateBadge('lte-state-badge', isUp(l.state));
+        
+        // State badge - check for stale
+        var state = l.state;
+        if (isFieldStale('net.lte.state')) state = null;
+        stateBadge('lte-state-badge', isUp(state));
 
         // Signal percent bar
-        var pct = parseInt(l.signal_pct) || 0;
+        var pct = (!isFieldStale('net.lte.signal_pct') && l.signal_pct !== undefined) 
+            ? parseInt(l.signal_pct) || 0 
+            : 0;
         var fill = el('lte-signal-fill');
         if (fill) fill.style.width = pct + '%';
         var barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-yellow-400' : 'bg-red-400';
@@ -514,36 +627,85 @@ console.log('general-config.js loaded');
         var pctEl = el('lte-signal-pct');
         if (pctEl) pctEl.textContent = pct + '%';
 
-        txt('lte-ip',            l.ip            || '--');
-        txt('lte-operator-name', l.operator_name || '--');
-        txt('lte-operator-id',   l.operator_id   || '--');
-        txt('lte-tech',          l.tech          || '--');
-        txt('lte-imei',          l.imei          || '--');
-        txt('lte-iccid',         l.iccid         || '--');
-        txt('lte-imsi',          l.imsi          || '--');
+        txt('lte-ip',            (!isFieldStale('net.lte.ip') && l.ip) ? l.ip : '--');
+        txt('lte-operator-name', (!isFieldStale('net.lte.operator_name') && l.operator_name) ? l.operator_name : '--');
+        txt('lte-operator-id',   (!isFieldStale('net.lte.operator_id') && l.operator_id) ? l.operator_id : '--');
+        txt('lte-tech',          (!isFieldStale('net.lte.tech') && l.tech) ? l.tech : '--');
+        txt('lte-imei',          (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
+        txt('lte-iccid',         (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
+        txt('lte-imsi',          (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
     };
 
     // =========================================================================
-    // APPLY SNAPSHOT  (called on every WS message)
+    // APPLY SNAPSHOT OR DELTA  (called on every WS message)
     // =========================================================================
     var applySnapshot = function (data) {
         if (!data) return;
-        mergeInto(_cache.lan,  data.lan  || {});
-        mergeInto(_cache.wlan, data.wlan || {});
-        mergeInto(_cache.lte,  data.lte  || {});
-
-        // Do NOT auto-switch tabs - stay on whichever tab the user is on.
-        // Just update the values in the background.
-
-        // Render each interface
-        renderEthernet();
-        renderWifi();
-        renderLte();
-
-        // Auto-stop toggle when WS confirms WiFi connected
-        if (_acEnabled && isUp((_cache.wlan || {}).state)) {
-            _stopAutoConnect();
-            showNotification('Auto-connect: WiFi connected', 'success');
+        
+        // Handle delta update (single field)
+        if (data.type === 'network_status_delta' && data.datapoint) {
+            updateCacheFromDelta(data.datapoint, data.value, data.path);
+            // Re-render only the affected panel based on the datapoint
+            if (data.datapoint.includes('.lte.')) {
+                renderLte();
+            } else if (data.datapoint.includes('.wlan.')) {
+                renderWifi();
+            } else if (data.datapoint.includes('.lan.')) {
+                renderEthernet();
+            }
+            return;
+        }
+        
+        // Handle full snapshot (initial or requested)
+        if (data.type === 'network_status_initial' && data.data) {
+            // Reset stale timestamps since we're getting fresh data
+            markAllFieldsStale();
+            
+            // Update cache with full snapshot
+            mergeInto(_cache.lan, data.data.lan || {});
+            mergeInto(_cache.wlan, data.data.wlan || {});
+            mergeInto(_cache.lte, data.data.lte || {});
+            
+            // Update timestamps for all fields in the snapshot
+            if (data.data.lan) {
+                updateTimestampsFromObject(data.data.lan, 'net.lan');
+            }
+            if (data.data.wlan) {
+                updateTimestampsFromObject(data.data.wlan, 'net.wlan');
+            }
+            if (data.data.lte) {
+                updateTimestampsFromObject(data.data.lte, 'net.lte');
+            }
+            
+            // Render all panels
+            renderEthernet();
+            renderWifi();
+            renderLte();
+            return;
+        }
+        
+        // Legacy support for old format (direct data without type wrapper)
+        if (data.lan || data.wlan || data.lte) {
+            markAllFieldsStale();
+            mergeInto(_cache.lan, data.lan || {});
+            mergeInto(_cache.wlan, data.wlan || {});
+            mergeInto(_cache.lte, data.lte || {});
+            renderEthernet();
+            renderWifi();
+            renderLte();
+        }
+    };
+    
+    var updateTimestampsFromObject = function(obj, prefix) {
+        if (!obj || typeof obj !== 'object') return;
+        for (var key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    updateTimestampsFromObject(obj[key], prefix + '.' + key);
+                } else {
+                    _fieldTimestamps[prefix + '.' + key] = Date.now();
+                }
+            }
         }
     };
 
@@ -555,7 +717,7 @@ console.log('general-config.js loaded');
     var _netReconnect = null;
     var _netAttempts  = 0;   // connection attempt counter
 
-        var setLiveBtnState = function (connected) {
+    var setLiveBtnState = function (connected) {
         // Update indicator badge
         var btn = el('live-btn-network');
         if (btn) {
@@ -574,7 +736,7 @@ console.log('general-config.js loaded');
             if (connected) {
                 bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs';
                 if (icon) icon.className = 'fa-solid fa-circle-dot fa-beat text-emerald-500';
-                if (txt)  txt.textContent = 'Live   network data ';
+                if (txt)  txt.textContent = 'Live network data ';
             } else {
                 bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs';
                 if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-amber-400';
@@ -610,14 +772,17 @@ console.log('general-config.js loaded');
             setLiveBtnState(true);
             _netWs.send(JSON.stringify({type:'get_snapshot'}));
         };
+        
         _netWs.onmessage = function (ev) {
             try {
                 var msg = JSON.parse(ev.data);
-                if (msg.type==='network_status_initial'||msg.type==='network_status_update') {
-                    applySnapshot(msg.data);
+                // Handle both snapshot and delta messages
+                if (msg.type === 'network_status_initial' || msg.type === 'network_status_update' || msg.type === 'network_status_delta') {
+                    applySnapshot(msg);
                 }
             } catch(e) { console.warn('[NET] parse error', e); }
         };
+        
         _netWs.onerror = function (e) { /* connection error handled in onclose */ };
         _netWs.onclose = function (ev) {
             _liveConnected = false;
@@ -777,8 +942,6 @@ console.log('general-config.js loaded');
         var timeStr = now.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
         return { date: dateStr, time: timeStr };
     };
-
-
 
     // =========================================================================
     // LIVE DATE + TIME INPUTS   tick every second, respect timezone + format
@@ -1109,9 +1272,8 @@ console.log('general-config.js loaded');
                 .then(function(){ nsy.innerHTML=orig; nsy.disabled=false; });
             });
         }
-
-
     };
+    
     // =========================================================================
     // INIT
     // =========================================================================

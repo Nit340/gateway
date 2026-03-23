@@ -1417,7 +1417,15 @@ function _renderTagsModal(tags, disabledNames = new Set()) {
     tbody.innerHTML = tags.map(t => {
         const isVirtual  = t.source === 'virtual';
         const isDisabled = disabledNames.has(t.name);
-        const sourceBadgeClass = isVirtual ? 'virtual' : (t.source === 'modbus' ? 'mqtt' : (t.source === 'loadcell' ? 'ftp' : 'http'));
+        // Determine badge class based on source
+        let sourceBadgeClass = 'http'; // default
+        if (isVirtual) {
+            sourceBadgeClass = 'virtual';
+        } else if (t.source === 'modbus-rtu' || t.source === 'modbus-tcp' || t.source === 'modbus') {
+            sourceBadgeClass = 'mqtt'; // modbus uses mqtt badge style
+        } else if (t.source === 'loadcell') {
+            sourceBadgeClass = 'ftp';
+        }
         const deviceDisplay = t.device
             ? (isVirtual
                 ? `<span class="inline-flex items-center gap-1"><i class="fa-solid fa-microchip text-violet-400 text-xs"></i>${_esc(t.device)}</span>`
