@@ -984,7 +984,12 @@
                                 </div>
                                 <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Unit</div>
-                                    <div class="text-sm text-slate-700">${config.unit || 'kg'}</div>
+                                    <div class="text-sm text-slate-700 font-semibold">
+                                        ${config.unit === 'ton'
+                                            ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold rounded">ton <span class="font-normal text-blue-500">Metric Ton</span></span>'
+                                            : '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold rounded">kg <span class="font-normal text-orange-500">Kilogram</span></span>'
+                                        }
+                                    </div>
                                 </div>
             `;
         } else if (protocol === 'virtual') {
@@ -1468,11 +1473,18 @@
                     <div class="grid grid-cols-3 gap-3">
                         ${inp('editCapacityMin','Min', cfg.capacity_min||0,'number','step="0.1"')}
                         ${inp('editCapacityMax','Max', cfg.capacity_max||1000,'number','step="0.1"')}
-                        ${inp('editUnit','Unit', cfg.unit||'kg')}
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Unit</label>
+                            <select id="editUnit" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                                <option value="kg" ${(!cfg.unit || cfg.unit==='kg')?'selected':''}>kg — Kilogram</option>
+                                <option value="ton" ${cfg.unit==='ton'?'selected':''}>ton — Metric Ton</option>
+                            </select>
+                        </div>
                     </div>
                     <p class="mt-2 text-xs text-slate-400">
                         <i class="fa-solid fa-circle-info mr-1"></i>
                         <em>load_name</em> and <em>capacity_name</em> are auto-generated.
+                        Capacity values are stored in the selected unit and applied throughout the system.
                     </p>
                 </div>
             </div>`;

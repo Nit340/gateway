@@ -1,20 +1,8 @@
 # -*- coding: utf-8 -*-
 # rules.py - Rules Engine API
 #
-# UI REMOVED: The rules page (rules.html) is no longer used.
-# All config is built purely from the database.
-#
-# LOADCELL AUTO-DISCOVERY:
-#   The loadcell section of core_config is built automatically at runtime
-#   by reading the first enabled row from loadcell_device.
-#   - datapoint_name      <- loadcell_device.name  (e.g. "load_weight")
-#   - unit_datapoint_name <- loadcell_device.name + "_unit" (e.g. "load_unit")
-#   No UI config is needed for this. The background job fires every time
-#   rules are triggered (Apply Rules button, or startup auto-send).
-#
-# CORE CONFIG PERSISTENCE:
-#   Every core config (auto-generated or manually uploaded) is saved to
-#   core_configs table with version tracking.
+# MODIFIED: Core config now uses a single row in database with version tracking
+# via updated_at timestamp. No local JSON files are generated.
 
 import json
 import os
@@ -156,11 +144,12 @@ async def rules_pipeline_trigger_handler(request):
 # ---------------------------------------------------------------------------
 # POST /api/rules/core-config/upload
 #
-# Upload and save core config JSON, optionally send to pipeline.
+# Upload and save core config JSON (replaces existing config), optionally send to pipeline.
 # ---------------------------------------------------------------------------
 async def core_config_upload_handler(request):
     """POST /api/rules/core-config/upload
     Upload and save core config JSON, optionally send to pipeline.
+    REPLACES existing config - only one row is kept.
     """
     try:
         body = await request.json()
@@ -183,11 +172,11 @@ async def core_config_upload_handler(request):
                 'error': 'Config must have service_name or services section'
             }, status=400)
         
-        # Save to core_configs table
+        # Save to core_configs table - SINGLE ROW ONLY
         conn = get_db()
         cursor = conn.cursor()
         
-        # Ensure table exists
+        # Ensure table exists with version column
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS core_configs (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,7 +184,8 @@ async def core_config_upload_handler(request):
                 device_names TEXT,
                 service_name TEXT,
                 config_json  TEXT NOT NULL,
-                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -208,20 +198,35 @@ async def core_config_upload_handler(request):
                         if 'members' in group:
                             device_names.extend(group['members'])
         
-        # Get next version
-        cursor.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
-        next_version = cursor.fetchone()[0] + 1
-        
         service_name = config.get('service_name', 'ilx_craneiq_core')
         
-        cursor.execute(
-            'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
-            (next_version, json.dumps(device_names), service_name, config_json)
-        )
+        # Check if we already have a config - UPDATE instead of INSERT
+        cursor.execute('SELECT id, version FROM core_configs LIMIT 1')
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Update existing row with new config
+            new_version = existing['version'] + 1
+            cursor.execute('''
+                UPDATE core_configs 
+                SET version = ?, 
+                    device_names = ?, 
+                    service_name = ?, 
+                    config_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (new_version, json.dumps(device_names), service_name, config_json, existing['id']))
+            print("[CORE-CFG] Updated config v{} from JSON".format(new_version))
+        else:
+            # First-time insert
+            cursor.execute('''
+                INSERT INTO core_configs (version, device_names, service_name, config_json, updated_at) 
+                VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (json.dumps(device_names), service_name, config_json))
+            print("[CORE-CFG] Inserted initial config from JSON")
+        
         conn.commit()
         conn.close()
-        
-        print("[CORE-CFG] Uploaded config v{} from JSON".format(next_version))
         
         # Optionally send to pipeline
         sent = False
@@ -252,7 +257,7 @@ async def core_config_upload_handler(request):
                     ))
                     if ok:
                         record_pipeline_send_success('core', new_version, core_svc, 
-                                                     'Uploaded JSON v{}'.format(next_version))
+                                                     'Uploaded JSON')
                         sent = True
                     else:
                         record_pipeline_send_failure('core', 'publish_config returned False')
@@ -272,7 +277,6 @@ async def core_config_upload_handler(request):
             'success': True,
             'sent': sent,
             'queued': queued,
-            'version': next_version,
             'message': 'Config saved to DB' + 
                        (' and sent to pipeline' if sent else 
                         (' and queued for pipeline' if queued else ''))
@@ -286,33 +290,39 @@ async def core_config_upload_handler(request):
 # ---------------------------------------------------------------------------
 # GET /api/rules/core-configs
 #
-# List all saved core configs
+# List all saved core configs (now only returns the single row)
 # ---------------------------------------------------------------------------
 async def core_configs_list_handler(request):
-    """GET /api/rules/core-configs - List all saved core configs"""
+    """GET /api/rules/core-configs - List saved core configs (only one row exists)"""
     try:
         conn = get_db()
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, version, device_names, service_name, config_json, created_at
+            SELECT id, version, device_names, service_name, config_json, created_at, updated_at
             FROM core_configs
-            ORDER BY version DESC
+            ORDER BY updated_at DESC
+            LIMIT 1
         ''')
         
-        configs = []
-        for row in cursor.fetchall():
-            configs.append({
-                'id': row[0],
-                'version': row[1],
-                'device_names': json.loads(row[2]) if row[2] else [],
-                'service_name': row[3],
-                'config': json.loads(row[4]) if row[4] else {},
-                'created_at': row[5]
-            })
-        
+        row = cursor.fetchone()
         conn.close()
-        return web.json_response({'success': True, 'configs': configs})
+        
+        if row:
+            return web.json_response({
+                'success': True, 
+                'configs': [{
+                    'id': row[0],
+                    'version': row[1],
+                    'device_names': json.loads(row[2]) if row[2] else [],
+                    'service_name': row[3],
+                    'config': json.loads(row[4]) if row[4] else {},
+                    'created_at': row[5],
+                    'updated_at': row[6]
+                }]
+            })
+        else:
+            return web.json_response({'success': True, 'configs': []})
         
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
@@ -321,7 +331,7 @@ async def core_configs_list_handler(request):
 # ---------------------------------------------------------------------------
 # GET /api/rules/core-config/latest
 #
-# Get the latest core config
+# Get the latest core config (always the single row)
 # ---------------------------------------------------------------------------
 async def core_config_latest_handler(request):
     """GET /api/rules/core-config/latest - Get the latest core config"""
@@ -330,9 +340,9 @@ async def core_config_latest_handler(request):
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, version, device_names, service_name, config_json, created_at
+            SELECT id, version, device_names, service_name, config_json, created_at, updated_at
             FROM core_configs
-            ORDER BY version DESC
+            ORDER BY updated_at DESC
             LIMIT 1
         ''')
         
@@ -348,7 +358,8 @@ async def core_config_latest_handler(request):
                     'device_names': json.loads(row[2]) if row[2] else [],
                     'service_name': row[3],
                     'config': json.loads(row[4]) if row[4] else {},
-                    'created_at': row[5]
+                    'created_at': row[5],
+                    'updated_at': row[6]
                 }
             })
         else:
@@ -508,6 +519,7 @@ def _build_combined_core_config(rules):
 def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_craneiq_core'):
     """
     Save core config to database with version tracking.
+    SINGLE ROW ONLY - updates existing row if present.
     Returns the version number.
     """
     conn = None
@@ -515,7 +527,7 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
         conn = get_db()
         cur = conn.cursor()
         
-        # Ensure table exists
+        # Ensure table exists with updated_at column
         cur.execute('''
             CREATE TABLE IF NOT EXISTS core_configs (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -523,23 +535,39 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
                 device_names TEXT,
                 service_name TEXT,
                 config_json  TEXT NOT NULL,
-                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # Get next version
-        cur.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
-        next_version = cur.fetchone()[0] + 1
-        
         device_names_json = json.dumps(device_names) if device_names else '[]'
         
-        cur.execute(
-            'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
-            (next_version, device_names_json, service_name, config_json)
-        )
-        conn.commit()
-        print('[CORE-CFG] Saved to DB v{}'.format(next_version))
-        return next_version
+        # Check if we already have a config - UPDATE instead of INSERT
+        cur.execute('SELECT id, version FROM core_configs LIMIT 1')
+        existing = cur.fetchone()
+        
+        if existing:
+            new_version = existing['version'] + 1
+            cur.execute('''
+                UPDATE core_configs 
+                SET version = ?, 
+                    device_names = ?, 
+                    service_name = ?, 
+                    config_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (new_version, device_names_json, service_name, config_json, existing['id']))
+            print('[CORE-CFG] Updated DB to v{}'.format(new_version))
+            return new_version
+        else:
+            # First-time insert
+            cur.execute('''
+                INSERT INTO core_configs (version, device_names, service_name, config_json, updated_at) 
+                VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (device_names_json, service_name, config_json))
+            conn.commit()
+            print('[CORE-CFG] Inserted initial config to DB')
+            return 1
         
     except Exception as db_e:
         print('[CORE-CFG] DB persist warning: {}'.format(db_e))
@@ -551,7 +579,7 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
 
 async def _build_and_send_core_config():
     """
-    Build combined core_config from DB, persist it, then send via pipeline.
+    Build combined core_config from DB, persist it (single row), then send via pipeline.
 
     This is the single entry-point used by:
       - POST /api/rules/pipeline/trigger  (Apply Rules button)
@@ -583,22 +611,9 @@ async def _build_and_send_core_config():
                     if 'members' in group:
                         device_names.extend(group['members'])
 
-    # -- Persist to core_configs DB table (ALWAYS do this) --
+    # -- Persist to core_configs DB table (SINGLE ROW) --
+    # NO JSON FILE GENERATION - removed
     db_version = _save_core_config_to_db(config_json, device_names, core_config.get('service_name', 'ilx_craneiq_core'))
-    
-    # -- Persist to disk (backup) --
-    config_dir = 'core_configs'
-    os.makedirs(config_dir, exist_ok=True)
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-    ts_file = os.path.join(config_dir, 'core_config_{}.json'.format(ts))
-    latest_file = os.path.join(config_dir, 'core_config_latest.json')
-    for path in (ts_file, latest_file):
-        try:
-            with open(path, 'w') as fh:
-                fh.write(config_json)
-        except Exception as write_e:
-            print('[CORE-CFG] File write warning ({}): {}'.format(path, write_e))
-    print('[CORE-CFG] Saved: {}'.format(ts_file))
 
     # -- Pipeline send --
     core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
@@ -619,7 +634,6 @@ async def _build_and_send_core_config():
             'pending':     True,
             'service':     core_svc,
             'rules_count': len(rules),
-            'file_saved':  ts_file,
             'db_version':  db_version,
         }
 
@@ -656,7 +670,6 @@ async def _build_and_send_core_config():
         'queued':      not ok,
         'service':     core_svc,
         'rules_count': len(rules),
-        'file_saved':  ts_file,
         'db_version':  db_version,
     }
 

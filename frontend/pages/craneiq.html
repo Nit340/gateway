@@ -99,6 +99,16 @@
                         <h3 class="text-lg font-semibold text-slate-800">Load Cell</h3>
                         <p class="text-xs text-slate-500" id="lc-device-label">Not connected</p>
                     </div>
+                    <!-- Dynamic device selector — shown only when 2 load cells exist -->
+                    <div id="lc-device-selector-wrap" style="display:none;" class="ml-2">
+                        <select id="lc-device-selector"
+                            class="text-sm border border-orange-300 rounded-lg px-3 py-1.5 bg-orange-50 text-orange-800 font-medium focus:ring-2 focus:ring-orange-400 focus:border-orange-400 cursor-pointer">
+                        </select>
+                    </div>
+                    <!-- Unit badge — reflects selected device's configured unit -->
+                    <span id="lc-unit-badge" style="display:none;"
+                        class="ml-1 px-2 py-0.5 bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-500 rounded-full uppercase tracking-wide">
+                    </span>
                 </div>
                 <!-- Pipeline connect/disconnect -->
                 <div class="flex items-center gap-3">
@@ -295,7 +305,7 @@
                         </div>
                         <!-- Known weight -->
                         <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                            <div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Known Weight (kg)</div>
+                            <div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Known Weight (<span id="cal-weight-unit-label">kg</span>)</div>
                             <input id="cal-weight-input" type="number" placeholder="e.g. 1000"
                                 class="w-full text-xl font-bold text-slate-900 border-none bg-transparent outline-none mb-2 p-0">
                             <div class="text-xs text-slate-400 mb-1">Raw at this weight:</div>

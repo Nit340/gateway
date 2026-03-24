@@ -295,7 +295,10 @@ def build_iot_gateway_config():
 
     wifi_ssid     = wifi.get('ssid',     '')
     wifi_password = wifi.get('password', '')
-    heartbeat_sec = int(hb.get('interval', 30))
+    
+    # Read heartbeat interval and offline threshold as separate values
+    heartbeat_interval_sec = int(hb.get('interval', 30))
+    offline_threshold_sec = int(hb.get('offline_threshold', 120))
 
     # -- 2. Load all enabled MQTT connections ---------------------------------
     db  = get_db_connection()
@@ -381,13 +384,16 @@ def build_iot_gateway_config():
             'wifi_password': wifi_password,
         },
         'heartbeat': {
-            'interval_sec': heartbeat_sec,
+            'interval_sec': heartbeat_interval_sec,
             'channel':      heartbeat_channel,
+        },
+        'offline_threshold': {
+            'interval_sec': offline_threshold_sec,
+            'channel':      heartbeat_channel,  # Use same channel as heartbeat
         },
         'servers':  servers,
         'mappings': all_mappings,
     }
-
 
 async def send_iot_gateway_config_now():
     """Convenience coroutine: build config and dispatch via pipeline.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Univa - Pipeline</title>
+<title>Crane Monitor - Pipeline</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
@@ -60,7 +60,7 @@
       <span class="mat text-white" style="font-size:22px;">precision_manufacturing</span>
     </div>
     <div>
-      <div class="text-sm font-extrabold text-stone-800">Univa</div>
+      <div class="text-sm font-extrabold text-stone-800">Crane Monitor</div>
       <div class="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Admin Panel</div>
     </div>
   </div>
@@ -158,88 +158,18 @@
         <span class="text-xs text-stone-300">Loading...</span>
       </div>
 
-      <!-- CORE panel with JSON editor -->
-<div class="cfg-panel" id="panel-core">
-  <!-- JSON Editor Section -->
-  <div class="mb-6 p-5 rounded-xl" style="background:#fef9e8; border:1px solid #fed7aa;">
-    <div class="flex items-center gap-2 mb-3">
-      <span class="mat" style="color:#f97316;font-size:22px;">edit_note</span>
-      <span class="text-sm font-bold text-stone-700">Core Config JSON Editor</span>
-      <span class="text-[10px] font-bold uppercase tracking-widest text-orange-400 bg-orange-100 px-2 py-0.5 rounded-full ml-auto">Edit & Save</span>
-    </div>
-    <p class="text-xs text-stone-500 mb-4">
-      Edit the core configuration JSON directly. Click <strong>Validate</strong> to check syntax, 
-      then <strong>Save & Send</strong> to update the config and push to pipeline.
-      This updates the latest config in the database (no version increment).
-    </p>
-    
-    <!-- JSON Editor Textarea -->
-    <div class="mb-4">
-      <label class="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Core Configuration JSON</label>
-      <textarea id="coreJsonEditor" rows="18" 
-        class="w-full font-mono text-xs p-4 rounded-xl border-2 border-orange-200 focus:border-orange-400 focus:outline-none resize-y bg-white"
-        placeholder='{
-  "service_name": "ilx_craneiq_core",
-  "services": {
-    "modbus": {
-      "service_name": "modbus_service",
-      "groups": [...]
-    },
-    "loadcell": {
-      "service_name": "load_cell_service",
-      "datapoint_name": "load_weight",
-      "unit_datapoint_name": "load_unit"
-    }
-  }
-}'></textarea>
-    </div>
-    
-    <!-- Action Buttons -->
-    <div class="flex flex-wrap gap-3">
-      <button onclick="validateCoreConfigJson()" 
-        class="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 transition-all">
-        <span class="mat" style="font-size:16px;">check_circle</span> Validate JSON
-      </button>
-      <button onclick="saveCoreConfig(false)" 
-        class="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 transition-all">
-        <span class="mat" style="font-size:16px;">database</span> Save Only
-      </button>
-      <button onclick="saveCoreConfig(true)" 
-        class="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all">
-        <span class="mat" style="font-size:16px;">send</span> Save & Send to Pipeline
-      </button>
-      <button onclick="loadLatestCoreConfig()" 
-        class="flex items-center gap-1 px-4 py-2 rounded-xl text-sm font-bold border-2 border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">
-        <span class="mat" style="font-size:16px;">refresh</span> Load Latest
-      </button>
-    </div>
-    
-    <div id="jsonEditorResult" class="hidden mt-3 p-2 rounded-lg text-xs whitespace-pre-wrap"></div>
-  </div>
-
-  <!-- Config Info -->
-  <div class="flex items-center gap-3 mb-4">
-    <p class="text-xs text-stone-400">
-      Forward the stored core config to the core pipeline service.
-      The config name used is set in the <strong>Service &amp; Config Names</strong> section above.
-    </p>
-    <span class="cfg-name-pill" id="cname-pill-core"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-core">core_config</span></span>
-  </div>
-
-  <!-- Config History (read-only) -->
-  <div class="mb-6">
-    <div class="text-xs font-bold text-stone-500 uppercase tracking-wide mb-2">Config History</div>
-    <div id="coreConfigList" class="text-xs text-stone-300">Loading...</div>
-  </div>
-
-  <div class="flex gap-3 flex-wrap">
-    <button onclick="resendCoreConfig()"
-      class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
-      <span class="mat" style="font-size:17px;">replay</span> Resend Latest
-    </button>
-  </div>
-  <div id="pushResult-core" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
-</div>
+      <!-- MODBUS panel -->
+      <div class="cfg-panel" id="panel-modbus">
+        <div class="flex items-center gap-3 mb-3">
+          <p class="text-xs text-stone-400">Push the current Modbus tag configuration (built from DB) to the pipeline service.</p>
+          <span class="cfg-name-pill" id="cname-pill-modbus"><span class="mat" style="font-size:13px;">label</span> <span id="cname-display-modbus">modbus_config</span></span>
+        </div>
+        <button onclick="pushGeneric('modbus')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-orange-200 text-orange-600 hover:bg-orange-50 active:scale-95 transition-all">
+          <span class="mat" style="font-size:17px;">memory</span> Push Modbus Config
+        </button>
+        <div id="pushResult-modbus" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+      </div>
 
       <!-- LOADCELL panel -->
       <div class="cfg-panel" id="panel-loadcell">
@@ -350,6 +280,24 @@
           </button>
         </div>
         <div id="pushResult-core" class="hidden mt-4 p-3 rounded-xl text-sm font-medium"></div>
+      </div>
+
+      <!-- CLIENT INFO panel -->
+      <div class="cfg-panel" id="panel-client_info">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="mat" style="color:#f97316;font-size:22px;">lan</span>
+          <span class="text-sm font-bold text-stone-700">Web Client (Server) Info</span>
+          <button onclick="loadClientInfo()" class="ml-auto flex items-center gap-1 text-xs font-semibold text-orange-400 hover:underline">
+            <span class="mat" style="font-size:14px;">refresh</span> Refresh
+          </button>
+        </div>
+        <p class="text-xs text-stone-400 mb-5">
+          Shows the port and address your browser is currently using to reach the web server (<code class="bg-stone-100 px-1 rounded">main.py</code> / aiohttp).
+          The <strong>Pipeline Server port</strong> (7000) is separate — it belongs to the <code class="bg-stone-100 px-1 rounded">ilx_pipeline</code> library and is fixed.
+        </p>
+        <div id="clientInfoBody" class="space-y-3">
+          <span class="text-xs text-stone-300">Loading...</span>
+        </div>
       </div>
 
     </div><!-- /Config Manager -->
@@ -474,6 +422,7 @@
     loadcell:    { label: 'Loadcell',    icon: 'scale',                 desc: 'Push loadcell filter/calibration config.',               defaultConfigName: 'loadcell_config' },
     iot_gateway: { label: 'IoT Gateway', icon: 'cloud_upload',          desc: 'Push IoT Gateway config to pipeline service.',           defaultConfigName: 'iot_gateway_config' },
     core:        { label: 'Core',        icon: 'settings_applications', desc: 'Forward stored core config to core pipeline service.',   defaultConfigName: 'core_config' },
+    client_info: { label: 'Client Info', icon: 'lan',                   desc: 'Web server (client) port and connection details.',       defaultConfigName: '' },
   };
   const ALL_TYPES = ['modbus', 'loadcell', 'iot_gateway', 'core'];
 
@@ -689,14 +638,17 @@
         if (el) el.textContent = cfgName;
       });
 
-      // Build tab bar
+      // Build tab bar (standard config tabs + Client Info tab)
       const tabBar = document.getElementById('cfgTabBar');
       tabBar.innerHTML = ALL_TYPES.map(ct => `
         <button class="cfg-tab" id="tab-${ct}" onclick="switchTab('${ct}')">
           <span class="mat" style="font-size:15px;vertical-align:middle;margin-right:4px;">${tabIcon(ct)}</span>${tabLabel(ct)}
-        </button>`).join('');
+        </button>`).join('') + `
+        <button class="cfg-tab" id="tab-client_info" onclick="switchTab('client_info')" style="margin-left:auto;border-color:#fed7aa;">
+          <span class="mat" style="font-size:15px;vertical-align:middle;margin-right:4px;">lan</span>Client Info
+        </button>`;
 
-      const toActivate = ALL_TYPES.includes(activeTab) ? activeTab : ALL_TYPES[0];
+      const toActivate = (ALL_TYPES.includes(activeTab) || activeTab === 'client_info') ? activeTab : ALL_TYPES[0];
       switchTab(toActivate);
 
     } catch (e) {
@@ -717,8 +669,9 @@
     document.querySelectorAll('.cfg-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('panel-' + type);
     if (panel) panel.classList.add('active');
-    if (type === 'loadcell') { loadLoadcellDevices(); }
-    if (type === 'core')     { loadCoreConfigs(); }
+    if (type === 'loadcell')    { loadLoadcellDevices(); }
+    if (type === 'core')        { loadCoreConfigs(); }
+    if (type === 'client_info') { loadClientInfo(); }
   }
 
   async function saveTargets() {
@@ -936,148 +889,28 @@
     }
   }
 
-  // -- Core Config JSON Editor Functions ---------------------------------
-
-// Load latest config into the editor
-async function loadLatestCoreConfig() {
-  const editor = document.getElementById('coreJsonEditor');
-  const resultDiv = document.getElementById('jsonEditorResult');
-  
-  try {
-    const d = await fetch('/api/pipeline/core-config/latest').then(r => r.json());
-    if (d.success && d.config) {
-      editor.value = JSON.stringify(d.config.config, null, 2);
-      showEditorResult('✅ Loaded latest config v' + d.config.version, true);
-    } else {
-      // Load default template if no config exists
-      const defaultConfig = {
-        service_name: "ilx_craneiq_core",
-        pipeline: {
-          server: "127.0.0.1",
-          port: 7000,
-          connection_timeout_s: 5,
-          max_queue_size: 10,
-          reconnect_interval_ms: 100
-        },
-        services: {
-          modbus: {
-            service_name: "modbus_service",
-            groups: [
-              { datapoint: "hoist_group", name: "hoist_up", members: ["hoist_up", "hoist_down"] },
-              { datapoint: "ct_group", name: "ct_group", members: ["ct_left", "ct_right"] },
-              { datapoint: "lt_group", name: "lt_group", members: ["lt_forward", "lt_backward"] }
-            ]
-          },
-          loadcell: {
-            service_name: "load_cell_service",
-            datapoint_name: "load_weight",
-            unit_datapoint_name: "load_unit"
-          }
-        },
-        logging: { level: "info" }
-      };
-      editor.value = JSON.stringify(defaultConfig, null, 2);
-      showEditorResult('📝 No existing config found - loaded default template', true);
-    }
-  } catch (e) {
-    showEditorResult('❌ Failed to load config: ' + e.message, false);
-  }
-}
-
-function validateCoreConfigJson() {
-  const editor = document.getElementById('coreJsonEditor');
-  const content = editor.value;
-  
-  try {
-    const config = JSON.parse(content);
-    
-    // Basic validation
-    const errors = [];
-    if (!config.service_name && !config.services) {
-      errors.push('Missing service_name or services section');
-    }
-    if (config.services) {
-      if (config.services.modbus && !config.services.modbus.service_name) {
-        errors.push('modbus service missing service_name');
+  async function downloadLatestCoreConfig() {
+    try {
+      const d = await fetch('/api/pipeline/core-config/latest').then(r => r.json());
+      if (!d.success || !d.config) {
+        toast('No config available to download', false);
+        return;
       }
-      if (config.services.loadcell && !config.services.loadcell.service_name) {
-        errors.push('loadcell service missing service_name');
-      }
+      const config = d.config.config;
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `core_config_v${d.config.version}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast(`Downloaded config v${d.config.version}`);
+    } catch (e) {
+      toast('Download failed: ' + e.message, false);
     }
-    
-    if (errors.length > 0) {
-      showEditorResult('❌ Validation failed:\n' + errors.join('\n'), false);
-      return false;
-    } else {
-      const summary = [
-        '✅ Valid JSON config!',
-        `Service: ${config.service_name || 'N/A'}`,
-        `Services: ${Object.keys(config.services || {}).join(', ') || 'none'}`
-      ].join('\n');
-      showEditorResult(summary, true);
-      return true;
-    }
-  } catch (err) {
-    showEditorResult('❌ Invalid JSON: ' + err.message, false);
-    return false;
   }
-}
-
-function showEditorResult(msg, isSuccess) {
-  const resultDiv = document.getElementById('jsonEditorResult');
-  resultDiv.classList.remove('hidden');
-  resultDiv.className = 'mt-3 p-2 rounded-lg text-xs whitespace-pre-wrap ' + 
-    (isSuccess ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-  resultDiv.textContent = msg;
-  setTimeout(() => {
-    if (resultDiv && !resultDiv.matches(':hover')) {
-      resultDiv.classList.add('hidden');
-    }
-  }, 8000);
-}
-
-async function saveCoreConfig(sendToPipeline = true) {
-  const editor = document.getElementById('coreJsonEditor');
-  const content = editor.value;
-  const resultDiv = document.getElementById('jsonEditorResult');
-  
-  // Validate first
-  if (!validateCoreConfigJson()) {
-    return;
-  }
-  
-  resultDiv.className = 'mt-3 p-2 rounded-lg text-xs bg-stone-50 text-stone-500';
-  resultDiv.classList.remove('hidden');
-  resultDiv.textContent = sendToPipeline ? '⏳ Saving and sending to pipeline...' : '💾 Saving to database...';
-  
-  try {
-    const response = await fetch('/api/pipeline/core-config/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        config_json: content,
-        send_to_pipeline: sendToPipeline
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-      showEditorResult(
-        '✅ ' + (data.sent ? 'Config saved and sent!' : (data.queued ? 'Config saved and queued for pipeline!' : 'Config saved to database!')),
-        true
-      );
-      // Refresh the config history
-      if (typeof loadCoreConfigs === 'function') loadCoreConfigs();
-      if (typeof loadSendLog === 'function') loadSendLog();
-      if (typeof loadStatus === 'function') loadStatus();
-    } else {
-      showEditorResult('❌ Save failed: ' + (data.error || 'Unknown error'), false);
-    }
-  } catch (err) {
-    showEditorResult('❌ Network error: ' + err.message, false);
-  }
-}
 
   // -- JSON Upload Functions --------------------------------------------
   let _uploadedJsonContent = null;
@@ -1401,6 +1234,62 @@ async function saveCoreConfig(sendToPipeline = true) {
         toast(d.error || 'Failed', false);
       }
     } catch (e) { toast('Error: ' + e.message, false); }
+  }
+
+  // -- Client Info -------------------------------------------------------
+  function loadClientInfo() {
+    const body = document.getElementById('clientInfoBody');
+    if (!body) return;
+
+    const proto    = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port     = window.location.port || (proto === 'https:' ? '443' : '80');
+    const origin   = window.location.origin;
+    const ua       = navigator.userAgent.length > 90
+                       ? navigator.userAgent.slice(0, 90) + '…'
+                       : navigator.userAgent;
+
+    body.innerHTML = `
+      <div class="space-y-3">
+
+        <div class="rounded-xl border-2 border-orange-200 p-4" style="background:#fff7ed;">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="mat" style="color:#f97316;font-size:20px;">router</span>
+            <span class="text-xs font-extrabold uppercase tracking-wide text-stone-700">Web Server Port (this client)</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-orange-400 bg-orange-100 px-2 py-0.5 rounded-full ml-auto">aiohttp · main.py</span>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-4xl font-extrabold text-orange-500 font-mono">${port}</span>
+            <div class="text-xs text-stone-500 space-y-0.5">
+              <div>Protocol: <span class="font-mono font-bold text-stone-700">${proto.replace(':', '')}</span></div>
+              <div>Host: <span class="font-mono font-bold text-stone-700">${hostname}</span></div>
+              <div>Origin: <span class="font-mono font-bold text-stone-700">${origin}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-stone-100 p-4" style="background:#fafaf9;">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="mat" style="color:#a8a29e;font-size:18px;">hub</span>
+            <span class="text-xs font-bold uppercase tracking-wide text-stone-500">Pipeline Server Port</span>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300 bg-stone-100 px-2 py-0.5 rounded-full ml-auto">fixed · ilx_pipeline</span>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="text-4xl font-extrabold text-stone-300 font-mono">7000</span>
+            <div class="text-xs text-stone-400 space-y-0.5">
+              <div>Owned by the <code class="bg-stone-100 px-1 rounded">ilx_pipeline</code> library daemon.</div>
+              <div><code class="bg-stone-100 px-1 rounded">PipelineClient</code> connects <em>to</em> this port — your app does not run on it.</div>
+              <div class="text-orange-400 font-semibold mt-1">Must stay 7000 — changing it breaks the pipeline connection.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-stone-100 p-3">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Browser</div>
+          <div class="text-[11px] text-stone-400 font-mono break-all">${ua}</div>
+        </div>
+
+      </div>`;
   }
 
   // Initialize everything

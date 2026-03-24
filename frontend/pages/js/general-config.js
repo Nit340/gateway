@@ -73,6 +73,31 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
+    // NETWORK ROUTE SELECT  -- sends pipeline datapoint on radio/auto change
+    //   "0": "auto", "1": "eth0", "2": "eth1", "3": "lte", "4": "wifi"
+    // =========================================================================
+    var _ROUTE_MAP = { auto: 0, eth0: 1, eth1: 2, lte: 3, wifi: 4,
+                       ethernet: 1 /* radio value alias */ };
+
+    var sendNetworkRouteSelect = function (routeKey) {
+        var val = _ROUTE_MAP[routeKey];
+        if (val === undefined) return;
+        fetch('/api/pipeline/network-route-select', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ network_route_select: val })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            console.log('[NET-ROUTE] sent network_route_select=' + val + ' (' + routeKey + ')', d);
+        })
+        .catch(function (e) {
+            console.warn('[NET-ROUTE] failed to send network_route_select:', e);
+        });
+    };
+
+    // =========================================================================
     // NETWORK MODE TAB
     // =========================================================================
     var setNetworkMode = function (mode) {
@@ -87,7 +112,15 @@ console.log('general-config.js loaded');
 
     var initializeNetworkToggles = function () {
         document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
-            r.addEventListener('change', function () { setNetworkMode(this.value); });
+            r.addEventListener('change', function () {
+                setNetworkMode(this.value);
+                // Send pipeline datapoint on radio click
+                // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1
+                var routeKey = this.value === 'ethernet' ? 'eth0' : this.value;
+                sendNetworkRouteSelect(routeKey);
+                // Reset eth card selection highlight when switching away from ethernet
+                if (this.value !== 'ethernet') { _setEthCardSelected(null); }
+            });
         });
         document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
             r.addEventListener('change', toggleIPAssignment);
@@ -522,6 +555,8 @@ console.log('general-config.js loaded');
         // Turn ON immediately so user sees it respond
         _acEnabled = true;
         _setAcUi(true, false);
+        // Send pipeline datapoint: 0 = auto
+        sendNetworkRouteSelect('auto');
 
         var ssid = (el('wifi-ssid-value') || {}).value || '';
         if (!ssid) {
@@ -580,6 +615,46 @@ console.log('general-config.js loaded');
         var saved = (el('wifi-ssid-value') || {}).value || 'Univa-Guest';
         var lbl = el('wifi-ssid-label');
         if (lbl) lbl.textContent = saved;
+    };
+
+    // =========================================================================
+    // ETHERNET INTERFACE SELECTION  (eth0 / eth1 select buttons)
+    // =========================================================================
+    var _selectedEth = null;  // 'eth0' | 'eth1' | null
+
+    var _setEthCardSelected = function (which) {
+        _selectedEth = which;
+        ['eth0', 'eth1'].forEach(function (iface) {
+            var card = el(iface + '-card');
+            var btn  = el(iface + '-select-btn');
+            if (!card || !btn) return;
+            if (iface === which) {
+                card.style.borderColor = '#2563EB';
+                card.style.background  = '#EFF6FF';
+                btn.textContent = 'Selected';
+                btn.style.background   = '#2563EB';
+                btn.style.color        = '#fff';
+                btn.style.borderColor  = '#2563EB';
+            } else {
+                card.style.borderColor = '';
+                card.style.background  = '';
+                btn.textContent = 'Select';
+                btn.style.background   = '';
+                btn.style.color        = '';
+                btn.style.borderColor  = '';
+            }
+        });
+    };
+
+    var initEthernetSelectButtons = function () {
+        ['eth0', 'eth1'].forEach(function (iface) {
+            var btn = el(iface + '-select-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                _setEthCardSelected(iface);
+                sendNetworkRouteSelect(iface);  // 1=eth0, 2=eth1
+            });
+        });
     };
 
     // =========================================================================
@@ -1098,9 +1173,9 @@ console.log('general-config.js loaded');
                 }
             },
             heartbeat: {
-                interval:          parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
-                offline_threshold: parseInt(getInputValue('[name="offline-threshold"]'))  || 120
-            },
+    interval:          parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
+    offline_threshold: parseInt(getInputValue('[name="offline-threshold"]'))  || 120
+},
             mac_address: (function () { var m=$('[data-mac-address]'); return m?m.textContent.trim():''; }())
         };
     };
@@ -1288,6 +1363,7 @@ console.log('general-config.js loaded');
         initializeNetworkToggles();
         initializePasswordToggles();
         initWifiScanAndConnect();
+        initEthernetSelectButtons();
         initLiveButton();
         initializeWebSocket();
         initTimezoneInteraction();

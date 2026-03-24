@@ -16,27 +16,83 @@
 
     function el(id) { return document.getElementById(id); }
 
-    // ---- Auto-load single LC device on init ----
+    // ---- Load all LC devices; show selector if >1 ----
+    var allDevices = [];
+
     function loadDevice() {
         fetch('/api/pipeline/loadcell-devices', { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            var devices = data.devices || [];
-            if (devices.length === 0) {
-                var btn = el('pipeline-connect-btn');
+            allDevices = data.devices || [];
+            var btn = el('pipeline-connect-btn');
+            var selectorWrap = el('lc-device-selector-wrap');
+            var selector = el('lc-device-selector');
+
+            if (allDevices.length === 0) {
                 if (btn) { btn.disabled = true; btn.classList.add('opacity-40'); }
                 var lbl = el('lc-device-label');
-                if (lbl) lbl.textContent = 'No device   add one in Device Management';
+                if (lbl) lbl.textContent = 'No device — add one in Device Management';
                 return;
             }
-            selectedDevice = devices[0];
-            rawDatapoint = 'loadcells.' + selectedDevice.name + '.raw';
-            var lbl = el('lc-device-label');
-            if (lbl) lbl.textContent = selectedDevice.name;
-            // Populate filter fields from saved device data
-            populateFilters(selectedDevice);
+
+            // If >1 device, show the selector dropdown
+            if (allDevices.length > 1 && selectorWrap && selector) {
+                selector.innerHTML = '';
+                allDevices.forEach(function(dev) {
+                    var opt = document.createElement('option');
+                    opt.value = dev.id || dev.name;
+                    opt.textContent = dev.name;
+                    selector.appendChild(opt);
+                });
+                selectorWrap.style.display = '';
+                selector.removeEventListener('change', onDeviceSelectorChange);
+                selector.addEventListener('change', onDeviceSelectorChange);
+            } else {
+                if (selectorWrap) selectorWrap.style.display = 'none';
+            }
+
+            // Select the first device
+            selectDevice(allDevices[0]);
         })
         .catch(function() {});
+    }
+
+    function onDeviceSelectorChange() {
+        var selector = el('lc-device-selector');
+        if (!selector) return;
+        var id = selector.value;
+        var dev = allDevices.find(function(d) { return (d.id || d.name) === id; });
+        if (dev) {
+            // Disconnect first if connected
+            if (connected) { disconnect(); }
+            selectDevice(dev);
+        }
+    }
+
+    function selectDevice(dev) {
+        selectedDevice = dev;
+        rawDatapoint = 'loadcells.' + dev.name + '.raw';
+        var lbl = el('lc-device-label');
+        if (lbl) lbl.textContent = dev.name;
+
+        // Show unit badge from device config
+        var unit = dev.unit || (dev.config && dev.config.unit) || '';
+        var badge = el('lc-unit-badge');
+        if (badge) {
+            if (unit) {
+                badge.textContent = unit;
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // Update calibration modal unit label
+        var calUnitLabel = el('cal-weight-unit-label');
+        if (calUnitLabel) calUnitLabel.textContent = unit || 'kg';
+
+        // Populate filter fields from saved device data
+        populateFilters(dev);
     }
 
     // ============================================================
@@ -372,8 +428,9 @@
                 selectedDevice.levels         = built.levels;
 
                 if (data.pipeline_sent) {
+                    var _unitLabel = selectedDevice.unit ? ' [' + selectedDevice.unit + ']' : '';
                     if (s) {
-                        s.textContent = '✓ Configured — sent to pipeline (' + (data.target_service || 'service') + ')';
+                        s.textContent = '✓ ' + selectedDevice.name + _unitLabel + ' — sent to pipeline (' + (data.target_service || 'service') + ')';
                         s.style.color = '#16a34a';
                     }
                     if (saveBtn) {

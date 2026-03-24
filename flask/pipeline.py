@@ -3112,6 +3112,69 @@ async def pipeline_load_raw_state_handler(request):
 
 
 # ============================================================================
+# NETWORK ROUTE SELECT  -- POST /api/pipeline/network-route-select
+# Publishes the network_route_select datapoint via client.datapoint_set().
+#   "0": "auto", "1": "eth0", "2": "eth1", "3": "lte", "4": "wifi"
+# Uses datapoint_set() -- no service name required; this client owns the
+# datapoint and the pipeline broadcasts it via SEND_TO_INPUT frame.
+# ============================================================================
+
+_ROUTE_SELECT_MAP = {0: 'auto', 1: 'eth0', 2: 'eth1', 3: 'lte', 4: 'wifi'}
+
+async def pipeline_network_route_select_handler(request):
+    """POST /api/pipeline/network-route-select
+    Body: { "network_route_select": <int 0-4> }
+    Calls client.datapoint_set('network_route_select', value) -- no service
+    name needed; the client publishes it as its own datapoint (SEND_TO_INPUT).
+    """
+    try:
+        body  = await request.json()
+        value = int(body.get('network_route_select', -1))
+    except Exception:
+        return web.json_response({'success': False, 'message': 'Invalid JSON or value'}, status=400)
+
+    if value not in _ROUTE_SELECT_MAP:
+        return web.json_response(
+            {'success': False, 'message': 'Value must be 0-4 (0=auto,1=eth0,2=eth1,3=lte,4=wifi)'},
+            status=400)
+
+    route_name = _ROUTE_SELECT_MAP[value]
+    print('[NET-ROUTE] network_route_select={} ({})'.format(value, route_name))
+
+    pipeline_sent    = False
+    pipeline_message = 'Pipeline not connected'
+
+    with pipeline_state['lock']:
+        client    = pipeline_state.get('client')
+        connected = pipeline_state.get('connected', False)
+
+    if connected and client:
+        try:
+            # datapoint_set publishes this client's own datapoint -- no service name needed.
+            # Type inference: int -> LONG (64-bit), sent via SEND_TO_INPUT binary frame.
+            ok = client.datapoint_set('network_route_select', value)
+            if ok:
+                pipeline_sent    = True
+                pipeline_message = 'Sent network_route_select={} ({})'.format(value, route_name)
+            else:
+                pipeline_message = 'datapoint_set returned False'
+        except Exception as exc:
+            pipeline_message = 'datapoint_set error: {}'.format(exc)
+            print('[NET-ROUTE] ' + pipeline_message)
+    else:
+        pipeline_message = 'Pipeline not connected -- datapoint not sent'
+
+    print('[NET-ROUTE] ' + pipeline_message)
+    return web.json_response({
+        'success':              True,
+        'network_route_select': value,
+        'route':                route_name,
+        'pipeline_sent':        pipeline_sent,
+        'pipeline_message':     pipeline_message,
+    })
+
+
+# ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================
 
@@ -3166,6 +3229,9 @@ def register_pipeline_routes(app):
     app.router.add_get ('/api/pipeline/load-raw-toggle', pipeline_load_raw_state_handler)
     app.router.add_post('/api/pipeline/load-raw-toggle', pipeline_load_raw_toggle_handler)
     app.router.add_post('/api/pipeline/core-config/save', pipeline_core_config_save_handler)
+
+    # -- Network route select ----------------------------------------------
+    app.router.add_post('/api/pipeline/network-route-select', pipeline_network_route_select_handler)
     # Register whitelisted device names from DB (permanent devices only),
     # then build the initial whitelist with raw OFF.
     try:

@@ -447,21 +447,29 @@
 
                 <!-- Live status cards: hidden until Live connected -->
                 <div id="eth-live-panel" class="mb-4 grid grid-cols-2 gap-3">
-                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5">
+                    <div id="eth0-card" class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth0</span>
                             <span id="eth0-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                         </div>
                         <div class="text-xs text-slate-500">IP &nbsp;<span id="eth0-ip"  class="font-mono text-slate-800">--</span></div>
                         <div class="text-xs text-slate-500">MAC <span id="eth0-mac" class="font-mono text-slate-800">--</span></div>
+                        <button type="button" id="eth0-select-btn"
+                            class="mt-1 w-full py-1 text-xs font-semibold rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-blue-50 hover:border-primary hover:text-primary transition-colors">
+                            Select
+                        </button>
                     </div>
-                    <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5">
+                    <div id="eth1-card" class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth1</span>
                             <span id="eth1-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                         </div>
                         <div class="text-xs text-slate-500">IP &nbsp;<span id="eth1-ip"  class="font-mono text-slate-800">--</span></div>
                         <div class="text-xs text-slate-500">MAC <span id="eth1-mac" class="font-mono text-slate-800">--</span></div>
+                        <button type="button" id="eth1-select-btn"
+                            class="mt-1 w-full py-1 text-xs font-semibold rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-blue-50 hover:border-primary hover:text-primary transition-colors">
+                            Select
+                        </button>
                     </div>
                 </div>
 
