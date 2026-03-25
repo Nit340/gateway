@@ -10,6 +10,9 @@ import re
 import os
 from datetime import datetime
 from aiohttp import web
+from logger_util import get_logger
+
+logger = get_logger(__name__)
 
 from general import device_status_tracker
 from database import DB_FILE, get_service_by_name, get_port_config
@@ -72,7 +75,7 @@ def _read_ext_device_file(device_id):
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
-        print('[EXT] Failed to read {}: {}'.format(path, e))
+        logger.info('[EXT] Failed to read {}: {}'.format(path, e))
         return None
 
 def _delete_ext_device_file(device_id):
@@ -82,7 +85,7 @@ def _delete_ext_device_file(device_id):
         if os.path.isfile(path):
             os.remove(path)
     except Exception as e:
-        print('[EXT] Failed to delete {}: {}'.format(path, e))
+        logger.info('[EXT] Failed to delete {}: {}'.format(path, e))
 
 # ============================================================================
 # DATABASE CONNECTION HELPER
@@ -248,14 +251,14 @@ async def get_all_devices(request):
                     }
                 })
         except Exception as e:
-            print("Error fetching external devices: {}".format(e))
+            logger.error("Error fetching external devices: {}".format(e))
             pass
         
         conn.close()
         return web.json_response({'devices': devices})
         
     except Exception as e:
-        print("Error getting devices: {}".format(e))
+        logger.error("Error getting devices: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -439,14 +442,14 @@ async def get_device_details(request):
                 conn.close()
                 return web.json_response(details)
         except Exception as e:
-            print("Error fetching external device: {}".format(e))
+            logger.error("Error fetching external device: {}".format(e))
             pass
 
         conn.close()
         return web.json_response({'error': 'Device not found'}, status=404)
         
     except Exception as e:
-        print("Error getting device details: {}".format(e))
+        logger.error("Error getting device details: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -557,15 +560,16 @@ async def add_device(request):
                 tag_capacity
             ))
 
-            # Automatically create datapoints
+            # Automatically create datapoints — use the device's chosen unit
+            _chosen_unit = config.get('unit', 'kg')
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                VALUES (?, ?, '')
-            ''', (device_id, tag_weight))
+                VALUES (?, ?, ?)
+            ''', (device_id, tag_weight, _chosen_unit))
             cursor.execute('''
                 INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                VALUES (?, ?, 'kg')
-            ''', (device_id, tag_capacity))
+                VALUES (?, ?, ?)
+            ''', (device_id, tag_capacity, _chosen_unit))
             
         elif device_type == 'external':
             ext_protocol = data.get('protocol', 'ext-rtu')
@@ -648,10 +652,10 @@ async def add_device(request):
         })
         
     except sqlite3.IntegrityError as e:
-        print("Database integrity error: {}".format(e))
+        logger.error("Database integrity error: {}".format(e))
         return web.json_response({'error': 'Database constraint violation: {}'.format(str(e))}, status=400)
     except Exception as e:
-        print("Error adding device: {}".format(e))
+        logger.error("Error adding device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -782,6 +786,14 @@ async def update_device(request):
             '''.format(fields=', '.join(update_fields))
             
             cursor.execute(query, values)
+
+            # If the unit changed, keep loadcell_datapoints in sync so
+            # tag_mapping always returns the correct unit for weight & capacity.
+            if 'unit' in config:
+                cursor.execute(
+                    'UPDATE loadcell_datapoints SET unit = ? WHERE device_id = ?',
+                    (config['unit'], device_id)
+                )
         
         conn.commit()
         conn.close()
@@ -792,7 +804,7 @@ async def update_device(request):
         })
         
     except Exception as e:
-        print("Error updating device: {}".format(e))
+        logger.error("Error updating device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -832,7 +844,7 @@ async def delete_device(request):
         })
         
     except Exception as e:
-        print("Error deleting device: {}".format(e))
+        logger.error("Error deleting device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -862,7 +874,7 @@ async def test_device(request):
             }, status=400)
             
     except Exception as e:
-        print("Error testing device: {}".format(e))
+        logger.error("Error testing device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 async def disable_device(request):
@@ -896,7 +908,7 @@ async def disable_device(request):
         })
         
     except Exception as e:
-        print("Error disabling device: {}".format(e))
+        logger.error("Error disabling device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1137,7 +1149,7 @@ async def duplicate_device(request):
         }, status=404)
         
     except Exception as e:
-        print("Error duplicating device: {}".format(e))
+        logger.error("Error duplicating device: {}".format(e))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -1234,7 +1246,7 @@ async def export_devices_csv(request):
                     '', '', '', '', '', '', '1' if enabled else '0'
                 ])
         except Exception as e:
-            print("Error exporting external devices: {}".format(e))
+            logger.error("Error exporting external devices: {}".format(e))
             pass
         
         conn.close()
@@ -1254,7 +1266,7 @@ async def export_devices_csv(request):
         )
         
     except Exception as e:
-        print("Error exporting devices: {}".format(e))
+        logger.error("Error exporting devices: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1418,15 +1430,16 @@ async def import_devices_csv(request):
                         1 if row.get('Enabled', '1') == '1' else 0
                     ))
                     
-                    # Create datapoints
+                    # Create datapoints — unit must match the device's chosen unit
+                    _import_unit = row.get('Unit', 'kg') or 'kg'
                     cursor.execute('''
                         INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                        VALUES (?, ?, '')
-                    ''', (device_id, tag_weight))
+                        VALUES (?, ?, ?)
+                    ''', (device_id, tag_weight, _import_unit))
                     cursor.execute('''
                         INSERT OR IGNORE INTO loadcell_datapoints (device_id, name, unit)
-                        VALUES (?, ?, 'kg')
-                    ''', (device_id, tag_capacity))
+                        VALUES (?, ?, ?)
+                    ''', (device_id, tag_capacity, _import_unit))
                     
                     existing_loadcell_count += 1
                     if not (replace_existing and existing_lc):
@@ -1540,7 +1553,7 @@ async def import_devices_csv(request):
         return web.json_response(response_data)
         
     except Exception as e:
-        print("Error importing devices: {}".format(e))
+        logger.error("Error importing devices: {}".format(e))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -1610,7 +1623,7 @@ async def download_csv_template(request):
         )
         
     except Exception as e:
-        print("Error generating template: {}".format(e))
+        logger.error("Error generating template: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1669,13 +1682,13 @@ async def get_device_datapoints(request):
                         'type': 'External'
                     })
             except Exception as e:
-                print("Error fetching external datapoints: {}".format(e))
+                logger.error("Error fetching external datapoints: {}".format(e))
         
         conn.close()
         return web.json_response({'datapoints': datapoints})
         
     except Exception as e:
-        print("Error getting device datapoints: {}".format(e))
+        logger.error("Error getting device datapoints: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1702,7 +1715,7 @@ async def update_device_status_api(request):
         })
         
     except Exception as e:
-        print("Error updating device status: {}".format(e))
+        logger.error("Error updating device status: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
 
 # ============================================================================
@@ -1719,5 +1732,5 @@ async def get_port_config_api(request):
         rows = get_port_config(device_type)
         return web.json_response({'success': True, 'ports': rows})
     except Exception as e:
-        print('Error getting port config: {}'.format(e))
+        logger.error('Error getting port config: {}'.format(e))
         return web.json_response({'error': str(e)}, status=500)

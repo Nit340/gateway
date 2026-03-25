@@ -188,8 +188,14 @@ let settings  = {};  // { module: {enabled, level} }
 // ── settings panel ──────────────────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const r = await fetch('/api/admin/log-settings');
-    if (!r.ok) return;
+    const r = await fetch('/api/admin/log-settings', {credentials:'include'});
+    if (!r.ok) {
+      // If 401, user isn't authenticated - redirect to login
+      if (r.status === 401) {
+        window.location.href = '/admin/login';
+      }
+      return;
+    }
     const d = await r.json();
     (d.settings||[]).forEach(s => { settings[s.module] = {enabled: s.enabled, level: s.level}; });
     renderSettings();
@@ -223,7 +229,7 @@ async function setSetting(module, enabled, level) {
   renderSettings();  // optimistic update
   try {
     await fetch('/api/admin/log-settings', {
-      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      method:'PUT', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
     });
   } catch(e) {}
 }
@@ -236,7 +242,7 @@ async function fetchLogs() {
   let url = `/api/admin/logs?limit=${limit}&module=${catFilter}&level=${level}`;
   if (search) url += `&search=${encodeURIComponent(search)}`;
   try {
-    const r = await fetch(url);
+    const r = await fetch(url, {credentials:'include'});
     if (!r.ok) return;
     const d = await r.json();
     renderTable(d.logs || []);
@@ -304,7 +310,7 @@ function setCat(btn, cat) {
 
 async function clearLogs() {
   if (!confirm('Clear all buffered logs?')) return;
-  await fetch('/api/admin/logs', {method:'DELETE'});
+  await fetch('/api/admin/logs', {method:'DELETE', credentials:'include'});
   renderTable([]);
 }
 

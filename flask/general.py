@@ -152,7 +152,7 @@ async def websocket_handler(request):
 
     # OPTIMIZATION: Enforce connection limit
     if len(connected_websockets) >= MAX_WEBSOCKET_CONNECTIONS:
-        print("WebSocket connection rejected - limit reached ({}/{})".format(
+        logger.info("WebSocket connection rejected - limit reached ({}/{})".format(
             len(connected_websockets), MAX_WEBSOCKET_CONNECTIONS))
         return web.Response(
             status=503,
@@ -165,7 +165,7 @@ async def websocket_handler(request):
     await ws.prepare(request)
 
     connected_websockets.add(ws)
-    print("WebSocket connected (user={}). Total clients: {}/{}".format(
+    logger.info("WebSocket connected (user={}). Total clients: {}/{}".format(
         user, len(connected_websockets), MAX_WEBSOCKET_CONNECTIONS))
 
     try:
@@ -187,7 +187,7 @@ async def websocket_handler(request):
                 # ws.exception() is None when the remote simply closed.
                 exc = ws.exception()
                 if exc:
-                    print('WebSocket protocol error (user={}): {}'.format(user, exc))
+                    logger.error('WebSocket protocol error (user={}): {}'.format(user, exc))
                 break
             elif msg.type == MsgType.ping:
                 # aiohttp auto-replies with pong when heartbeat= is set,
@@ -199,8 +199,17 @@ async def websocket_handler(request):
                     msg_type = data.get('type')
 
                     if msg_type == 'sync_time':
-                        new_date = datetime.datetime.now().strftime('%Y-%m-%d')
-                        new_time = datetime.datetime.now().strftime('%H:%M')
+                        # Accept time_format from the WS message (sent by JS on sync)
+                        _tf = data.get('time_format', '24-hour')
+                        _now = get_now()
+                        new_date = _now.strftime('%Y-%m-%d')
+                        # Always store 24h in realtime_state; format is carried separately
+                        new_time = _now.strftime('%H:%M')
+                        # Build the display-formatted time for the client
+                        if _tf == '12-hour':
+                            new_time_display = _now.strftime('%I:%M %p').lstrip('0') or _now.strftime('%I:%M %p')
+                        else:
+                            new_time_display = new_time
 
                         if (new_date != realtime_state['current_date'] or
                                 new_time != realtime_state['current_time']):
@@ -211,13 +220,17 @@ async def websocket_handler(request):
                                 'type': 'time_update',
                                 'current_date': new_date,
                                 'current_time': new_time,
+                                'time_display': new_time_display,
+                                'time_format':  _tf,
                             })
 
                         if not ws.closed:
                             await ws.send_str(json.dumps({
-                                'type': 'time_synced',
+                                'type':         'time_synced',
                                 'current_date': realtime_state['current_date'],
                                 'current_time': realtime_state['current_time'],
+                                'time_display': new_time_display,
+                                'time_format':  _tf,
                             }))
 
                     elif msg_type == 'get_wifi_signal':
@@ -246,11 +259,11 @@ async def websocket_handler(request):
         # Browser closed the tab abruptly.
         pass
     except Exception as e:
-        print("WebSocket unexpected error (user={}): {}: {}".format(
+        logger.error("WebSocket unexpected error (user={}): {}: {}".format(
             user, type(e).__name__, e))
     finally:
         connected_websockets.discard(ws)
-        print("WebSocket disconnected (user={}). Remaining: {}/{}".format(
+        logger.info("WebSocket disconnected (user={}). Remaining: {}/{}".format(
             user, len(connected_websockets), MAX_WEBSOCKET_CONNECTIONS))
 
     return ws
@@ -408,7 +421,7 @@ def update_network_status_field(datapoint_name: str, value) -> None:
                 main_loop,
             )
         except Exception as e:
-            print("[NET-STATUS] broadcast error: {}".format(e))
+            logger.error("[NET-STATUS] broadcast error: {}".format(e))
 
 
 def _build_network_status_snapshot():
@@ -506,7 +519,7 @@ async def network_status_websocket_handler(request):
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
     network_status_websockets.add(ws)
-    print("[NET-STATUS] WS connected (user={}). Total: {}".format(
+    logger.info("[NET-STATUS] WS connected (user={}). Total: {}".format(
         user, len(network_status_websockets)))
 
     try:
@@ -523,7 +536,7 @@ async def network_status_websocket_handler(request):
             elif msg.type == MsgType.error:
                 exc = ws.exception()
                 if exc:
-                    print("[NET-STATUS] WS protocol error (user={}): {}".format(user, exc))
+                    logger.error("[NET-STATUS] WS protocol error (user={}): {}".format(user, exc))
                 break
             elif msg.type == MsgType.ping:
                 await ws.pong(msg.data)
@@ -547,11 +560,11 @@ async def network_status_websocket_handler(request):
     except ConnectionResetError:
         pass
     except Exception as e:
-        print("[NET-STATUS] WS unexpected error (user={}): {}: {}".format(
+        logger.error("[NET-STATUS] WS unexpected error (user={}): {}: {}".format(
             user, type(e).__name__, e))
     finally:
         network_status_websockets.discard(ws)
-        print("[NET-STATUS] WS disconnected (user={}). Total: {}".format(
+        logger.info("[NET-STATUS] WS disconnected (user={}). Total: {}".format(
             user, len(network_status_websockets)))
 
     return ws
@@ -607,7 +620,7 @@ def _scan_wifi_windows():
             # Give the adapter time to complete the scan
             time.sleep(3)
     except Exception as e:
-        print('[WIFI-SCAN] wlanapi scan trigger failed (non-fatal): {}'.format(e))
+        logger.info('[WIFI-SCAN] wlanapi scan trigger failed (non-fatal): {}'.format(e))
         time.sleep(1)  # still wait a bit in case a previous scan is cached
 
     # ------------------------------------------------------------------ #
@@ -619,7 +632,7 @@ def _scan_wifi_windows():
             capture_output=True, text=True, timeout=15,
             encoding='utf-8', errors='replace'
         )
-        print('[WIFI-SCAN] netsh rc={} lines={}'.format(
+        logger.info('[WIFI-SCAN] netsh rc={} lines={}'.format(
             result.returncode, len(result.stdout.splitlines())))
 
         if result.returncode != 0 or not result.stdout.strip():
@@ -661,11 +674,11 @@ def _scan_wifi_windows():
                 'channel':        channel,
             })
 
-        print('[WIFI-SCAN] parsed {} networks'.format(len(networks)))
+        logger.info('[WIFI-SCAN] parsed {} networks'.format(len(networks)))
         return networks
 
     except Exception as e:
-        print('[WIFI-SCAN] netsh parse error: {}'.format(e))
+        logger.error('[WIFI-SCAN] netsh parse error: {}'.format(e))
         return []
 
 
@@ -699,27 +712,27 @@ def _do_wifi_scan():
       2. wpa_cli  -- fallback if iw is missing
     """
     import time
-    print('[WIFI-SCAN] Starting scan on Linux...')
+    logger.info('[WIFI-SCAN] Starting scan on Linux...')
 
     iface = _get_wifi_iface()
-    print('[WIFI-SCAN] Using interface: {}'.format(iface))
+    logger.info('[WIFI-SCAN] Using interface: {}'.format(iface))
 
     # -- Method 1: iw dev <iface> scan --
     networks = _scan_wifi_iw(iface)
     if networks:
         networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
-        print('[WIFI-SCAN] Found {} networks via iw.'.format(len(networks)))
+        logger.info('[WIFI-SCAN] Found {} networks via iw.'.format(len(networks)))
         return networks
 
     # -- Method 2: wpa_cli scan + scan_results --
-    print('[WIFI-SCAN] iw empty, trying wpa_cli...')
+    logger.info('[WIFI-SCAN] iw empty, trying wpa_cli...')
     networks = _scan_wifi_wpa_cli(iface)
     if networks:
         networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
-        print('[WIFI-SCAN] Found {} networks via wpa_cli.'.format(len(networks)))
+        logger.info('[WIFI-SCAN] Found {} networks via wpa_cli.'.format(len(networks)))
         return networks
 
-    print('[WIFI-SCAN] All methods returned empty.')
+    logger.info('[WIFI-SCAN] All methods returned empty.')
     return []
 
 
@@ -751,7 +764,7 @@ def _scan_wifi_wpa_cli(iface):
     else:
         base += ['-i', iface]
 
-    print('[WIFI-SCAN] wpa_cli base cmd: {}'.format(' '.join(base)))
+    logger.info('[WIFI-SCAN] wpa_cli base cmd: {}'.format(' '.join(base)))
 
     # Trigger scan
     try:
@@ -760,14 +773,14 @@ def _scan_wifi_wpa_cli(iface):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
         )
         out = r.stdout.decode('utf-8', errors='replace').strip()
-        print('[WIFI-SCAN] wpa_cli scan rc={} out={}'.format(r.returncode, out[:80]))
+        logger.info('[WIFI-SCAN] wpa_cli scan rc={} out={}'.format(r.returncode, out[:80]))
         if r.returncode != 0 and 'OK' not in out:
             return []
     except FileNotFoundError:
-        print('[WIFI-SCAN] wpa_cli not found')
+        logger.info('[WIFI-SCAN] wpa_cli not found')
         return []
     except Exception as e:
-        print('[WIFI-SCAN] wpa_cli scan error: {}'.format(e))
+        logger.error('[WIFI-SCAN] wpa_cli scan error: {}'.format(e))
         return []
 
     # Wait for scan to complete
@@ -780,10 +793,10 @@ def _scan_wifi_wpa_cli(iface):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
         )
         output = r.stdout.decode('utf-8', errors='replace')
-        print('[WIFI-SCAN] wpa_cli scan_results rc={} lines={}'.format(
+        logger.info('[WIFI-SCAN] wpa_cli scan_results rc={} lines={}'.format(
             r.returncode, len(output.splitlines())))
     except Exception as e:
-        print('[WIFI-SCAN] wpa_cli scan_results error: {}'.format(e))
+        logger.error('[WIFI-SCAN] wpa_cli scan_results error: {}'.format(e))
         return []
 
     # Parse tab-separated output: bssid / frequency / signal / flags / ssid
@@ -858,7 +871,7 @@ def _scan_wifi_nmcli(iface):
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
             )
             stdout = result.stdout.decode('utf-8', errors='replace')
-            print('[WIFI-SCAN] nmcli rc={} lines={} cmd={}'.format(
+            logger.info('[WIFI-SCAN] nmcli rc={} lines={} cmd={}'.format(
                 result.returncode, len(stdout.splitlines()), ' '.join(cmd)))
 
             if result.returncode != 0 or not stdout.strip():
@@ -899,14 +912,14 @@ def _scan_wifi_nmcli(iface):
                 })
 
             if networks:
-                print('[WIFI-SCAN] nmcli parsed {} networks'.format(len(networks)))
+                logger.info('[WIFI-SCAN] nmcli parsed {} networks'.format(len(networks)))
                 return networks
 
         except FileNotFoundError:
-            print('[WIFI-SCAN] nmcli not found')
+            logger.info('[WIFI-SCAN] nmcli not found')
             break
         except Exception as e:
-            print('[WIFI-SCAN] nmcli error: {}'.format(e))
+            logger.error('[WIFI-SCAN] nmcli error: {}'.format(e))
 
     return []
 
@@ -929,7 +942,7 @@ def _scan_wifi_iw(iface):
             )
             stdout = result.stdout.decode('utf-8', errors='replace')
             stderr = result.stderr.decode('utf-8', errors='replace')
-            print('[WIFI-SCAN] iw rc={} lines={} stderr={}'.format(
+            logger.info('[WIFI-SCAN] iw rc={} lines={} stderr={}'.format(
                 result.returncode, len(stdout.splitlines()), stderr.strip()[:120]))
 
             if not stdout.strip():
@@ -977,14 +990,14 @@ def _scan_wifi_iw(iface):
             _flush(cur)
 
             if networks:
-                print('[WIFI-SCAN] iw parsed {} networks'.format(len(networks)))
+                logger.info('[WIFI-SCAN] iw parsed {} networks'.format(len(networks)))
                 return networks
 
         except FileNotFoundError:
-            print('[WIFI-SCAN] iw not found')
+            logger.info('[WIFI-SCAN] iw not found')
             break
         except Exception as e:
-            print('[WIFI-SCAN] iw error: {}'.format(e))
+            logger.error('[WIFI-SCAN] iw error: {}'.format(e))
 
     return []
 
@@ -1045,7 +1058,7 @@ async def wifi_scan_handler(request):
         })
 
     except Exception as e:
-        print('[WIFI-SCAN] Unexpected error: {}'.format(e))
+        logger.error('[WIFI-SCAN] Unexpected error: {}'.format(e))
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
@@ -1102,7 +1115,7 @@ async def wifi_connect_handler(request):
             return web.json_response({'success': False, 'message': message}, status=502)
 
     except Exception as e:
-        print('[WIFI-CONNECT] Unexpected error: {}'.format(e))
+        logger.error('[WIFI-CONNECT] Unexpected error: {}'.format(e))
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
@@ -1117,8 +1130,21 @@ async def periodic_updates():
             # Update time using active timezone
             now      = get_now()
             new_date = now.strftime('%Y-%m-%d')
-            new_time = now.strftime('%H:%M')
-            
+            new_time = now.strftime('%H:%M')  # always stored as 24h
+
+            # Load time_format from saved config so broadcast carries the right format
+            try:
+                cfg = get_general_configuration()
+                _tf = (cfg.get('date_time') or {}).get('time_format', '24-hour')
+            except Exception:
+                _tf = '24-hour'
+
+            if _tf == '12-hour':
+                _h12 = now.strftime('%I:%M %p')
+                new_time_display = _h12.lstrip('0') if _h12.startswith('0') else _h12
+            else:
+                new_time_display = new_time
+
             date_changed = new_date != previous_state['current_date']
             time_changed = new_time != previous_state['current_time']
             
@@ -1132,9 +1158,11 @@ async def periodic_updates():
                 # Broadcast time update if changed and clients are connected
                 if connected_websockets and (date_changed or time_changed):
                     await broadcast_to_clients({
-                        'type': 'time_update',
+                        'type':         'time_update',
                         'current_date': new_date,
-                        'current_time': new_time
+                        'current_time': new_time,
+                        'time_display': new_time_display,
+                        'time_format':  _tf,
                     })
             
             # Smart sleep interval
@@ -1144,7 +1172,7 @@ async def periodic_updates():
                 await asyncio.sleep(60)  # No clients - check every minute
             
         except Exception as e:
-            print("Error in periodic updates: {}".format(e))
+            logger.error("Error in periodic updates: {}".format(e))
             await asyncio.sleep(60)
 
 
@@ -1227,7 +1255,7 @@ async def sync_time_handler(request):
         stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=15
     )
     out_step = (r_step.stdout + r_step.stderr).decode('utf-8', errors='replace').strip()
-    print('[SYNC-TIME] chronyc makestep rc={} out={}'.format(r_step.returncode, out_step))
+    logger.info('[SYNC-TIME] chronyc makestep rc={} out={}'.format(r_step.returncode, out_step))
     if r_step.returncode != 0:
         return web.json_response({
             'success': False,
@@ -1240,14 +1268,14 @@ async def sync_time_handler(request):
         stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=35
     )
     out_wait = (r_wait.stdout + r_wait.stderr).decode('utf-8', errors='replace').strip()
-    print('[SYNC-TIME] chronyc waitsync rc={} out={}'.format(r_wait.returncode, out_wait))
+    logger.info('[SYNC-TIME] chronyc waitsync rc={} out={}'.format(r_wait.returncode, out_wait))
 
     # ------------------------------------------------------------------
     # STEP 3: Stop NTP service (time is now frozen at synced value)
     # ------------------------------------------------------------------
     _sp.call(['timedatectl', 'set-ntp', 'false'])
     _sp.call(['systemctl', 'stop', 'chronyd'])
-    print('[SYNC-TIME] NTP service stopped (one-time sync complete)')
+    logger.info('[SYNC-TIME] NTP service stopped (one-time sync complete)')
 
     # ------------------------------------------------------------------
     # STEP 4: Set timezone
@@ -1258,11 +1286,11 @@ async def sync_time_handler(request):
             stdout=_sp.PIPE, stderr=_sp.PIPE, timeout=5
         )
         if r_tz.returncode == 0:
-            print('[SYNC-TIME] timedatectl set-timezone {} OK'.format(timezone))
+            logger.info('[SYNC-TIME] timedatectl set-timezone {} OK'.format(timezone))
         else:
             raise Exception('timedatectl returned {}'.format(r_tz.returncode))
     except Exception as e:
-        print('[SYNC-TIME] timedatectl failed: {}, trying symlink'.format(e))
+        logger.info('[SYNC-TIME] timedatectl failed: {}, trying symlink'.format(e))
         try:
             tz_file = '/usr/share/zoneinfo/{}'.format(timezone)
             if _os.path.exists(tz_file):
@@ -1274,20 +1302,20 @@ async def sync_time_handler(request):
                         _f.write(timezone + '\n')
                 except Exception:
                     pass
-                print('[SYNC-TIME] symlinked /etc/localtime -> {}'.format(tz_file))
+                logger.info('[SYNC-TIME] symlinked /etc/localtime -> {}'.format(tz_file))
             else:
-                print('[SYNC-TIME] zoneinfo file not found: {}'.format(tz_file))
+                logger.info('[SYNC-TIME] zoneinfo file not found: {}'.format(tz_file))
         except Exception as e2:
-            print('[SYNC-TIME] timezone symlink failed: {}'.format(e2))
+            logger.info('[SYNC-TIME] timezone symlink failed: {}'.format(e2))
 
     # ------------------------------------------------------------------
     # STEP 5: Tell kernel RTC stores UTC
     # ------------------------------------------------------------------
     try:
         _sp.call(['timedatectl', 'set-local-rtc', '0'], timeout=5)
-        print('[SYNC-TIME] timedatectl set-local-rtc 0 OK (RTC stores UTC)')
+        logger.info('[SYNC-TIME] timedatectl set-local-rtc 0 OK (RTC stores UTC)')
     except Exception as e:
-        print('[SYNC-TIME] set-local-rtc error (non-fatal): {}'.format(e))
+        logger.error('[SYNC-TIME] set-local-rtc error (non-fatal): {}'.format(e))
 
     # ------------------------------------------------------------------
     # STEP 6: Write synced system clock to RTC hardware
@@ -1301,9 +1329,9 @@ async def sync_time_handler(request):
         )
         out_hwclock = (r_hwclock.stdout + r_hwclock.stderr).decode('utf-8', errors='replace').strip()
         out_hwclock = out_hwclock if out_hwclock else ('OK' if r_hwclock.returncode == 0 else 'failed')
-        print('[SYNC-TIME] hwclock --systohc rc={} out={}'.format(r_hwclock.returncode, out_hwclock))
+        logger.info('[SYNC-TIME] hwclock --systohc rc={} out={}'.format(r_hwclock.returncode, out_hwclock))
     except Exception as e:
-        print('[SYNC-TIME] hwclock --systohc error (non-fatal): {}'.format(e))
+        logger.error('[SYNC-TIME] hwclock --systohc error (non-fatal): {}'.format(e))
 
     # ------------------------------------------------------------------
     # STEP 7: Update active_timezone and return updated time to UI
@@ -1387,7 +1415,7 @@ async def put_config_handler(request):
     try:
         success = update_general_configuration(data)
     except Exception as e:
-        print("Error in PUT handler: {}".format(e))
+        logger.error("Error in PUT handler: {}".format(e))
         return web.json_response({'success': False, 'message': str(e)}, status=400)
 
     # Update active timezone so periodic_updates reflects new setting immediately
@@ -1415,7 +1443,7 @@ async def put_config_handler(request):
         from mqtt_cloud import send_iot_gateway_config_now
         await send_iot_gateway_config_now()
     except Exception as e:
-        print('[IOT-CFG] sync error after general_config save: {}'.format(e))
+        logger.error('[IOT-CFG] sync error after general_config save: {}'.format(e))
 
     return web.json_response({'success': True, 'message': 'Configuration saved successfully'})
 
@@ -1426,7 +1454,7 @@ async def put_config_handler(request):
 
 async def start_background_tasks(app):
     """Start background tasks for the general config module."""
-    print("[GENERAL-CONFIG] Starting background tasks...")
+    logger.info("[GENERAL-CONFIG] Starting background tasks...")
     # Load saved timezone from DB so periodic_updates starts with correct tz
     global active_timezone
     try:
@@ -1434,9 +1462,9 @@ async def start_background_tasks(app):
         saved_tz = (cfg.get('date_time') or {}).get('timezone')
         if saved_tz:
             active_timezone = saved_tz
-            print("[GENERAL-CONFIG] Loaded timezone: {}".format(active_timezone))
+            logger.info("[GENERAL-CONFIG] Loaded timezone: {}".format(active_timezone))
     except Exception as e:
-        print("[GENERAL-CONFIG] Could not load timezone from DB: {}".format(e))
+        logger.info("[GENERAL-CONFIG] Could not load timezone from DB: {}".format(e))
     # Stash the running event loop so pipeline thread callbacks can reach it.
     _main_loop_ref["loop"] = asyncio.get_event_loop()
     app['general_config_periodic'] = asyncio.ensure_future(periodic_updates())
@@ -1444,14 +1472,14 @@ async def start_background_tasks(app):
 
 async def cleanup_background_tasks(app):
     """Clean up background tasks."""
-    print("[GENERAL-CONFIG] Cleaning up background tasks...")
+    logger.info("[GENERAL-CONFIG] Cleaning up background tasks...")
     if 'general_config_periodic' in app:
         app['general_config_periodic'].cancel()
         try:
             await app['general_config_periodic']
         except (asyncio.CancelledError, Exception):
             pass
-    print("[GENERAL-CONFIG] Cleanup complete")
+    logger.info("[GENERAL-CONFIG] Cleanup complete")
 
 
 # ============================================================================
@@ -1483,7 +1511,7 @@ def register_general_config_routes(app):
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     
-    print("[GENERAL-CONFIG] Routes registered")
+    logger.info("[GENERAL-CONFIG] Routes registered")
 
 
 # ============================================================================
@@ -1491,7 +1519,10 @@ def register_general_config_routes(app):
 # ============================================================================
 
 import datetime as _dt
+from logger_util import get_logger
 
+
+logger = get_logger(__name__)
 # Device status tracking (not in database)
 device_status_tracker = {}
 

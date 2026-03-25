@@ -116,10 +116,29 @@ console.log('general-config.js loaded');
                 setNetworkMode(this.value);
                 // Send pipeline datapoint on radio click
                 // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1
-                var routeKey = this.value === 'ethernet' ? 'eth0' : this.value;
+                var routeKey = this.value === 'ethernet' ? (_selectedEth || 'eth0') : this.value;
                 sendNetworkRouteSelect(routeKey);
                 // Reset eth card selection highlight when switching away from ethernet
                 if (this.value !== 'ethernet') { _setEthCardSelected(null); }
+                // Reset auto-highlight trackers when leaving auto mode
+                if (this.value !== 'auto') { _autoHighlightedMode = null; _autoHighlightedEth = null; }
+                // Persist network_mode to DB immediately so page refresh keeps the selection
+                var modeToSave = this.value;
+                var payload = { network: { mode: modeToSave } };
+                if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
+                fetch('/api/general-configuration', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    console.log('[NET-MODE] persisted network_mode=' + modeToSave, d);
+                })
+                .catch(function (e) {
+                    console.warn('[NET-MODE] failed to persist network_mode:', e);
+                });
             });
         });
         document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
@@ -219,6 +238,58 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
+    // AUTO MODE  — highlight whichever interface the live data says is connected
+    // Pure UI only: no DB write, no pipeline call.  Runs after every render.
+    // Priority: eth0 > eth1 > wlan > lte  (first connected one wins)
+    // =========================================================================
+    var _autoHighlightedMode = null;   // tracks what auto last highlighted
+    var _autoHighlightedEth  = null;
+
+    var _autoHighlight = function () {
+        var mode = getRadioValue('[name="network-mode"]') || 'wifi';
+        if (mode !== 'auto') return;
+
+        var e0State  = (!isFieldStale('net.lan.eth0.state'))  ? _cache.lan.eth0.state  : null;
+        var e1State  = (!isFieldStale('net.lan.eth1.state'))  ? _cache.lan.eth1.state  : null;
+        var wState   = (!isFieldStale('net.wlan.state'))      ? _cache.wlan.state      : null;
+        var lState   = (!isFieldStale('net.lte.state'))       ? _cache.lte.state       : null;
+
+        var activeMode = null;
+        var activeEth  = null;
+
+        if (isUp(e0State)) {
+            activeMode = 'ethernet'; activeEth = 'eth0';
+        } else if (isUp(e1State)) {
+            activeMode = 'ethernet'; activeEth = 'eth1';
+        } else if (isUp(wState)) {
+            activeMode = 'wifi';
+        } else if (isUp(lState)) {
+            activeMode = 'lte';
+        }
+
+        // Only update DOM when something changed to avoid flicker
+        if (activeMode === _autoHighlightedMode && activeEth === _autoHighlightedEth) return;
+        _autoHighlightedMode = activeMode;
+        _autoHighlightedEth  = activeEth;
+
+        // Show the config panel for the active interface
+        ['ethernet-config', 'wifi-config', 'cellular-config'].forEach(function (id) {
+            var e = el(id); if (e) e.style.display = 'none';
+        });
+        var panelMap = { ethernet: 'ethernet-config', wifi: 'wifi-config', lte: 'cellular-config' };
+        if (activeMode && panelMap[activeMode]) {
+            var p = el(panelMap[activeMode]); if (p) p.style.display = 'block';
+        }
+
+        // Highlight eth card if applicable
+        if (activeMode === 'ethernet') {
+            _setEthCardSelected(activeEth);
+        } else {
+            _setEthCardSelected(null);
+        }
+    };
+
+    // =========================================================================
     // RENDER ETHERNET
     // Fields: eth0.ip, eth0.mac, eth0.state  /  eth1.ip, eth1.mac, eth1.state
     // =========================================================================
@@ -252,6 +323,8 @@ console.log('general-config.js loaded');
         if (isUp(eth0State) && e0.mac && !isFieldStale('net.lan.eth0.mac')) {
             var m = $('[data-mac-address]'); if (m) m.textContent = e0.mac;
         }
+
+        _autoHighlight();
     };
 
     // =========================================================================
@@ -314,6 +387,8 @@ console.log('general-config.js loaded');
         if (isUp(state) && w.mac && !isFieldStale('net.wlan.mac')) {
             var m = $('[data-mac-address]'); if (m) m.textContent = w.mac;
         }
+
+        _autoHighlight();
     };
 
     // =========================================================================
@@ -652,7 +727,27 @@ console.log('general-config.js loaded');
             if (!btn) return;
             btn.addEventListener('click', function () {
                 _setEthCardSelected(iface);
-                sendNetworkRouteSelect(iface);  // 1=eth0, 2=eth1
+                _selectedEth = iface;
+                sendNetworkRouteSelect(iface);  // 1=eth0, 2=eth1 — pipeline datapoint
+                // Persist eth_selected + network_mode to DB immediately so refresh survives
+                fetch('/api/general-configuration', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        network: {
+                            mode: 'ethernet',
+                            eth_selected: iface
+                        }
+                    })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    console.log('[ETH-SELECT] persisted eth_selected=' + iface, d);
+                })
+                .catch(function (e) {
+                    console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
+                });
             });
         });
     };
@@ -709,6 +804,8 @@ console.log('general-config.js loaded');
         txt('lte-imei',          (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
         txt('lte-iccid',         (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
         txt('lte-imsi',          (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
+
+        _autoHighlight();
     };
 
     // =========================================================================
@@ -930,11 +1027,18 @@ console.log('general-config.js loaded');
         window.ws.onmessage = function (ev) {
             try {
                 var d = JSON.parse(ev.data);
-                if (d.type==='time_update') {
-                    setInputValue('[name="date"]', d.formatted_date || formatDate(d.current_date));
-                    // Always store 24h in the input; use display label for 12h preference
-                    var raw24 = formatTime(d.current_time || (d.formatted_time||'').replace(/\s*(AM|PM)$/i,''));
-                    setInputValue('[name="time"]', raw24);
+                if (d.type === 'time_update' || d.type === 'time_synced' || d.type === 'initial') {
+                    // Format the date using the selected format
+                    if (d.current_date) {
+                        setInputValue('[name="date"]', d.formatted_date || formatDate(d.current_date));
+                    }
+                    // current_time is always 24h from server; time_display is pre-formatted by server
+                    var raw24 = formatTime(d.current_time || '');
+                    // Determine the effective time format: prefer server-sent, then UI selection
+                    var tfmt = d.time_format || getSelectValue('[name="time-format"]') || '24-hour';
+                    // Display value shown in the time input field
+                    var displayTime = d.time_display || formatTimeDisplay(raw24, tfmt);
+                    setInputValue('[name="time"]', displayTime);
                     updateTimeDisplayLabel(raw24);
                 }
             } catch(e) {}
@@ -1056,6 +1160,8 @@ console.log('general-config.js loaded');
         }
         if (timeEl && document.activeElement !== timeEl) {
             timeEl.value = _buildTimeStr(now, tz, timeFmt);
+            // Update placeholder to match active format
+            timeEl.placeholder = timeFmt === '12-hour' ? 'HH:MM AM/PM' : 'HH:MM';
         }
 
         // Keep hint in sync
@@ -1111,6 +1217,7 @@ console.log('general-config.js loaded');
         var w   = _cache.wlan || {};
         var e0  = (_cache.lan||{}).eth0 || {};
         var e1  = (_cache.lan||{}).eth1 || {};
+        var _ethSel = _selectedEth || 'eth0';
         return {
             gateway_identity: {
                 name:            getInputValue('[name="gateway-name"]')    || 'Univa-GW-01',
@@ -1129,6 +1236,7 @@ console.log('general-config.js loaded');
             },
             network: {
                 mode: getRadioValue('[name="network-mode"]') || 'wifi',
+                eth_selected: _ethSel,
                 wifi: {
                     ssid:     (function(){ var h=el('wifi-ssid-value'); return h?h.value:getInputValue('[name="wifi-ssid"]'); }()),
                     password: getInputValue('[name="wifi-password"]'),
@@ -1229,7 +1337,10 @@ console.log('general-config.js loaded');
                     if (cfg._realtime.current_date) setInputValue('[name="date"]', formatDate(cfg._realtime.current_date));
                     if (cfg._realtime.current_time) {
                         var raw24 = formatTime(cfg._realtime.current_time);
-                        setInputValue('[name="time"]', raw24);
+                        // Use saved time_format (already populated by populateFormWithConfig)
+                        var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
+                        var displayTime = formatTimeDisplay(raw24, tfmt);
+                        setInputValue('[name="time"]', displayTime);
                         updateTimeDisplayLabel(raw24);
                     }
                 }
@@ -1276,6 +1387,12 @@ console.log('general-config.js loaded');
             setInputValue('[name="cellular-username"]', c.username||'');
             setInputValue('[name="cellular-password"]', c.password||'');
             setNetworkMode(n.mode||'wifi');
+            // Restore persisted ethernet interface selection
+            if (n.mode === 'ethernet') {
+                var savedEth = n.eth_selected || 'eth0';
+                _setEthCardSelected(savedEth);
+                _selectedEth = savedEth;
+            }
         }
         if (cfg.heartbeat) {
             setInputValue('[name="heartbeat-interval"]', cfg.heartbeat.interval);

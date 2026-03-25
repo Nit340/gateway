@@ -44,7 +44,7 @@ _LEVEL_NO    = {l: getattr(logging, l) for l in VALID_LEVELS}
 # Per-module settings  { module: {'enabled': bool, 'level': 'DEBUG'} }
 # ---------------------------------------------------------------------------
 _settings_lock = threading.Lock()
-_settings = {m: {'enabled': True, 'level': 'DEBUG'} for m in ALL_MODULES}
+_settings = {m: {'enabled': False, 'level': 'DEBUG'} for m in ALL_MODULES}
 
 def _is_allowed(module: str, level: str) -> bool:
     """Return True if this log entry should be shown/stored."""
@@ -149,14 +149,46 @@ def install():
     _installed = True
 
     # Fix logging — this is why logs were completely silent before.
-    # force=True ensures it runs even if some partial config happened.
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
-        datefmt='%H:%M:%S',
-        stream=sys.stdout,
-        force=True,
-    )
+    # Check Python version to determine if force parameter is supported
+    root_logger = logging.getLogger()
+    
+    # For Python 3.8+, we can use force=True
+    # For older versions, we need to handle it differently
+    if sys.version_info >= (3, 8):
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
+            datefmt='%H:%M:%S',
+            stream=sys.stdout,
+            force=True,
+        )
+    else:
+        # Python 3.5-3.7: force parameter not supported
+        # Check if basicConfig has already been called
+        if not root_logger.handlers:
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format='[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
+                datefmt='%H:%M:%S',
+                stream=sys.stdout,
+            )
+        else:
+            # basicConfig already called, just ensure root logger is configured properly
+            root_logger.setLevel(logging.DEBUG)
+            # Add a stdout handler if none exists
+            has_stdout_handler = False
+            for handler in root_logger.handlers:
+                if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+                    has_stdout_handler = True
+                    break
+            if not has_stdout_handler:
+                handler = logging.StreamHandler(sys.stdout)
+                handler.setFormatter(logging.Formatter(
+                    '[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
+                    datefmt='%H:%M:%S',
+                ))
+                root_logger.addHandler(handler)
+    
     # Reduce noise from aiohttp internals
     logging.getLogger('aiohttp').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
@@ -215,8 +247,9 @@ def register_routes(app):
     from aiohttp import web
 
     def _auth(request):
-        import main as _m
-        _m._require_admin(request)
+        import sys
+        main_module = sys.modules['__main__']
+        main_module._require_admin(request)
 
     async def api_logs_get(request):
         _auth(request)

@@ -3,7 +3,10 @@
 import json, time, asyncio
 from aiohttp import web
 from database import get_db_connection
+from logger_util import get_logger
 
+
+logger = get_logger(__name__)
 def register_cloud_routes(app):
     app.router.add_get   ('/api/cloud-integration/connection-types',              _connection_types)
     app.router.add_get   ('/api/cloud-integration/connections',                   _list)
@@ -230,7 +233,7 @@ async def _save_all(req):
         try:
             await send_iot_gateway_config_now()
         except Exception as _e:
-            print('[IOT-CFG] sync error in _save_all: {}'.format(_e))
+            logger.error('[IOT-CFG] sync error in _save_all: {}'.format(_e))
         return _ok({'message':'Saved ({} connections)'.format(n),'total':n})
     except Exception as e: return _err(str(e),500)
 
@@ -403,7 +406,7 @@ async def send_iot_gateway_config_now():
         from pipeline import send_iot_gateway_config_now as _pipeline_send
         return await _pipeline_send()
     except Exception as e:
-        print('[IOT-CFG] send_iot_gateway_config_now error: {}'.format(e))
+        logger.error('[IOT-CFG] send_iot_gateway_config_now error: {}'.format(e))
         return {'success': False, 'error': str(e)}
 
 

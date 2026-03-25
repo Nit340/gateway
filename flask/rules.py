@@ -10,7 +10,10 @@ import sqlite3
 from datetime import datetime
 from aiohttp import web
 from database import DB_FILE, get_db_connection
+from logger_util import get_logger
 
+
+logger = get_logger(__name__)
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)
@@ -216,14 +219,14 @@ async def core_config_upload_handler(request):
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (new_version, json.dumps(device_names), service_name, config_json, existing['id']))
-            print("[CORE-CFG] Updated config v{} from JSON".format(new_version))
+            logger.info("[CORE-CFG] Updated config v{} from JSON".format(new_version))
         else:
             # First-time insert
             cursor.execute('''
                 INSERT INTO core_configs (version, device_names, service_name, config_json, updated_at) 
                 VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
             ''', (json.dumps(device_names), service_name, config_json))
-            print("[CORE-CFG] Inserted initial config from JSON")
+            logger.info("[CORE-CFG] Inserted initial config from JSON")
         
         conn.commit()
         conn.close()
@@ -267,9 +270,9 @@ async def core_config_upload_handler(request):
                     with pipeline_state['lock']:
                         pipeline_state['core_config_pending'] = config_json
                     queued = True
-                    print('[CORE-CFG] Not connected -- queued for "{}"'.format(core_svc))
+                    logger.info('[CORE-CFG] Not connected -- queued for "{}"'.format(core_svc))
             except Exception as e:
-                print('[CORE-CFG] Upload send error: {}'.format(e))
+                logger.error('[CORE-CFG] Upload send error: {}'.format(e))
                 record_pipeline_send_failure('core', str(e))
                 queued = True
         
@@ -283,7 +286,7 @@ async def core_config_upload_handler(request):
         })
         
     except Exception as e:
-        print('[CORE-CFG] Upload error: {}'.format(e))
+        logger.error('[CORE-CFG] Upload error: {}'.format(e))
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
@@ -423,11 +426,11 @@ def _get_loadcell_datapoint_names():
         if row:
             dp_name = row['dp_name'] or 'load_weight'
             unit_name = row['unit_name'] or 'load_unit'
-            print('[RULES] loadcell auto-discovery: datapoint_name="{}" unit_datapoint_name="{}"'.format(
+            logger.info('[RULES] loadcell auto-discovery: datapoint_name="{}" unit_datapoint_name="{}"'.format(
                 dp_name, unit_name))
             return dp_name, unit_name
     except Exception as e:
-        print('[RULES] loadcell auto-discovery error: {} -- using defaults'.format(e))
+        logger.error('[RULES] loadcell auto-discovery error: {} -- using defaults'.format(e))
     return 'load_weight', 'load_unit'
 
 
@@ -557,7 +560,7 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (new_version, device_names_json, service_name, config_json, existing['id']))
-            print('[CORE-CFG] Updated DB to v{}'.format(new_version))
+            logger.info('[CORE-CFG] Updated DB to v{}'.format(new_version))
             return new_version
         else:
             # First-time insert
@@ -566,11 +569,11 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
                 VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
             ''', (device_names_json, service_name, config_json))
             conn.commit()
-            print('[CORE-CFG] Inserted initial config to DB')
+            logger.info('[CORE-CFG] Inserted initial config to DB')
             return 1
         
     except Exception as db_e:
-        print('[CORE-CFG] DB persist warning: {}'.format(db_e))
+        logger.warning('[CORE-CFG] DB persist warning: {}'.format(db_e))
         return None
     finally:
         if conn:
@@ -594,13 +597,13 @@ async def _build_and_send_core_config():
     core_config = _build_combined_core_config(rules)
     config_json = json.dumps(core_config, indent=2)
 
-    print('\n' + '='*60)
-    print('[CORE-CFG] Trigger -- {} enabled rule(s)'.format(len(rules)))
-    print('[CORE-CFG] loadcell: datapoint_name="{}"  unit_datapoint_name="{}"'.format(
+    logger.info('\n' + '='*60)
+    logger.info('[CORE-CFG] Trigger -- {} enabled rule(s)'.format(len(rules)))
+    logger.info('[CORE-CFG] loadcell: datapoint_name="{}"  unit_datapoint_name="{}"'.format(
         core_config['services']['loadcell']['datapoint_name'],
         core_config['services']['loadcell']['unit_datapoint_name'],
     ))
-    print('='*60)
+    logger.info('='*60)
 
     # -- Extract device names for DB storage --
     device_names = []
@@ -627,7 +630,7 @@ async def _build_and_send_core_config():
         # Queue as pending -- pipeline.py SERVICE_ADDED will dispatch when ready
         with pipeline_state['lock']:
             pipeline_state['core_config_pending'] = config_json
-        print('[CORE-CFG] Not connected -- queued as pending for "{}"'.format(core_svc))
+        logger.info('[CORE-CFG] Not connected -- queued as pending for "{}"'.format(core_svc))
         return {
             'sent':        False,
             'queued':      True,
@@ -653,14 +656,14 @@ async def _build_and_send_core_config():
                 pipeline_state['core_config']         = config_json
                 pipeline_state['core_config_pending'] = None
                 pipeline_state['core_config_version'] = new_version
-            print('[CORE-CFG] publish_config -> {} (v{}) OK'.format(core_svc, new_version))
+            logger.info('[CORE-CFG] publish_config -> {} (v{}) OK'.format(core_svc, new_version))
         else:
             record_pipeline_send_failure('core', 'publish_config returned False')
             with pipeline_state['lock']:
                 pipeline_state['core_config_pending'] = config_json
-            print('[CORE-CFG] publish_config FAILED -- queued as pending')
+            logger.info('[CORE-CFG] publish_config FAILED -- queued as pending')
     except Exception as e:
-        print('[CORE-CFG] publish_config error: {}'.format(e))
+        logger.error('[CORE-CFG] publish_config error: {}'.format(e))
         record_pipeline_send_failure('core', str(e))
         with pipeline_state['lock']:
             pipeline_state['core_config_pending'] = config_json
@@ -689,4 +692,4 @@ def register_rules_routes(app):
     app.router.add_get   ('/api/rules/core-configs',      core_configs_list_handler)
     app.router.add_get   ('/api/rules/core-config/latest', core_config_latest_handler)
     
-    print('[Rules] Routes registered OK')
+    logger.info('[Rules] Routes registered OK')

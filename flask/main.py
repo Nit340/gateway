@@ -5,7 +5,41 @@ import io
 # Force UTF-8 encoding for stdout
 if sys.stdout.encoding != 'UTF-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+from logger_util import get_logger
+
+# ---------------------------------------------------------------------------
+# Logger and auth globals - defined early for log_handler import
+# ---------------------------------------------------------------------------
+logger = get_logger(__name__)
+
+ADMIN_SESSIONS = {}           # token -> username
+ADMIN_USER_TOKENS = {}        # username -> token  (enforces one session per user)
+_SESSION_COOKIE = 'gw_admin_session'
+
+WEBUI_SESSIONS = {}           # token -> {username, logged_in_at, token}
+WEBUI_USER_TOKENS = {}        # username -> [token, ...]  (enforces max_sessions per user)
+_WEBUI_SESSION_COOKIE = 'gw_webui_session'
+
+def _get_admin_session(request):
+    token = request.cookies.get(_SESSION_COOKIE)
+    return ADMIN_SESSIONS.get(token) if token else None
+
+def _require_admin(request):
+    token = request.cookies.get(_SESSION_COOKIE)
+    user = ADMIN_SESSIONS.get(token) if token else None
+    if not user:
+        logger.warning("[ADMIN AUTH] Access denied for {}".format(request.path))
+        path = request.path
+        if path.startswith('/api/'):
+            raise web.HTTPUnauthorized()
+        raise web.HTTPFound('/admin/login')
+    return user
+
+# ---------------------------------------------------------------------------
 import log_handler; log_handler.install()
+# ---------------------------------------------------------------------------
+
 # main.py (OPTIMIZED)
 import asyncio
 import json
@@ -71,27 +105,6 @@ from pipeline import (
     PIPELINE_AVAILABLE, send_modbus_config_now,
 )
 
-ADMIN_SESSIONS = {}           # token -> username
-ADMIN_USER_TOKENS = {}        # username -> token  (enforces one session per user)
-_SESSION_COOKIE = 'gw_admin_session'
-
-WEBUI_SESSIONS = {}           # token -> {username, logged_in_at, token}
-WEBUI_USER_TOKENS = {}        # username -> [token, ...]  (enforces max_sessions per user)
-_WEBUI_SESSION_COOKIE = 'gw_webui_session'
-
-def _get_admin_session(request):
-    token = request.cookies.get(_SESSION_COOKIE)
-    return ADMIN_SESSIONS.get(token) if token else None
-
-def _require_admin(request):
-    user = _get_admin_session(request)
-    if not user:
-        path = request.path
-        if path.startswith('/api/'):
-            raise web.HTTPUnauthorized()
-        raise web.HTTPFound('/admin/login')
-    return user
-
 ADMIN_UI_DIR = os.path.join(os.path.dirname(__file__), 'admin_ui')
 
 def _html(filename):
@@ -120,19 +133,17 @@ async def admin_login_post(request):
 
     token = binascii.hexlify(os.urandom(32)).decode()
 
-    # If this user already has an active session, reject the new login attempt.
-    # The first session (Window A) stays alive and untouched.
+    # If this user already has an active session, log out the existing one to allow re-login.
     existing_token = ADMIN_USER_TOKENS.get(user['username'])
     if existing_token and existing_token in ADMIN_SESSIONS:
-        return web.json_response(
-            {'success': False, 'error': 'This account is already logged in. Please log out from the other window first.'},
-            status=409
-        )
+        ADMIN_SESSIONS.pop(existing_token, None)
+        ADMIN_USER_TOKENS.pop(user['username'], None)
 
     ADMIN_SESSIONS[token] = user['username']
     ADMIN_USER_TOKENS[user['username']] = token
+    logger.info("[ADMIN LOGIN] Created session for {}, token: {}...".format(user['username'], token[:8]))
     resp = web.json_response({'success': True, 'username': user['username'], 'role': user['role']})
-    resp.set_cookie(_SESSION_COOKIE, token, httponly=True, path='/')
+    resp.set_cookie(_SESSION_COOKIE, token, httponly=False, path='/')
     return resp
 
 async def admin_logout(request):
@@ -141,6 +152,7 @@ async def admin_logout(request):
         username = ADMIN_SESSIONS.pop(token, None)
         if username and ADMIN_USER_TOKENS.get(username) == token:
             ADMIN_USER_TOKENS.pop(username, None)
+        logger.info("[ADMIN LOGOUT] Logged out user: {}".format(username or 'unknown'))
     resp = web.HTTPFound('/admin/login')
     resp.del_cookie(_SESSION_COOKIE, path='/')
     return resp
@@ -419,10 +431,15 @@ async def webui_login_api(request):
     max_sessions = get_webui_user_max_sessions(user['id'])
     active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
     if len(active_tokens) >= max_sessions:
-        return web.json_response(
-            {'success': False, 'error': "Maximum concurrent sessions reached ({}). Please log out from another window first, or ask an admin to increase your session limit.".format(max_sessions)},
-            status=409
-        )
+        # Log out the oldest session to allow new login
+        oldest_token = active_tokens[0]  # Assuming list is in order, but actually it's not sorted
+        # To properly get oldest, we need to check logged_in_at
+        sessions_info = [(t, WEBUI_SESSIONS[t]['logged_in_at']) for t in active_tokens if isinstance(WEBUI_SESSIONS[t], dict)]
+        if sessions_info:
+            sessions_info.sort(key=lambda x: x[1])
+            oldest_token = sessions_info[0][0]
+            WEBUI_SESSIONS.pop(oldest_token, None)
+            WEBUI_USER_TOKENS[user['username']].remove(oldest_token)
 
     token = binascii.hexlify(os.urandom(32)).decode()
     WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.now(_dt.timezone.utc).isoformat(), 'token': token}
@@ -431,7 +448,7 @@ async def webui_login_api(request):
     WEBUI_USER_TOKENS[user['username']].append(token)
 
     resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name'], 'role': user['role']})
-    resp.set_cookie('gw_webui_session', token, httponly=True, path='/', max_age=30*24*3600)
+    resp.set_cookie('gw_webui_session', token, httponly=False, path='/', max_age=30*24*3600)
     return resp
 
 async def webui_logout_api(request):
@@ -581,10 +598,10 @@ async def api_db_path_put(request):
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 async def start_background_tasks(app):
-    print("[MAIN] Starting background tasks...")
+    logger.info("[MAIN] Starting background tasks...")
 
     if PIPELINE_AVAILABLE:
-        print("[MAIN] Starting pipeline background thread...")
+        logger.info("[MAIN] Starting pipeline background thread...")
         start_pipeline_background(app)
 
         async def _pipeline_watchdog():
@@ -606,14 +623,14 @@ async def start_background_tasks(app):
                     # set it to False now that connect/disconnect are no-ops.
                     _ps["should_run"] = True
                 if thread is None or not thread.is_alive():
-                    print("[MAIN] Watchdog: pipeline thread is dead -- restarting...")
+                    logger.info("[MAIN] Watchdog: pipeline thread is dead -- restarting...")
                     _spb(app)
 
         app["pipeline_watchdog"] = asyncio.ensure_future(_pipeline_watchdog())
 
         async def _startup_auto_send():
             from pipeline import pipeline_state, _do_auto_send
-            print("[MAIN] Startup auto-send: waiting for pipeline connection (max 30 s)...")
+            logger.info("[MAIN] Startup auto-send: waiting for pipeline connection (max 30 s)...")
             for _ in range(30):
                 await asyncio.sleep(1)
                 with pipeline_state["lock"]:
@@ -621,7 +638,7 @@ async def start_background_tasks(app):
                         break
             with pipeline_state["lock"]:
                 connected = pipeline_state["connected"]
-            print("[MAIN] Startup auto-send: pipeline {} -- running ordered send".format(
+            logger.info("[MAIN] Startup auto-send: pipeline {} -- running ordered send".format(
                 "connected" if connected else "not connected (will queue)"))
 
             # On every startup, push the unit ("kg") for every enabled load cell
@@ -649,17 +666,17 @@ async def start_background_tasks(app):
                             try:
                                 _rid = _client.datapoint_update(_lc_svc, _dp_name, _unit)
                                 if _rid:
-                                    print("[MAIN] Startup unit update sent: '{}' = '{}' (req_id={})".format(
+                                    logger.info("[MAIN] Startup unit update sent: '{}' = '{}' (req_id={})".format(
                                         _dp_name, _unit, _rid))
                                 else:
-                                    print("[MAIN] Startup unit update FAILED (not connected?): '{}'".format(_dp_name))
+                                    logger.info("[MAIN] Startup unit update FAILED (not connected?): '{}'".format(_dp_name))
                             except Exception as _ue:
-                                print("[MAIN] Startup unit update error for '{}': {}".format(_dp_name, _ue))
+                                logger.error("[MAIN] Startup unit update error for '{}': {}".format(_dp_name, _ue))
                     else:
-                        print("[MAIN] Startup unit update skipped -- client={} lc_svc={}".format(
+                        logger.info("[MAIN] Startup unit update skipped -- client={} lc_svc={}".format(
                             bool(_client), _lc_svc))
                 except Exception as _e:
-                    print("[MAIN] Startup unit update error: {}".format(_e))
+                    logger.error("[MAIN] Startup unit update error: {}".format(_e))
             try:
                 result = await _do_auto_send()
                 import json as _j
@@ -670,19 +687,19 @@ async def start_background_tasks(app):
                     body = result
                 sent   = body.get("auto_sent", False)
                 count  = body.get("targets_attempted", 0)
-                print("[MAIN] Startup auto-send complete: {} target(s), sent={}".format(count, sent))
+                logger.info("[MAIN] Startup auto-send complete: {} target(s), sent={}".format(count, sent))
                 for r in body.get("results", []):
-                    print("[MAIN]   {} order={} sent={} -> {}".format(
+                    logger.info("[MAIN]   {} order={} sent={} -> {}".format(
                         r.get("config_type"), r.get("send_order"), r.get("pipeline_sent"), r.get("message", "")))
             except Exception as e:
-                print("[MAIN] Startup auto-send error: {}".format(e))
+                logger.error("[MAIN] Startup auto-send error: {}".format(e))
 
         app["startup_auto_send"] = asyncio.ensure_future(_startup_auto_send())
     else:
-        print("[MAIN] Pipeline not available - skipping")
+        logger.info("[MAIN] Pipeline not available - skipping")
 
 async def cleanup_background_tasks(app):
-    print("[MAIN] Cleaning up background tasks...")
+    logger.info("[MAIN] Cleaning up background tasks...")
     for key in ('startup_auto_send', 'pipeline_watchdog'):
         task = app.get(key)
         if task:
@@ -698,8 +715,8 @@ async def cleanup_background_tasks(app):
             with pipeline_state["lock"]:
                 pipeline_state["should_run"] = False
         except Exception as e:
-            print("[MAIN] Error stopping pipeline: {}".format(e))
-    print("[MAIN] Cleanup complete")
+            logger.error("[MAIN] Error stopping pipeline: {}".format(e))
+    logger.info("[MAIN] Cleanup complete")
 
 
 async def api_webui_sessions_get(request):
@@ -830,7 +847,7 @@ async def api_core_config_upload(request):
         conn.commit()
         conn.close()
         
-        print("[CORE-CFG] Uploaded config v{} from JSON".format(next_version))
+        logger.info("[CORE-CFG] Uploaded config v{} from JSON".format(next_version))
         
         # Optionally send to pipeline
         sent = False
@@ -871,9 +888,9 @@ async def api_core_config_upload(request):
                     with pipeline_state['lock']:
                         pipeline_state['core_config_pending'] = config_json
                     queued = True
-                    print('[CORE-CFG] Not connected -- queued for "{}"'.format(core_svc))
+                    logger.info('[CORE-CFG] Not connected -- queued for "{}"'.format(core_svc))
             except Exception as e:
-                print('[CORE-CFG] Upload send error: {}'.format(e))
+                logger.error('[CORE-CFG] Upload send error: {}'.format(e))
                 record_pipeline_send_failure('core', str(e))
                 queued = True
         
@@ -888,7 +905,7 @@ async def api_core_config_upload(request):
         })
         
     except Exception as e:
-        print('[CORE-CFG] Upload error: {}'.format(e))
+        logger.error('[CORE-CFG] Upload error: {}'.format(e))
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
@@ -1141,14 +1158,14 @@ def create_app():
     return app
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("  Gateway Admin Server Starting (OPTIMIZED)")
-    print("=" * 60)
-    print("\nInitializing database...")
+    logger.info("=" * 60)
+    logger.info("  Gateway Admin Server Starting (OPTIMIZED)")
+    logger.info("=" * 60)
+    logger.info("\nInitializing database...")
     # OPTIMIZATION: Call ensure_db_initialized instead of init_database
     # This runs only once and supports lazy initialization
     ensure_db_initialized()
-    print("\nAdmin Panel : http://0.0.0.0:8082/admin")
-    print("Default login: admin / admin123")
-    print("=" * 60 + "\n")
+    logger.info("\nAdmin Panel : http://0.0.0.0:8082/admin")
+    logger.info("Default login: admin / admin123")
+    logger.info("=" * 60 + "\n")
     web.run_app(create_app(), host='0.0.0.0', port=8082)

@@ -4,7 +4,10 @@ import sqlite3
 from aiohttp import web
 
 from database import DB_FILE
+from logger_util import get_logger
 
+
+logger = get_logger(__name__)
 # ============================================================================
 # GET ALL DATAPOINTS
 # ============================================================================
@@ -96,7 +99,7 @@ async def get_all_datapoints(request):
                     'protocol_type': protocol_type,
                 })
         except Exception as _ext_err:
-            print("Warning: could not load external datapoints:", _ext_err)
+            logger.info("Warning: could not load external datapoints:", _ext_err)
 
         # Loadcell datapoints
         cursor.execute('''
@@ -106,7 +109,8 @@ async def get_all_datapoints(request):
                 ld.name,
                 ld.unit,
                 l.name as device_name,
-                l.capacity_max as capacity,
+                l.capacity_min,
+                l.capacity_max,
                 l.unit as device_unit,
                 l.load_name,
                 l.capacity_name,
@@ -119,6 +123,9 @@ async def get_all_datapoints(request):
         ''')
         for row in cursor.fetchall():
             r = dict(row)
+            # Resolve the effective unit: prefer the datapoint's own unit,
+            # fall back to the device-level unit (e.g. 'kg', 'lb', 't').
+            effective_unit = r['unit'] or r.get('device_unit') or 'kg'
             tags.append({
                 'id': r['id'],
                 'device_id': r['device_id'],
@@ -126,8 +133,16 @@ async def get_all_datapoints(request):
                 'device_type': 'Loadcell',
                 'tag_name': r['name'],
                 'name': r['name'],
-                'unit': r['unit'] or r.get('device_unit') or '',
-                'capacity': r['capacity'],
+                'unit': effective_unit,
+                # capacity_min / capacity_max are stored in the same unit as
+                # the device unit, so they are always consistent with the
+                # weight value.  Expose both so the frontend can build a
+                # correct gauge/scale range without any hard-coded values.
+                'capacity_min': r['capacity_min'] if r['capacity_min'] is not None else 0,
+                'capacity_max': r['capacity_max'] if r['capacity_max'] is not None else 0,
+                # Keep the legacy 'capacity' key pointing at capacity_max so
+                # existing consumers are not broken.
+                'capacity': r['capacity_max'] if r['capacity_max'] is not None else 0,
                 'load_name': r['load_name'] or 'load_weight',
                 'capacity_name': r['capacity_name'] or 'capacity',
                 'data_type': 'float32',
@@ -145,7 +160,7 @@ async def get_all_datapoints(request):
         return web.json_response(tags)
 
     except Exception as e:
-        print("Error getting tags: {}".format(str(e)))
+        logger.error("Error getting tags: {}".format(str(e)))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -155,7 +170,7 @@ async def add_modbus_datapoint(request):
     """POST - Add Modbus datapoint tag to an external device"""
     try:
         data = await request.json()
-        print("Received data for modbus tag creation:", data)
+        logger.info("Received data for modbus tag creation:", data)
 
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
@@ -189,7 +204,7 @@ async def add_modbus_datapoint(request):
             if grp:
                 group_id = grp[0]
             else:
-                print("Group '{}' not found, ignoring".format(group_name))
+                logger.info("Group '{}' not found, ignoring".format(group_name))
 
         cursor.execute('''
             INSERT INTO external_datapoints (
@@ -225,7 +240,7 @@ async def add_modbus_datapoint(request):
         return web.json_response({'success': True, 'message': 'Tag added successfully', 'id': datapoint_id})
 
     except Exception as e:
-        print("Error adding tag: {}".format(str(e)))
+        logger.error("Error adding tag: {}".format(str(e)))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -236,7 +251,7 @@ async def update_modbus_datapoint(request):
     try:
         tag_id = request.match_info['id']
         data = await request.json()
-        print("Received data for modbus tag update:", data)  # Debug log
+        logger.debug("Received data for modbus tag update:", data)  # Debug log
         
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
@@ -317,7 +332,7 @@ async def update_modbus_datapoint(request):
         })
         
     except Exception as e:
-        print("Error updating tag: {}".format(str(e)))
+        logger.error("Error updating tag: {}".format(str(e)))
         import traceback
         traceback.print_exc()
         return web.json_response({'error': str(e)}, status=500)
@@ -365,7 +380,7 @@ async def delete_datapoint(request):
         })
         
     except Exception as e:
-        print("Error deleting tag: {}".format(str(e)))
+        logger.error("Error deleting tag: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -425,7 +440,7 @@ async def get_available_devices(request):
         return web.json_response({'devices': devices})
 
     except Exception as e:
-        print("Error getting available devices: {}".format(str(e)))
+        logger.error("Error getting available devices: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -601,7 +616,7 @@ async def get_protocol_form(request):
         return web.json_response(form_schema)
         
     except Exception as e:
-        print("Error getting protocol form: {}".format(str(e)))
+        logger.error("Error getting protocol form: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -642,7 +657,7 @@ async def update_loadcell_datapoint(request):
         })
         
     except Exception as e:
-        print("Error updating loadcell tag: {}".format(str(e)))
+        logger.error("Error updating loadcell tag: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -674,7 +689,7 @@ async def get_all_tag_groups(request):
         conn.close()
         return web.json_response({'groups': groups})
     except Exception as e:
-        print("Error getting tag groups: {}".format(str(e)))
+        logger.error("Error getting tag groups: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -698,7 +713,7 @@ async def add_tag_group(request):
     except sqlite3.IntegrityError:
         return web.json_response({'error': 'Group name already exists'}, status=400)
     except Exception as e:
-        print("Error adding tag group: {}".format(str(e)))
+        logger.error("Error adding tag group: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -728,7 +743,7 @@ async def update_tag_group(request):
         conn.close()
         return web.json_response({'success': True, 'message': 'Group updated'})
     except Exception as e:
-        print("Error updating tag group: {}".format(str(e)))
+        logger.error("Error updating tag group: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -745,7 +760,7 @@ async def delete_tag_group(request):
         conn.close()
         return web.json_response({'success': True, 'message': 'Group deleted'})
     except Exception as e:
-        print("Error deleting tag group: {}".format(str(e)))
+        logger.error("Error deleting tag group: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -768,5 +783,5 @@ async def assign_tags_to_group(request):
         conn.close()
         return web.json_response({'success': True, 'message': '{} tag(s) assigned'.format(len(tag_ids))})
     except Exception as e:
-        print("Error assigning tags to group: {}".format(str(e)))
+        logger.error("Error assigning tags to group: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)

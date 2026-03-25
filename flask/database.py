@@ -9,14 +9,17 @@ import atexit
 import traceback
 from datetime import datetime
 from contextlib import contextmanager
+from logger_util import get_logger
+
+logger = get_logger(__name__)
 
 # Debug flag - set to True to enable connection tracking
 _DEBUG_DB = False
 
 def _log_debug(msg):
-    """Print debug messages if _DEBUG_DB is enabled."""
+    """Log debug messages if _DEBUG_DB is enabled."""
     if _DEBUG_DB:
-        print("[DB-DEBUG] {}".format(msg), flush=True)
+        logger.debug(msg)
 
 # Database path - configurable via environment variable
 _DB_DIR = os.environ.get('GATEWAY_DB_DIR', '/mnt/data')
@@ -225,8 +228,8 @@ def init_database():
     # This is a temporary connection, so actually close it
     cursor.close()
     conn.close()
-    print("[DB] Database initialized: {}".format(DB_FILE))
-    print("[DB] All tables created/verified OK")
+    logger.info("[DB] Database initialized: {}".format(DB_FILE))
+    logger.info("[DB] All tables created/verified OK")
 
 
 def create_tables(cursor):
@@ -262,6 +265,8 @@ def create_tables(cursor):
 
             -- Network: active mode selector
             network_mode        TEXT    DEFAULT 'wifi',
+            -- Ethernet: which interface is selected (eth0 or eth1)
+            eth_selected        TEXT    DEFAULT 'eth0',
 
             -- WiFi
             wifi_ssid           TEXT    DEFAULT '',
@@ -611,7 +616,7 @@ def _migrate_existing_db(cursor):
     cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='pipeline_service_targets'")
     _pst_row = cursor.fetchone()
     if _pst_row and "'modbus'" not in _pst_row[0] and 'modbus' not in _pst_row[0]:
-        print("[DB] Migration: rebuilding pipeline_service_targets")
+        logger.info("[DB] Migration: rebuilding pipeline_service_targets")
         cursor.execute("ALTER TABLE pipeline_service_targets RENAME TO _pipeline_service_targets_old")
         cursor.execute('''
             CREATE TABLE pipeline_service_targets (
@@ -643,7 +648,7 @@ def _migrate_existing_db(cursor):
     cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='pipeline_send_log'")
     _psl_row = cursor.fetchone()
     if _psl_row and "'modbus'" not in _psl_row[0] and 'modbus' not in _psl_row[0]:
-        print("[DB] Migration: rebuilding pipeline_send_log")
+        logger.info("[DB] Migration: rebuilding pipeline_send_log")
         cursor.execute("ALTER TABLE pipeline_send_log RENAME TO _pipeline_send_log_old")
         cursor.execute('''
             CREATE TABLE pipeline_send_log (
@@ -711,6 +716,12 @@ def _migrate_existing_db(cursor):
     if 'device_path_ch2' not in lc_dev_cols:
         cursor.execute("ALTER TABLE loadcell_device ADD COLUMN device_path_ch2 TEXT DEFAULT NULL")
 
+    # Add eth_selected to general_configuration (persists which ethernet interface is active)
+    cursor.execute("PRAGMA table_info(general_configuration)")
+    gc_cols = {r[1] for r in cursor.fetchall()}
+    if 'eth_selected' not in gc_cols:
+        cursor.execute("ALTER TABLE general_configuration ADD COLUMN eth_selected TEXT DEFAULT 'eth0'")
+
 
 def _create_indexes(cursor):
     """Create indexes on frequently queried columns."""
@@ -734,9 +745,9 @@ def _create_indexes(cursor):
                     cursor.execute('CREATE INDEX IF NOT EXISTS {} ON {} ({})'.format(
                         index_name, table_name, column_name))
         except Exception as e:
-            print('[DB] Warning: Could not create index {}: {}'.format(index_name, e))
+            logger.warning('[DB] Warning: Could not create index {}: {}'.format(index_name, e))
     
-    print('[DB] Performance indexes created')
+    logger.info('[DB] Performance indexes created')
 
 
 def _hash_password(plain):
@@ -795,7 +806,7 @@ def verify_admin_user(username, password):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] verify_admin_user error: {}".format(e))
+        logger.error("[DB] verify_admin_user error: {}".format(e))
         return None
 
 
@@ -813,7 +824,7 @@ def verify_webui_user(username, password):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] verify_webui_user error: {}".format(e))
+        logger.error("[DB] verify_webui_user error: {}".format(e))
         return None
 
 
@@ -828,7 +839,7 @@ def get_pipeline_service_name(config_type):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] get_pipeline_service_name error: {}".format(e))
+        logger.error("[DB] get_pipeline_service_name error: {}".format(e))
         return ''
 
 
@@ -847,7 +858,7 @@ def set_pipeline_service_name(config_type, service_name, config_name=None):
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print("[DB] set_pipeline_service_name error: {}".format(e))
+        logger.error("[DB] set_pipeline_service_name error: {}".format(e))
         return False
 
 
@@ -865,7 +876,7 @@ def get_pipeline_config_name(config_type):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] get_pipeline_config_name error: {}".format(e))
+        logger.error("[DB] get_pipeline_config_name error: {}".format(e))
         return _defaults.get(config_type, config_type + '_config')
 
 
@@ -881,7 +892,7 @@ def get_all_pipeline_service_targets():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] get_all_pipeline_service_targets error: {}".format(e))
+        logger.error("[DB] get_all_pipeline_service_targets error: {}".format(e))
         return []
 
 
@@ -900,7 +911,7 @@ def get_pipeline_send_log(config_type):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] get_pipeline_send_log error: {}".format(e))
+        logger.error("[DB] get_pipeline_send_log error: {}".format(e))
         return {'config_type': config_type, 'last_version': 0}
 
 
@@ -922,7 +933,7 @@ def record_pipeline_send_success(config_type, version, service_name, message='')
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print("[DB] record_pipeline_send_success error: {}".format(e))
+        logger.error("[DB] record_pipeline_send_success error: {}".format(e))
         return False
 
 
@@ -937,7 +948,7 @@ def record_pipeline_send_failure(config_type, message=''):
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print("[DB] record_pipeline_send_failure error: {}".format(e))
+        logger.error("[DB] record_pipeline_send_failure error: {}".format(e))
         return False
 
 
@@ -953,7 +964,7 @@ def get_all_pipeline_send_logs():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] get_all_pipeline_send_logs error: {}".format(e))
+        logger.error("[DB] get_all_pipeline_send_logs error: {}".format(e))
         return []
 
 
@@ -968,7 +979,7 @@ def get_enabled_pipeline_targets():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("[DB] get_enabled_pipeline_targets error: {}".format(e))
+        logger.error("[DB] get_enabled_pipeline_targets error: {}".format(e))
         return []
 
 
@@ -982,6 +993,7 @@ def get_general_configuration():
                        timezone, ntp_server, date_format, time_format, language,
                        heartbeat_interval, offline_threshold,
                        COALESCE(network_mode, 'wifi') AS network_mode,
+                       COALESCE(eth_selected, 'eth0') AS eth_selected,
                        COALESCE(wifi_ssid, '') AS wifi_ssid,
                        COALESCE(wifi_password, '') AS wifi_password,
                        COALESCE(eth_ip_assignment, 'dhcp') AS eth_ip_assignment,
@@ -1012,21 +1024,22 @@ def get_general_configuration():
                 'heartbeat': {'interval': row[13], 'offline_threshold': row[14]},
                 'mac_address': row[7],
                 'network': {
-                    'mode': row[15],
-                    'wifi': {'ssid': row[16], 'password': row[17]},
+                    'mode':         row[15],
+                    'eth_selected': row[16],  # 'eth0' or 'eth1' -- persisted selection
+                    'wifi': {'ssid': row[17], 'password': row[18]},
                     'ethernet': {
-                        'ip_assignment': row[18], 'static_ip': row[19],
-                        'subnet_mask': row[20], 'gateway': row[21],
-                        'dns1': row[22], 'dns2': row[23],
+                        'ip_assignment': row[19], 'static_ip': row[20],
+                        'subnet_mask': row[21], 'gateway': row[22],
+                        'dns1': row[23], 'dns2': row[24],
                     },
-                    'cellular': {'apn': row[24], 'username': row[25], 'password': row[26]},
+                    'cellular': {'apn': row[25], 'username': row[26], 'password': row[27]},
                 },
             }
     
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting general config: {}".format(e))
+        logger.error("Error getting general config: {}".format(e))
         return {}
 
 
@@ -1061,6 +1074,7 @@ def update_general_configuration(config_data):
             
             net = config_data.get('network', {})
             if 'mode' in net: _add('network_mode', net['mode'])
+            if 'eth_selected' in net: _add('eth_selected', net['eth_selected'])
             
             wifi = net.get('wifi', {})
             if 'ssid' in wifi: _add('wifi_ssid', wifi['ssid'])
@@ -1086,7 +1100,7 @@ def update_general_configuration(config_data):
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print("Error updating general config: {}".format(e))
+        logger.error("Error updating general config: {}".format(e))
         return False
 
 
@@ -1101,7 +1115,7 @@ def get_all_tag_groups():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting device groups: {}".format(e))
+        logger.error("Error getting device groups: {}".format(e))
         return []
 
 
@@ -1115,7 +1129,7 @@ def add_tag_group(name, color='blue', description=''):
     try:
         return execute_with_retry(_insert)
     except Exception as e:
-        print("Error adding device group: {}".format(e))
+        logger.error("Error adding device group: {}".format(e))
         return None
 
 
@@ -1130,7 +1144,7 @@ def delete_tag_group(group_id):
     try:
         return execute_with_retry(_delete)
     except Exception as e:
-        print("Error deleting device group: {}".format(e))
+        logger.error("Error deleting device group: {}".format(e))
         return False
 
 
@@ -1145,7 +1159,7 @@ def get_all_services():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting services: {}".format(e))
+        logger.error("Error getting services: {}".format(e))
         return []
 
 
@@ -1160,7 +1174,7 @@ def get_service_by_name(name):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting service by name: {}".format(e))
+        logger.error("Error getting service by name: {}".format(e))
         return None
 
 
@@ -1181,7 +1195,7 @@ def get_database_stats():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting stats: {}".format(e))
+        logger.error("Error getting stats: {}".format(e))
         return {}
 
 
@@ -1197,7 +1211,7 @@ def get_all_admin_users():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting admin users: {}".format(e))
+        logger.error("Error getting admin users: {}".format(e))
         return []
 
 
@@ -1212,7 +1226,7 @@ def create_admin_user(username, password, role='operator'):
     try:
         return execute_with_retry(_insert)
     except Exception as e:
-        print("Error creating admin user: {}".format(e))
+        logger.error("Error creating admin user: {}".format(e))
         return None
 
 
@@ -1233,7 +1247,7 @@ def update_admin_user(user_id, data):
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print("Error updating admin user: {}".format(e))
+        logger.error("Error updating admin user: {}".format(e))
         return False
 
 
@@ -1247,7 +1261,7 @@ def delete_admin_user(user_id):
     try:
         return execute_with_retry(_delete)
     except Exception as e:
-        print("Error deleting admin user: {}".format(e))
+        logger.error("Error deleting admin user: {}".format(e))
         return False
 
 
@@ -1291,7 +1305,7 @@ def get_all_webui_users():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("Error getting webui users: {}".format(e))
+        logger.error("Error getting webui users: {}".format(e))
         return []
 
 
@@ -1306,7 +1320,7 @@ def create_webui_user(username, password, display_name='', role='user'):
     try:
         return execute_with_retry(_insert)
     except Exception as e:
-        print("Error creating webui user: {}".format(e))
+        logger.error("Error creating webui user: {}".format(e))
         return None
 
 
@@ -1328,7 +1342,7 @@ def update_webui_user(user_id, data):
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print("Error updating webui user: {}".format(e))
+        logger.error("Error updating webui user: {}".format(e))
         return False
 
 
@@ -1342,7 +1356,7 @@ def delete_webui_user(user_id):
     try:
         return execute_with_retry(_delete)
     except Exception as e:
-        print("Error deleting webui user: {}".format(e))
+        logger.error("Error deleting webui user: {}".format(e))
         return False
 
 
@@ -1362,7 +1376,7 @@ def get_all_rules():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("get_all_rules error: {}".format(e))
+        logger.error("get_all_rules error: {}".format(e))
         return []
 
 
@@ -1394,7 +1408,7 @@ def save_rule(rule):
     try:
         return execute_with_retry(_save)
     except Exception as e:
-        print("save_rule error: {}".format(e))
+        logger.error("save_rule error: {}".format(e))
         return False
 
 
@@ -1408,7 +1422,7 @@ def delete_rule(rule_id):
     try:
         return execute_with_retry(_delete)
     except Exception as e:
-        print("delete_rule error: {}".format(e))
+        logger.error("delete_rule error: {}".format(e))
         return False
 
 
@@ -1422,7 +1436,7 @@ def get_all_loadcell_tags():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("get_all_loadcell_tags error: {}".format(e))
+        logger.error("get_all_loadcell_tags error: {}".format(e))
         return []
 
 
@@ -1444,14 +1458,14 @@ def get_all_available_tags():
                 # Map protocol to display name: ext-rtu -> modbus-rtu, ext-tcp -> modbus-tcp, external/modbus -> modbus
                 tags += [{'name': r[0], 'unit': r[1], 'deviceId': r[2], 'device': r[3], 'source': r[4].replace('ext-', 'modbus-') if r[4] and r[4].startswith('ext-') else 'modbus', 'dtype': _map_dtype(r[5])} for r in cursor.fetchall()]
             except Exception as e:
-                print("get_all_available_tags [modbus] error: {}".format(e))
+                logger.error("get_all_available_tags [modbus] error: {}".format(e))
             
             # Loadcell datapoints
             try:
                 cursor.execute("SELECT ld.name, COALESCE(ld.unit,''), ld.device_id, COALESCE(lc.name,''), 'loadcell' FROM loadcell_datapoints ld LEFT JOIN loadcell_device lc ON lc.id = ld.device_id ORDER BY ld.name")
                 tags += [{'name': r[0], 'unit': r[1], 'deviceId': r[2], 'device': r[3], 'source': r[4], 'dtype': 'float'} for r in cursor.fetchall()]
             except Exception as e:
-                print("get_all_available_tags [loadcell] error: {}".format(e))
+                logger.error("get_all_available_tags [loadcell] error: {}".format(e))
             
             # Virtual datapoints (optional)
             try:
@@ -1465,7 +1479,7 @@ def get_all_available_tags():
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print("get_all_available_tags error: {}".format(e))
+        logger.error("get_all_available_tags error: {}".format(e))
         return []
 
 
@@ -1510,7 +1524,7 @@ def get_user_page_restrictions(user_id):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print('get_user_page_restrictions error: {}'.format(e))
+        logger.error('get_user_page_restrictions error: {}'.format(e))
         return []
 
 
@@ -1527,7 +1541,7 @@ def set_user_page_restriction(user_id, page_key, hidden):
     try:
         return execute_with_retry(_update)
     except Exception as e:
-        print('set_user_page_restriction error: {}'.format(e))
+        logger.error('set_user_page_restriction error: {}'.format(e))
         return False
 
 
@@ -1551,7 +1565,7 @@ def get_port_config(device_type=None):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print('[DB] get_port_config error: {}'.format(e))
+        logger.error('[DB] get_port_config error: {}'.format(e))
         return []
 
 
@@ -1566,7 +1580,7 @@ def get_port_label(device_type, port_value):
     try:
         return execute_with_retry(_query)
     except Exception as e:
-        print('[DB] get_port_label error: {}'.format(e))
+        logger.error('[DB] get_port_label error: {}'.format(e))
         return port_value
 
 
@@ -1579,11 +1593,11 @@ atexit.register(close_all_connections)
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    print("Initializing database...")
+    logger.info("Initializing database...")
     init_database()
-    print("\n=== Database Statistics ===")
+    logger.info("\n=== Database Statistics ===")
     for k, v in get_database_stats().items():
-        print("{}: {}".format(k, v))
+        logger.info("{}: {}".format(k, v))
 # Do NOT auto-initialize at module import time!
 # Let ensure_db_initialized() be called explicitly from main.py
 # This prevents premature connection creation and closure
