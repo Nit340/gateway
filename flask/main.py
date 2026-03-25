@@ -5,6 +5,7 @@ import io
 # Force UTF-8 encoding for stdout
 if sys.stdout.encoding != 'UTF-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+import log_handler; log_handler.install()
 # main.py (OPTIMIZED)
 import asyncio
 import json
@@ -424,7 +425,7 @@ async def webui_login_api(request):
         )
 
     token = binascii.hexlify(os.urandom(32)).decode()
-    WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.utcnow().isoformat(), 'token': token}
+    WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.now(_dt.timezone.utc).isoformat(), 'token': token}
     if user['username'] not in WEBUI_USER_TOKENS:
         WEBUI_USER_TOKENS[user['username']] = []
     WEBUI_USER_TOKENS[user['username']].append(token)
@@ -1126,6 +1127,14 @@ def create_app():
             'ws_auth_result': _ws_auth_main(request),
         })
     app.router.add_get('/api/debug/sessions', debug_sessions)
+
+    # Logs page + API
+    import log_handler as _lh
+    _lh.register_routes(app)
+    async def _logs_page(request):
+        _require_admin(request)
+        return _html('logs.html')
+    app.router.add_get('/admin/logs', _logs_page)
 
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Logs</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+<style>
+* { font-family:'Inter',sans-serif; }
+.mat { font-family:'Material Symbols Outlined'; font-style:normal; font-size:20px; line-height:1; }
+.slink { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; font-size:13px; font-weight:600; color:#78716c; text-decoration:none; transition:all .15s; cursor:pointer; }
+.slink:hover { background:#fff7ed; color:#ea580c; }
+.slink.active { background:#ea580c; color:white; }
+.slink.active .mat { color:white; }
+.slink:hover .mat { color:#ea580c; }
+::-webkit-scrollbar{width:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#e7cfc7;border-radius:10px}
+
+/* level badges */
+.lv { display:inline-block; padding:1px 7px; border-radius:4px; font-size:10px; font-weight:700; }
+.lv-DEBUG    { background:#f0f9ff; color:#0369a1; }
+.lv-INFO     { background:#f0fdf4; color:#16a34a; }
+.lv-WARNING  { background:#fffbeb; color:#b45309; }
+.lv-ERROR    { background:#fef2f2; color:#dc2626; }
+.lv-CRITICAL { background:#fdf4ff; color:#9333ea; }
+/* row tint */
+.rw-WARNING  { background:#fffdf0!important; }
+.rw-ERROR    { background:#fff5f5!important; }
+.rw-CRITICAL { background:#fdf4ff!important; }
+/* filter buttons */
+.fbt { padding:3px 11px; border-radius:8px; font-size:11px; font-weight:600; background:#f5f5f4; color:#78716c; border:none; cursor:pointer; transition:all .15s; }
+.fbt:hover { background:#fff7ed; color:#ea580c; }
+.fbt.on    { background:#ea580c; color:white; }
+/* toggle switch */
+.tog { position:relative; display:inline-block; width:34px; height:18px; }
+.tog input { opacity:0; width:0; height:0; }
+.tog-sl { position:absolute; cursor:pointer; inset:0; background:#d4d4d4; border-radius:20px; transition:.25s; }
+.tog-sl:before { content:''; position:absolute; height:12px; width:12px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.25s; }
+input:checked + .tog-sl { background:#ea580c; }
+input:checked + .tog-sl:before { transform:translateX(16px); }
+/* log font */
+.logmsg { font-family:'Courier New',monospace; font-size:11.5px; word-break:break-all; line-height:1.6; }
+</style>
+</head>
+<body class="bg-stone-50 min-h-screen flex">
+
+<!-- Sidebar -->
+<aside class="w-60 min-h-screen flex flex-col flex-shrink-0" style="background:#fffaf7;border-right:1.5px solid #fed7aa;">
+  <div class="px-5 py-6 flex items-center gap-3 border-b" style="border-color:#fed7aa;">
+    <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background:#f97316;">
+      <span class="mat text-white" style="font-size:22px;">precision_manufacturing</span>
+    </div>
+    <div>
+      <div class="text-sm font-extrabold text-stone-800 leading-tight">Univa</div>
+      <div class="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Admin Panel</div>
+    </div>
+  </div>
+  <nav class="flex-1 px-3 py-5 space-y-1">
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mb-3">Main</div>
+    <a href="/admin"              class="slink"><span class="mat">dashboard</span>Dashboard</a>
+    <a href="/admin/pipeline"     class="slink"><span class="mat">device_hub</span>Pipeline</a>
+    <a href="/admin/database"     class="slink"><span class="mat">table_chart</span>Database</a>
+    <a href="/admin/logs"         class="slink active"><span class="mat">terminal</span>Logs</a>
+    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
+    <a href="/admin/users"        class="slink"><span class="mat">manage_accounts</span>Users</a>
+    <a href="/admin/access-control" class="slink"><span class="mat">shield_lock</span>Access Control</a>
+  </nav>
+  <div class="px-3 py-4 border-t" style="border-color:#fed7aa;">
+    <button onclick="doLogout()" class="slink w-full text-left hover:bg-red-50 hover:text-red-500" style="color:#a8a29e;">
+      <span class="mat">logout</span>Logout
+    </button>
+  </div>
+</aside>
+
+<!-- Main area: settings panel left + log stream right -->
+<div class="flex-1 flex flex-col min-h-screen overflow-hidden">
+
+  <!-- Top bar -->
+  <header class="h-14 bg-white border-b border-stone-100 flex items-center px-6 gap-3 flex-shrink-0">
+    <span class="mat text-stone-400">terminal</span>
+    <h1 class="text-base font-bold text-stone-800 flex-1">Server Logs</h1>
+    <!-- live indicator -->
+    <button id="liveBtn" onclick="toggleLive()"
+      class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors">
+      <span id="liveDot" class="relative flex h-2 w-2">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      </span>
+      <span id="liveLabel">Live</span>
+    </button>
+    <button onclick="clearLogs()"
+      class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
+      <span class="mat" style="font-size:16px;">delete_sweep</span>Clear
+    </button>
+  </header>
+
+  <!-- Body: settings panel + log table side-by-side -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- LEFT: Settings panel -->
+    <div class="w-64 flex-shrink-0 border-r border-stone-100 bg-white flex flex-col overflow-y-auto">
+      <div class="px-4 py-3 border-b border-stone-100">
+        <div class="text-xs font-bold uppercase tracking-widest text-stone-400">Module Controls</div>
+        <div class="text-[10px] text-stone-400 mt-0.5">Toggle OFF to stop logs entirely from that module — in backend too.</div>
+      </div>
+      <div id="settingsPanel" class="flex-1 px-3 py-2 space-y-1">
+        <div class="text-stone-300 text-xs text-center py-6">Loading…</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Filter bar + log table -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Filter bar -->
+      <div class="bg-white border-b border-stone-100 px-4 py-2 flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-[10px] font-bold uppercase tracking-widest text-stone-300">View</span>
+          <button class="fbt on" onclick="setCat(this,'ALL')">All</button>
+          <button class="fbt" onclick="setCat(this,'main')">main</button>
+          <button class="fbt" onclick="setCat(this,'database')">db</button>
+          <button class="fbt" onclick="setCat(this,'pipeline')">pipeline</button>
+          <button class="fbt" onclick="setCat(this,'general')">general</button>
+          <button class="fbt" onclick="setCat(this,'device_management')">device</button>
+          <button class="fbt" onclick="setCat(this,'tag_mapping')">tag</button>
+          <button class="fbt" onclick="setCat(this,'mqtt_cloud')">mqtt</button>
+          <button class="fbt" onclick="setCat(this,'rules')">rules</button>
+          <button class="fbt" onclick="setCat(this,'auth')">auth</button>
+        </div>
+        <div class="flex items-center gap-2 ml-auto">
+          <select id="lvlSel" onchange="fetchLogs()"
+            class="text-xs border border-stone-200 rounded-lg px-2 py-1.5 font-semibold text-stone-600 bg-white">
+            <option value="ALL">All levels</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+            <option value="CRITICAL">CRITICAL</option>
+          </select>
+          <input id="searchBox" placeholder="Search…" oninput="fetchLogs()"
+            class="text-xs border border-stone-200 rounded-lg px-3 py-1.5 w-36 focus:outline-none focus:ring-2 focus:ring-orange-200"/>
+          <select id="limitSel" onchange="fetchLogs()"
+            class="text-xs border border-stone-200 rounded-lg px-2 py-1.5 font-semibold text-stone-600 bg-white">
+            <option value="200">200</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Log table -->
+      <div class="flex-1 flex flex-col overflow-hidden px-4 py-3 gap-2">
+        <div id="logWrap" class="flex-1 overflow-auto bg-white rounded-xl border border-stone-100 shadow-sm">
+          <table class="w-full border-collapse text-xs">
+            <thead class="sticky top-0 z-10 bg-stone-50 border-b border-stone-100">
+              <tr>
+                <th class="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 w-40 whitespace-nowrap">Time</th>
+                <th class="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 w-20">Level</th>
+                <th class="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400 w-32">Module</th>
+                <th class="px-2 py-2 text-left text-[10px] font-bold uppercase tracking-widest text-stone-400">Message</th>
+              </tr>
+            </thead>
+            <tbody id="logBody">
+              <tr><td colspan="4" class="px-4 py-10 text-center text-stone-300">Waiting for logs…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex items-center justify-between">
+          <span id="statusBar" class="text-xs text-stone-400"></span>
+          <label class="flex items-center gap-1.5 text-xs text-stone-400 cursor-pointer select-none">
+            <input type="checkbox" id="autoScroll" checked class="accent-orange-500"/> Auto-scroll
+          </label>
+        </div>
+      </div>
+
+    </div><!-- end right -->
+  </div><!-- end body -->
+</div><!-- end main -->
+
+<script>
+const MODULES = ['main','database','pipeline','general','device_management','tag_mapping','mqtt_cloud','rules','auth'];
+const LEVELS  = ['DEBUG','INFO','WARNING','ERROR','CRITICAL'];
+let catFilter = 'ALL';
+let liveMode  = true;
+let liveTimer = null;
+let settings  = {};  // { module: {enabled, level} }
+
+// ── settings panel ──────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/admin/log-settings');
+    if (!r.ok) return;
+    const d = await r.json();
+    (d.settings||[]).forEach(s => { settings[s.module] = {enabled: s.enabled, level: s.level}; });
+    renderSettings();
+  } catch(e) {}
+}
+
+function renderSettings() {
+  const panel = document.getElementById('settingsPanel');
+  panel.innerHTML = MODULES.map(mod => {
+    const s   = settings[mod] || {enabled:true, level:'DEBUG'};
+    const ck  = s.enabled ? 'checked' : '';
+    const opts = LEVELS.map(l => `<option value="${l}" ${l===s.level?'selected':''}>${l}</option>`).join('');
+    return `<div class="flex items-center gap-2 py-2 border-b border-stone-50 last:border-0">
+      <label class="tog flex-shrink-0">
+        <input type="checkbox" ${ck} onchange="setSetting('${mod}',this.checked,null)"/>
+        <span class="tog-sl"></span>
+      </label>
+      <span class="text-xs font-semibold text-stone-700 flex-1 truncate" title="${mod}">${mod}</span>
+      <select onchange="setSetting('${mod}',null,this.value)"
+        class="text-[10px] border border-stone-200 rounded px-1.5 py-0.5 font-semibold text-stone-600 bg-white w-20 flex-shrink-0">
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+async function setSetting(module, enabled, level) {
+  const body = {module};
+  if (enabled !== null) { body.enabled = enabled; if(settings[module]) settings[module].enabled = enabled; }
+  if (level   !== null) { body.level   = level;   if(settings[module]) settings[module].level   = level;   }
+  renderSettings();  // optimistic update
+  try {
+    await fetch('/api/admin/log-settings', {
+      method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+  } catch(e) {}
+}
+
+// ── log fetch ───────────────────────────────────────────────────────────────
+async function fetchLogs() {
+  const limit  = document.getElementById('limitSel').value;
+  const level  = document.getElementById('lvlSel').value;
+  const search = document.getElementById('searchBox').value.trim();
+  let url = `/api/admin/logs?limit=${limit}&module=${catFilter}&level=${level}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return;
+    const d = await r.json();
+    renderTable(d.logs || []);
+  } catch(e) {}
+}
+
+function renderTable(rows) {
+  const body = document.getElementById('logBody');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="4" class="px-4 py-10 text-center text-stone-300">No log entries.</td></tr>';
+    document.getElementById('statusBar').textContent = '';
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const lvl = r.level || 'INFO';
+    const rc  = {WARNING:'rw-WARNING',ERROR:'rw-ERROR',CRITICAL:'rw-CRITICAL'}[lvl]||'';
+    return `<tr class="${rc} border-b border-stone-50 hover:bg-stone-50">
+      <td class="px-3 py-1 text-stone-400 font-mono text-[10.5px] whitespace-nowrap">${esc(r.timestamp||'')}</td>
+      <td class="px-2 py-1 whitespace-nowrap"><span class="lv lv-${lvl}">${lvl}</span></td>
+      <td class="px-2 py-1 text-stone-500 font-semibold whitespace-nowrap text-[11px]">${esc(r.module||'')}</td>
+      <td class="px-2 py-1 logmsg text-stone-700">${esc(r.message||'')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('statusBar').textContent = rows.length + ' entries';
+  if (document.getElementById('autoScroll').checked) {
+    const w = document.getElementById('logWrap');
+    w.scrollTop = w.scrollHeight;
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── live ────────────────────────────────────────────────────────────────────
+function scheduleLive() {
+  if (liveTimer) clearTimeout(liveTimer);
+  if (!liveMode) return;
+  liveTimer = setTimeout(async () => { await fetchLogs(); scheduleLive(); }, 2000);
+}
+
+function toggleLive() {
+  liveMode = !liveMode;
+  const btn = document.getElementById('liveBtn');
+  const dot = document.getElementById('liveDot');
+  const lbl = document.getElementById('liveLabel');
+  if (liveMode) {
+    btn.className = 'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors';
+    dot.innerHTML = '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>';
+    lbl.textContent = 'Live';
+    scheduleLive();
+  } else {
+    btn.className = 'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-stone-100 text-stone-500 hover:bg-stone-200 transition-colors';
+    dot.innerHTML = '<span class="relative inline-flex rounded-full h-2 w-2 bg-stone-300"></span>';
+    lbl.textContent = 'Paused';
+    if (liveTimer) clearTimeout(liveTimer);
+  }
+}
+
+// ── misc ────────────────────────────────────────────────────────────────────
+function setCat(btn, cat) {
+  catFilter = cat;
+  document.querySelectorAll('.fbt').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  fetchLogs();
+}
+
+async function clearLogs() {
+  if (!confirm('Clear all buffered logs?')) return;
+  await fetch('/api/admin/logs', {method:'DELETE'});
+  renderTable([]);
+}
+
+async function doLogout() {
+  await fetch('/admin/logout');
+  window.location.href = '/admin/login';
+}
+
+// ── boot ────────────────────────────────────────────────────────────────────
+loadSettings();
+fetchLogs();
+scheduleLive();
+</script>
+</body>
+</html>
