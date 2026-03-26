@@ -428,21 +428,17 @@ async def webui_login_api(request):
 
     # Enforce per-user session limit stored in database
     import datetime as _dt
+    import time
     max_sessions = get_webui_user_max_sessions(user['id'])
     active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
     if len(active_tokens) >= max_sessions:
-        # Log out the oldest session to allow new login
-        oldest_token = active_tokens[0]  # Assuming list is in order, but actually it's not sorted
-        # To properly get oldest, we need to check logged_in_at
-        sessions_info = [(t, WEBUI_SESSIONS[t]['logged_in_at']) for t in active_tokens if isinstance(WEBUI_SESSIONS[t], dict)]
-        if sessions_info:
-            sessions_info.sort(key=lambda x: x[1])
-            oldest_token = sessions_info[0][0]
-            WEBUI_SESSIONS.pop(oldest_token, None)
-            WEBUI_USER_TOKENS[user['username']].remove(oldest_token)
+        if max_sessions == 1:
+            return web.json_response({'success': False, 'error': 'Session limit is 1. Another user is already logged in.'}, status=403)
+        else:
+            return web.json_response({'success': False, 'error': 'Session limit reached. Cannot allow more concurrent view-only sessions.'}, status=403)
 
     token = binascii.hexlify(os.urandom(32)).decode()
-    WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.now(_dt.timezone.utc).isoformat(), 'token': token}
+    WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.now(_dt.timezone.utc).isoformat(), 'token': token, 'last_ping': time.time()}
     if user['username'] not in WEBUI_USER_TOKENS:
         WEBUI_USER_TOKENS[user['username']] = []
     WEBUI_USER_TOKENS[user['username']].append(token)
@@ -473,11 +469,17 @@ async def webui_logout_api(request):
 async def webui_session_status(request):
     """GET /api/auth/status -- returns 200 if session valid, 401 if not.
     Also returns hidden_pages list so layout.html can restrict the sidebar per user."""
+    import time
     token = request.cookies.get('gw_webui_session')
     if not token or token not in WEBUI_SESSIONS:
         return web.json_response({'authenticated': False}, status=401)
     _sess = WEBUI_SESSIONS[token]
-    username = _sess['username'] if isinstance(_sess, dict) else _sess
+    if isinstance(_sess, dict):
+        _sess['last_ping'] = time.time()
+        username = _sess['username']
+    else:
+        username = _sess
+        WEBUI_SESSIONS[token] = {'username': username, 'last_ping': time.time()}
     # Look up user_id to fetch per-user page restrictions
     try:
         from database import get_db_connection as _gdc
@@ -599,6 +601,31 @@ async def api_db_path_put(request):
 
 async def start_background_tasks(app):
     logger.info("[MAIN] Starting background tasks...")
+    import time
+
+    async def _webui_session_watchdog():
+        while True:
+            await asyncio.sleep(5)
+            now = time.time()
+            to_remove = []
+            for token, info in list(WEBUI_SESSIONS.items()):
+                if isinstance(info, dict) and 'last_ping' in info:
+                    if now - info['last_ping'] > 15:
+                        to_remove.append(token)
+            for token in to_remove:
+                info = WEBUI_SESSIONS.pop(token, None)
+                if info:
+                    uname = info.get('username') if isinstance(info, dict) else info
+                    if uname and uname in WEBUI_USER_TOKENS:
+                        try:
+                            WEBUI_USER_TOKENS[uname].remove(token)
+                        except ValueError:
+                            pass
+                        if not WEBUI_USER_TOKENS[uname]:
+                            del WEBUI_USER_TOKENS[uname]
+                logger.info("[MAIN] Session watchdog removed inactive token for user {}".format(uname))
+
+    app["webui_session_watchdog"] = asyncio.ensure_future(_webui_session_watchdog())
 
     if PIPELINE_AVAILABLE:
         logger.info("[MAIN] Starting pipeline background thread...")
@@ -700,7 +727,7 @@ async def start_background_tasks(app):
 
 async def cleanup_background_tasks(app):
     logger.info("[MAIN] Cleaning up background tasks...")
-    for key in ('startup_auto_send', 'pipeline_watchdog'):
+    for key in ('startup_auto_send', 'pipeline_watchdog', 'webui_session_watchdog'):
         task = app.get(key)
         if task:
             task.cancel()
@@ -1002,7 +1029,24 @@ def create_app():
         return session.get('username') if isinstance(session, dict) else session
     _dm_mod._require_webui_session = _require_webui_session_main
 
-    app = web.Application()
+    @web.middleware
+    async def security_headers_middleware(request, handler):
+        try:
+            response = await handler(request)
+            if isinstance(response, web.StreamResponse):
+                response.headers['X-Content-Type-Options'] = 'nosniff'
+                response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+                response.headers['X-XSS-Protection'] = '1; mode=block'
+                response.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;"
+            return response
+        except web.HTTPException as ex:
+            ex.headers['X-Content-Type-Options'] = 'nosniff'
+            ex.headers['X-Frame-Options'] = 'SAMEORIGIN'
+            ex.headers['X-XSS-Protection'] = '1; mode=block'
+            ex.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;"
+            raise
+
+    app = web.Application(middlewares=[security_headers_middleware])
 
     app.router.add_get('/admin/login', admin_login_page)
     app.router.add_post('/admin/login', admin_login_post)

@@ -560,6 +560,27 @@
     </div>
 </div>
 
+<!-- Custom Import Group Modal (Matches ServerAlertOverlay) -->
+<div id="importGroupModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);backdrop-filter:blur(3px);z-index:99999;align-items:center;justify-content:center;">
+    <div class="sa-card bg-white rounded-2xl border border-slate-200 shadow-2xl p-8 max-w-[420px] w-[92%] text-center transform transition-all">
+        <div class="sa-icon-wrap sa-icon-timeout bg-amber-50 text-amber-500 w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+            <i class="fa-solid fa-layer-group"></i>
+        </div>
+        <div class="sa-badge sa-badge-timeout bg-amber-50 text-amber-600 text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3 inline-flex">Missing Groups</div>
+        <div class="sa-title text-lg font-bold text-slate-900 mb-2">Auto-Create Groups?</div>
+        <div class="sa-desc text-sm text-slate-500 mb-4 px-2" id="importGroupModalDesc">There are missing groups in the CSV.</div>
+        
+        <div class="sa-detail bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 text-left mb-6 max-h-32 overflow-y-auto" id="importGroupModalList">
+            <!-- List goes here -->
+        </div>
+
+        <div class="flex justify-center gap-3">
+            <button class="sa-btn-login bg-white text-slate-600 border border-slate-200 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-slate-50 transition-colors flex-1" id="cancelImportGroupBtn">Cancel</button>
+            <button class="sa-btn-retry bg-blue-600 text-white border-none rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-blue-700 transition-colors flex-1" id="confirmImportGroupBtn">Yes, Add Them</button>
+        </div>
+    </div>
+</div>
+
 <style>
 /* Add Tag / Tag Mapping styles */
 .compact-table { font-size:12px; }

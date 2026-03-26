@@ -454,7 +454,7 @@
         <div class="vb-card">
             <div class="vb-icon">👁</div>
             <div class="vb-title">View-Only Mode</div>
-            <div class="vb-desc">Another user is currently editing.<br>You can browse but cannot make changes.</div>
+            <div class="vb-desc">There is a user editing already.<br>Wait for the user to log out to edit.<br>You can view only.</div>
             <button class="vb-close" onclick="document.getElementById('viewerBanner').classList.remove('show')">
                 <i class="fa-solid fa-check"></i> Got it
             </button>
@@ -573,6 +573,29 @@
             return 'SERVER_DISCONNECT';
         }
 
+        /* ── Global Fetch Interceptor ── */
+        var originalFetch = window.fetch;
+        window.fetch = function() {
+            var url = arguments[0];
+            return originalFetch.apply(this, arguments).then(function(res) {
+                if (!res.ok && res.status >= 400 && typeof url === 'string' && url.indexOf('/api/') !== -1) {
+                    if (url.indexOf('/api/auth/status') === -1 && url.indexOf('/api/auth/session-role') === -1 && url.indexOf('/api/auth/login') === -1) {
+                        if (typeof showAlert !== 'undefined') {
+                            showAlert('SERVER_ERROR', 'HTTP ' + res.status + ' ' + res.statusText);
+                        }
+                    }
+                }
+                return res;
+            }).catch(function(err) {
+                if (typeof url === 'string' && url.indexOf('/api/auth/status') === -1) {
+                    if (typeof showAlert !== 'undefined' && typeof classifyError !== 'undefined') {
+                        showAlert(classifyError(err), err ? err.message : 'Fetch Error');
+                    }
+                }
+                throw err;
+            });
+        };
+
         /* ── Retry: re-check session without reloading the page ── */
         function doRetry() {
             hideAlert();
@@ -644,7 +667,7 @@
             showAlert('NO_NETWORK', 'navigator.onLine became false');
         });
 
-        /* ── Periodic heartbeat every 30 s to detect crashes mid-session ── */
+        /* ── Periodic heartbeat every 5 s to detect crashes mid-session ── */
         setInterval(function () {
             if (document.getElementById('serverAlertOverlay').classList.contains('show')) return;
             fetch('/api/auth/status', { credentials: 'same-origin' })
@@ -657,7 +680,7 @@
             .catch(function(err){
                 showAlert(classifyError(err), err ? err.message : 'Heartbeat failed');
             });
-        }, 30000);
+        }, 5000);
 
         /* ── Initial check on page load ── */
         checkSession();

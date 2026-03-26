@@ -1073,15 +1073,87 @@ async function importCSV() {
         }
 
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        
+        // --- 1. First Pass: Detect missing groups ---
+        const existingGroupNames = _groups.map(g => {
+            const name = (typeof g === 'object') ? (g.name || '') : String(g);
+            return name.toLowerCase();
+        });
+        const missingGroupsSet = new Set();
+        
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+            const row = {};
+            headers.forEach((h, j) => { row[h] = cols[j] || ''; });
+            const gName = (row['group'] || '').trim();
+            if (gName && !existingGroupNames.includes(gName.toLowerCase())) {
+                missingGroupsSet.add(gName);
+            }
+        }
+        
+        // --- 2. Prompt user and Auto-Create ---
+        if (missingGroupsSet.size > 0) {
+            const mgList = Array.from(missingGroupsSet);
+            const confirmed = await new Promise((resolve) => {
+                const modal = document.getElementById('importGroupModal');
+                const desc = document.getElementById('importGroupModalDesc');
+                const list = document.getElementById('importGroupModalList');
+                const btnOk = document.getElementById('confirmImportGroupBtn');
+                const btnCancel = document.getElementById('cancelImportGroupBtn');
+                
+                if (!modal) { resolve(confirm(`Missing groups: ${mgList.join(', ')}`)); return; }
+                
+                desc.textContent = `There are ${mgList.length} missing group(s) in the CSV. Would you like to generate these groups automatically?`;
+                list.innerHTML = mgList.map(g => `<div class="mb-1"><strong>•</strong> ${g}</div>`).join('');
+                
+                modal.style.display = 'flex';
+                
+                const cleanup = () => {
+                    modal.style.display = 'none';
+                    btnOk.onclick = null;
+                    btnCancel.onclick = null;
+                };
+                
+                btnOk.onclick = () => { cleanup(); resolve(true); };
+                btnCancel.onclick = () => { cleanup(); resolve(false); };
+            });
+
+            if (confirmed) {
+                _toast(`Creating ${mgList.length} new groups...`, 'info');
+                for (const gName of mgList) {
+                    try {
+                        await fetch('/api/tag-groups', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: gName, color: 'blue' })
+                        });
+                    } catch (e) { console.error('Failed to create group:', gName, e); }
+                }
+                
+                // Refresh local group state so subsequent tags map properly
+                try {
+                     const grpResp = await fetch('/api/tag-groups');
+                     if (grpResp.ok) {
+                         const grpData = await grpResp.json();
+                         _groups = (grpData.groups || []);
+                         _populateGroupDropdowns();
+                         _renderGroupsPanel();
+                     }
+                } catch(e) {}
+            }
+        }
+        
         let imported = 0, errors = 0;
 
         for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
             const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
             const row = {};
             headers.forEach((h, j) => { row[h] = cols[j] || ''; });
 
             const devName = row['device_name'] || row['device_id'] || '';
-            const dev = (_devices || []).find(d => d.name === devName || String(d.id) === devName);
+            const dev = (_devices || []).find(d => String(d.name).toLowerCase() === String(devName).toLowerCase() || String(d.id) === String(devName));
             if (!dev) {
                 errors++;
                 continue;

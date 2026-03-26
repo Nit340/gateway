@@ -319,9 +319,15 @@ console.log('general-config.js loaded');
         if (isFieldStale('net.lan.eth1.state')) eth1State = null;
         stateBadge('eth1-state-badge', isUp(eth1State));
         
-        // Update global MAC if eth0 connected and not stale
-        if (isUp(eth0State) && e0.mac && !isFieldStale('net.lan.eth0.mac')) {
-            var m = $('[data-mac-address]'); if (m) m.textContent = e0.mac;
+        if (_selectedEth === 'eth0') {
+            txt('global-mac-eth-label', 'eth0');
+            txt('global-mac-eth', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac.toUpperCase() : '--');
+        } else if (_selectedEth === 'eth1') {
+            txt('global-mac-eth-label', 'eth1');
+            txt('global-mac-eth', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac.toUpperCase() : '--');
+        } else {
+            txt('global-mac-eth-label', 'Auto');
+            txt('global-mac-eth', '--');
         }
 
         _autoHighlight();
@@ -383,10 +389,7 @@ console.log('general-config.js loaded');
             }
         }
         
-        // Update global MAC
-        if (isUp(state) && w.mac && !isFieldStale('net.wlan.mac')) {
-            var m = $('[data-mac-address]'); if (m) m.textContent = w.mac;
-        }
+        txt('global-mac-wifi', (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac.toUpperCase() : '--');
 
         _autoHighlight();
     };
@@ -715,31 +718,41 @@ console.log('general-config.js loaded');
         _selectedEth = which;
         ['eth0', 'eth1'].forEach(function (iface) {
             var card = el(iface + '-card');
-            var btn  = el(iface + '-select-btn');
-            if (!card || !btn) return;
+            var radio = el(iface + '-radio');
+            var icon = el(iface + '-radio-icon');
+            if (!card) return;
             if (iface === which) {
                 card.style.borderColor = '#2563EB';
                 card.style.background  = '#EFF6FF';
-                btn.textContent = 'Selected';
-                btn.style.background   = '#2563EB';
-                btn.style.color        = '#fff';
-                btn.style.borderColor  = '#2563EB';
+                if (radio) radio.className = 'w-5 h-5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center transition-colors';
+                if (icon) icon.classList.remove('opacity-0');
             } else {
                 card.style.borderColor = '';
                 card.style.background  = '';
-                btn.textContent = 'Select';
-                btn.style.background   = '';
-                btn.style.color        = '';
-                btn.style.borderColor  = '';
+                if (radio) radio.className = 'w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors';
+                if (icon) icon.classList.add('opacity-0');
             }
         });
+        
+        // Update MAC display conditionally
+        if (_net && _net.lan) {
+            var e0 = _net.lan.eth0 || {};
+            var e1 = _net.lan.eth1 || {};
+            if (which === 'eth0') {
+                txt('global-mac-eth-label', 'eth0');
+                txt('global-mac-eth', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac.toUpperCase() : '--');
+            } else if (which === 'eth1') {
+                txt('global-mac-eth-label', 'eth1');
+                txt('global-mac-eth', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac.toUpperCase() : '--');
+            }
+        }
     };
 
     var initEthernetSelectButtons = function () {
         ['eth0', 'eth1'].forEach(function (iface) {
-            var btn = el(iface + '-select-btn');
-            if (!btn) return;
-            btn.addEventListener('click', function () {
+            var card = el(iface + '-card');
+            if (!card) return;
+            card.addEventListener('click', function () {
                 _setEthCardSelected(iface);
                 _selectedEth = iface;
                 sendNetworkRouteSelect(iface);  // 1=eth0, 2=eth1 — pipeline datapoint
@@ -818,6 +831,8 @@ console.log('general-config.js loaded');
         txt('lte-imei',          (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
         txt('lte-iccid',         (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
         txt('lte-imsi',          (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
+        
+        txt('global-mac-lte',    (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
 
         _autoHighlight();
     };
@@ -1305,6 +1320,33 @@ console.log('general-config.js loaded');
     // =========================================================================
     // SAVE
     // =========================================================================
+    var toggleLoader = function(show, text, isSuccess) {
+        var loader = el('gc-page-loader');
+        if (!loader) return;
+        var sub = el('gc-loader-sub');
+        var mainText = el('gc-loader-main');
+        var iconContainer = el('gc-loader-icon-container');
+
+        if (text && sub) sub.textContent = text;
+        
+        if (isSuccess === true) {
+            if (mainText) mainText.textContent = 'Success';
+            if (iconContainer) iconContainer.innerHTML = '<i class="fa-solid fa-circle-check text-5xl text-emerald-500 mb-2"></i>';
+        } else if (isSuccess === false) {
+            if (mainText) mainText.textContent = 'Failed';
+            if (iconContainer) iconContainer.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-5xl text-red-500 mb-2"></i>';
+        } else {
+            if (mainText) mainText.textContent = 'Processing';
+            if (iconContainer) iconContainer.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-5xl text-primary mb-2"></i>';
+        }
+
+        if (show) {
+            loader.classList.remove('opacity-0', 'pointer-events-none');
+        } else {
+            loader.classList.add('opacity-0', 'pointer-events-none');
+        }
+    };
+    
     var handleSaveConfiguration = function () {
         var btn = el('save-btn'); if (!btn) return;
         var orig = btn.innerHTML;
@@ -1313,6 +1355,8 @@ console.log('general-config.js loaded');
         btn.classList.remove('bg-primary','hover:bg-primaryHover');
         btn.classList.add('bg-gray-500','cursor-wait');
 
+        toggleLoader(true, 'Please wait while settings are applied...');
+
         fetch('/api/general-configuration', {
             method:'PUT', credentials:'same-origin',
             headers:{'Content-Type':'application/json','Accept':'application/json'},
@@ -1320,19 +1364,25 @@ console.log('general-config.js loaded');
         })
         .then(function (r) { if(!r.ok) return r.json().then(function(e){throw new Error(e.message||'HTTP '+r.status);}); return r.json(); })
         .then(function (result) {
+            toggleLoader(true, 'Configuration saved successfully!', true);
             btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Save Success';
             btn.classList.remove('bg-gray-500','cursor-wait');
             btn.classList.add('bg-emerald-600','hover:bg-emerald-700');
-            showNotification(result.message||'Configuration saved successfully!', 'success');
             window.dispatchEvent(new Event('gateway-config-saved'));
-            setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 2500);
+            setTimeout(function () { 
+                toggleLoader(false);
+                btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; 
+            }, 2000);
         })
         .catch(function (err) {
+            toggleLoader(true, err.message, false);
             btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
             btn.classList.remove('bg-gray-500','cursor-wait');
             btn.classList.add('bg-red-600','hover:bg-red-700');
-            showNotification('Save failed: '+err.message, 'error');
-            setTimeout(function () { btn.innerHTML=orig; btn.classList.remove('bg-red-600','hover:bg-red-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; }, 3000);
+            setTimeout(function () { 
+                toggleLoader(false);
+                btn.innerHTML=orig; btn.classList.remove('bg-red-600','hover:bg-red-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; 
+            }, 3000);
         });
     };
 

@@ -447,29 +447,31 @@
 
                 <!-- Live status cards: hidden until Live connected -->
                 <div id="eth-live-panel" class="mb-4 grid grid-cols-2 gap-3">
-                    <div id="eth0-card" class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all">
+                    <div id="eth0-card" class="relative cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all focus:outline-none" tabindex="0">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth0</span>
-                            <span id="eth0-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth0</span>
+                                <span id="eth0-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                            </div>
+                            <div id="eth0-radio" class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors">
+                                <i id="eth0-radio-icon" class="fa-solid fa-check text-[10px] text-white opacity-0 transition-opacity"></i>
+                            </div>
                         </div>
-                        <div class="text-xs text-slate-500">IP &nbsp;<span id="eth0-ip"  class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500 mt-2">IP &nbsp;<span id="eth0-ip"  class="font-mono text-slate-800">--</span></div>
                         <div class="text-xs text-slate-500">MAC <span id="eth0-mac" class="font-mono text-slate-800">--</span></div>
-                        <button type="button" id="eth0-select-btn"
-                            class="mt-1 w-full py-1 text-xs font-semibold rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-blue-50 hover:border-primary hover:text-primary transition-colors">
-                            Select
-                        </button>
                     </div>
-                    <div id="eth1-card" class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all">
+                    <div id="eth1-card" class="relative cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all focus:outline-none" tabindex="0">
                         <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth1</span>
-                            <span id="eth1-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth1</span>
+                                <span id="eth1-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                            </div>
+                            <div id="eth1-radio" class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors">
+                                <i id="eth1-radio-icon" class="fa-solid fa-check text-[10px] text-white opacity-0 transition-opacity"></i>
+                            </div>
                         </div>
-                        <div class="text-xs text-slate-500">IP &nbsp;<span id="eth1-ip"  class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500 mt-2">IP &nbsp;<span id="eth1-ip"  class="font-mono text-slate-800">--</span></div>
                         <div class="text-xs text-slate-500">MAC <span id="eth1-mac" class="font-mono text-slate-800">--</span></div>
-                        <button type="button" id="eth1-select-btn"
-                            class="mt-1 w-full py-1 text-xs font-semibold rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-blue-50 hover:border-primary hover:text-primary transition-colors">
-                            Select
-                        </button>
                     </div>
                 </div>
 
@@ -574,12 +576,25 @@
 
             </div>
 
-            <!-- MAC Address (live   updated from active interface) -->
+            <!-- MAC Addresses (live updated from active interfaces) -->
             <div class="border-t border-slate-200 pt-6">
                 <div class="p-4 border border-slate-200 rounded-lg bg-slate-50">
-                    <label class="block text-sm font-medium text-slate-700 mb-1">MAC Address</label>
-                    <div class="font-mono text-slate-600" data-mac-address>--</div>
-                    <p class="text-xs text-slate-500 mt-1">Active interface hardware address (updated live)</p>
+                    <label class="block text-sm font-medium text-slate-700 mb-3">Hardware Addresses (MAC)</label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Ethernet MAC</div>
+                            <div class="font-mono text-xs text-slate-800" id="global-mac-eth">--</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5" id="global-mac-eth-label">Auto</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">WiFi MAC</div>
+                            <div class="font-mono text-xs text-slate-800" id="global-mac-wifi">--</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">LTE (IMEI)</div>
+                            <div class="font-mono text-xs text-slate-800" id="global-mac-lte">--</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -637,6 +652,17 @@
             </div>
         </div>
     </footer>
+</div>
+
+<!-- Full page loader override -->
+<div id="gc-page-loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center min-w-[300px]">
+        <div id="gc-loader-icon-container" class="mb-4">
+            <i class="fa-solid fa-circle-notch fa-spin text-4xl text-primary"></i>
+        </div>
+        <div class="text-lg font-semibold text-slate-800" id="gc-loader-main">Processing</div>
+        <div class="text-sm text-slate-500 mt-1 text-center" id="gc-loader-sub">Please wait while settings are applied...</div>
+    </div>
 </div>
 
 <!-- Toast Container -->
