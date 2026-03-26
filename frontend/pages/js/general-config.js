@@ -592,6 +592,13 @@ console.log('general-config.js loaded');
         _acEnabled = false;
         if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
         _setAcUi(false, false);
+        // Persist OFF state to DB so it survives reload/reopen
+        fetch('/api/general-configuration', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ network: { auto_connect: false } })
+        }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist OFF:', e); });
     };
 
     var _doOneConnect = function () {
@@ -632,6 +639,13 @@ console.log('general-config.js loaded');
         _setAcUi(true, false);
         // Send pipeline datapoint: 0 = auto
         sendNetworkRouteSelect('auto');
+        // Persist ON state to DB so it survives reload/reopen
+        fetch('/api/general-configuration', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ network: { auto_connect: true } })
+        }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist ON:', e); });
 
         var ssid = (el('wifi-ssid-value') || {}).value || '';
         if (!ssid) {
@@ -1392,6 +1406,23 @@ console.log('general-config.js loaded');
                 var savedEth = n.eth_selected || 'eth0';
                 _setEthCardSelected(savedEth);
                 _selectedEth = savedEth;
+            }
+            // Restore persisted Auto-connect toggle
+            if (n.auto_connect) {
+                _acEnabled = true;
+                _setAcUi(true, false);
+                // Resume retrying if not already connected
+                if (!isUp((_cache.wlan || {}).state)) {
+                    _acTimer = setInterval(function () {
+                        if (!_acEnabled) return;
+                        if (isUp((_cache.wlan || {}).state)) {
+                            _stopAutoConnect();
+                            showNotification('Auto-connect: already connected', 'success');
+                            return;
+                        }
+                        _doOneConnect();
+                    }, 15000);
+                }
             }
         }
         if (cfg.heartbeat) {

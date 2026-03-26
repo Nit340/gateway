@@ -111,11 +111,11 @@ class _StdoutCapture:
                 continue
             module = _detect_module(line)
             level  = _detect_level(line)
-            # Always write to real terminal regardless of settings
-            self._real.write(line + '\n')
-            self._real.flush()
-            # Only push to ring if settings allow
-            _push(module, level, line)
+            # Only write to terminal AND ring buffer if module settings allow
+            if _is_allowed(module, level):
+                self._real.write(line + '\n')
+                self._real.flush()
+                _push(module, level, line)
         return len(text)
 
     def flush(self):   self._real.flush()
@@ -131,9 +131,26 @@ class _RingHandler(logging.Handler):
             module = name if name in ALL_MODULES else _detect_module(record.getMessage())
             level  = record.levelname
             msg    = self.format(record)
-            # Always let the StreamHandler print to terminal (handled by basicConfig)
-            # Only push to ring if settings allow
+            # Push to ring buffer only if allowed
             _push(module, level, msg)
+        except Exception:
+            pass
+
+
+class _FilteringStreamHandler(logging.StreamHandler):
+    """
+    Replaces the default basicConfig StreamHandler.
+    Suppresses terminal output for disabled modules — the standard
+    StreamHandler has no awareness of our per-module settings.
+    """
+    def emit(self, record):
+        try:
+            name   = record.name or 'main'
+            module = name if name in ALL_MODULES else _detect_module(record.getMessage())
+            level  = record.levelname
+            if not _is_allowed(module, level):
+                return   # suppress — module is OFF or below its level threshold
+            super().emit(record)
         except Exception:
             pass
 
@@ -148,59 +165,36 @@ def install():
         return
     _installed = True
 
-    # Fix logging — this is why logs were completely silent before.
-    # Check Python version to determine if force parameter is supported
+    fmt = logging.Formatter(
+        '[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
+        datefmt='%H:%M:%S',
+    )
+
+    # Set root logger level — handlers do the real filtering
     root_logger = logging.getLogger()
-    
-    # For Python 3.8+, we can use force=True
-    # For older versions, we need to handle it differently
-    if sys.version_info >= (3, 8):
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
-            datefmt='%H:%M:%S',
-            stream=sys.stdout,
-            force=True,
-        )
-    else:
-        # Python 3.5-3.7: force parameter not supported
-        # Check if basicConfig has already been called
-        if not root_logger.handlers:
-            logging.basicConfig(
-                level=logging.DEBUG,
-                format='[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
-                datefmt='%H:%M:%S',
-                stream=sys.stdout,
-            )
-        else:
-            # basicConfig already called, just ensure root logger is configured properly
-            root_logger.setLevel(logging.DEBUG)
-            # Add a stdout handler if none exists
-            has_stdout_handler = False
-            for handler in root_logger.handlers:
-                if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
-                    has_stdout_handler = True
-                    break
-            if not has_stdout_handler:
-                handler = logging.StreamHandler(sys.stdout)
-                handler.setFormatter(logging.Formatter(
-                    '[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
-                    datefmt='%H:%M:%S',
-                ))
-                root_logger.addHandler(handler)
+    root_logger.setLevel(logging.DEBUG)
+
+    # Remove any existing StreamHandlers so basicConfig output doesn't bypass our filter
+    root_logger.handlers = [
+        h for h in root_logger.handlers
+        if not isinstance(h, logging.StreamHandler) or isinstance(h, (_RingHandler, _FilteringStreamHandler))
+    ]
+
+    # Our filtering terminal handler — respects per-module enabled/level settings
+    fsh = _FilteringStreamHandler(sys.stdout)
+    fsh.setLevel(logging.DEBUG)
+    fsh.setFormatter(fmt)
+    root_logger.addHandler(fsh)
     
     # Reduce noise from aiohttp internals
     logging.getLogger('aiohttp').setLevel(logging.WARNING)
     logging.getLogger('asyncio').setLevel(logging.WARNING)
 
-    # Add ring handler to root logger
+    # Ring buffer handler — stores entries for the Logs UI page
     rh = _RingHandler()
     rh.setLevel(logging.DEBUG)
-    rh.setFormatter(logging.Formatter(
-        '[%(asctime)s] %(levelname)-8s %(name)s: %(message)s',
-        datefmt='%H:%M:%S',
-    ))
-    logging.getLogger().addHandler(rh)
+    rh.setFormatter(fmt)
+    root_logger.addHandler(rh)
 
     # Wrap stdout so print() calls are also captured
     if not isinstance(sys.stdout, _StdoutCapture):

@@ -810,8 +810,8 @@
                         <i class="fa-solid fa-user"></i>
                     </div>
                     <div class="user-info">
-                        <h4 id="sidebarUsername">Admin User</h4>
-                        <p id="sidebarUserRole">System Administrator</p>
+                        <h4 id="sidebarUsername">User</h4>
+                        <p id="sidebarUserRole">System User</p>
                     </div>
                     <button
                         onclick="handleLogout()"
@@ -955,7 +955,7 @@
         const storedUser = getCookie('gw_user');
         if (storedUser) {
             const el = document.getElementById('sidebarUsername');
-            if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1) + ' User';
+            if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1);
         }
 
         // Logout handler
@@ -981,12 +981,21 @@
                 const data = await res.json();
 
                 // ── Expose role globally for page scripts (e.g. device-management.js) ──
-                window.__userRole = (data.user_role || 'user').toLowerCase();
+                window.__userRole = (data.role || data.user_role || 'user').toLowerCase();
 
                 // Update sidebar footer role label
                 const roleLabel = document.getElementById('sidebarUserRole');
                 if (roleLabel) {
                     roleLabel.textContent = window.__userRole === 'admin' ? 'Administrator' : 'System User';
+                }
+
+                // Update username with role suffix
+                const usernameEl = document.getElementById('sidebarUsername');
+                if (usernameEl) {
+                    const name = getCookie('gw_user') || 'User';
+                    const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+                    const roleSuffix = window.__userRole === 'admin' ? 'Administrator' : 'System User';
+                    usernameEl.textContent = capitalized + ' ' + roleSuffix;
                 }
 
                 const hidden = data.hidden_pages || [];

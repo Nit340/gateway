@@ -721,6 +721,9 @@ def _migrate_existing_db(cursor):
     gc_cols = {r[1] for r in cursor.fetchall()}
     if 'eth_selected' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN eth_selected TEXT DEFAULT 'eth0'")
+    # Add auto_connect to general_configuration (persists Auto-connect toggle state)
+    if 'auto_connect' not in gc_cols:
+        cursor.execute("ALTER TABLE general_configuration ADD COLUMN auto_connect INTEGER DEFAULT 0")
 
 
 def _create_indexes(cursor):
@@ -1004,7 +1007,8 @@ def get_general_configuration():
                        COALESCE(eth_dns2, '') AS eth_dns2,
                        COALESCE(cell_apn, 'internet') AS cell_apn,
                        COALESCE(cell_username, '') AS cell_username,
-                       COALESCE(cell_password, '') AS cell_password
+                       COALESCE(cell_password, '') AS cell_password,
+                       COALESCE(auto_connect, 0) AS auto_connect
                 FROM general_configuration WHERE id = 1
             ''')
             row = cursor.fetchone()
@@ -1024,8 +1028,9 @@ def get_general_configuration():
                 'heartbeat': {'interval': row[13], 'offline_threshold': row[14]},
                 'mac_address': row[7],
                 'network': {
-                    'mode':         row[15],
-                    'eth_selected': row[16],  # 'eth0' or 'eth1' -- persisted selection
+                    'mode':             row[15],
+                    'eth_selected':     row[16],  # 'eth0' or 'eth1' -- persisted selection
+                    'auto_connect':     bool(row[28]),  # Auto-connect toggle persisted state
                     'wifi': {'ssid': row[17], 'password': row[18]},
                     'ethernet': {
                         'ip_assignment': row[19], 'static_ip': row[20],
@@ -1075,6 +1080,7 @@ def update_general_configuration(config_data):
             net = config_data.get('network', {})
             if 'mode' in net: _add('network_mode', net['mode'])
             if 'eth_selected' in net: _add('eth_selected', net['eth_selected'])
+            if 'auto_connect' in net: _add('auto_connect', 1 if net['auto_connect'] else 0)
             
             wifi = net.get('wifi', {})
             if 'ssid' in wifi: _add('wifi_ssid', wifi['ssid'])
