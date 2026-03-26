@@ -448,7 +448,7 @@ async def webui_login_api(request):
     WEBUI_USER_TOKENS[user['username']].append(token)
 
     resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name'], 'role': user['role']})
-    resp.set_cookie('gw_webui_session', token, httponly=False, path='/', max_age=30*24*3600)
+    resp.set_cookie('gw_webui_session', token, httponly=False, path='/')
     return resp
 
 async def webui_logout_api(request):

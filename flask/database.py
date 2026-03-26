@@ -769,7 +769,9 @@ def insert_default_data(cursor):
     cursor.execute('INSERT OR IGNORE INTO admin_users (username, password, role) VALUES (?, ?, ?)',
                    ('admin', _hash_password('admin123'), 'admin'))
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
-                   ('admin', _hash_password('admin'), 'Crane Operator', 'admin'))
+                   ('admin', _hash_password('admin'), 'Admin User', 'admin'))
+    cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
+                   ('user', _hash_password('user123'), 'Regular User', 'user'))
 
     for cfg_type, svc_name, cfg_name, desc in [
         ('modbus', 'modbus_service', 'modbus_config', 'Modbus pipeline service name'),
@@ -1604,6 +1606,3 @@ if __name__ == '__main__':
     logger.info("\n=== Database Statistics ===")
     for k, v in get_database_stats().items():
         logger.info("{}: {}".format(k, v))
-# Do NOT auto-initialize at module import time!
-# Let ensure_db_initialized() be called explicitly from main.py
-# This prevents premature connection creation and closure

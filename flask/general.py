@@ -364,6 +364,11 @@ def _update_cache_from_datapoint(datapoint_name: str, value):
         if 'wlan' not in network_status_state:
             network_status_state['wlan'] = {}
         network_status_state['wlan'][path['field']] = value
+        # Keep both signal keys in sync (pipeline may send either field name)
+        if path['field'] == 'signal':
+            network_status_state['wlan']['signal_quality'] = value
+        elif path['field'] == 'signal_quality':
+            network_status_state['wlan']['signal'] = value
         
     elif path['type'] == 'lan':
         if 'lan' not in network_status_state:
@@ -392,10 +397,23 @@ def update_network_status_field(datapoint_name: str, value) -> None:
     # Update structured cache
     _update_cache_from_datapoint(datapoint_name, value)
     
+    # Update WiFi signal strength if this is the signal datapoint
+    if datapoint_name == "net.wlan.signal_pct":
+        try:
+            pct = float(value)
+            strength = min(4, int(pct) // 25)
+            update_wifi_signal_strength(strength)
+        except (ValueError, TypeError):
+            pass
+    
     # Rate limit broadcasts for the same datapoint
+    # Static hardware fields (MAC, IMEI, ICCID, IMSI, BSSID) are exempt —
+    # they only change on interface connect/disconnect so must always be sent.
+    _STATIC_FIELDS = {'mac', 'imei', 'iccid', 'imsi', 'bssid'}
+    _field_name = datapoint_name.split('.')[-1]
     now = datetime.datetime.now().timestamp()
     last_time = _last_broadcast_time.get(datapoint_name, 0)
-    if now - last_time < _MIN_BROADCAST_INTERVAL:
+    if _field_name not in _STATIC_FIELDS and now - last_time < _MIN_BROADCAST_INTERVAL:
         return
     
     _last_broadcast_time[datapoint_name] = now
@@ -1388,6 +1406,14 @@ async def sync_time_handler(request):
 async def get_config_handler(request):
     """GET /api/general-configuration"""
     config = get_general_configuration()
+
+    # Update wifi signal strength from latest network status
+    if 'net.wlan.signal_pct' in network_status_state:
+        try:
+            pct = float(network_status_state['net.wlan.signal_pct'])
+            realtime_state['wifi_signal_strength'] = min(4, int(pct) // 25)
+        except (ValueError, TypeError):
+            pass
 
     # Add real-time data to response
     if isinstance(config, dict):
