@@ -818,13 +818,6 @@
         }
 
         detailsHtml += `
-                                <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Status</div>
-                                    <div class="flex items-center">
-                                        <span class="status-dot ${statusStyle.dot} mr-2"></span>
-                                        <span class="text-sm ${statusStyle.text}">${statusStyle.label}</span>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>

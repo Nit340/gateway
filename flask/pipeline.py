@@ -1719,126 +1719,110 @@ async def pipeline_calibration_post_handler(request):
 # LOADCELL -- FILTERS & LEVELS  ->  BUILD + SEND CONFIG
 # ============================================================================
 
-async def send_loadcell_config_now():
-    """Build and send loadcell config purely from DB (no HTTP request body).
-    Used by _do_auto_send. Returns a plain dict, not a web.Response.
-    """
-    logger.info("\n" + "="*70)
-    logger.info("[LC-CFG] Save Filters & Levels  ->  Build  ->  Send")
-    logger.info("=" * 70)
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT id, name, device_path, lc_mode,
-                   poll_ms, resolution_bits, effective_bits, signed, gain, vref,
-                   raw_min, raw_max, capacity_min, capacity_max, unit,
-                   pipeline_server, pipeline_port, log_level,
-                   tare_offset, known_weight, known_weight_raw,
-                   raw_filters, weight_filters, levels
-            FROM loadcell_device LIMIT 1
-        ''')
-        row = cursor.fetchone()
-        conn.close()
+def _build_multi_loadcell_config(device_rows, source="auto_send"):
+    """Internal helper to build a v2 config for ALL enabled devices in device_rows."""
+    new_version = get_next_pipeline_version("loadcell")
 
-        if not row:
-            msg = "No loadcell device configured"
-            logger.info("[LC-CFG] " + msg)
-            return {"success": False, "error": msg}
+    def _parse_json_col(val):
+        if not val: return []
+        if isinstance(val, list): return val
+        try: return json.loads(val)
+        except: return []
 
-        r = dict(row)
+    def _active(arr):
+        return [{"type": f["type"], "parameters": f["parameters"]}
+                for f in arr if f.get("enabled", True)]
 
-        def _parse_json_col(val):
-            if not val:
-                return []
-            if isinstance(val, list):
-                return val
-            try:
-                return json.loads(val)
-            except Exception:
-                return []
-
+    load_cells_list = []
+    for r in device_rows:
+        r = dict(r)
         raw_filters    = _parse_json_col(r.get("raw_filters"))
         weight_filters = _parse_json_col(r.get("weight_filters"))
         levels         = _parse_json_col(r.get("levels"))
-
-        logger.info("[LC-CFG] Device: {} ({})".format(r['name'], r['id']))
-
-        # Guard: do not auto-send if calibration ref_weight is 0.
-        # Wait for a loadcell config received from another pipeline client first.
-        known_weight = r.get("known_weight") or 0
-        if not known_weight or float(known_weight) == 0.0:
-            msg = ("Skipping auto-send: ref_weight is 0 -- "
-                   "waiting for loadcell config from another pipeline client before sending.")
-            logger.info("[LC-CFG] " + msg)
-            return {"success": False, "skipped": True, "error": msg}
-
-        def _active(arr):
-            return [{"type": f["type"], "parameters": f["parameters"]}
-                    for f in arr if f.get("enabled", True)]
 
         active_raw    = _active(raw_filters)
         active_weight = _active(weight_filters)
         active_levels = [{"name": lv["name"], "ratio": lv["ratio"]}
                          for lv in levels if lv.get("enabled", True)]
 
-        new_version = get_next_pipeline_version("loadcell")
-
-        # Always output kg -- normalise capacity and known_weight at build time
-        # in case the DB still has a non-kg unit from an older import.
-        _db_unit     = r.get("unit") or "kg"
+        _db_unit = r.get("unit") or "kg"
         _cap_min_kg, _ = _normalise_to_kg(r.get("capacity_min") or 0,    _db_unit)
         _cap_max_kg, _ = _normalise_to_kg(r.get("capacity_max") or 1000, _db_unit)
         _kw_kg,      _ = _normalise_to_kg(r.get("known_weight") or 0,    _db_unit)
-        if _db_unit != "kg":
-            logger.warning("[LC-CFG] WARNING: DB unit='{}' -- normalising capacity {}/{} and known_weight {} to kg".format(
-                _db_unit, r.get("capacity_min"), r.get("capacity_max"), r.get("known_weight")))
 
-        config = {
-            "version":       2,
-            "send_version":  new_version,
-            "timestamp":     time.time(),
-            "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "source":        "auto_send",
-            "logging": [{"type": "console", "parameters": {"level": r.get("log_level") or "info"}}],
-            "ipc": [{
-                "type": "pipeline", "enabled": True,
+        lc_entry = {
+            "name": r["name"],
+            "device": {
+                "type": "sysfs_hx711",
                 "parameters": {
-                    "server":       r.get("pipeline_server") or "127.0.0.1",
-                    "port":         r.get("pipeline_port") or 7000,
-                    "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
+                    "poll_ms":         r.get("poll_ms") or 10,
+                    "channels":        [{"path": r.get("device_path") or ""}],
+                    "resolution_bits": r.get("resolution_bits") or 24,
+                    "effective_bits":  r.get("effective_bits") or 14,
+                    "signed":          bool(r.get("signed")),
+                    "gain":            r["gain"]    if r["gain"]    is not None else 1,
+                    "vref":            r["vref"]    if r["vref"]    is not None else 5,
+                    "raw_min":         r["raw_min"] if r["raw_min"] is not None else 0,
+                    "raw_max":         r["raw_max"] if r["raw_max"] is not None else 16383,
                 }
-            }],
-            "load_cells": [{
-                "name": r["name"],
-                "device": {
-                    "type": "sysfs_hx711",
-                    "parameters": {
-                        "poll_ms":         r.get("poll_ms") or 10,
-                        "channels":        [{"path": r.get("device_path") or ""}],
-                        "resolution_bits": r.get("resolution_bits") or 24,
-                        "effective_bits":  r.get("effective_bits") or 14,
-                        "signed":          bool(r.get("signed")),
-                        "gain":            r["gain"]    if r["gain"]    is not None else 1,
-                        "vref":            r["vref"]    if r["vref"]    is not None else 5,
-                        "raw_min":         r["raw_min"] if r["raw_min"] is not None else 0,
-                        "raw_max":         r["raw_max"] if r["raw_max"] is not None else 16383,
-                    }
-                },
-                "specifications": {"capacity": {
+            },
+            "specifications": {
+                "capacity": {
                     "min": {"value": _cap_min_kg, "unit": "kg"},
                     "max": {"value": _cap_max_kg, "unit": "kg"},
-                }},
-                "levels":      {"type": "ratio",        "parameters": {"ratios": active_levels}},
-                "tare":        {"type": "manual",        "parameters": {"offset_raw": r.get("tare_offset") or 0.0}},
-                "calibration": {"type": "single_point" if r.get("lc_mode") == "single_ended" else "differential", "parameters": {
-                    "ref_weight": {"value": _kw_kg, "unit": "kg"},
-                    "ref_raw":    r.get("known_weight_raw") or 0.0,
-                }},
-                "filter": {"raw": active_raw, "weight": active_weight}
-            }]
+                }
+            },
+            "levels":      {"type": "ratio", "parameters": {"ratios": active_levels}},
+            "tare":        {"type": "manual", "parameters": {"offset_raw": r.get("tare_offset") or 0.0}},
+            "calibration": {"type": "single_point" if r.get("lc_mode") == "single_ended" else "differential", "parameters": {
+                "ref_weight": {"value": _kw_kg, "unit": "kg"},
+                "ref_raw":    r.get("known_weight_raw") or 0.0,
+            }},
+            "filter": {"raw": active_raw, "weight": active_weight}
         }
+        load_cells_list.append(lc_entry)
+
+    # Use network/ipc settings from the first device in the list
+    first = dict(device_rows[0])
+    return {
+        "version":       2,
+        "send_version":  new_version,
+        "timestamp":     time.time(),
+        "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "source":        source,
+        "logging": [{"type": "console", "parameters": {"level": first.get("log_level") or "info"}}],
+        "ipc": [{
+            "type": "pipeline", "enabled": True,
+            "parameters": {
+                "server":       first.get("pipeline_server") or "127.0.0.1",
+                "port":         first.get("pipeline_port") or 7000,
+                "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
+            }
+        }],
+        "load_cells": load_cells_list
+    }, new_version
+
+async def send_loadcell_config_now():
+    """Build and send loadcell config for ALL enabled devices."""
+    logger.info("\n" + "="*70)
+    logger.info("[LC-CFG] Auto-Send: Building config for all enabled devices")
+    logger.info("=" * 70)
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM loadcell_device WHERE enabled = 1
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            msg = "No enabled loadcell devices found"
+            logger.info("[LC-CFG] " + msg)
+            return {"success": False, "error": msg}
+
+        config, new_version = _build_multi_loadcell_config(rows, source="auto_send")
 
         config_json = json.dumps(config, indent=2)
         logger.info("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
@@ -1948,109 +1932,24 @@ async def pipeline_filters_post_handler(request):
             conn.close()
             return web.json_response({"success": False, "error": "Device not found"})
 
-        cursor.execute('''
-            SELECT id, name, device_path, lc_mode,
-                   poll_ms, resolution_bits, effective_bits, signed, gain, vref,
-                   raw_min, raw_max, capacity_min, capacity_max, unit,
-                   pipeline_server, pipeline_port, log_level,
-                   tare_offset, known_weight, known_weight_raw
-            FROM loadcell_device WHERE id = ?
-        ''', (device_id,))
-        row = cursor.fetchone()
+        # If save_only is requested, we stop here.
+        if body.get("save_only"):
+            return web.json_response({
+                "success":          True,
+                "pipeline_sent":    False,
+                "pipeline_message": "Saved to database only."
+            })
+
+        # Build and send config for ALL enabled devices
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM loadcell_device WHERE enabled = 1")
+        rows = cursor.fetchall()
         conn.close()
 
-        if not row:
-            return web.json_response({"success": False, "error": "Device not found after update"})
+        if not rows:
+            return web.json_response({"success": False, "error": "No enabled devices found for config build."})
 
-        r = dict(row)
-        logger.info("[LC-CFG] Device: {} ({})".format(r['name'], r['id']))
-
-        def _active(arr):
-            return [{"type": f["type"], "parameters": f["parameters"]}
-                    for f in arr if f.get("enabled", True)]
-
-        active_raw    = _active(raw_filters)
-        active_weight = _active(weight_filters)
-        active_levels = [{"name": lv["name"], "ratio": lv["ratio"]}
-                         for lv in levels if lv.get("enabled", True)]
-
-        new_version = get_next_pipeline_version("loadcell")
-
-        # Always output kg -- normalise capacity and known_weight at build time
-        # in case the DB still has a non-kg unit from an older import.
-        _db_unit     = r.get("unit") or "kg"
-        _cap_min_kg, _ = _normalise_to_kg(r.get("capacity_min") or 0,    _db_unit)
-        _cap_max_kg, _ = _normalise_to_kg(r.get("capacity_max") or 1000, _db_unit)
-        _kw_kg,      _ = _normalise_to_kg(r.get("known_weight") or 0,    _db_unit)
-        if _db_unit != "kg":
-            logger.warning("[LC-CFG] WARNING: DB unit='{}' -- normalising capacity {}/{} and known_weight {} to kg".format(
-                _db_unit, r.get("capacity_min"), r.get("capacity_max"), r.get("known_weight")))
-
-        config = {
-            "version":       2,
-            "send_version":  new_version,
-            "timestamp":     time.time(),
-            "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "source":        "web_ui",
-            "logging": [{
-                "type":       "console",
-                "parameters": {"level": r.get("log_level") or "info"}
-            }],
-            "ipc": [{
-                "type":    "pipeline",
-                "enabled": True,
-                "parameters": {
-                    "server":       r.get("pipeline_server") or "127.0.0.1",
-                    "port":         r.get("pipeline_port") or 7000,
-                    "service_name": get_pipeline_service_name("loadcell") or "load_cell_service",
-                }
-            }],
-            "load_cells": [{
-                "name": r["name"],
-                "device": {
-                    "type": "sysfs_hx711",
-                    "parameters": {
-                        "poll_ms":         r.get("poll_ms") or 10,
-                        "channels":        [{"path": r.get("device_path") or ""}],
-                        "resolution_bits": r.get("resolution_bits") or 24,
-                        "effective_bits":  r.get("effective_bits") or 14,
-                        "signed":          bool(r.get("signed")),
-                        "gain":            r["gain"]    if r["gain"]    is not None else 1,
-                        "vref":            r["vref"]    if r["vref"]    is not None else 5,
-                        "raw_min":         r["raw_min"] if r["raw_min"] is not None else 0,
-                        "raw_max":         r["raw_max"] if r["raw_max"] is not None else 16383,
-                    }
-                },
-                "specifications": {
-                    "capacity": {
-                        "min": {"value": _cap_min_kg, "unit": "kg"},
-                        "max": {"value": _cap_max_kg, "unit": "kg"},
-                    }
-                },
-                "levels": {
-                    "type": "ratio",
-                    "parameters": {"ratios": active_levels}
-                },
-                "tare": {
-                    "type": "manual",
-                    "parameters": {"offset_raw": r.get("tare_offset") or 0.0}
-                },
-                "calibration": {
-                    "type": "single_point" if r.get("lc_mode") == "single_ended" else "differential",
-                    "parameters": {
-                        "ref_weight": {
-                            "value": _kw_kg,
-                            "unit":  "kg",
-                        },
-                        "ref_raw": r.get("known_weight_raw") or 0.0,
-                    }
-                },
-                "filter": {
-                    "raw":    active_raw,
-                    "weight": active_weight,
-                }
-            }]
-        }
+        config, new_version = _build_multi_loadcell_config(rows, source="web_ui")
 
         config_json = json.dumps(config, indent=2)
         logger.info("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
@@ -2094,35 +1993,31 @@ async def pipeline_filters_post_handler(request):
                             pipeline_state["loadcell_config_pending"] = None
                         logger.info("[LC-CFG] " + pipeline_message)
 
+                        # Request and subscribe to all datapoints for all devices
                         for lc_entry in config.get("load_cells", []):
-                            dev_dp = lc_entry.get("name")
-                            if dev_dp:
+                            device_name = lc_entry.get("name")
+                            if device_name:
                                 try:
-                                    client.datapoint_update(target_service, dev_dp, '{}')
-                                    logger.info("[LC-CFG] Requested live data for: '{}'".format(dev_dp))
-                                except Exception as pull_e:
-                                    logger.error("[LC-CFG] Live data request error for '{}': {}".format(dev_dp, pull_e))
+                                    client.datapoint_update(target_service, device_name, '{}')
+                                except: pass
 
-                        device_name = r["name"]
-                        mapped_datapoints = [
-                            "loadcells.{}.weight_kg".format(device_name),
-                            "loadcells.{}.raw".format(device_name),
-                            "loadcells.{}.unit".format(device_name),
-                            "loadcells.{}.known_weight_kg".format(device_name),
-                            "loadcells.{}.known_raw".format(device_name),
-                            "loadcells.{}.tared".format(device_name),
-                            "loadcells.{}.calibrated".format(device_name),
-                            "loadcells.{}.capacity".format(device_name),
-                        ]
-                        if hasattr(client, 'subscribe'):
-                            for dp in mapped_datapoints:
-                                try:
-                                    client.subscribe(dp)
-                                    logger.info("[LC-CFG] Subscribed to receive: '{}'".format(dp))
-                                except Exception as sub_e:
-                                    logger.error("[LC-CFG] Subscribe error for '{}': {}".format(dp, sub_e))
-                            with pipeline_state["lock"]:
-                                pipeline_state["subscribed_datapoints"].update(mapped_datapoints)
+                                mapped_datapoints = [
+                                    "loadcells.{}.weight_kg".format(device_name),
+                                    "loadcells.{}.raw".format(device_name),
+                                    "loadcells.{}.unit".format(device_name),
+                                    "loadcells.{}.known_weight_kg".format(device_name),
+                                    "loadcells.{}.known_raw".format(device_name),
+                                    "loadcells.{}.tared".format(device_name),
+                                    "loadcells.{}.calibrated".format(device_name),
+                                    "loadcells.{}.capacity".format(device_name),
+                                ]
+                                if hasattr(client, 'subscribe'):
+                                    for dp in mapped_datapoints:
+                                        try:
+                                            client.subscribe(dp)
+                                        except: pass
+                                    with pipeline_state["lock"]:
+                                        pipeline_state["subscribed_datapoints"].update(mapped_datapoints)
                     else:
                         pipeline_message = "publish_config failed -- queued as pending"
                         record_pipeline_send_failure("loadcell", pipeline_message)

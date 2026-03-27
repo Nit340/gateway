@@ -46,12 +46,25 @@ console.log('general-config.js loaded');
     var isFieldStale = function(datapoint) {
         var ts = _fieldTimestamps[datapoint];
         if (!ts) return true;
-        return (Date.now() - ts) > _FIELD_TIMEOUT;
+        
+        // MAC addresses and IMEI/Serial should have a much longer timeout (1 hour)
+        var timeout = _FIELD_TIMEOUT;
+        if (datapoint.includes('.mac') || datapoint.includes('.imei') || datapoint.includes('.iccid') || datapoint.includes('.imsi')) {
+            timeout = 3600000; // 1 hour
+        }
+        
+        return (Date.now() - ts) > timeout;
     };
     
     var markAllFieldsStale = function() {
-        // Clear all timestamps so next render shows "--" until new data arrives
-        _fieldTimestamps = {};
+        // Clear all timestamps EXCEPT for hardware identifiers that don't change often
+        var newTimestamps = {};
+        for (var dp in _fieldTimestamps) {
+            if (dp.includes('.mac') || dp.includes('.imei') || dp.includes('.iccid') || dp.includes('.imsi') || dp.includes('serial_number')) {
+                newTimestamps[dp] = _fieldTimestamps[dp];
+            }
+        }
+        _fieldTimestamps = newTimestamps;
     };
 
     // =========================================================================
@@ -78,6 +91,51 @@ console.log('general-config.js loaded');
     // =========================================================================
     var _ROUTE_MAP = { auto: 0, eth0: 1, eth1: 2, lte: 3, wifi: 4,
                        ethernet: 1 /* radio value alias */ };
+
+    var showNetworkSwitchingModal = function (newMode) {
+        var modal = el('net-switching-modal');
+        var title = el('net-switching-title');
+        var text  = el('net-switching-text');
+        var progress = el('net-switching-progress');
+        if (!modal) return;
+
+        // Fetch config from server
+        fetch('/api/modals')
+        .then(function(r) { return r.json(); })
+        .then(function(modals) {
+            var cfg = modals.find(function(m) { return m.intname === 'network-load'; }) || 
+                      { modal_text: 'Switching network mode, please wait...' };
+            
+            var duration = 3000; // Hardcoded 3 seconds as requested
+            var message  = cfg.modal_text || 'Switching network mode, please wait...';
+            
+            if (title) title.textContent = 'Switching to ' + newMode.toUpperCase() + '...';
+            if (text) text.textContent = message;
+            
+            modal.classList.remove('hidden');
+            if (progress) {
+                progress.style.width = '0%';
+                setTimeout(function() {
+                    progress.style.transition = 'width ' + duration + 'ms linear';
+                    progress.style.width = '100%';
+                }, 50);
+            }
+            
+            setTimeout(function() {
+                modal.classList.add('hidden');
+                if (progress) {
+                    progress.style.transition = 'none';
+                    progress.style.width = '0%';
+                }
+            }, duration);
+        })
+        .catch(function(e) {
+            console.warn('[NET-MODAL] failed to fetch config:', e);
+            // Fallback
+            modal.classList.remove('hidden');
+            setTimeout(function() { modal.classList.add('hidden'); }, 3000);
+        });
+    };
 
     var sendNetworkRouteSelect = function (routeKey) {
         var val = _ROUTE_MAP[routeKey];
@@ -172,6 +230,7 @@ console.log('general-config.js loaded');
         document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
             r.addEventListener('change', function () {
                 setNetworkMode(this.value);
+                showNetworkSwitchingModal(this.value);
                 // Send pipeline datapoint on radio click
                 // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1
                 var routeKey = this.value === 'ethernet' ? (_selectedEth || 'eth0') : this.value;
@@ -805,6 +864,7 @@ console.log('general-config.js loaded');
             if (!card) return;
             card.addEventListener('click', function () {
                 _setEthCardSelected(iface);
+                showNetworkSwitchingModal(iface);
                 _selectedEth = iface;
                 sendNetworkRouteSelect(iface);  // 1=eth0, 2=eth1 — pipeline datapoint
                 // Persist eth_selected + network_mode to DB immediately so refresh survives
@@ -1170,19 +1230,12 @@ console.log('general-config.js loaded');
         return String(h).padStart(2,'0') + ':' + min;
     };
 
-    // Returns a human-readable string respecting the user's format preference
-    // Use this for notifications and display labels  NOT for <input type="time">
+    // Returns a human-readable string (Strictly 24-hour)
     var formatTimeDisplay = function (hhmm, fmt) {
         if (!hhmm) return '';
-        fmt = fmt || getSelectValue('[name="time-format"]') || '24-hour';
         var parts = hhmm.split(':');
         var h = parseInt(parts[0]) || 0;
         var min = (parts[1] || '00').substring(0, 2);
-        if (fmt === '12-hour') {
-            var ampm = h >= 12 ? 'PM' : 'AM';
-            h = h % 12 || 12;
-            return h + ':' + min + ' ' + ampm;
-        }
         return String(h).padStart(2,'0') + ':' + min;
     };
 
@@ -1216,11 +1269,10 @@ console.log('general-config.js loaded');
         return d; // DD/MM/YYYY
     };
 
-    // Build a formatted time string for the active time-format
-    var _buildTimeStr = function (now, tz, timeFmt) {
-        var h12 = timeFmt === '12-hour';
+    // Build a formatted time string (Strictly 24-hour)
+    var _buildTimeStr = function (now, tz) {
         return now.toLocaleTimeString('en-GB', {
-            timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: h12
+            timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
         });
     };
 
@@ -1229,7 +1281,6 @@ console.log('general-config.js loaded');
         var now     = new Date();
         var tz      = getActiveTimezone();
         var dateFmt = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
-        var timeFmt = getSelectValue('[name="time-format"]') || '24-hour';
 
         var dateEl = document.querySelector('[name="date"]');
         var timeEl = document.querySelector('[name="time"]');
@@ -1239,9 +1290,9 @@ console.log('general-config.js loaded');
             dateEl.value = _buildDateStr(now, tz, dateFmt);
         }
         if (timeEl && document.activeElement !== timeEl) {
-            timeEl.value = _buildTimeStr(now, tz, timeFmt);
-            // Update placeholder to match active format
-            timeEl.placeholder = timeFmt === '12-hour' ? 'HH:MM AM/PM' : 'HH:MM';
+            // Strictly 24-hour HH:MM:SS
+            timeEl.value = _buildTimeStr(now, tz, '24-hour');
+            timeEl.placeholder = 'HH:MM';
         }
 
         // Keep hint in sync
@@ -1255,15 +1306,12 @@ console.log('general-config.js loaded');
         _clockTimer = setInterval(_tickInputs, 1000);
     };
 
-    // When timezone or format dropdowns change: immediately refresh inputs
+    // When timezone changes: immediately refresh inputs
     var onTimezoneChange = function () { _tickInputs(); };
-    var onTimeFormatChange = function () { _tickInputs(); };
 
     var initTimezoneInteraction = function () {
         var tzSel = document.getElementById('timezone-select');
         if (tzSel) tzSel.addEventListener('change', onTimezoneChange);
-        var tfSel = document.querySelector('[name="time-format"]');
-        if (tfSel) tfSel.addEventListener('change', onTimeFormatChange);
         var dfSel = document.querySelector('[name="date-format"]');
         if (dfSel) dfSel.addEventListener('change', _tickInputs);
         startLiveInputs();

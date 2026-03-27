@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Modal Config</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+<link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{--bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;--border:#2e2b28;--border2:#3a3632;--accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;--green:#4ade80;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.slink{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.slink:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.slink.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.slink.active .mat{color:var(--accent);}
+.slink:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.form-group{margin-bottom:16px;}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;}
+input[type=text], input[type=number], textarea{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;padding:10px 12px;outline:none;transition:border-color 0.2s;}
+input:focus, textarea:focus{border-color:var(--accent);}
+.btn-primary{background:var(--accent);color:white;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;transition:transform 0.1s, background 0.2s;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-primary:active{transform:scale(0.98);}
+
+.modal-item{display:flex;flex-direction:column;gap:15px;padding:15px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);margin-bottom:15px;}
+.modal-header{display:flex;justify-content:space-between;align-items:center;}
+.modal-name{font-weight:700;color:var(--accent);font-size:14px;}
+
+::-webkit-scrollbar{width:4px;height:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+</style>
+</head>
+<body>
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon"><span class="mat" style="font-size:20px;color:white;">precision_manufacturing</span></div>
+    <div><div class="logo-name">Univa</div><div class="logo-sub">Admin Panel</div></div>
+  </div>
+  <nav>
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="slink"><span class="mat">dashboard</span>Dashboard</a>
+    <a href="/admin/pipeline" class="slink"><span class="mat">device_hub</span>Pipeline</a>
+    <a href="/admin/database" class="slink"><span class="mat">table_chart</span>Database</a>
+    <a href="/admin/logs" class="slink"><span class="mat">terminal</span>Logs</a>
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="slink active"><span class="mat">settings_overscan</span>Modal Config</a>
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="slink"><span class="mat">manage_accounts</span>Users</a>
+    <a href="/admin/access-control" class="slink"><span class="mat">shield_lock</span>Access Control</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button onclick="doLogout()" class="slink" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);"><span class="mat">logout</span>Logout</button>
+  </div>
+</aside>
+
+<div style="flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;">
+  <header>
+    <span class="mat" style="color:var(--text3);">settings_overscan</span>
+    <h1 class="topbar-title">Modal Configuration</h1>
+  </header>
+
+  <div style="flex:1;overflow-y:auto;padding:25px;">
+    <div style="max-width:800px;margin:0 auto;">
+      <div class="card">
+        <h2 style="font-size:16px;margin-top:0;margin-bottom:20px;">Network Switching Modal Settings</h2>
+        <div id="modalList">
+          <div style="text-align:center;padding:40px;color:var(--text3);">Loading configurations…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadModals() {
+    try {
+        const r = await fetch('/api/admin/modals');
+        if (!r.ok) { if (r.status === 401) window.location.href = '/admin/login'; return; }
+        const data = await r.json();
+        renderModals(data);
+    } catch(e) {
+        console.error(e);
+    }
+}
+
+function renderModals(modals) {
+    const list = document.getElementById('modalList');
+    if (!modals || modals.length === 0) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">No modal configurations found.</div>';
+        return;
+    }
+    
+    list.innerHTML = modals.map(m => `
+        <div class="modal-item" id="item-${m.intname}">
+            <div class="modal-header">
+                <span class="modal-name">${m.intname}</span>
+                <span style="font-size:11px;color:var(--text3);">Internal ID: ${m.intname}</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Loading Message Text</label>
+                <textarea id="text-${m.intname}" rows="3">${m.modal_text || ''}</textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+                <button class="btn-primary" onclick="saveModal('${m.intname}')">Save Configuration</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function saveModal(intname) {
+    const text = document.getElementById(`text-${intname}`).value;
+    
+    try {
+        const r = await fetch('/api/admin/modal', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                intname: intname,
+                modal_text: text
+            })
+        });
+        const res = await r.json();
+        if (res.success) {
+            alert('Settings saved successfully');
+        } else {
+            alert('Error: ' + (res.error || 'Unknown error'));
+        }
+    } catch(e) {
+        alert('Failed to save: ' + e);
+    }
+}
+
+async function doLogout() { await fetch('/admin/logout'); window.location.href = '/admin/login'; }
+
+loadModals();
+</script>
+</body>
+</html>

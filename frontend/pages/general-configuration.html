@@ -363,10 +363,11 @@
                 <!-- Time Format -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Time Format</label>
-                    <select name="time-format" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                        <option value="24-hour">24-Hour (14:30)</option>
-                        <option value="12-hour">12-Hour (2:30 PM)</option>
-                    </select>
+                    <div class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-50 text-slate-600 flex items-center justify-between">
+                        <span>24-Hour Format (24:00)</span>
+                        <i class="fa-solid fa-lock text-[10px] text-slate-400"></i>
+                    </div>
+                    <input type="hidden" name="time-format" value="24-hour">
                 </div>
 
                 <!-- Manual Time: inputs auto-update from selected timezone + format -->
@@ -662,6 +663,35 @@
         </div>
         <div class="text-lg font-semibold text-slate-800" id="gc-loader-main">Processing</div>
         <div class="text-sm text-slate-500 mt-1 text-center" id="gc-loader-sub">Please wait while settings are applied...</div>
+    </div>
+</div>
+
+<!-- Network Switching Modal -->
+<div id="net-switching-modal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden transform transition-all">
+            <div class="p-8 text-center" id="net-switching-content">
+                <!-- Loading Animation -->
+                <div class="mb-6 flex justify-center">
+                    <div class="relative w-20 h-20">
+                        <div class="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                        <div class="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <div class="absolute inset-4 bg-blue-50 rounded-full flex items-center justify-center">
+                            <i class="fa-solid fa-network-wired text-primary text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 id="net-switching-title" class="text-xl font-bold text-slate-900 mb-2">Switching Network...</h3>
+                <p id="net-switching-text" class="text-slate-500 text-sm">Please wait while we reconfigure your connection.</p>
+                
+                <!-- Progress bar -->
+                <div class="mt-8 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div id="net-switching-progress" class="bg-primary h-full w-0 transition-all duration-300 ease-linear"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

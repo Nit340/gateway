@@ -20,6 +20,7 @@ def register_cloud_routes(app):
     app.router.add_delete('/api/cloud-integration/connections/{id}/tags/{tag}',   _remove_tag)
     app.router.add_get   ('/api/cloud-integration/available-tags',                _available_tags)
     app.router.add_put   ('/api/cloud-integration/save-config',                   _save_all)
+    app.router.add_get   ('/api/cloud-integration/metadata-tags',                 _metadata_tags)
     app.router.add_post  ('/api/cloud-integration/send-iot-config',                _send_iot_config)
 
 # --- TYPE DEFAULTS ------------------------------------------------------------
@@ -223,6 +224,15 @@ async def _available_tags(req):
         return _ok({'tags': tags, 'total': len(tags)})
     except Exception as e:
         return _err(str(e), 500)
+    
+async def _metadata_tags(req):
+    try:
+        db = get_db_connection(); cur = db.cursor()
+        cur.execute('SELECT name, datatype, source, component FROM metadata ORDER BY name')
+        tags = [{'name':r[0], 'dtype':r[1], 'source':r[2], 'component':r[3]} for r in cur.fetchall()]
+        db.close()
+        return _ok({'tags': tags, 'total': len(tags)})
+    except Exception as e: return _err(str(e), 500)
 
 async def _save_all(req):
     try:
@@ -339,8 +349,8 @@ def build_iot_gateway_config():
             'password':      cfg.get('password', ''),
             'keepalive_sec': int(cfg.get('keepalive_sec', 60)),
             'channels': {
-                'publish':   [raw_pub[0]] if raw_pub else [],
-                'subscribe': [raw_sub[0]] if raw_sub else [],
+                'publish':   raw_pub,
+                'subscribe': raw_sub,
             },
         }
         if cfg.get('secure_token'):
@@ -348,11 +358,12 @@ def build_iot_gateway_config():
 
         servers[server_key] = server_entry
 
-        # heartbeat.channel = the 'name' field of publish channel[0]
-        # e.g. {"topic":"default_pubtopic_cms","name":"receive",...} -> "receive"
-        # applies to whichever connection is configured (mqtt or mqtt_cloud)
+        # heartbeat.channel = the 'name' of the default publish channel
+        # Use the first available if no default marked, but prioritize the 'mqtt' server
         if raw_pub:
-            heartbeat_channel = raw_pub[0].get('name', 'default_publish')
+            def_ch = _get_default_channel_for_connection(cfg)
+            if server_key == 'mqtt' or heartbeat_channel == 'default_publish':
+                heartbeat_channel = def_ch
 
         # Collect mappings   groups pass through as-is;
         # individual tags each become their own mapping entry.

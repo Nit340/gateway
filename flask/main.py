@@ -437,6 +437,10 @@ async def webui_login_api(request):
         else:
             return web.json_response({'success': False, 'error': 'Session limit reached. Cannot allow more concurrent view-only sessions.'}, status=403)
 
+    # Enforce global session limit (max 2 sessions total across all users)
+    if len(WEBUI_SESSIONS) >= 2:
+        return web.json_response({'success': False, 'error': 'Global session limit reached (max 2). Please wait for another user to log out.'}, status=403)
+
     token = binascii.hexlify(os.urandom(32)).decode()
     WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.now(_dt.timezone.utc).isoformat(), 'token': token, 'last_ping': time.time()}
     if user['username'] not in WEBUI_USER_TOKENS:
@@ -513,11 +517,19 @@ async def webui_session_role(request):
     info = WEBUI_SESSIONS[token]
     username = info['username'] if isinstance(info, dict) else info
 
-    # The first token in the list for this user is the editor
-    user_tokens = WEBUI_USER_TOKENS.get(username, [])
-    # Filter to only tokens still active in WEBUI_SESSIONS
-    active_tokens = [t for t in user_tokens if t in WEBUI_SESSIONS]
-    role = 'editor' if (active_tokens and active_tokens[0] == token) else 'viewer'
+    # Global Editor: The oldest active session across ALL users is the editor.
+    # Filter WEBUI_SESSIONS to find the one with the earliest 'logged_in_at'
+    all_active = []
+    for t, s in WEBUI_SESSIONS.items():
+        if isinstance(s, dict) and 'logged_in_at' in s:
+            all_active.append((t, s['logged_in_at']))
+        else:
+            # Fallback for old session format if any
+            all_active.append((t, '9999-12-31'))
+    
+    # Sort by logged_in_at
+    all_active.sort(key=lambda x: x[1])
+    role = 'editor' if (all_active and all_active[0][0] == token) else 'viewer'
 
     # Fetch DB-level role ('admin' or 'user')
     try:
@@ -532,6 +544,36 @@ async def webui_session_role(request):
         user_role = 'user'
 
     return web.json_response({'authenticated': True, 'username': username, 'role': role, 'user_role': user_role})
+
+
+async def api_modals_get(request):
+    """GET /api/admin/modals -- Admin only"""
+    _require_admin(request)
+    import database as _db
+    return web.json_response(_db.get_all_modal_configs())
+
+
+async def api_modals_get_public(request):
+    """GET /api/modals -- Public (or WebUI authenticated) access to modal configs"""
+    import database as _db
+    return web.json_response(_db.get_all_modal_configs())
+
+
+async def api_modal_post(request):
+    """POST /api/admin/modal"""
+    _require_admin(request)
+    import database as _db
+    try:
+        body = await request.json()
+        intname = body.get('intname')
+        modal_text = body.get('modal_text', '')
+        if not intname:
+            return web.json_response({'success': False, 'error': 'intname is required'}, status=400)
+        
+        success = _db.save_modal_config(intname, modal_text)
+        return web.json_response({'success': success})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
 
 
 async def database_viewer_handler(request):
@@ -1197,6 +1239,16 @@ def create_app():
         _require_admin(request)
         return _html('logs.html')
     app.router.add_get('/admin/logs', _logs_page)
+
+    async def _modal_page(request):
+        _require_admin(request)
+        return _html('modal.html')
+    app.router.add_get('/admin/modal', _modal_page)
+
+    # API for modal configs
+    app.router.add_get('/api/admin/modals', api_modals_get)
+    app.router.add_get('/api/modals',       api_modals_get_public)
+    app.router.add_post('/api/admin/modal', api_modal_post)
 
     # ---------------------------------------------------------------------------
     # Static assets served from admin_ui/public/

@@ -35,20 +35,25 @@
                 return;
             }
 
-            // If >1 device, show the selector dropdown
-            if (allDevices.length > 1 && selectorWrap && selector) {
-                selector.innerHTML = '';
-                allDevices.forEach(function(dev) {
-                    var opt = document.createElement('option');
-                    opt.value = dev.id || dev.name;
-                    opt.textContent = dev.name;
-                    selector.appendChild(opt);
-                });
-                selectorWrap.style.display = '';
-                selector.removeEventListener('change', onDeviceSelectorChange);
-                selector.addEventListener('change', onDeviceSelectorChange);
+            // If >1 device, show the selector dropdown and the "Save to Database" button
+            var saveDbBtn = el('lc-save-db-btn');
+            if (allDevices.length > 1) {
+                if (selectorWrap && selector) {
+                    selector.innerHTML = '';
+                    allDevices.forEach(function(dev) {
+                        var opt = document.createElement('option');
+                        opt.value = dev.id || dev.name;
+                        opt.textContent = dev.name;
+                        selector.appendChild(opt);
+                    });
+                    selectorWrap.style.display = '';
+                    selector.removeEventListener('change', onDeviceSelectorChange);
+                    selector.addEventListener('change', onDeviceSelectorChange);
+                }
+                if (saveDbBtn) saveDbBtn.style.display = '';
             } else {
                 if (selectorWrap) selectorWrap.style.display = 'none';
+                if (saveDbBtn) saveDbBtn.style.display = 'none';
             }
 
             // Select the first device
@@ -389,23 +394,27 @@
         return { rawFilters: rawFilters, weightFilters: weightFilters, levels: levels };
     }
 
-    // ---- Save filters (no pipeline needed) ----
-    window.saveLoadcellFilters = function() {
+    // ---- Save filters (no pipeline needed if saveOnly=true) ----
+    window.saveLoadcellFilters = function(saveOnly) {
         if (!selectedDevice) {
             var s = document.getElementById('lc-filter-status');
             if (s) s.textContent = 'No device loaded.';
             return;
         }
         var s = document.getElementById('lc-filter-status');
-        var saveBtn = document.getElementById('lc-save-filters-btn');
+        var sendBtn = document.getElementById('lc-save-filters-btn');
+        var saveBtn = document.getElementById('lc-save-db-btn');
 
-        // Update button to show "Send to Pipeline"
-        var origBtnHTML = saveBtn ? saveBtn.innerHTML : null;
-        if (saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sending to Pipeline…';
+        var activeBtn = saveOnly ? saveBtn : sendBtn;
+        var origBtnHTML = activeBtn ? activeBtn.innerHTML : null;
+
+        if (activeBtn) {
+            activeBtn.disabled = true;
+            activeBtn.innerHTML = saveOnly
+                ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Saving…'
+                : '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sending to the loadcell…';
         }
-        if (s) s.textContent = 'Saving…';
+        if (s) s.textContent = saveOnly ? 'Saving…' : 'Sending to the loadcell…';
 
         var built = buildFiltersFromUI();
 
@@ -417,7 +426,8 @@
                 device_id:      selectedDevice.id,
                 raw_filters:    built.rawFilters,
                 weight_filters: built.weightFilters,
-                levels:         built.levels
+                levels:         built.levels,
+                save_only:      !!saveOnly
             })
         })
         .then(function(r) { return r.json(); })
@@ -428,51 +438,52 @@
                 selectedDevice.levels         = built.levels;
 
                 if (data.pipeline_sent) {
-                    var _unitLabel = selectedDevice.unit ? ' [' + selectedDevice.unit + ']' : '';
                     if (s) {
-                        s.textContent = '✓ ' + selectedDevice.name + _unitLabel + ' — sent to pipeline (' + (data.target_service || 'service') + ')';
+                        s.textContent = '✓ Sent';
                         s.style.color = '#16a34a';
                     }
-                    if (saveBtn) {
-                        saveBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Sent to Pipeline';
-                        saveBtn.style.background = '#16a34a';
-                        saveBtn.style.color = 'white';
+                    if (activeBtn) {
+                        activeBtn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Sent';
+                        activeBtn.style.background = '#16a34a';
+                        activeBtn.style.color = 'white';
                     }
                 } else {
-                    // Saved to DB but pipeline not connected — config is queued
+                    // Saved to DB (and successfully or queued for pipeline)
                     var isQueued = data.pipeline_message && data.pipeline_message.indexOf('pending') !== -1;
                     if (s) {
-                        s.textContent = isQueued
-                            ? '⏳ Queued — will configure Load Cell when pipeline is available'
-                            : '✓ Saved' + (data.pipeline_message ? ' — ' + data.pipeline_message : '');
-                        s.style.color = isQueued ? '#d97706' : '#16a34a';
+                        s.textContent = (isQueued && !saveOnly) ? '⏳ Queued' : '✓ Saved';
+                        s.style.color = (isQueued && !saveOnly) ? '#d97706' : '#16a34a';
                     }
-                    if (saveBtn) {
-                        saveBtn.innerHTML = isQueued
+                    if (activeBtn) {
+                        activeBtn.innerHTML = (isQueued && !saveOnly)
                             ? '<i class="fa-solid fa-clock mr-1"></i> Queued'
                             : '<i class="fa-solid fa-check mr-1"></i> Saved';
+                        if (!isQueued || saveOnly) {
+                             activeBtn.style.background = '#16a34a';
+                             activeBtn.style.color = 'white';
+                        }
                     }
                 }
             } else {
                 if (s) { s.textContent = '✗ Error: ' + (data.error || 'unknown'); s.style.color = '#dc2626'; }
-                if (saveBtn) saveBtn.innerHTML = origBtnHTML || 'Configure Load Cell';
+                if (activeBtn) activeBtn.innerHTML = origBtnHTML;
             }
             // Restore button after delay
             setTimeout(function() {
                 if (s) { s.textContent = ''; s.style.color = ''; }
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = origBtnHTML || 'Configure Load Cell';
-                    saveBtn.style.background = '';
-                    saveBtn.style.color = '';
+                if (activeBtn) {
+                    activeBtn.disabled = false;
+                    activeBtn.innerHTML = origBtnHTML;
+                    activeBtn.style.background = '';
+                    activeBtn.style.color = '';
                 }
-            }, 5000);
+            }, 3000);
         })
         .catch(function(e) {
             if (s) { s.textContent = '✗ ' + e.message; s.style.color = '#dc2626'; }
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = origBtnHTML || 'Configure Load Cell';
+            if (activeBtn) {
+                activeBtn.disabled = false;
+                activeBtn.innerHTML = origBtnHTML;
             }
         });
     };

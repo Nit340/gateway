@@ -6,6 +6,8 @@ let _connections  = [];
 let _selectedId   = null;
 let _selectedType = null;
 let _availTags    = [];
+let _metadataTags = [];
+let _currentTagsTab = 'system';
 
 // --- ENTRY --------------------------------------------------------------------
 window.initMqttCloud = async function () {
@@ -182,6 +184,7 @@ function _renderPublishChannels(list) {
         return;
     }
     list.forEach((ch, idx) => {
+        const isDefault = ch.default || (list.length === 1);
         const tr = document.createElement('tr');
         tr.className = 'border-t border-slate-100';
         tr.dataset.idx = idx;
@@ -196,7 +199,7 @@ function _renderPublishChannels(list) {
             </select>
           </td>
           <td class="p-2 text-center"><input type="checkbox" class="ch-retain" ${ch.retain?'checked':''}></td>
-          <td class="p-2 text-center"><input type="radio" name="pub-default" class="ch-default" value="${idx}" ${ch.default?'checked':''}></td>
+          <td class="p-2 text-center"><input type="radio" name="pub-default" class="ch-default" value="${idx}" ${isDefault?'checked':''}></td>
           <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
     });
@@ -212,6 +215,7 @@ function _renderSubscribeChannels(list) {
         return;
     }
     list.forEach((ch, idx) => {
+        const isDefault = ch.default || (list.length === 1);
         const tr = document.createElement('tr');
         tr.className = 'border-t border-slate-100';
         tr.dataset.idx = idx;
@@ -225,7 +229,7 @@ function _renderSubscribeChannels(list) {
               <option value="2" ${ch.qos===2?'selected':''}>2</option>
             </select>
           </td>
-          <td class="p-2 text-center"><input type="radio" name="sub-default" class="sch-default" value="${idx}" ${ch.default?'checked':''}></td>
+          <td class="p-2 text-center"><input type="radio" name="sub-default" class="sch-default" value="${idx}" ${isDefault?'checked':''}></td>
           <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
     });
@@ -250,7 +254,7 @@ window._addPublishChannel = function () {
         </select>
       </td>
       <td class="p-2 text-center"><input type="checkbox" class="ch-retain"></td>
-      <td class="p-2 text-center"><input type="radio" name="pub-default" class="ch-default" value="${idx}"></td>
+      <td class="p-2 text-center"><input type="radio" name="pub-default" class="ch-default" value="${idx}" ${idx===0?'checked':''}></td>
       <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
     tbody.appendChild(tr);
 };
@@ -272,7 +276,7 @@ window._addSubscribeChannel = function () {
           <option value="0" selected>0</option><option value="1">1</option><option value="2">2</option>
         </select>
       </td>
-      <td class="p-2 text-center"><input type="radio" name="sub-default" class="sch-default" value="${idx}"></td>
+      <td class="p-2 text-center"><input type="radio" name="sub-default" class="sch-default" value="${idx}" ${idx===0?'checked':''}></td>
       <td class="p-2"><button class="text-red-500 hover:text-red-700 text-xs" onclick="this.closest('tr').remove()"><i class="fa-solid fa-trash"></i></button></td>`;
     tbody.appendChild(tr);
 };
@@ -351,13 +355,15 @@ function _renderMappingsTable(conn) {
                                     style="min-width:160px"
                                     data-conn="${_esc(conn.id)}" data-group-idx="${idx}"
                                     onchange="window._updateGroupChannel('${_esc(conn.id)}', ${idx}, this.value)">
-                                <option value="">⚙️ default channel</option>
+                                ${!pubChannelOptions.length ? '' : `
+                                <option value=""></option>
                                 ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `<optgroup label="📤 Publish">` : ''}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>↗️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="📥 Subscribe">` : ''}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${currentChannel === ch.name ? 'selected' : ''}>↙️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                                 ${pubChannelOptions.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
+                                `}
                                 ${currentChannel && !pubChannelOptions.find(c => c.name === currentChannel)
                                     ? `<option value="${_esc(currentChannel)}" selected>📌 ${_esc(currentChannel)}</option>` : ''}
                             </select>
@@ -477,13 +483,15 @@ function _renderMappingsTable(conn) {
                 <td class="p-2">
                     <select class="compact-select text-xs tag-channel" data-mapping-idx="${item.mappingIdx}"
                             onchange="window._updateIndividualChannel('${_esc(conn.id)}', ${item.mappingIdx}, '${_esc(item.name)}', this.value)">
-                        <option value="">⚙️ default</option>
+                        ${!pubChannelOptionsInd.length ? '' : `
+                        <option value=""></option>
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `<optgroup label="📤 Publish">` : ''}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>↗️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'publish').length ? `</optgroup>` : ''}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `<optgroup label="📥 Subscribe">` : ''}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').map(ch => `<option value="${_esc(ch.name)}" ${item.channel === ch.name ? 'selected' : ''}>↙️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`).join('')}
                         ${pubChannelOptionsInd.filter(ch => ch.dir === 'subscribe').length ? `</optgroup>` : ''}
+                        `}
                         ${item.channel && !pubChannelOptionsInd.find(c => c.name === item.channel)
                             ? `<option value="${_esc(item.channel)}" selected>📌 ${_esc(item.channel)}</option>` : ''}
                     </select>
@@ -530,13 +538,15 @@ function _getAllChannelOptions() {
     document.querySelectorAll('#publish-channels-table tr[data-idx]').forEach(tr => {
         const name = tr.querySelector('.ch-name')?.value.trim();
         const topic = tr.querySelector('.ch-topic')?.value.trim();
-        if (name) options.push({ name, topic: topic || '', dir: 'publish' });
+        const isDef = tr.querySelector('.ch-default')?.checked;
+        if (name) options.push({ name, topic: topic || '', dir: 'publish', isDefault: isDef });
     });
     // Subscribe channels
     document.querySelectorAll('#subscribe-channels-table tr[data-idx]').forEach(tr => {
         const name = tr.querySelector('.sch-name')?.value.trim();
         const topic = tr.querySelector('.sch-topic')?.value.trim();
-        if (name) options.push({ name, topic: topic || '', dir: 'subscribe' });
+        const isDef = tr.querySelector('.sch-default')?.checked;
+        if (name) options.push({ name, topic: topic || '', dir: 'subscribe', isDefault: isDef });
     });
     // Fallback to in-memory if tables not rendered yet
     if (!options.length && _selectedId) {
@@ -805,10 +815,6 @@ function _wireAddTagsBtn(conn) {
         const el = _el(id);
         if (el) el.value = [...crypto.getRandomValues(new Uint8Array(12))].map(b=>'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b%72]).join('');
     };
-
-    // Expose custom-tag modal opener so mqtt-form.html button can call it
-    window.mqttFormLogic = window.mqttFormLogic || {};
-    window.mqttFormLogic.openCustomTagModal = () => _openCustomTagModal(conn);
 }
 
 // --- SAVE: MQTT CONNECTION ----------------------------------------------------
@@ -1026,141 +1032,22 @@ window._editGroupName = async function(connId, groupVisualIdx, currentAlias) {
     } catch { _toast('Rename failed', 'error'); }
 };
 
-// --- CUSTOM TAG MODAL ---------------------------------------------------------
-// Opens a small modal to type a free-form tag name and add it as an individual mapping.
-function _openCustomTagModal(conn) {
-    // Remove any stale instance
-    const stale = _el('customTagModal');
-    if (stale) stale.remove();
-
-    const chOptions = _getPublishChannelOptions();
-    const chOptHtml = [
-        '<option value="">default channel</option>',
-        ...chOptions.filter(ch => ch.dir === 'publish').map(ch =>
-            `<option value="${_esc(ch.name)}">⬆ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`),
-        ...chOptions.filter(ch => ch.dir === 'subscribe').map(ch =>
-            `<option value="${_esc(ch.name)}">⬇ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')' : ''}</option>`),
-    ].join('');
-
-    const modal = document.createElement('div');
-    modal.id = 'customTagModal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px);';
-    modal.innerHTML = `
-        <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:420px;margin:0 16px;overflow:hidden;">
-            <!-- Header -->
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #E2E8F0;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <i class="fa-solid fa-wand-magic-sparkles" style="color:#8B5CF6;"></i>
-                    <span style="font-weight:600;font-size:14px;color:#1E293B;">Custom Tag</span>
-                </div>
-                <button id="closeCustomTagModal" style="background:none;border:none;cursor:pointer;color:#94A3B8;font-size:17px;line-height:1;">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-
-            <!-- Body -->
-            <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
-                <p style="font-size:12px;color:#64748B;margin:0;">
-                    Define a tag with any name you choose. It will be added as an individual mapping.
-                </p>
-
-                <!-- Tag name -->
-                <div>
-                    <label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:5px;">
-                        <i class="fa-solid fa-tag" style="color:#8B5CF6;margin-right:4px;"></i>Tag Name <span style="color:#F87171;">*</span>
-                    </label>
-                    <input id="customTagName" type="text" class="compact-input"
-                           style="width:100%;box-sizing:border-box;"
-                           placeholder="e.g. crane.load.weight, custom_sensor_01">
-                </div>
-
-                <!-- Data type -->
-                <div>
-                    <label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:5px;">
-                        <i class="fa-solid fa-code" style="color:#94A3B8;margin-right:4px;"></i>Data Type
-                    </label>
-                    <select id="customTagDtype" class="compact-select" style="width:100%;box-sizing:border-box;">
-                        <option value="float" selected>float</option>
-                        <option value="int">int</option>
-                        <option value="string">string</option>
-                        <option value="bool">bool</option>
-                    </select>
-                </div>
-
-                <!-- Channel -->
-                <div>
-                    <label style="display:block;font-size:12px;font-weight:500;color:#475569;margin-bottom:5px;">
-                        <i class="fa-solid fa-broadcast-tower" style="color:#94A3B8;margin-right:4px;"></i>Channel
-                    </label>
-                    <select id="customTagChannel" class="compact-select" style="width:100%;box-sizing:border-box;">${chOptHtml}</select>
-                </div>
-            </div>
-
-            <!-- Footer -->
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:12px 18px;border-top:1px solid #E2E8F0;background:#F8FAFC;">
-                <button id="cancelCustomTag" class="compact-button" style="border:1px solid #CBD5E1;color:#475569;background:#fff;">
-                    Cancel
-                </button>
-                <button id="confirmCustomTag" class="compact-button" style="background:#8B5CF6;color:#fff;">
-                    <i class="fa-solid fa-plus" style="margin-right:4px;"></i> Add Tag
-                </button>
-            </div>
-        </div>`;
-
-    document.body.appendChild(modal);
-
-    // Focus the input
-    setTimeout(() => _el('customTagName')?.focus(), 50);
-
-    const close = () => { modal.remove(); document.body.style.overflow = ''; };
-
-    _el('closeCustomTagModal').onclick = close;
-    _el('cancelCustomTag').onclick     = close;
-    modal.addEventListener('click', e => { if (e.target === modal) close(); });
-    document.addEventListener('keydown', function _esc_handler(e) {
-        if (e.key === 'Escape') { close(); document.removeEventListener('keydown', _esc_handler); }
-    });
-
-    _el('confirmCustomTag').onclick = async () => {
-        const tagName = (_el('customTagName')?.value || '').trim();
-        if (!tagName) {
-            _el('customTagName').style.borderColor = '#F87171';
-            _el('customTagName').focus();
-            return;
-        }
-        const dtype   = _el('customTagDtype')?.value  || 'float';
-        const channel = _el('customTagChannel')?.value || '';
-
-        const existingMappings = (_connections.find(c => c.id === conn.id)?.config?.mappings) || [];
-        const newEntry = { datapoints: { [dtype]: [tagName] } };
-        if (channel) newEntry.channel = channel;
-        const newMappings = [...existingMappings, newEntry];
-
-        const btn = _el('confirmCustomTag');
-        _setLoading(btn, true);
-        try {
-            await _api('PUT', `${API}/connections/${conn.id}`, { config: { mappings: newMappings } });
-            close();
-            await _selectConnection(conn.id);
-            _toast(`Custom tag "${tagName}" added`, 'success');
-        } catch {
-            _toast('Failed to add custom tag', 'error');
-        } finally {
-            _setLoading(btn, false);
-        }
-    };
-}
 
 // --- ADD TAGS MODAL -----------------------------------------------------------
 async function _openTagsModal(conn) {
     _showM('addTagsModal');
+    _currentTagsTab = 'system';
     _el('tagsSelectedCount').textContent = '0';
     _el('tagsModalBody').innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading tags...</td></tr>';
+    
+    // Reset tabs
+    _el('tags-tab-system').className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-blue-600 text-blue-600 transition-all';
+    _el('tags-tab-metadata').className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all';
 
     // Inject mode controls (group vs individual) + channel select
     const chOptions = _getPublishChannelOptions();
-    const chOptHtml = [
-        '<option value="">⚙️ default channel</option>',
+    const chOptHtml = !chOptions.length ? '' : [
+        '<option value=""></option>',
         chOptions.filter(ch => ch.dir === 'publish').length ? '<optgroup label="📤 Publish">' : '',
         ...chOptions.filter(ch => ch.dir === 'publish').map(ch =>
             `<option value="${_esc(ch.name)}">↗️ ${_esc(ch.name)}${ch.topic ? ' ('+_esc(ch.topic)+')':''}</option>`),
@@ -1233,16 +1120,35 @@ async function _openTagsModal(conn) {
     window._setModalMode('individual');
 
     try {
-        const d = await _api('GET', `${API}/available-tags`);
-        _availTags = d.tags || [];
-        _renderTagsModal(_availTags);
-    } catch { 
-        _el('tagsModalBody').innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400">Failed to load tags</td></tr>'; 
+        const [availData, metaData] = await Promise.all([
+            _api('GET', `${API}/available-tags`),
+            _api('GET', `${API}/metadata-tags`)
+        ]);
+        _availTags = availData.tags || [];
+        _metadataTags = metaData.tags || [];
+        _renderTagsModal();
+    } catch (err) { 
+        console.error(err);
+        _el('tagsModalBody').innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-400">Failed to load tags</td></tr>'; 
     }
 
     _el('tagSearch').oninput = e => {
-        const q = e.target.value.toLowerCase();
-        _renderTagsModal(_availTags.filter(t => t.name.toLowerCase().includes(q) || (t.device||'').toLowerCase().includes(q)));
+        _renderTagsModal();
+    };
+    
+    // Tab switcher
+    window._switchTagsTab = function(tab) {
+        _currentTagsTab = tab;
+        const btnSys = _el('tags-tab-system');
+        const btnMeta = _el('tags-tab-metadata');
+        if (tab === 'system') {
+            btnSys.className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-blue-600 text-blue-600 transition-all';
+            btnMeta.className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all';
+        } else {
+            btnSys.className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all';
+            btnMeta.className = 'px-4 py-2.5 text-xs font-semibold border-b-2 border-blue-600 text-blue-600 transition-all';
+        }
+        _renderTagsModal();
     };
     
     _el('selectAllTags').onchange = e => { 
@@ -1406,48 +1312,59 @@ window._openGroupTagsModal = async function(connId, groupVisualIdx) {
             _setLoading(_el('tagsConfirm'), false);
         }
     };
-};
+}
 
-function _renderTagsModal(tags, disabledNames = new Set()) {
-    const tbody = _el('tagsModalBody');
-    if (!tags.length) { 
-        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">No tags available</td></tr>'; 
-        return; 
+function _renderTagsModal(tagsOverride, existingNames) {
+    const list = _el('tagsModalBody');
+    if (!list) return;
+
+    const q = (_el('tagSearch')?.value || '').toLowerCase();
+    const sourceData = _currentTagsTab === 'system' ? _availTags : _metadataTags;
+    // Use tagsOverride if provided (e.g. from _openGroupTagsModal search), else use sourceData + search input
+    const tags = tagsOverride || sourceData.filter(t => 
+        t.name.toLowerCase().includes(q) || 
+        (t.device||'').toLowerCase().includes(q) || 
+        (t.source||'').toLowerCase().includes(q)
+    );
+
+    if (!tags.length) {
+        list.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">
+            <i class="fa-solid fa-magnifying-glass mb-2 text-2xl opacity-20 block"></i>
+            No tags found matching "${_esc(q)}" in ${_currentTagsTab === 'system' ? 'available tags' : 'metadata'}
+        </td></tr>`;
+        return;
     }
-    tbody.innerHTML = tags.map(t => {
-        const isVirtual  = t.source === 'virtual';
-        const isDisabled = disabledNames.has(t.name);
-        // Determine badge class based on source
-        let sourceBadgeClass = 'http'; // default
-        if (isVirtual) {
-            sourceBadgeClass = 'virtual';
-        } else if (t.source === 'modbus-rtu' || t.source === 'modbus-tcp' || t.source === 'modbus') {
-            sourceBadgeClass = 'mqtt'; // modbus uses mqtt badge style
-        } else if (t.source === 'loadcell') {
-            sourceBadgeClass = 'ftp';
-        }
-        const deviceDisplay = t.device
-            ? (isVirtual
-                ? `<span class="inline-flex items-center gap-1"><i class="fa-solid fa-microchip text-violet-400 text-xs"></i>${_esc(t.device)}</span>`
-                : _esc(t.device))
-            : (isVirtual ? '<span class="text-violet-400 italic text-xs">virtual</span>' : '');
+
+    list.innerHTML = tags.map(t => {
+        const isAdded = existingNames?.has(t.name);
+        const sourceBadge = _currentTagsTab === 'system' 
+            ? `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200 uppercase">${_esc(t.source||'system')}</span>`
+            : `<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-medium border border-blue-200 uppercase">${_esc(t.source||'Univa-gateway')}</span>`;
+
         return `
-      <tr class="border-t border-slate-100 ${isDisabled ? 'opacity-40 bg-slate-50' : 'hover:bg-slate-50'}${isVirtual && !isDisabled ? ' bg-violet-50/30' : ''}">
-        <td class="p-3"><input type="checkbox" class="modal-tag-cb" data-tag="${_esc(t.name)}" data-dtype="${_esc(t.dtype||'float')}" ${isDisabled ? 'disabled' : ''} onchange="window._syncModalTagType(this); window._updateTagCount()"></td>
-        <td class="p-3 font-mono text-sm">${_esc(t.name)}${isDisabled ? ' <span class="text-xs text-slate-400 font-sans italic">already added</span>' : ''}</td>
-        <td class="p-3 text-sm text-slate-600">${deviceDisplay}</td>
-        <td class="p-3 text-sm text-slate-500">${_esc(t.unit||'')}</td>
-        <td class="p-3">
-          <select class="compact-select text-xs modal-tag-type" data-tag="${_esc(t.name)}" ${isDisabled ? 'disabled' : ''}
-                  onchange="this.closest('tr').querySelector('.modal-tag-cb').dataset.dtype = this.value">
-            <option value="int"    ${(t.dtype||'float')==='int'    ?'selected':''}>int</option>
-            <option value="float"  ${(t.dtype||'float')==='float'  ?'selected':''}>float</option>
-            <option value="string" ${(t.dtype||'float')==='string' ?'selected':''}>string</option>
-            <option value="bool"   ${(t.dtype||'float')==='bool'   ?'selected':''}>bool</option>
-          </select>
-        </td>
-        <td class="p-3"><span class="cc-badge ${sourceBadgeClass}">${_esc(t.source)}</span></td>
-      </tr>`;
+            <tr class="hover:bg-slate-50 transition-colors ${isAdded ? 'opacity-50 grayscale bg-slate-50' : ''}">
+                <td class="p-3 text-center">
+                    <input type="checkbox" class="modal-tag-cb" 
+                           data-tag="${_esc(t.name)}" 
+                           data-dtype="${_esc(t.dtype||'float')}"
+                           ${isAdded ? 'disabled' : 'onchange="window._updateTagCount()"'}
+                           ${isAdded ? 'checked' : ''}>
+                </td>
+                <td class="p-3 font-medium text-slate-700">${_esc(t.name)}</td>
+                <td class="p-3 text-slate-500">${_currentTagsTab === 'system' ? _esc(t.device||'-') : '<span class="text-slate-300 italic">N/A</span>'}</td>
+                <td class="p-3 text-slate-500">${_currentTagsTab === 'system' ? _esc(t.unit||'-') : '<span class="text-slate-300 italic">N/A</span>'}</td>
+                <td class="p-3">
+                    <select class="compact-select text-[11px] py-1 h-7" 
+                            onchange="this.closest('tr').querySelector('.modal-tag-cb').dataset.dtype = this.value"
+                            ${isAdded ? 'disabled' : ''}>
+                        <option value="bool"   ${t.dtype==='bool'?'selected':''}>bool</option>
+                        <option value="int"    ${t.dtype==='int'?'selected':''}>int</option>
+                        <option value="float"  ${t.dtype==='float'||!t.dtype?'selected':''}>float</option>
+                        <option value="string" ${t.dtype==='string'?'selected':''}>string</option>
+                    </select>
+                </td>
+                <td class="p-3">${sourceBadge}</td>
+            </tr>`;
     }).join('');
 }
 
@@ -1577,8 +1494,26 @@ function _bindPageListeners() {
     _el('addConnectionBtn')?.addEventListener('click', _openAddModal);
     _el('refreshBtn')?.addEventListener('click', async () => { await _loadConnections(); _toast('Refreshed','success'); });
     _el('footerSaveBtn')?.addEventListener('click', async () => {
-        try { const d = await _api('PUT', `${API}/save-config`, {}); _toast(d.message||'Saved','success'); }
-        catch { _toast('Save failed','error'); }
+        const modal = _el('mqtt-page-loader');
+        if (modal) {
+            modal.style.opacity = '1';
+            modal.style.pointerEvents = 'auto';
+        }
+        try { 
+            const d = await _api('PUT', `${API}/save-config`, {}); 
+            _toast(d.message||'Saved','success'); 
+        }
+        catch { 
+            _toast('Save failed','error'); 
+        } finally {
+            if (modal) {
+                // Keep modal for at least 1.5s for "premium" feel as user requested
+                setTimeout(() => {
+                    modal.style.opacity = '0';
+                    modal.style.pointerEvents = 'none';
+                }, 1500);
+            }
+        }
     });
 
     _el('enabledToggle')?.addEventListener('change', async function () {

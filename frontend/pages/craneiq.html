@@ -246,11 +246,15 @@
                         </div>
                     </div>
 
-                    <!-- Save button -->
+                    <!-- Save/Send buttons -->
                     <div class="flex items-center gap-3 pt-2">
-                        <button onclick="saveLoadcellFilters()"
+                        <button id="lc-save-db-btn" onclick="saveLoadcellFilters(true)" style="display:none;"
+                            class="px-5 py-2 text-sm font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors">
+                            Save
+                        </button>
+                        <button id="lc-save-filters-btn" onclick="saveLoadcellFilters(false)"
                             class="px-5 py-2 text-sm font-semibold rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">
-                            Save Filters &amp; Levels
+                            Send
                         </button>
                         <span id="lc-filter-status" class="text-xs text-slate-400"></span>
                     </div>

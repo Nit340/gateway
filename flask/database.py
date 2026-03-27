@@ -465,7 +465,7 @@ def create_tables(cursor):
             display_name TEXT  DEFAULT '',
             role       TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
             enabled    BOOLEAN DEFAULT 1,
-            max_sessions INTEGER DEFAULT 1,
+            max_sessions INTEGER DEFAULT 2,
             last_login TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -487,8 +487,6 @@ def create_tables(cursor):
             updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-
-    # -----------------------------------------------------------------------
     # Pipeline send log
     # -----------------------------------------------------------------------
     cursor.execute('''
@@ -501,6 +499,34 @@ def create_tables(cursor):
             last_service    TEXT    DEFAULT '',
             last_status     TEXT    DEFAULT 'never',
             last_message    TEXT    DEFAULT ''
+        )
+    ''')
+
+    # -----------------------------------------------------------------------
+    # Modal configuration table
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS modal (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            intname TEXT UNIQUE,
+            modal_text TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_modal_intname ON modal (intname)')
+    
+    # -----------------------------------------------------------------------
+    # Metadata table (Gateway-specific tags)
+    # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS metadata (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL UNIQUE,
+            datatype    TEXT    NOT NULL DEFAULT 'float',
+            source      TEXT    NOT NULL DEFAULT 'Univa-gateway',
+            component   TEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -706,7 +732,7 @@ def _migrate_existing_db(cursor):
     cursor.execute("PRAGMA table_info(webui_users)")
     webui_cols = [r[1] for r in cursor.fetchall()]
     if 'max_sessions' not in webui_cols:
-        cursor.execute('ALTER TABLE webui_users ADD COLUMN max_sessions INTEGER DEFAULT 1')
+        cursor.execute('ALTER TABLE webui_users ADD COLUMN max_sessions INTEGER DEFAULT 2')
 
     # Add lc_mode to loadcell_device
     cursor.execute("PRAGMA table_info(loadcell_device)")
@@ -724,6 +750,22 @@ def _migrate_existing_db(cursor):
     # Add auto_connect to general_configuration (persists Auto-connect toggle state)
     if 'auto_connect' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN auto_connect INTEGER DEFAULT 0")
+
+    # Migration for modal table: remove modal_time column
+    cursor.execute("PRAGMA table_info(modal)")
+    modal_cols = {r[1] for r in cursor.fetchall()}
+    if 'modal_time' in modal_cols:
+        logger.info("[DB] Migration: removing modal_time from modal table")
+        # Since it's a small config table, just drop and let it recreate/reseed
+        cursor.execute("DROP TABLE modal")
+        cursor.execute('''
+            CREATE TABLE modal (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                intname TEXT UNIQUE,
+                modal_text TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
 
 def _create_indexes(cursor):
@@ -770,6 +812,10 @@ def insert_default_data(cursor):
                    ('admin', _hash_password('admin123'), 'admin'))
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('admin', _hash_password('admin'), 'Admin User', 'admin'))
+    
+    # Metadata seed
+    for m in [('Gateway Name', 'string', 'System'), ('Uptime', 'int', 'Performance'), ('CPU Load', 'float', 'Hardware')]:
+        cursor.execute('INSERT OR IGNORE INTO metadata (name, datatype, component) VALUES (?, ?, ?)', m)
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('user', _hash_password('user123'), 'Regular User', 'user'))
 
@@ -791,6 +837,10 @@ def insert_default_data(cursor):
     ]:
         cursor.execute('INSERT OR IGNORE INTO port_config (device_type, port_number, label, port_value) VALUES (?, ?, ?, ?)',
                        (device_type, port_number, label, port_value))
+
+    # Default modals
+    cursor.execute("INSERT OR IGNORE INTO modal (intname, modal_text) VALUES (?, ?)",
+                  ('network-load', 'Switching network mode, please wait...'))
 
 
 # ============================================================================
@@ -1418,6 +1468,52 @@ def save_rule(rule):
     except Exception as e:
         logger.error("save_rule error: {}".format(e))
         return False
+
+
+
+
+def get_modal_config(intname):
+    """Get modal configuration by internal name."""
+    def _query():
+        with get_cursor() as cursor:
+            cursor.execute('SELECT modal_text FROM modal WHERE intname = ?', (intname,))
+            row = cursor.fetchone()
+            if row:
+                return {'modal_text': row[0]}
+            return None
+    try:
+        return execute_with_retry(_query)
+    except Exception:
+        return None
+
+
+def save_modal_config(intname, modal_text):
+    """Save/Update modal configuration."""
+    def _update():
+        with get_cursor() as cursor:
+            cursor.execute('''INSERT INTO modal (intname, modal_text, updated_at)
+                           VALUES (?, ?, CURRENT_TIMESTAMP)
+                           ON CONFLICT(intname) DO UPDATE SET 
+                           modal_text=excluded.modal_text, 
+                           updated_at=excluded.updated_at''', (intname, modal_text))
+        return True
+    try:
+        return execute_with_retry(_update)
+    except Exception:
+        return False
+
+
+def get_all_modal_configs():
+    """Get all modal configurations."""
+    def _query():
+        with get_cursor() as cursor:
+            cursor.execute('SELECT intname, modal_text FROM modal ORDER BY intname')
+            rows = cursor.fetchall()
+            return [{'intname': r[0], 'modal_text': r[1]} for r in rows]
+    try:
+        return execute_with_retry(_query)
+    except Exception:
+        return []
 
 
 def delete_rule(rule_id):
