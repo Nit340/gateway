@@ -4,40 +4,85 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Univa – Admin</title>
-  <link href="/css/tailwind.css" rel="stylesheet"/>
-  <link href="/css/fonts.css" rel="stylesheet"/>
-  <link href="/css/material-icons.css" rel="stylesheet"/>
-  <link href="/css/animations.css" rel="stylesheet"/>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
 <style>
-  * { font-family: 'Inter', sans-serif; }
-  .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
-  .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px; font-size:13px; font-weight:600; color:#78716c; text-decoration:none; transition:all .15s; cursor:pointer; }
-  .sidebar-link:hover { background:#fff7ed; color:#ea580c; }
-  .sidebar-link.active { background:#ea580c; color:white; }
-  .sidebar-link.active .mat { color:white; }
-  .sidebar-link:hover .mat { color:#ea580c; }
-  .sidebar-link.active:hover { background:#c2410c; }
-  ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
+*{box-sizing:border-box;}
+:root{
+  --bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;
+  --border:#2e2b28;--border2:#3a3632;
+  --accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--accent-glow2:rgba(249,115,22,0.08);
+  --text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;
+  --green:#4ade80;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+
+/* SIDEBAR */
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.sidebar-link{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.sidebar-link:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.sidebar-link.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.sidebar-link.active .mat{color:var(--accent);}
+.sidebar-link:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+
+/* TOPBAR */
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+
+/* STAT CARDS */
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+.stat-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+.stat-val{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:var(--text);line-height:1;}
+
+/* QUICK CARDS */
+.quick-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;text-decoration:none;display:block;transition:all .15s;}
+.quick-card:hover{border-color:rgba(249,115,22,0.35);background:rgba(249,115,22,0.04);}
+.quick-card:hover .qc-title{color:var(--accent);}
+.qc-icon{width:44px;height:44px;background:var(--accent-glow);border:1px solid rgba(249,115,22,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;}
+.qc-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;transition:color .15s;}
+.qc-desc{font-size:11.5px;color:var(--text3);line-height:1.5;}
+
+/* DB PATH */
+.dbpath-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+.dbpath-val{font-family:'Inter',monospace;font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:8px;}
+
+/* Online indicator */
+.online-dot{position:relative;display:inline-flex;width:8px;height:8px;}
+.online-dot span:first-child{position:absolute;inset:0;border-radius:50%;background:var(--green);opacity:0.5;animation:ping 1.2s ease-in-out infinite;}
+.online-dot span:last-child{position:relative;width:8px;height:8px;border-radius:50%;background:var(--green);display:block;}
+@keyframes ping{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(2);opacity:0;}}
+
+::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
 </style>
 </head>
-<body class="bg-stone-50 min-h-screen flex">
+<body>
 
 <!-- Sidebar -->
-<aside class="w-60 min-h-screen flex flex-col" style="background:#fffaf7;border-right:1.5px solid #fed7aa;">
-  <!-- Logo -->
-  <div class="px-5 py-6 flex items-center gap-3 border-b" style="border-color:#fed7aa;">
-    <div class="flex h-10 w-10 items-center justify-center rounded-xl" style="background:#f97316;">
-      <span class="mat text-white" style="font-size:22px;">precision_manufacturing</span>
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <span class="mat text-white" style="font-size:20px;color:white;">precision_manufacturing</span>
     </div>
     <div>
-      <div class="text-sm font-extrabold text-stone-800 leading-tight">Univa</div>
-      <div class="text-[10px] text-stone-400 font-semibold uppercase tracking-wider">Admin Panel</div>
+      <div class="logo-name">Univa</div>
+      <div class="logo-sub">Admin Panel</div>
     </div>
   </div>
 
-  <!-- Nav -->
-  <nav class="flex-1 px-3 py-5 space-y-1">
-    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mb-3">Main</div>
+  <nav>
+    <div class="nav-section">Main</div>
     <a href="/admin" class="sidebar-link active" id="nav-dashboard">
       <span class="mat">dashboard</span> Dashboard
     </a>
@@ -51,7 +96,7 @@
       <span class="mat">terminal</span> Logs
     </a>
 
-    <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
+    <div class="nav-section">Users</div>
     <a href="/admin/users" class="sidebar-link" id="nav-users">
       <span class="mat">manage_accounts</span> Users
     </a>
@@ -60,91 +105,89 @@
     </a>
   </nav>
 
-  <!-- User / logout -->
-  <div class="px-3 py-4 border-t" style="border-color:#fed7aa;">
-    <button onclick="logout()" class="sidebar-link w-full text-left hover:bg-red-50 hover:text-red-500 hover:!text-red-500" style="color:#a8a29e;">
+  <div class="sidebar-footer">
+    <button onclick="logout()" class="sidebar-link" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);">
       <span class="mat">logout</span> Logout
     </button>
   </div>
 </aside>
 
-<!-- Main content -->
-<div class="flex-1 flex flex-col min-h-screen">
-  <!-- Top bar -->
-  <header class="h-14 bg-white border-b border-stone-100 flex items-center px-6 gap-4 flex-shrink-0">
-    <h1 class="text-base font-bold text-stone-800 flex-1">Dashboard</h1>
-    <div class="flex items-center gap-2 text-xs font-semibold text-stone-400">
-      <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
+<!-- Main -->
+<div style="flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;">
+  <header>
+    <h1 class="topbar-title">Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--text3);">
+      <span class="online-dot"><span></span><span></span></span>
       Server Online
     </div>
   </header>
 
-  <!-- Content -->
-  <main class="flex-1 p-6 overflow-auto">
-    <!-- Stats -->
-    <div class="grid grid-cols-4 gap-4 mb-6" id="statsGrid">
-      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
-        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Modbus Devices</div>
-        <div class="text-3xl font-extrabold text-stone-800" id="stat-modbus">–</div>
+  <main style="flex:1;padding:22px;overflow:auto;">
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+      <div class="stat-card">
+        <div class="stat-label">Modbus Devices</div>
+        <div class="stat-val" id="stat-modbus">–</div>
       </div>
-      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
-        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Loadcell Devices</div>
-        <div class="text-3xl font-extrabold text-stone-800" id="stat-loadcell">–</div>
+      <div class="stat-card">
+        <div class="stat-label">Loadcell Devices</div>
+        <div class="stat-val" id="stat-loadcell">–</div>
       </div>
-      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
-        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Datapoints</div>
-        <div class="text-3xl font-extrabold text-stone-800" id="stat-datapoints">–</div>
+      <div class="stat-card">
+        <div class="stat-label">Datapoints</div>
+        <div class="stat-val" id="stat-datapoints">–</div>
       </div>
-      <div class="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
-        <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-1">Admin Users</div>
-        <div class="text-3xl font-extrabold text-stone-800" id="stat-users">–</div>
+      <div class="stat-card">
+        <div class="stat-label">Admin Users</div>
+        <div class="stat-val" id="stat-users">–</div>
       </div>
     </div>
 
-    <!-- Quick nav cards -->
-    <div class="grid grid-cols-3 gap-4">
-      <a href="/admin/pipeline" class="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer no-underline">
-        <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-4" style="background:#fff7ed;">
-          <span class="mat" style="font-size:26px;color:#f97316;">device_hub</span>
+    <!-- Quick nav -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+      <a href="/admin/pipeline" class="quick-card">
+        <div class="qc-icon">
+          <span class="mat" style="font-size:22px;color:var(--accent);">device_hub</span>
         </div>
-        <div class="text-sm font-bold text-stone-800 mb-1 group-hover:text-orange-600">Pipeline Controller</div>
-        <div class="text-xs text-stone-400">Manage service targets, send modbus & loadcell configs to pipeline services.</div>
+        <div class="qc-title">Pipeline Controller</div>
+        <div class="qc-desc">Manage service targets, send modbus &amp; loadcell configs to pipeline services.</div>
       </a>
-
-      <a href="/admin/database" class="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer no-underline">
-        <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-4" style="background:#fff7ed;">
-          <span class="mat" style="font-size:26px;color:#f97316;">table_chart</span>
+      <a href="/admin/database" class="quick-card">
+        <div class="qc-icon">
+          <span class="mat" style="font-size:22px;color:var(--accent);">table_chart</span>
         </div>
-        <div class="text-sm font-bold text-stone-800 mb-1 group-hover:text-orange-600">Database Manager</div>
-        <div class="text-xs text-stone-400">Browse, insert, edit and delete records in all database tables.</div>
+        <div class="qc-title">Database Manager</div>
+        <div class="qc-desc">Browse, insert, edit and delete records in all database tables.</div>
       </a>
-
-      <a href="/admin/users" class="bg-white rounded-2xl p-6 border border-stone-100 shadow-sm hover:border-orange-200 hover:shadow-md transition-all group cursor-pointer no-underline">
-        <div class="h-12 w-12 rounded-xl flex items-center justify-center mb-4" style="background:#fff7ed;">
-          <span class="mat" style="font-size:26px;color:#f97316;">manage_accounts</span>
+      <a href="/admin/users" class="quick-card">
+        <div class="qc-icon">
+          <span class="mat" style="font-size:22px;color:var(--accent);">manage_accounts</span>
         </div>
-        <div class="text-sm font-bold text-stone-800 mb-1 group-hover:text-orange-600">User Management</div>
-        <div class="text-xs text-stone-400">Manage admin panel users and WebUI operator accounts.</div>
+        <div class="qc-title">User Management</div>
+        <div class="qc-desc">Manage admin panel users and WebUI operator accounts.</div>
       </a>
     </div>
 
-    <!-- DB path info -->
-    <div class="mt-6 bg-white rounded-2xl border border-stone-100 p-5 shadow-sm">
-      <div class="text-xs font-bold text-stone-400 uppercase tracking-wide mb-2">Database Location</div>
-      <div id="dbPath" class="font-mono text-sm text-stone-700 bg-stone-50 rounded-lg px-3 py-2">Loading…</div>
-      <p class="text-xs text-stone-400 mt-2">Change via <code class="bg-stone-100 px-1 rounded">GATEWAY_DB_FILE</code> environment variable on server startup.</p>
+    <!-- DB path -->
+    <div class="dbpath-card">
+      <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Database Location</div>
+      <div id="dbPath" class="dbpath-val">Loading…</div>
+      <p style="font-size:11px;color:var(--text3);margin-top:8px;">Change via <code style="background:var(--surface3);padding:1px 6px;border-radius:4px;font-size:11px;color:var(--text2);">GATEWAY_DB_FILE</code> environment variable on server startup.</p>
     </div>
+
   </main>
 </div>
 
 <script>
-  // Set active nav
   const path = window.location.pathname;
   document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
   if (path === '/admin' || path === '/admin/') document.getElementById('nav-dashboard').classList.add('active');
   else if (path.includes('/admin/pipeline')) document.getElementById('nav-pipeline').classList.add('active');
   else if (path.includes('/admin/database')) document.getElementById('nav-database').classList.add('active');
   else if (path.includes('/admin/users'))    document.getElementById('nav-users').classList.add('active');
+  else if (path.includes('/admin/logs'))     document.getElementById('nav-logs').classList.add('active');
+  else if (path.includes('/admin/access-control')) document.getElementById('nav-access-control').classList.add('active');
 
   async function logout() {
     await fetch('/admin/logout');
@@ -153,21 +196,12 @@
 
   async function loadStats() {
     try {
-      // Load admin users
-      const [u, t] = await Promise.all([
+      const [u] = await Promise.all([
         fetch('/api/admin/users/admin').then(r=>r.json()),
-        fetch('/api/admin/db/tables').then(r=>r.json())
       ]);
       document.getElementById('stat-users').textContent = (u.users||[]).length;
-      // Load device stats via device API
-      const devs = await fetch('/api/devices').then(r=>r.json()).catch(()=>({devices:[]}));
-      const devices = devs.devices || [];
-      document.getElementById('stat-modbus').textContent    = devices.filter(d=>d.type==='modbus'||d.device_type==='tcp'||d.device_type==='rtu').length;
-      document.getElementById('stat-loadcell').textContent  = devices.filter(d=>d.type==='loadcell').length;
-      const dps = await fetch('/api/datapoints').then(r=>r.json()).catch(()=>({datapoints:[]}));
-      document.getElementById('stat-datapoints').textContent = (dps.datapoints||[]).length;
+
     } catch(e) {}
-    // Show DB path
     document.getElementById('dbPath').textContent = 'Configured on server (see GATEWAY_DB_FILE env var)';
   }
   loadStats();
