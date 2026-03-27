@@ -98,6 +98,63 @@ console.log('general-config.js loaded');
     };
 
     // =========================================================================
+    // UPDATE GLOBAL MAC DISPLAY - shows only the MAC for the selected network mode
+    // =========================================================================
+    var updateGlobalMacDisplay = function() {
+        var mode = getRadioValue('[name="network-mode"]') || 'wifi';
+        
+        // Hide all global MAC rows first
+        var ethRow = el('global-mac-eth-row');
+        var wifiRow = el('global-mac-wifi-row');
+        var lteRow = el('global-mac-lte-row');
+        
+        if (ethRow) ethRow.style.display = 'none';
+        if (wifiRow) wifiRow.style.display = 'none';
+        if (lteRow) lteRow.style.display = 'none';
+        
+        // Show only the one for the selected mode and populate its value
+        if (mode === 'ethernet') {
+            if (ethRow) {
+                ethRow.style.display = '';
+                // Update Ethernet MAC value
+                var e0 = _cache.lan.eth0 || {};
+                var e1 = _cache.lan.eth1 || {};
+                var macValue = '--';
+                if (_selectedEth === 'eth0' && e0.mac && !isFieldStale('net.lan.eth0.mac')) {
+                    macValue = e0.mac.toUpperCase();
+                } else if (_selectedEth === 'eth1' && e1.mac && !isFieldStale('net.lan.eth1.mac')) {
+                    macValue = e1.mac.toUpperCase();
+                } else if (!_selectedEth && isUp(e0.state)) {
+                    macValue = e0.mac ? e0.mac.toUpperCase() : '--';
+                } else if (!_selectedEth && isUp(e1.state)) {
+                    macValue = e1.mac ? e1.mac.toUpperCase() : '--';
+                }
+                if (el('global-mac-eth')) {
+                    el('global-mac-eth').textContent = macValue;
+                }
+            }
+        } else if (mode === 'wifi') {
+            if (wifiRow) {
+                wifiRow.style.display = '';
+                var w = _cache.wlan;
+                var wifiMac = (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac.toUpperCase() : '--';
+                if (el('global-mac-wifi')) {
+                    el('global-mac-wifi').textContent = wifiMac;
+                }
+            }
+        } else if (mode === 'lte') {
+            if (lteRow) {
+                lteRow.style.display = '';
+                var l = _cache.lte;
+                var lteMac = (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--';
+                if (el('global-mac-lte')) {
+                    el('global-mac-lte').textContent = lteMac;
+                }
+            }
+        }
+    };
+
+    // =========================================================================
     // NETWORK MODE TAB
     // =========================================================================
     var setNetworkMode = function (mode) {
@@ -108,6 +165,7 @@ console.log('general-config.js loaded');
         var map = {ethernet:'ethernet-config', wifi:'wifi-config', lte:'cellular-config'};
         var e = el(map[mode]||'wifi-config');
         if (e) e.style.display = 'block';
+        updateGlobalMacDisplay();
     };
 
     var initializeNetworkToggles = function () {
@@ -139,6 +197,7 @@ console.log('general-config.js loaded');
                 .catch(function (e) {
                     console.warn('[NET-MODE] failed to persist network_mode:', e);
                 });
+                updateGlobalMacDisplay();
             });
         });
         document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
@@ -193,6 +252,11 @@ console.log('general-config.js loaded');
                 console.log('[CACHE] Updated LTE.' + field + ' =', value);
             } else if (type === 'wlan' && _cache.wlan) {
                 _cache.wlan[field] = value;
+                if (field === 'signal') {
+                    _cache.wlan.signal_quality = value;
+                } else if (field === 'signal_quality') {
+                    _cache.wlan.signal = value;
+                }
                 console.log('[CACHE] Updated WLAN.' + field + ' =', value);
             } else if (type === 'lan' && _cache.lan) {
                 if (device && _cache.lan[device]) {
@@ -217,6 +281,11 @@ console.log('general-config.js loaded');
                 console.log('[CACHE] Updated LTE.' + field + ' =', value);
             } else if (iface === 'wlan' && _cache.wlan) {
                 _cache.wlan[field] = value;
+                if (field === 'signal') {
+                    _cache.wlan.signal_quality = value;
+                } else if (field === 'signal_quality') {
+                    _cache.wlan.signal = value;
+                }
                 console.log('[CACHE] Updated WLAN.' + field + ' =', value);
             } else if (iface === 'lan' && _cache.lan) {
                 if (parts.length >= 4) {
@@ -287,6 +356,8 @@ console.log('general-config.js loaded');
         } else {
             _setEthCardSelected(null);
         }
+        
+        updateGlobalMacDisplay();
     };
 
     // =========================================================================
@@ -319,17 +390,7 @@ console.log('general-config.js loaded');
         if (isFieldStale('net.lan.eth1.state')) eth1State = null;
         stateBadge('eth1-state-badge', isUp(eth1State));
         
-        if (_selectedEth === 'eth0') {
-            txt('global-mac-eth-label', 'eth0');
-            txt('global-mac-eth', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac.toUpperCase() : '--');
-        } else if (_selectedEth === 'eth1') {
-            txt('global-mac-eth-label', 'eth1');
-            txt('global-mac-eth', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac.toUpperCase() : '--');
-        } else {
-            txt('global-mac-eth-label', 'Auto');
-            txt('global-mac-eth', '--');
-        }
-
+        updateGlobalMacDisplay();
         _autoHighlight();
     };
 
@@ -363,10 +424,12 @@ console.log('general-config.js loaded');
         stateBadge('wifi-state-badge', isUp(state));
         
         // signal_quality is dBm (signed negative number)
-        if (w.signal_quality !== undefined && w.signal_quality !== null && !isFieldStale('net.wlan.signal')) {
-            updateWifiBars(w.signal_quality);
+        var wifiSignal = (w.signal_quality !== undefined && w.signal_quality !== null) ? w.signal_quality : w.signal;
+        var signalStale = isFieldStale('net.wlan.signal') && isFieldStale('net.wlan.signal_quality');
+        if (wifiSignal !== undefined && wifiSignal !== null && !signalStale) {
+            updateWifiBars(wifiSignal);
             var e = el('wifi-signal-dbm');
-            if (e) e.textContent = w.signal_quality + ' dBm';
+            if (e) e.textContent = wifiSignal + ' dBm';
         } else {
             var e = el('wifi-signal-dbm');
             if (e) e.textContent = '--';
@@ -389,8 +452,7 @@ console.log('general-config.js loaded');
             }
         }
         
-        txt('global-mac-wifi', (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac.toUpperCase() : '--');
-
+        updateGlobalMacDisplay();
         _autoHighlight();
     };
 
@@ -734,18 +796,7 @@ console.log('general-config.js loaded');
             }
         });
         
-        // Update MAC display conditionally
-        if (_net && _net.lan) {
-            var e0 = _net.lan.eth0 || {};
-            var e1 = _net.lan.eth1 || {};
-            if (which === 'eth0') {
-                txt('global-mac-eth-label', 'eth0');
-                txt('global-mac-eth', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac.toUpperCase() : '--');
-            } else if (which === 'eth1') {
-                txt('global-mac-eth-label', 'eth1');
-                txt('global-mac-eth', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac.toUpperCase() : '--');
-            }
-        }
+        updateGlobalMacDisplay();
     };
 
     var initEthernetSelectButtons = function () {
@@ -775,6 +826,7 @@ console.log('general-config.js loaded');
                 .catch(function (e) {
                     console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
                 });
+                updateGlobalMacDisplay();
             });
         });
     };
@@ -832,8 +884,7 @@ console.log('general-config.js loaded');
         txt('lte-iccid',         (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
         txt('lte-imsi',          (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
         
-        txt('global-mac-lte',    (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
-
+        updateGlobalMacDisplay();
         _autoHighlight();
     };
 
@@ -1480,6 +1531,7 @@ console.log('general-config.js loaded');
             setInputValue('[name="offline-threshold"]',  cfg.heartbeat.offline_threshold);
         }
         if (cfg.mac_address) { var m=$('[data-mac-address]'); if(m) m.textContent=cfg.mac_address; }
+        updateGlobalMacDisplay();
     };
 
     // =========================================================================

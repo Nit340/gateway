@@ -1029,24 +1029,25 @@ def create_app():
         return session.get('username') if isinstance(session, dict) else session
     _dm_mod._require_webui_session = _require_webui_session_main
 
-    @web.middleware
-    async def security_headers_middleware(request, handler):
-        try:
-            response = await handler(request)
-            if isinstance(response, web.StreamResponse):
-                response.headers['X-Content-Type-Options'] = 'nosniff'
-                response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-                response.headers['X-XSS-Protection'] = '1; mode=block'
-                response.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;"
-            return response
-        except web.HTTPException as ex:
-            ex.headers['X-Content-Type-Options'] = 'nosniff'
-            ex.headers['X-Frame-Options'] = 'SAMEORIGIN'
-            ex.headers['X-XSS-Protection'] = '1; mode=block'
-            ex.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;"
-            raise
+    async def security_headers_middleware_factory(app, handler):
+        async def security_headers_middleware(request):
+            try:
+                response = await handler(request)
+                if isinstance(response, web.StreamResponse):
+                    response.headers['X-Content-Type-Options'] = 'nosniff'
+                    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+                    response.headers['X-XSS-Protection'] = '1; mode=block'
+                    response.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;"
+                return response
+            except web.HTTPException as ex:
+                ex.headers['X-Content-Type-Options'] = 'nosniff'
+                ex.headers['X-Frame-Options'] = 'SAMEORIGIN'
+                ex.headers['X-XSS-Protection'] = '1; mode=block'
+                ex.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:;"
+                raise
+        return security_headers_middleware
 
-    app = web.Application(middlewares=[security_headers_middleware])
+    app = web.Application(middlewares=[security_headers_middleware_factory])
 
     app.router.add_get('/admin/login', admin_login_page)
     app.router.add_post('/admin/login', admin_login_post)
@@ -1196,6 +1197,24 @@ def create_app():
         _require_admin(request)
         return _html('logs.html')
     app.router.add_get('/admin/logs', _logs_page)
+
+    # ---------------------------------------------------------------------------
+    # Static assets served from admin_ui/public/
+    # Structure: public/css/*.css  public/fonts/**/*.woff2
+    # ---------------------------------------------------------------------------
+    _PUBLIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "admin_ui", "public")
+    if os.path.isdir(_PUBLIC_DIR):
+        app.router.add_static("/css",   os.path.join(_PUBLIC_DIR, "css"),   show_index=False, follow_symlinks=True)
+        app.router.add_static("/fonts", os.path.join(_PUBLIC_DIR, "fonts"), show_index=False, follow_symlinks=True)
+
+    # Silence favicon 404
+    async def _favicon(request):
+        _fav = os.path.join(os.path.dirname(os.path.abspath(__file__)), "favicon.ico")
+        if os.path.isfile(_fav):
+            with open(_fav, "rb") as f:
+                return web.Response(body=f.read(), content_type="image/x-icon")
+        return web.Response(status=204)
+    app.router.add_get("/favicon.ico", _favicon)
 
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)

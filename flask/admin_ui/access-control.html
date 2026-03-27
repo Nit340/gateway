@@ -4,9 +4,10 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Univa – Access Control</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+  <link href="/css/tailwind.css" rel="stylesheet"/>
+  <link href="/css/fonts.css" rel="stylesheet"/>
+  <link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/animations.css" rel="stylesheet"/>
 <style>
   * { font-family: 'Inter', sans-serif; }
   .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
@@ -56,6 +57,7 @@
     <a href="/admin"          class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
     <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
     <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <a href="/admin/logs" class="sidebar-link" id="nav-logs"><span class="mat">terminal</span> Logs</a>
     <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
     <a href="/admin/users"          class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
     <a href="/admin/access-control" class="sidebar-link active"><span class="mat">shield_lock</span> Access Control</a>

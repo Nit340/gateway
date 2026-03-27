@@ -4,9 +4,13 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Univa – Users</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+  <link href="/css/tailwind.css" rel="stylesheet"/>
+  <link href="/css/fonts.css" rel="stylesheet"/>
+  <link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/animations.css" rel="stylesheet"/>
+
+
+
 <style>
   * { font-family: 'Inter', sans-serif; }
   .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
@@ -17,7 +21,8 @@
   .sidebar-link:hover .mat { color:#ea580c; }
   input.field, select.field { width:100%; padding:9px 12px; border:1.5px solid #e7e5e4; border-radius:8px; font-size:13px; outline:none; transition:border-color .15s; background:white; }
   input.field:focus, select.field:focus { border-color:#f97316; }
-  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50; display:flex; align-items:center; justify-content:center; }
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50; display:none; align-items:center; justify-content:center; }
+  .modal-bg.open { display:flex; }
   .modal { background:white; border-radius:20px; padding:28px; width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.15); }
   ::-webkit-scrollbar { width:5px; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
   .badge { display:inline-flex; align-items:center; padding:2px 10px; border-radius:99px; font-size:11px; font-weight:700; }
@@ -46,6 +51,7 @@
     <a href="/admin" class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
     <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
     <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <a href="/admin/logs" class="sidebar-link" id="nav-logs"><span class="mat">terminal</span> Logs</a>
     <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
     <a href="/admin/users" class="sidebar-link active"><span class="mat">manage_accounts</span> Users</a>
     <a href="/admin/access-control" class="sidebar-link"><span class="mat">shield_lock</span> Access Control</a>
@@ -127,7 +133,7 @@
 </div>
 
 <!-- Modal -->
-<div id="modal" class="modal-bg hidden" onclick="if(event.target===this)closeModal()">
+<div id="modal" class="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-bold text-stone-800" id="modalTitle">Add User</h2>
@@ -209,7 +215,7 @@
     document.getElementById('modalTitle').textContent = type === 'admin' ? 'Add Admin User' : 'Add Operator Account';
     renderModalBody(type, null);
     document.getElementById('modalErr').classList.add('hidden');
-    document.getElementById('modal').classList.remove('hidden');
+    document.getElementById('modal').classList.add('open');
   }
 
   function openEditModal(type, user) {
@@ -218,7 +224,7 @@
     document.getElementById('modalTitle').textContent = 'Edit ' + (type==='admin'?'Admin User':'Operator') + ': ' + user.username;
     renderModalBody(type, user);
     document.getElementById('modalErr').classList.add('hidden');
-    document.getElementById('modal').classList.remove('hidden');
+    document.getElementById('modal').classList.add('open');
   }
 
   function renderModalBody(type, user) {
@@ -256,7 +262,7 @@
   }
 
   function closeModal() {
-    document.getElementById('modal').classList.add('hidden');
+    document.getElementById('modal').classList.remove('open');
     editId = null;
   }
 

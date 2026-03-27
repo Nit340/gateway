@@ -4,9 +4,10 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Univa – Database</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet"/>
+  <link href="/css/tailwind.css" rel="stylesheet"/>
+  <link href="/css/fonts.css" rel="stylesheet"/>
+  <link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/animations.css" rel="stylesheet"/>
 <style>
   * { font-family: 'Inter', sans-serif; }
   .mat { font-family: 'Material Symbols Outlined'; font-style: normal; font-size: 20px; line-height:1; }
@@ -24,7 +25,8 @@
   .table-pill:hover { background:#fff7ed; color:#ea580c; }
   .table-pill.active { background:#ea580c; color:white; }
   ::-webkit-scrollbar { width:5px; height:5px; } ::-webkit-scrollbar-thumb { background:#e7cfc7; border-radius:10px; }
-  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50; display:flex; align-items:center; justify-content:center; }
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50; display:none; align-items:center; justify-content:center; }
+  .modal-bg.open { display:flex; }
   .modal { background:white; border-radius:20px; padding:28px; width:520px; max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.15); }
 </style>
 </head>
@@ -46,6 +48,9 @@
     <a href="/admin" class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
     <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
     <a href="/admin/database" class="sidebar-link active"><span class="mat">table_chart</span> Database</a>
+        <a href="/admin/logs" class="sidebar-link" id="nav-logs">
+      <span class="mat">terminal</span> Logs
+    </a>
     <div class="text-[9px] font-bold uppercase tracking-widest text-stone-300 px-2 mt-5 mb-3">Users</div>
     <a href="/admin/users" class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
     <a href="/admin/access-control" class="sidebar-link"><span class="mat">shield_lock</span> Access Control</a>
@@ -85,7 +90,7 @@
 </div>
 
 <!-- Modal for insert/edit -->
-<div id="modal" class="modal-bg hidden" onclick="if(event.target===this)closeModal()">
+<div id="modal" class="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-bold text-stone-800" id="modalTitle">Insert Row</h2>
@@ -203,7 +208,7 @@
        <input class="field" id="mf-${c}" type="text" placeholder="${c}"/></div>`
     ).join('');
     document.getElementById('modalErr').classList.add('hidden');
-    document.getElementById('modal').classList.remove('hidden');
+    document.getElementById('modal').classList.add('open');
   }
 
   function openEditModal(row) {
@@ -216,11 +221,11 @@
        <input class="field" id="mf-${c}" type="text" value="${row[c]===null||row[c]===undefined?'':row[c]}"/></div>`
     ).join('');
     document.getElementById('modalErr').classList.add('hidden');
-    document.getElementById('modal').classList.remove('hidden');
+    document.getElementById('modal').classList.add('open');
   }
 
   function closeModal() {
-    document.getElementById('modal').classList.add('hidden');
+    document.getElementById('modal').classList.remove('open');
     editRowId = null;
   }
 
