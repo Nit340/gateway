@@ -289,13 +289,27 @@ def _get_default_channel_for_connection(conn_config):
     return publish[0].get('name', 'default_publish')
 
 
+def _get_default_subscribe_channel_for_connection(conn_config):
+    """Return the name of the default (or first) subscribe channel for a connection."""
+    channels  = conn_config.get('channels', {})
+    subscribe = channels.get('subscribe', [])
+    if not subscribe:
+        return 'default_subscribe'
+    # Prefer channel explicitly marked default=True
+    for ch in subscribe:
+        if ch.get('default'):
+            return ch.get('name', 'default_subscribe')
+    # Fall back to first channel
+    return subscribe[0].get('name', 'default_subscribe')
+
+
 def build_iot_gateway_config():
     """Build the complete iot_gateway JSON config from the database.
 
     Returns a dict ready to be json.dumps()-ed.
 
     - wifi credentials come from general_configuration (network.wifi.ssid / .password)
-    - heartbeat.channel is taken from the first publish channel of the local MQTT
+    - heartbeat.channel is taken from the first subscribe channel of the local MQTT
       broker connection so it always matches whatever is configured in the MQTT form
     """
     from database import get_general_configuration, get_db_connection
@@ -323,7 +337,7 @@ def build_iot_gateway_config():
 
     servers          = {}
     all_mappings     = []
-    heartbeat_channel = 'default_publish'   # updated from local broker's first publish channel
+    heartbeat_channel = 'default_subscribe'   # updated from local broker's first subscribe channel
 
     for row in rows:
         cid, name, enabled, cfg_raw = row
@@ -358,11 +372,11 @@ def build_iot_gateway_config():
 
         servers[server_key] = server_entry
 
-        # heartbeat.channel = the 'name' of the default publish channel
+        # heartbeat.channel = the 'name' of the default subscribe channel
         # Use the first available if no default marked, but prioritize the 'mqtt' server
-        if raw_pub:
-            def_ch = _get_default_channel_for_connection(cfg)
-            if server_key == 'mqtt' or heartbeat_channel == 'default_publish':
+        if raw_sub:
+            def_ch = _get_default_subscribe_channel_for_connection(cfg)
+            if server_key == 'mqtt' or heartbeat_channel == 'default_subscribe':
                 heartbeat_channel = def_ch
 
         # Collect mappings   groups pass through as-is;

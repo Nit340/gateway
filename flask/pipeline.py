@@ -706,8 +706,13 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             # Only subscribe to loadcell mapped datapoints --
                             # modbus/iot_gateway/core are send-only, no subscriptions needed.
                             # Re-subscribe from the last known loadcell config if available.
+                            # IMPORTANT: skip .raw datapoints unless the Raw toggle is ON --
+                            # subscribing to raw when the toggle is OFF causes the library to
+                            # fire DATA_UPDATE/RECEIVE_DONE events continuously even though
+                            # the whitelist blocks them from reaching WebSocket clients.
                             with pipeline_state["lock"]:
-                                last_lc_config = pipeline_state.get("loadcell_config")
+                                last_lc_config  = pipeline_state.get("loadcell_config")
+                                raw_toggle_on   = pipeline_state.get("load_raw_enabled", False)
                             subscribed = set()
                             if last_lc_config:
                                 try:
@@ -715,6 +720,11 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                     for ipc_entry in cfg.get("ipc", []):
                                         for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
                                             for mapped_dp in (dp_entry.get("map") or {}).values():
+                                                if (mapped_dp.startswith("loadcells.") and
+                                                        mapped_dp.endswith(".raw") and
+                                                        not raw_toggle_on):
+                                                    logger.info("[PIPELINE] Skipping raw subscribe (toggle OFF): '{}'".format(mapped_dp))
+                                                    continue
                                                 client.subscribe(mapped_dp)
                                                 subscribed.add(mapped_dp)
                                                 logger.info("[PIPELINE] Subscribed to '{}'".format(mapped_dp))
@@ -1825,8 +1835,14 @@ async def send_loadcell_config_now():
         config, new_version = _build_multi_loadcell_config(rows, source="auto_send")
 
         config_json = json.dumps(config, indent=2)
+        _lc_list  = config.get("load_cells", [])
+        _first_lc = _lc_list[0] if _lc_list else {}
+        _filt     = _first_lc.get("filter", {})
+        _n_raw    = len(_filt.get("raw", []))
+        _n_weight = len(_filt.get("weight", []))
+        _n_levels = len((_first_lc.get("levels") or {}).get("parameters", {}).get("ratios", []))
         logger.info("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
-            new_version, len(active_raw), len(active_weight), len(active_levels)))
+            new_version, _n_raw, _n_weight, _n_levels))
 
         pipeline_sent    = False
         pipeline_message = "Queued as pending (not connected)"
@@ -1890,9 +1906,9 @@ async def send_loadcell_config_now():
             "pipeline_message":      pipeline_message,
             "target_service":        target_service,
             "version":               new_version,
-            "active_raw_filters":    len(active_raw),
-            "active_weight_filters": len(active_weight),
-            "active_levels":         len(active_levels),
+            "active_raw_filters":    _n_raw,
+            "active_weight_filters": _n_weight,
+            "active_levels":         _n_levels,
         }
     except Exception as e:
         logging.error("send_loadcell_config_now error: %s", e, exc_info=True)
@@ -1952,13 +1968,20 @@ async def pipeline_filters_post_handler(request):
         config, new_version = _build_multi_loadcell_config(rows, source="web_ui")
 
         config_json = json.dumps(config, indent=2)
+        _lc_list  = config.get("load_cells", [])
+        _first_lc = _lc_list[0] if _lc_list else {}
+        _filt     = _first_lc.get("filter", {})
+        _n_raw    = len(_filt.get("raw", []))
+        _n_weight = len(_filt.get("weight", []))
+        _n_levels = len((_first_lc.get("levels") or {}).get("parameters", {}).get("ratios", []))
         logger.info("[LC-CFG] Built v{}: raw={} weight={} levels={}".format(
-            new_version, len(active_raw), len(active_weight), len(active_levels)))
+            new_version, _n_raw, _n_weight, _n_levels))
 
         # Warn if known_weight_raw is 0 while known_weight is set -- calibration likely
         # not performed yet or the raw was not captured before saving.
-        _kw  = r.get("known_weight") or 0
-        _kwr = r.get("known_weight_raw") or 0.0
+        _first_row = dict(rows[0])
+        _kw  = _first_row.get("known_weight") or 0
+        _kwr = _first_row.get("known_weight_raw") or 0.0
         if float(_kw) != 0.0 and float(_kwr) == 0.0:
             logger.warning("[LC-CFG] WARNING: known_weight={} but known_weight_raw=0 -- "                  "calibration raw value missing! ref_raw will be 0 in sent config.".format(_kw))
 
@@ -1994,6 +2017,8 @@ async def pipeline_filters_post_handler(request):
                         logger.info("[LC-CFG] " + pipeline_message)
 
                         # Request and subscribe to all datapoints for all devices
+                        with pipeline_state["lock"]:
+                            raw_toggle_on = pipeline_state.get("load_raw_enabled", False)
                         for lc_entry in config.get("load_cells", []):
                             device_name = lc_entry.get("name")
                             if device_name:
@@ -2003,7 +2028,6 @@ async def pipeline_filters_post_handler(request):
 
                                 mapped_datapoints = [
                                     "loadcells.{}.weight_kg".format(device_name),
-                                    "loadcells.{}.raw".format(device_name),
                                     "loadcells.{}.unit".format(device_name),
                                     "loadcells.{}.known_weight_kg".format(device_name),
                                     "loadcells.{}.known_raw".format(device_name),
@@ -2011,6 +2035,12 @@ async def pipeline_filters_post_handler(request):
                                     "loadcells.{}.calibrated".format(device_name),
                                     "loadcells.{}.capacity".format(device_name),
                                 ]
+                                # Only subscribe to raw if the Raw toggle is currently ON
+                                raw_dp = "loadcells.{}.raw".format(device_name)
+                                if raw_toggle_on:
+                                    mapped_datapoints.append(raw_dp)
+                                else:
+                                    logger.info("[LC-CFG] Skipping raw subscribe (toggle OFF): '{}'".format(raw_dp))
                                 if hasattr(client, 'subscribe'):
                                     for dp in mapped_datapoints:
                                         try:
@@ -2048,9 +2078,9 @@ async def pipeline_filters_post_handler(request):
             "pipeline_message":      pipeline_message,
             "target_service":        target_service,
             "version":               new_version,
-            "active_raw_filters":    len(active_raw),
-            "active_weight_filters": len(active_weight),
-            "active_levels":         len(active_levels),
+            "active_raw_filters":    _n_raw,
+            "active_weight_filters": _n_weight,
+            "active_levels":         _n_levels,
         })
 
     except Exception as e:
@@ -2982,6 +3012,12 @@ async def pipeline_load_raw_toggle_handler(request):
     Body: { "enabled": true | false }
     Adds or removes the exact raw datapoint for the current device
     from the broadcast whitelist.
+
+    When turning ON:  also call client.subscribe() for any .raw datapoints
+                      that were skipped at connect time (because toggle was OFF).
+    When turning OFF: whitelist removal is sufficient -- there is no
+                      client.unsubscribe(), but the RECEIVE_DONE handler drops
+                      non-whitelisted datapoints before reading or broadcasting.
     """
     try:
         body    = await request.json()
@@ -2992,9 +3028,47 @@ async def pipeline_load_raw_toggle_handler(request):
     with pipeline_state["lock"]:
         pipeline_state["load_raw_enabled"] = enabled
 
-    # Rebuild whitelist -- this reads the real device name from DB and
-    # adds/removes the exact datapoint string (e.g. "load_raw")
+    # Rebuild whitelist first -- adds/removes the exact raw datapoint strings
     rebuild_whitelist(include_raw=enabled)
+
+    # When turning ON: subscribe to raw datapoints now (they were skipped at
+    # connect time because the toggle was OFF then).
+    if enabled:
+        with pipeline_state["lock"]:
+            client    = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+            lc_config = pipeline_state.get("loadcell_config")
+
+        if connected and client and hasattr(client, "subscribe") and lc_config:
+            try:
+                cfg = json.loads(lc_config)
+                for lc_entry in cfg.get("load_cells", []):
+                    device_name = lc_entry.get("name")
+                    if device_name:
+                        raw_dp = "loadcells.{}.raw".format(device_name)
+                        with pipeline_state["lock"]:
+                            already = raw_dp in pipeline_state.get("subscribed_datapoints", set())
+                        if not already:
+                            try:
+                                client.subscribe(raw_dp)
+                                with pipeline_state["lock"]:
+                                    pipeline_state["subscribed_datapoints"].add(raw_dp)
+                                logger.info("[PIPELINE] Raw ON -- subscribed to '{}'".format(raw_dp))
+                            except Exception as sub_e:
+                                logger.error("[PIPELINE] Raw subscribe error '{}': {}".format(raw_dp, sub_e))
+                        else:
+                            logger.info("[PIPELINE] Raw ON -- already subscribed to '{}'".format(raw_dp))
+            except Exception as e:
+                logger.error("[PIPELINE] Raw ON subscribe parse error: {}".format(e))
+    else:
+        # Turning OFF: remove raw datapoints from the subscribed_datapoints
+        # tracking set so they get re-skipped on the next reconnect.
+        with pipeline_state["lock"]:
+            subs = pipeline_state.get("subscribed_datapoints", set())
+            raw_dps = {dp for dp in subs if dp.startswith("loadcells.") and dp.endswith(".raw")}
+            subs.difference_update(raw_dps)
+            if raw_dps:
+                logger.info("[PIPELINE] Raw OFF -- removed from tracked subscriptions: {}".format(raw_dps))
 
     state = "ON" if enabled else "OFF"
     logger.info("[PIPELINE] load_raw broadcast toggled: {}".format(state))
