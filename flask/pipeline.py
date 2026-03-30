@@ -1025,14 +1025,61 @@ def _handle_received_loadcell_config(cfg):
     dev_params       = lc.get("device", {}).get("parameters", {})
     tare_offset      = lc.get("tare", {}).get("parameters", {}).get("offset_raw")
     calib_params     = lc.get("calibration", {}).get("parameters", {})
-    _rw_d            = calib_params.get("ref_weight", {})
-    _rw_unit         = _rw_d.get("unit", "kg") if isinstance(_rw_d, dict) else "kg"
-    _rw_value        = _rw_d.get("value", 0.0) if isinstance(_rw_d, dict) else float(_rw_d or 0)
-    known_weight, _  = _normalise_to_kg(_rw_value, _rw_unit)
-    if known_weight != _rw_value:
-        logger.info("[LC-RX] Normalised known_weight {} {} -> {} kg".format(_rw_value, _rw_unit, known_weight))
+
+    # ------------------------------------------------------------------
+    # FIX: Use the unit already stored in the DB as the source of truth.
+    # The load cell service may echo the config back with ref_weight.unit
+    # normalised to "kg" internally, which previously overwrote the user-
+    # assigned unit (e.g. "ton") in the database. We now read the stored
+    # unit first and only fall back to the received unit when the DB row
+    # has no unit set yet (first-time import scenario).
+    # ------------------------------------------------------------------
+    try:
+        cursor.execute("SELECT unit FROM loadcell_device WHERE id = ?", (device_id,))
+        _unit_row = cursor.fetchone()
+        db_stored_unit = (_unit_row["unit"] if _unit_row and _unit_row["unit"] else None)
+    except Exception as _ue:
+        logger.warning("[LC-RX] Could not read stored unit from DB: {}".format(_ue))
+        db_stored_unit = None
+
+    # Only fall back to the received config's unit when the DB has nothing yet
+    _rw_d = calib_params.get("ref_weight", {})
+    if isinstance(_rw_d, dict):
+        received_unit = _rw_d.get("unit", "kg")
+    else:
+        received_unit = "kg"
+
+    if db_stored_unit:
+        # Always honour the unit the user originally assigned — never let an
+        # echoed config silently change it.
+        db_unit = db_stored_unit
+        logger.info("[LC-RX] Unit preserved from DB: '{}' (received config had: '{}')".format(
+            db_unit, received_unit))
+    else:
+        # First-time receive — no unit in DB yet; accept from received config
+        if received_unit in ("t", "tonne", "tonnes", "metric ton", "metric tons"):
+            db_unit = "ton"
+        else:
+            db_unit = "kg"
+        logger.info("[LC-RX] Unit set from received config (no DB unit yet): '{}'".format(db_unit))
+
+    # Get the actual known-weight value; store as-is in the DB unit (no conversion)
+    _rw_value = _rw_d.get("value", 0.0) if isinstance(_rw_d, dict) else float(_rw_d or 0)
+    known_weight = float(_rw_value)
+
     known_weight_raw = calib_params.get("ref_raw")
     poll_ms          = dev_params.get("poll_ms")
+
+    # Extract capacity from specifications — use values as-is; the unit is
+    # already correct because we are preserving db_unit from the DB.
+    specs = lc.get("specifications", {})
+    cap = specs.get("capacity", {})
+    cap_min = cap.get("min", {})
+    cap_max = cap.get("max", {})
+    capacity_min = float(cap_min.get("value", 0.0))   if cap_min else 0.0
+    capacity_max = float(cap_max.get("value", 1000.0)) if cap_max else 1000.0
+
+    logger.info("[LC-RX] Device unit: {} (received from config: {})".format(db_unit, received_unit))
 
     ipc_params = {}
     for ipc in received.get("ipc", []):
@@ -1047,17 +1094,24 @@ def _handle_received_loadcell_config(cfg):
         log_level = log.get("parameters", {}).get("level")
         break
 
-    # 4. Persist to DB -- only write columns we actually received
+    # 4. Persist to DB -- write all columns
     fields = [
         "raw_filters = ?",
         "weight_filters = ?",
         "levels = ?",
+        "unit = ?",
+        "capacity_min = ?",
+        "capacity_max = ?",
     ]
     values = [
         json.dumps(raw_filters),
         json.dumps(weight_filters),
         json.dumps(levels_out),
+        db_unit,
+        capacity_min,
+        capacity_max,
     ]
+    
     for col, val in [
         ("tare_offset",      tare_offset),
         ("known_weight",     known_weight),
@@ -1066,7 +1120,6 @@ def _handle_received_loadcell_config(cfg):
         ("pipeline_port",    pipeline_port),
         ("log_level",        log_level),
         ("poll_ms",          poll_ms),
-        ("unit",             "kg"),   # always normalise unit to kg in DB
     ]:
         if val is not None:
             fields.append("{} = ?".format(col))
@@ -1081,8 +1134,8 @@ def _handle_received_loadcell_config(cfg):
             values
         )
         conn.commit()
-        logger.info("[LC-RX] DB updated for '{}' -- {} field(s) written".format(
-            device_name, len(fields) - 1))
+        logger.info("[LC-RX] DB updated for '{}' -- {} field(s) written, unit={}".format(
+            device_name, len(fields) - 1, db_unit))
     except Exception as update_err:
         logger.info("[LC-RX] DB update error: {}".format(update_err))
     finally:
@@ -1094,8 +1147,7 @@ def _handle_received_loadcell_config(cfg):
         pipeline_state["loadcell_config_version"] = cfg.version
 
     logger.info("[LC-RX] Done -- loadcell_config v{} accepted".format(cfg.version))
-
-
+    
 def start_pipeline_background(app=None):
     """Start (or restart) the pipeline background thread."""
     if not PIPELINE_AVAILABLE:
@@ -1449,13 +1501,13 @@ async def pipeline_loadcell_devices_handler(request):
 # ============================================================================
 
 def _normalise_to_kg(value, unit):
-    """Convert a weight value to kg and return (value_kg, 'kg').
-
+    """Convert a weight value to base unit (kg or ton) and return (value, unit).
+    
     Handles common variants:
-      g / gram / grams   -> divide by 1000
-      t / tonne / tonnes -> multiply by 1000
-      lb / lbs / pound   -> multiply by 0.453592
-      kg / kilogram etc  -> no change
+      g / gram / grams   -> divide by 1000, returns kg
+      t / tonne / tonnes -> returns as ton (no conversion)
+      lb / lbs / pound   -> multiply by 0.453592, returns kg
+      kg / kilogram etc  -> returns as kg
     If the unit is unrecognised, the value is returned unchanged with unit 'kg'
     (safe default -- caller should log a warning if needed).
     """
@@ -1466,7 +1518,7 @@ def _normalise_to_kg(value, unit):
     if u in ("g", "gram", "grams"):
         return v / 1000.0, "kg"
     if u in ("t", "tonne", "tonnes", "metric ton", "metric tons"):
-        return v * 1000.0, "kg"
+        return v, "ton"
     if u in ("lb", "lbs", "pound", "pounds"):
         return v * 0.453592, "kg"
     # kg / kilogram / kilograms / kgs / anything else -> treat as kg
@@ -1529,29 +1581,45 @@ async def pipeline_loadcell_import_handler(request):
             cap_min_d = cap.get("min") or {}
             cap_max_d = cap.get("max") or {}
 
-            # Normalise capacity to kg regardless of what unit the imported JSON uses
-            raw_unit     = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
-            capacity_min, unit = _normalise_to_kg(cap_min_d.get("value", 0),    raw_unit)
-            capacity_max, _    = _normalise_to_kg(cap_max_d.get("value", 1000), raw_unit)
-            unit = "kg"  # always store as kg -- values already converted above
+            # Determine the unit from the capacity (could be kg or ton)
+            raw_unit = cap_max_d.get("unit") or cap_min_d.get("unit") or "kg"
+            
+            # Get values in their original unit
+            cap_min_val = cap_min_d.get("value", 0)
+            cap_max_val = cap_max_d.get("value", 1000)
+            
+            # Store in database with the original unit
+            if raw_unit in ("t", "tonne", "tonnes", "metric ton", "metric tons"):
+                unit = "ton"
+                # Store values as ton (no conversion needed)
+                capacity_min = float(cap_min_val)
+                capacity_max = float(cap_max_val)
+            else:
+                unit = "kg"
+                # Store values as kg
+                capacity_min = float(cap_min_val)
+                capacity_max = float(cap_max_val)
 
             tare_params  = (lc.get("tare") or {}).get("parameters") or {}
             tare_offset  = tare_params.get("offset_raw", tare_params.get("offset", 0.0))
 
             cal_params   = (lc.get("calibration") or {}).get("parameters") or {}
             ref_weight_d = cal_params.get("ref_weight") or {}
-            # Normalise known_weight to kg using the unit declared inside ref_weight
-            _rw_unit     = ref_weight_d.get("unit", raw_unit) if isinstance(ref_weight_d, dict) else raw_unit
-            _rw_value    = ref_weight_d.get("value", 0.0)     if isinstance(ref_weight_d, dict) else float(ref_weight_d or 0)
-            known_weight, _ = _normalise_to_kg(_rw_value, _rw_unit)
+            
+            # Determine unit for known_weight from the config
+            _rw_unit = ref_weight_d.get("unit", raw_unit) if isinstance(ref_weight_d, dict) else raw_unit
+            _rw_value = ref_weight_d.get("value", 0.0) if isinstance(ref_weight_d, dict) else float(ref_weight_d or 0)
+            
+            # Store known_weight with the same unit as capacity
+            if _rw_unit in ("t", "tonne", "tonnes", "metric ton", "metric tons"):
+                known_weight = float(_rw_value)  # Store as ton
+            else:
+                known_weight = float(_rw_value)  # Store as kg
+            
             known_weight_raw = cal_params.get("ref_raw", 0.0)
-            if known_weight != _rw_value:
-                logger.info("[LC-IMPORT] Normalised known_weight {} {} -> {} kg".format(
-                    _rw_value, _rw_unit, known_weight))
-            if raw_unit.lower().strip() not in ("kg", "kilogram", "kilograms", "kgs"):
-                logger.info("[LC-IMPORT] Normalised capacity {}/{} {} -> {}/{} kg".format(
-                    cap_min_d.get("value", 0), cap_max_d.get("value", 1000), raw_unit,
-                    capacity_min, capacity_max))
+            
+            logger.info("[LC-IMPORT] Device '{}': unit={}, capacity=[{}, {}], known_weight={} {}".format(
+                name, unit, capacity_min, capacity_max, known_weight, unit))
 
             filters_d      = lc.get("filter") or {}
             raw_filters    = json.dumps(filters_d.get("raw",    []))
@@ -1755,10 +1823,26 @@ def _build_multi_loadcell_config(device_rows, source="auto_send"):
         active_levels = [{"name": lv["name"], "ratio": lv["ratio"]}
                          for lv in levels if lv.get("enabled", True)]
 
+        # Get the unit from database (can be "kg" or "ton")
         _db_unit = r.get("unit") or "kg"
-        _cap_min_kg, _ = _normalise_to_kg(r.get("capacity_min") or 0,    _db_unit)
-        _cap_max_kg, _ = _normalise_to_kg(r.get("capacity_max") or 1000, _db_unit)
-        _kw_kg,      _ = _normalise_to_kg(r.get("known_weight") or 0,    _db_unit)
+        
+        # Get raw values from database (already in the correct unit)
+        _cap_min_val = r.get("capacity_min") or 0
+        _cap_max_val = r.get("capacity_max") or 1000
+        _kw_val = r.get("known_weight") or 0
+        
+        # Normalise to appropriate base unit if needed
+        # If the stored unit is ton, we need to convert to kg for internal calculations
+        # but keep the unit as ton for the config
+        if _db_unit == "ton":
+            # Convert to kg for internal calculations (1 ton = 1000 kg)
+            _cap_min_kg = float(_cap_min_val) * 1000.0
+            _cap_max_kg = float(_cap_max_val) * 1000.0
+            _kw_kg = float(_kw_val) * 1000.0
+        else:
+            _cap_min_kg = float(_cap_min_val)
+            _cap_max_kg = float(_cap_max_val)
+            _kw_kg = float(_kw_val)
 
         lc_entry = {
             "name": r["name"],
@@ -1778,14 +1862,14 @@ def _build_multi_loadcell_config(device_rows, source="auto_send"):
             },
             "specifications": {
                 "capacity": {
-                    "min": {"value": _cap_min_kg, "unit": "kg"},
-                    "max": {"value": _cap_max_kg, "unit": "kg"},
+                    "min": {"value": float(_cap_min_val), "unit": _db_unit},
+                    "max": {"value": float(_cap_max_val), "unit": _db_unit},
                 }
             },
             "levels":      {"type": "ratio", "parameters": {"ratios": active_levels}},
             "tare":        {"type": "manual", "parameters": {"offset_raw": r.get("tare_offset") or 0.0}},
             "calibration": {"type": "single_point" if r.get("lc_mode") == "single_ended" else "differential", "parameters": {
-                "ref_weight": {"value": _kw_kg, "unit": "kg"},
+                "ref_weight": {"value": float(_kw_val), "unit": _db_unit},
                 "ref_raw":    r.get("known_weight_raw") or 0.0,
             }},
             "filter": {"raw": active_raw, "weight": active_weight}

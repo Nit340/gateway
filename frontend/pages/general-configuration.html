@@ -426,7 +426,6 @@
                         <input type="radio" name="network-mode" value="lte" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
                         <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
                     </label>
-
                     <!-- Auto-Connect toggle -->
                     <button type="button" id="wifi-auto-connect-btn"
                         title="Auto Connect"
@@ -439,6 +438,19 @@
                         </span>
                         <span id="ac-label">Auto</span>
                     </button>
+                </div>
+
+                <!-- Auto-mode info banner — visible only when Auto toggle is ON -->
+                <div id="auto-mode-banner" style="display:none;"
+                     class="flex items-start gap-3 px-4 py-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm mb-2">
+                    <i class="fa-solid fa-circle-info flex-shrink-0 mt-0.5"></i>
+                    <div>
+                        <p class="font-medium">Auto mode is enabled</p>
+                        <p class="text-xs text-blue-600 mt-0.5">The gateway switches between interfaces automatically based on priority: <strong>Ethernet &rsaquo; WiFi &rsaquo; LTE</strong>. Network selection changes are view-only and will not be sent to the backend.</p>
+                        <p class="text-xs text-blue-700 mt-1.5 font-medium">
+                            Currently using: <span id="auto-mode-active-iface" class="font-mono"><i class="fa-solid fa-rotate fa-spin mr-1"></i>detecting&hellip;</span>
+                        </p>
+                    </div>
                 </div>
             </div>
 

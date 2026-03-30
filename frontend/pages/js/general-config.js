@@ -179,13 +179,13 @@ console.log('general-config.js loaded');
                 var e1 = _cache.lan.eth1 || {};
                 var macValue = '--';
                 if (_selectedEth === 'eth0' && e0.mac && !isFieldStale('net.lan.eth0.mac')) {
-                    macValue = e0.mac.toUpperCase();
+                    macValue = e0.mac;
                 } else if (_selectedEth === 'eth1' && e1.mac && !isFieldStale('net.lan.eth1.mac')) {
-                    macValue = e1.mac.toUpperCase();
+                    macValue = e1.mac;
                 } else if (!_selectedEth && isUp(e0.state)) {
-                    macValue = e0.mac ? e0.mac.toUpperCase() : '--';
+                    macValue = e0.mac ? e0.mac : '--';
                 } else if (!_selectedEth && isUp(e1.state)) {
-                    macValue = e1.mac ? e1.mac.toUpperCase() : '--';
+                    macValue = e1.mac ? e1.mac : '--';
                 }
                 if (el('global-mac-eth')) {
                     el('global-mac-eth').textContent = macValue;
@@ -195,7 +195,7 @@ console.log('general-config.js loaded');
             if (wifiRow) {
                 wifiRow.style.display = '';
                 var w = _cache.wlan;
-                var wifiMac = (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac.toUpperCase() : '--';
+                var wifiMac = (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac : '--';
                 if (el('global-mac-wifi')) {
                     el('global-mac-wifi').textContent = wifiMac;
                 }
@@ -226,15 +226,51 @@ console.log('general-config.js loaded');
         updateGlobalMacDisplay();
     };
 
+    // =========================================================================
+    // AUTO MODE UI  — disables manual radio buttons and shows info banner
+    // when auto mode is active; restores them when a manual mode is selected.
+    // =========================================================================
+    var _applyAutoModeUi = function (isAuto) {
+        // Show or hide the auto-mode info banner
+        var banner = el('auto-mode-banner');
+        if (banner) banner.style.display = isAuto ? '' : 'none';
+        if (isAuto) _updateAutoModeBanner();
+    };
+
+    // Refresh the auto-mode banner text to show whichever interface is active
+    var _updateAutoModeBanner = function () {
+        var banner = el('auto-mode-active-iface');
+        if (!banner) return;
+        var e0 = _cache.lan.eth0 || {};
+        var e1 = _cache.lan.eth1 || {};
+        var w  = _cache.wlan    || {};
+        var l  = _cache.lte     || {};
+        var label = 'detecting\u2026';
+        var icon  = 'fa-solid fa-rotate fa-spin';
+        if (isUp(e0.state)) {
+            label = 'Ethernet (eth0)'; icon = 'fa-solid fa-ethernet';
+        } else if (isUp(e1.state)) {
+            label = 'Ethernet (eth1)'; icon = 'fa-solid fa-ethernet';
+        } else if (isUp(w.state)) {
+            label = 'WiFi' + (w.ssid ? ' \u2014 ' + w.ssid : ''); icon = 'fa-solid fa-wifi';
+        } else if (isUp(l.state)) {
+            label = 'LTE / 4G' + (l.operator_name ? ' \u2014 ' + l.operator_name : ''); icon = 'fa-solid fa-signal';
+        } else {
+            label = 'No active connection'; icon = 'fa-solid fa-triangle-exclamation text-amber-500';
+        }
+        banner.innerHTML = '<i class="' + icon + ' mr-1.5"></i>' + label;
+    };
+
     var initializeNetworkToggles = function () {
         document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
             r.addEventListener('change', function () {
                 setNetworkMode(this.value);
-                showNetworkSwitchingModal(this.value);
-                // Send pipeline datapoint on radio click
-                // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1
-                var routeKey = this.value === 'ethernet' ? (_selectedEth || 'eth0') : this.value;
-                sendNetworkRouteSelect(routeKey);
+                // Only send to backend and show switching modal when Auto toggle is OFF
+                if (!_acEnabled) {
+                    showNetworkSwitchingModal(this.value);
+                    var routeKey = this.value === 'ethernet' ? (_selectedEth || 'eth0') : this.value;
+                    sendNetworkRouteSelect(routeKey);
+                }
                 // Reset eth card selection highlight when switching away from ethernet
                 if (this.value !== 'ethernet') { _setEthCardSelected(null); }
                 // Reset auto-highlight trackers when leaving auto mode
@@ -263,7 +299,9 @@ console.log('general-config.js loaded');
             r.addEventListener('change', toggleIPAssignment);
         });
         var c = $('input[name="network-mode"]:checked');
-        setNetworkMode(c ? c.value : 'wifi');
+        var initMode = c ? c.value : 'wifi';
+        setNetworkMode(initMode);
+        _applyAutoModeUi(initMode === 'auto');
         toggleIPAssignment();
     };
 
@@ -417,6 +455,7 @@ console.log('general-config.js loaded');
         }
         
         updateGlobalMacDisplay();
+        _updateAutoModeBanner();
     };
 
     // =========================================================================
@@ -716,6 +755,7 @@ console.log('general-config.js loaded');
         _acEnabled = false;
         if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
         _setAcUi(false, false);
+        _applyAutoModeUi(false);
         // Persist OFF state to DB so it survives reload/reopen
         fetch('/api/general-configuration', {
             method: 'PUT',
@@ -761,6 +801,7 @@ console.log('general-config.js loaded');
         // Turn ON immediately so user sees it respond
         _acEnabled = true;
         _setAcUi(true, false);
+        _applyAutoModeUi(true);
         // Send pipeline datapoint: 0 = auto
         sendNetworkRouteSelect('auto');
         // Persist ON state to DB so it survives reload/reopen
@@ -1560,6 +1601,7 @@ console.log('general-config.js loaded');
             if (n.auto_connect) {
                 _acEnabled = true;
                 _setAcUi(true, false);
+                _applyAutoModeUi(true);
                 // Resume retrying if not already connected
                 if (!isUp((_cache.wlan || {}).state)) {
                     _acTimer = setInterval(function () {
