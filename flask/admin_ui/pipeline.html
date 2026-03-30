@@ -232,56 +232,63 @@ select.field option{background:var(--surface2);}
 
       <!-- CORE panel -->
       <div class="cfg-panel" id="panel-core">
-        <!-- JSON Upload -->
-        <div class="json-upload-area" id="jsonUploadArea" style="padding:18px;margin-bottom:16px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-            <span class="mat" style="color:var(--accent);font-size:20px;">upload_file</span>
-            <span style="font-size:13px;font-weight:600;color:var(--text);">Upload Core Config JSON</span>
-            <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:var(--accent);background:var(--accent-glow);padding:2px 8px;border-radius:20px;margin-left:auto;">Manual upload</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+          <span class="mat" style="color:var(--accent);font-size:20px;">edit_note</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text);">Core Configuration Editor</span>
+          <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;color:var(--accent);background:var(--accent-glow);padding:2px 8px;border-radius:20px;margin-left:auto;">Manual override</span>
+        </div>
+        
+        <p style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.5;">Directly edit the Core service configuration JSON. Changes are persisted to the database and will be used for all future auto-sends until updated again.</p>
+
+        <!-- Managed Fields Warning -->
+        <div style="background:rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 10px; padding: 12px; margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;">
+          <span class="mat" style="color:var(--blue); font-size:18px; margin-top:2px;">info</span>
+          <div>
+            <span style="font-size:11px; font-weight:700; color:var(--text2); display:block; margin-bottom:2px; text-transform:uppercase; letter-spacing:0.02em;">Managed Configuration</span>
+            <p style="font-size:10.5px; color:var(--text3); margin:0; line-height:1.4;">
+              Fields in <code style="background:var(--surface3); padding:1px 4px; border-radius:4px; font-family:monospace; color:var(--blue);">services.loadcell</code> (Deadband & Overload) are <b>source-of-truth</b> from the database. Any manual changes to them below will be overwritten with the actual system values upon save.
+            </p>
           </div>
-          <p style="font-size:11.5px;color:var(--text3);margin-bottom:12px;line-height:1.5;">Upload a JSON file to replace the current core configuration. The config will be validated, saved to database, and optionally sent to the pipeline.</p>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-            <div style="flex:1;min-width:180px;">
-              <label style="display:block;font-size:9.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">JSON File</label>
-              <input type="file" id="coreJsonFile" accept=".json"
-                style="display:block;width:100%;font-size:11.5px;color:var(--text2);font-family:'Inter',sans-serif;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;cursor:pointer;"/>
-            </div>
-            <div style="display:flex;gap:6px;">
-              <button onclick="validateCoreConfigJson()" class="btn-outline-orange" style="font-size:11.5px;padding:7px 12px;">
-                <span class="mat" style="font-size:13px;">check_circle</span> Validate
-              </button>
-              <button onclick="uploadCoreConfigJson(true)" class="btn-primary" style="font-size:11.5px;padding:7px 12px;">
-                <span class="mat" style="font-size:13px;">send</span> Save & Send
-              </button>
-              <button onclick="uploadCoreConfigJson(false)" class="btn-outline-orange" style="font-size:11.5px;padding:7px 12px;">
-                <span class="mat" style="font-size:13px;">database</span> Save Only
-              </button>
-            </div>
-          </div>
-          <div style="margin-top:8px;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;">
-            <span class="mat" style="font-size:12px;">drag_click</span>
-            Or drag &amp; drop a JSON file anywhere in this area
-          </div>
-          <div id="jsonUploadResult" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:11.5px;white-space:pre-wrap;"></div>
         </div>
 
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-          <p style="font-size:11.5px;color:var(--text3);flex:1;">Forward the stored core config to the core pipeline service.</p>
-          <span class="cfg-name-pill" id="cname-pill-core"><span class="mat" style="font-size:12px;">label</span> <span id="cname-display-core">core_config</span></span>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;display:flex;flex-direction:column;">
+          <div style="padding:8px 12px;background:var(--surface3);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;gap:12px;">
+              <button onclick="loadCurrentCoreConfig()" class="btn-text" style="font-size:10.5px;color:var(--accent);">
+                <span class="mat" style="font-size:14px;">refresh</span> Reset to Rules
+              </button>
+              <button onclick="beautifyCoreJson()" class="btn-text" style="font-size:10.5px;color:var(--text2);">
+                <span class="mat" style="font-size:14px;">format_align_left</span> Beautify
+              </button>
+            </div>
+            <span id="core-status-badge" style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;">Unsaved Changes</span>
+          </div>
+          <textarea id="coreJsonEditor" spellcheck="false" 
+            style="width:100%;height:400px;background:var(--bg);color:var(--text2);border:none;padding:16px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.6;resize:vertical;outline:none;"
+            placeholder='{"service_name": "ilx_craneiq_core", ...}'></textarea>
         </div>
-        <div style="margin-bottom:16px;">
-          <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Upload History</div>
-          <div id="coreConfigList" style="font-size:11.5px;color:var(--text3);">Loading...</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button onclick="resendCoreConfig()" class="btn-outline-orange">
-            <span class="mat" style="font-size:16px;">replay</span> Resend Latest
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;">
+          <button onclick="saveCoreConfigManual(false)" class="btn-outline-orange">
+            <span class="mat" style="font-size:16px;">database</span> Store Only
           </button>
-          <button onclick="downloadLatestCoreConfig()" class="btn-outline-orange">
-            <span class="mat" style="font-size:16px;">download</span> Download Latest
+          <button onclick="saveCoreConfigManual(true)" class="btn-primary">
+            <span class="mat" style="font-size:16px;">send</span> Store &amp; Sync Pipeline
           </button>
         </div>
-        <div id="pushResult-core" style="display:none;margin-top:12px;padding:10px 14px;border-radius:9px;font-size:12px;font-weight:500;"></div>
+        
+        <div id="coreManualResult" style="display:none;margin-top:12px;padding:10px 14px;border-radius:9px;font-size:12px;font-weight:500;"></div>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <span class="mat" style="font-size:16px;color:var(--text3);">history</span>
+            <span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">Status</span>
+            <span class="cfg-name-pill" id="cname-pill-core" style="margin-left:auto;"><span class="mat" style="font-size:12px;">label</span> <span id="cname-display-core">core_config</span></span>
+          </div>
+          <div id="coreConfigStatus" style="font-size:11.5px;color:var(--text2);background:var(--surface2);padding:10px 14px;border-radius:8px;border:1px solid var(--border);">
+            Reading latest state...
+          </div>
+        </div>
       </div>
 
       <!-- CLIENT INFO panel -->
@@ -892,172 +899,121 @@ select.field option{background:var(--surface2);}
     }
   }
 
-  // -- JSON Upload Functions --------------------------------------------
-  let _uploadedJsonContent = null;
-  let _uploadedJsonValid = false;
+  // -- Core JSON Editor --------------------------------------------------
+  let _coreJsonOriginal = '';
 
-  // Setup drag & drop for JSON upload area
-  function setupDragAndDrop() {
-    const dropArea = document.getElementById('jsonUploadArea');
-    if (!dropArea) return;
-    
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      dropArea.addEventListener(eventName, preventDefaults, false);
-    });
-    
-    function preventDefaults(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropArea.addEventListener(eventName, () => {
-        dropArea.classList.add('drag-over');
-      }, false);
-    });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropArea.addEventListener(eventName, () => {
-        dropArea.classList.remove('drag-over');
-      }, false);
-    });
-    
-    dropArea.addEventListener('drop', handleDrop, false);
-    
-    function handleDrop(e) {
-      const dt = e.dataTransfer;
-      const files = dt.files;
-      if (files.length > 0) {
-        const file = files[0];
-        if (file.name.endsWith('.json')) {
-          document.getElementById('coreJsonFile').files = files;
-          validateCoreConfigJson();
-        } else {
-          showJsonResult('❌ Please drop a JSON file', false);
-        }
-      }
-    }
-  }
-
-  function validateCoreConfigJson() {
-    const fileInput = document.getElementById('coreJsonFile');
-    const resultDiv = document.getElementById('jsonUploadResult');
-    
-    if (!fileInput.files || fileInput.files.length === 0) {
-      showJsonResult('Please select a JSON file first', false);
-      return;
-    }
-    
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-    
-    reader.onload = function(e) {
-      try {
-        const content = e.target.result;
-        const config = JSON.parse(content);
-        
-        // Basic validation
-        const errors = [];
-        if (!config.service_name && !config.services) {
-          errors.push('Missing service_name or services section');
-        }
-        if (config.services) {
-          if (config.services.modbus && !config.services.modbus.service_name) {
-            errors.push('modbus service missing service_name');
-          }
-          if (config.services.loadcell && !config.services.loadcell.service_name) {
-            errors.push('loadcell service missing service_name');
-          }
-        }
-        
-        if (errors.length > 0) {
-          showJsonResult('❌ Validation failed:\n' + errors.join('\n'), false);
-          _uploadedJsonValid = false;
-          _uploadedJsonContent = null;
-        } else {
-          const summary = [
-            '✅ Valid JSON config!',
-            `Service: ${config.service_name || 'N/A'}`,
-            `Services: ${Object.keys(config.services || {}).join(', ') || 'none'}`
-          ].join('\n');
-          showJsonResult(summary, true);
-          _uploadedJsonValid = true;
-          _uploadedJsonContent = content;
-        }
-      } catch (err) {
-        showJsonResult('❌ Invalid JSON: ' + err.message, false);
-        _uploadedJsonValid = false;
-        _uploadedJsonContent = null;
-      }
-    };
-    
-    reader.onerror = function() {
-      showJsonResult('❌ Error reading file', false);
-      _uploadedJsonValid = false;
-      _uploadedJsonContent = null;
-    };
-    
-    reader.readAsText(file);
-  }
-
-  function showJsonResult(msg, isSuccess) {
-    const resultDiv = document.getElementById('jsonUploadResult');
-    resultDiv.classList.remove('hidden');
-    resultDiv.className = 'mt-3 p-2 rounded-lg text-xs whitespace-pre-wrap ' + 
-      (isSuccess ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600');
-    resultDiv.textContent = msg;
-    setTimeout(() => {
-      if (resultDiv && !resultDiv.matches(':hover')) {
-        resultDiv.classList.add('hidden');
-      }
-    }, 8000);
-  }
-
-  async function uploadCoreConfigJson(sendToPipeline = true) {
-    if (!_uploadedJsonValid || !_uploadedJsonContent) {
-      showJsonResult('Please validate the JSON file first', false);
-      return;
-    }
-    
-    const resultDiv = document.getElementById('jsonUploadResult');
-    resultDiv.className = 'mt-3 p-2 rounded-lg text-xs bg-[var(--surface2)] text-[var(--text2)] border border-[var(--border2)]';
-    resultDiv.classList.remove('hidden');
-    resultDiv.textContent = sendToPipeline ? '⏳ Saving and sending to pipeline...' : '💾 Saving to database...';
+  async function loadCurrentCoreConfig() {
+    const editor = document.getElementById('coreJsonEditor');
+    const status = document.getElementById('coreConfigStatus');
+    const badge = document.getElementById('core-status-badge');
     
     try {
-      const response = await fetch('/api/pipeline/core-config/upload', {
+      // Try to get the latest manual config first
+      const res = await fetch('/api/rules/core-config/latest');
+      const data = await res.json();
+      
+      if (data.success && data.config) {
+        const jsonStr = JSON.stringify(data.config.config, null, 2);
+        editor.value = jsonStr;
+        _coreJsonOriginal = jsonStr;
+        status.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-bold text-[var(--accent)]">Manual Config Active (v${data.config.version})</div>
+              <div class="text-[10px] opacity-70">Last updated: ${new Date(data.config.updated_at).toLocaleString()}</div>
+            </div>
+          </div>
+        `;
+        badge.textContent = 'Saved';
+        badge.style.color = 'var(--green)';
+      } else {
+        // Fallback: Preview generated from rules
+        const previewRes = await fetch('/api/rules/core-config/preview');
+        const previewData = await previewRes.json();
+        const jsonStr = JSON.stringify(previewData.config || {}, null, 2);
+        editor.value = jsonStr;
+        _coreJsonOriginal = jsonStr;
+        status.innerHTML = `
+          <div class="font-bold text-[var(--text3)] italic">Using auto-generated config from rules (No manual edit found)</div>
+        `;
+        badge.textContent = 'Auto-Generated';
+        badge.style.color = 'var(--text3)';
+      }
+    } catch (e) {
+      status.textContent = 'Error loading config: ' + e.message;
+    }
+  }
+
+  function beautifyCoreJson() {
+    const editor = document.getElementById('coreJsonEditor');
+    try {
+      const obj = JSON.parse(editor.value);
+      editor.value = JSON.stringify(obj, null, 2);
+    } catch (e) {
+      toast('Invalid JSON: ' + e.message, false);
+    }
+  }
+
+  async function saveCoreConfigManual(sendToPipeline = true) {
+    const editor = document.getElementById('coreJsonEditor');
+    const resultDiv = document.getElementById('coreManualResult');
+    const badge = document.getElementById('core-status-badge');
+    
+    try {
+      const configObj = JSON.parse(editor.value);
+      
+      resultDiv.style.display = 'block';
+      resultDiv.style.background = 'var(--surface2)';
+      resultDiv.style.color = 'var(--text2)';
+      resultDiv.textContent = 'Saving...';
+      
+      const res = await fetch('/api/pipeline/core-config/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          config_json: _uploadedJsonContent,
+          config_json: JSON.stringify(configObj),
           send_to_pipeline: sendToPipeline
         })
       });
       
-      const data = await response.json();
-      
+      const data = await res.json();
       if (data.success) {
-        showJsonResult(
-          '✅ ' + (data.sent ? 'Config saved and sent!' : (data.queued ? 'Config saved and queued for pipeline!' : 'Config saved to database!')) +
-          (data.version ? ' (v' + data.version + ')' : ''),
-          true
-        );
-        // Refresh the config history
-        if (typeof loadCoreConfigs === 'function') loadCoreConfigs();
-        if (typeof loadSendLog === 'function') loadSendLog();
-        if (typeof loadStatus === 'function') loadStatus();
+        resultDiv.style.background = 'rgba(74, 222, 128, 0.1)';
+        resultDiv.style.color = 'var(--green)';
+        resultDiv.style.border = '1px solid rgba(74, 222, 128, 0.2)';
+        resultDiv.textContent = '✅ ' + data.pipeline_message;
         
-        // Clear file input
-        document.getElementById('coreJsonFile').value = '';
-        _uploadedJsonContent = null;
-        _uploadedJsonValid = false;
+        _coreJsonOriginal = editor.value;
+        badge.textContent = 'Saved';
+        badge.style.color = 'var(--green)';
+        
+        setTimeout(() => loadCurrentCoreConfig(), 1000);
+        if (typeof loadSendLog === 'function') loadSendLog();
       } else {
-        showJsonResult('❌ Upload failed: ' + (data.error || 'Unknown error'), false);
+        throw new Error(data.error || 'Server error');
       }
-    } catch (err) {
-      showJsonResult('❌ Network error: ' + err.message, false);
+    } catch (e) {
+      resultDiv.style.display = 'block';
+      resultDiv.style.background = 'rgba(248, 113, 113, 0.1)';
+      resultDiv.style.color = 'var(--red)';
+      resultDiv.style.border = '1px solid rgba(248, 113, 113, 0.2)';
+      resultDiv.textContent = '❌ ' + e.message;
     }
   }
+
+  // Monitor editor for changes
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'coreJsonEditor') {
+      const badge = document.getElementById('core-status-badge');
+      if (e.target.value !== _coreJsonOriginal) {
+        badge.textContent = 'Unsaved Changes';
+        badge.style.color = 'var(--yellow)';
+      } else {
+        badge.textContent = 'Saved';
+        badge.style.color = 'var(--green)';
+      }
+    }
+  });
 
   // -- Version log ------------------------------------------------------
   async function loadSendLog() {
@@ -1103,7 +1059,7 @@ select.field option{background:var(--surface2);}
   }
 
   async function loadAll() {
-    await Promise.all([loadStatus(), loadTargets(), loadSendLog()]);
+    await Promise.all([loadStatus(), loadTargets(), loadSendLog(), loadCurrentCoreConfig()]);
   }
 
   // -- Whitelist Manager ------------------------------------------------
@@ -1275,7 +1231,7 @@ select.field option{background:var(--surface2);}
   // Initialize everything
   loadAll();
   loadWhitelist();
-  setupDragAndDrop();
+  loadClientInfo();
 </script>
 </body>
 </html>

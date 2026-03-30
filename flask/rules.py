@@ -373,6 +373,43 @@ async def core_config_latest_handler(request):
 
 
 # ---------------------------------------------------------------------------
+# GET /api/rules/core-config/preview
+#
+# Preview the generated core config JSON (built from current rules/devices)
+# ---------------------------------------------------------------------------
+async def core_config_preview_handler(request):
+    """GET /api/rules/core-config/preview - Preview the generated core config"""
+    try:
+        # Get latest loadcell params from DB regardless of stored config
+        lc_params = _get_loadcell_service_params()
+        
+        # First try to get the latest from DB
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT config_json FROM core_configs ORDER BY updated_at DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            config = json.loads(row[0])
+            # Inject/Override with latest DB truth for loadcell
+            if 'services' in config and 'loadcell' in config['services']:
+                lc = config['services']['loadcell']
+                lc['overload_threshold_grams'] = lc_params['overload_threshold_grams']
+                lc['overload_deadband_grams']  = lc_params['overload_deadband_grams']
+                lc['datapoint_name']            = lc_params['datapoint_name']
+                lc['unit_datapoint_name']       = lc_params['unit_datapoint_name']
+            return web.json_response({'success': True, 'config': config})
+            
+        # Fallback to building from rules
+        rules = _collect_all_enabled_rules()
+        core_config = _build_combined_core_config(rules)
+        return web.json_response({'success': True, 'config': core_config})
+    except Exception as e:
+        return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -393,29 +430,20 @@ def _collect_all_enabled_rules():
     return rows
 
 
-def _get_loadcell_datapoint_names():
+def _get_loadcell_service_params():
     """
-    Auto-discover loadcell datapoint names from the first enabled
-    loadcell_device row.
-
-    Returns (datapoint_name, unit_datapoint_name):
-      - datapoint_name:       the device's pipeline-facing name
-                              (e.g. "load_weight")
-      - unit_datapoint_name:  device name + "_unit"
-                              (e.g. "load_unit")
-
-    These values are derived entirely from the DB -- no UI config required.
-    If no device is found, safe defaults ("load_weight", "load_unit") are used.
+    Auto-discover loadcell params from the first enabled row.
     """
     try:
         conn = get_db()
         cur = conn.cursor()
-        # load_name is the operator-facing label stored in loadcell_device;
-        # fall back to the device name itself if load_name is blank.
         cur.execute('''
             SELECT
-                COALESCE(NULLIF(TRIM(load_name), ''), name) AS dp_name,
-                COALESCE(NULLIF(TRIM(capacity_name), ''), name || '_unit') AS unit_name
+                name,
+                load_name,
+                capacity_name,
+                deadband, 
+                overload
             FROM loadcell_device
             WHERE enabled = 1
             ORDER BY created_at ASC
@@ -424,14 +452,23 @@ def _get_loadcell_datapoint_names():
         row = cur.fetchone()
         conn.close()
         if row:
-            dp_name = row['dp_name'] or 'load_weight'
-            unit_name = row['unit_name'] or 'load_unit'
-            logger.info('[RULES] loadcell auto-discovery: datapoint_name="{}" unit_datapoint_name="{}"'.format(
-                dp_name, unit_name))
-            return dp_name, unit_name
+            dev_name = row['name'] or "load"
+            dp_name = f"loadcells.{dev_name}.weight"
+            unit_name = f"loadcells.{dev_name}.unit"
+            return {
+                'datapoint_name': dp_name,
+                'unit_datapoint_name': unit_name,
+                'overload_deadband_grams': row['deadband'] or 0.0,
+                'overload_threshold_grams': row['overload'] or 0.0
+            }
     except Exception as e:
         logger.error('[RULES] loadcell auto-discovery error: {} -- using defaults'.format(e))
-    return 'load_weight', 'load_unit'
+    return {
+        'datapoint_name': 'weight',
+        'unit_datapoint_name': 'unit',
+        'overload_deadband_grams': 0.0,
+        'overload_threshold_grams': 0.0
+    }
 
 
 def _build_combined_core_config(rules):
@@ -474,7 +511,7 @@ def _build_combined_core_config(rules):
     ]
 
     # -- Loadcell: fully automatic from DB, no UI config required ---------
-    lc_datapoint_name, lc_unit_datapoint_name = _get_loadcell_datapoint_names()
+    lc_params = _get_loadcell_service_params()
 
     # -- Emergency output from first enabled emergency rule ----------------
     emergency_output = None
@@ -505,9 +542,11 @@ def _build_combined_core_config(rules):
                 'groups':       modbus_groups,
             },
             'loadcell': {
-                'service_name':        'load_cell_service',
-                'datapoint_name':      lc_datapoint_name,
-                'unit_datapoint_name': lc_unit_datapoint_name,
+                'service_name':             'load_cell_service',
+                'datapoint_name':           lc_params['datapoint_name'],
+                'unit_datapoint_name':      lc_params['unit_datapoint_name'],
+                'overload_threshold_grams': lc_params['overload_threshold_grams'],
+                'overload_deadband_grams':  lc_params['overload_deadband_grams']
             },
         },
         'logging': {'level': 'info'},
@@ -580,43 +619,76 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
             conn.close()
 
 
-async def _build_and_send_core_config():
+async def _build_and_send_core_config(force_rebuild=False):
     """
     Build combined core_config from DB, persist it (single row), then send via pipeline.
-
-    This is the single entry-point used by:
-      - POST /api/rules/pipeline/trigger  (Apply Rules button)
-      - pipeline auto-send on startup
+    If force_rebuild is False, it will try to use the existing config from the core_configs table.
     """
     from pipeline import pipeline_state, get_pipeline_service_name
     from pipeline import Config, get_pipeline_config_name
     from pipeline import record_pipeline_send_success, record_pipeline_send_failure
     from pipeline import get_next_pipeline_version
 
-    rules = _collect_all_enabled_rules()
-    core_config = _build_combined_core_config(rules)
-    config_json = json.dumps(core_config, indent=2)
-
-    logger.info('\n' + '='*60)
-    logger.info('[CORE-CFG] Trigger -- {} enabled rule(s)'.format(len(rules)))
-    logger.info('[CORE-CFG] loadcell: datapoint_name="{}"  unit_datapoint_name="{}"'.format(
-        core_config['services']['loadcell']['datapoint_name'],
-        core_config['services']['loadcell']['unit_datapoint_name'],
-    ))
-    logger.info('='*60)
-
-    # -- Extract device names for DB storage --
+    config_json = None
+    db_version = None
     device_names = []
-    if 'services' in core_config:
-        for svc_name, svc_config in core_config['services'].items():
-            if svc_name == 'modbus' and 'groups' in svc_config:
-                for group in svc_config['groups']:
-                    if 'members' in group:
-                        device_names.extend(group['members'])
+    
+    if not force_rebuild:
+        # Try to load from DB first
+        try:
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT config_json, version, device_names FROM core_configs LIMIT 1")
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                config_json = row[0]
+                db_version = row[1]
+                device_names = json.loads(row[2]) if row[2] else []
+                
+                # Injection: Always override with latest DB truth for loadcell
+                try:
+                    lc_params = _get_loadcell_service_params()
+                    config = json.loads(config_json)
+                    if 'services' in config and 'loadcell' in config['services']:
+                        lc = config['services']['loadcell']
+                        lc['overload_threshold_grams'] = lc_params['overload_threshold_grams']
+                        lc['overload_deadband_grams']  = lc_params['overload_deadband_grams']
+                        lc['datapoint_name']            = lc_params['datapoint_name']
+                        lc['unit_datapoint_name']       = lc_params['unit_datapoint_name']
+                        config_json = json.dumps(config, indent=2)
+                        logger.info("[CORE-CFG] Using existing config from DB (v{}) - loadcell params enforced".format(db_version))
+                    else:
+                        logger.info("[CORE-CFG] Using existing config from DB (v{})".format(db_version))
+                except Exception as lc_e:
+                    logger.warning("[CORE-CFG] Loadcell param injection failed: {}".format(lc_e))
+                    logger.info("[CORE-CFG] Using existing config from DB (v{})".format(db_version))
+        except Exception as e:
+            logger.warning("[CORE-CFG] DB load warning: {}".format(e))
 
-    # -- Persist to core_configs DB table (SINGLE ROW) --
-    # NO JSON FILE GENERATION - removed
-    db_version = _save_core_config_to_db(config_json, device_names, core_config.get('service_name', 'ilx_craneiq_core'))
+    if config_json is None:
+        rules = _collect_all_enabled_rules()
+        core_config = _build_combined_core_config(rules)
+        config_json = json.dumps(core_config, indent=2)
+
+        logger.info('\n' + '='*60)
+        logger.info('[CORE-CFG] Trigger -- {} enabled rule(s)'.format(len(rules)))
+        logger.info('[CORE-CFG] loadcell: datapoint_name="{}"  unit_datapoint_name="{}"'.format(
+            core_config['services']['loadcell']['datapoint_name'],
+            core_config['services']['loadcell']['unit_datapoint_name'],
+        ))
+        logger.info('='*60)
+
+        # -- Extract device names for DB storage --
+        if 'services' in core_config:
+            for svc_name, svc_config in core_config['services'].items():
+                if svc_name == 'modbus' and 'groups' in svc_config:
+                    for group in svc_config['groups']:
+                        if 'members' in group:
+                            device_names.extend(group['members'])
+
+        # -- Persist to core_configs DB table (SINGLE ROW) --
+        db_version = _save_core_config_to_db(config_json, device_names, core_config.get('service_name', 'ilx_craneiq_core'))
 
     # -- Pipeline send --
     core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
@@ -672,7 +744,7 @@ async def _build_and_send_core_config():
         'sent':        ok,
         'queued':      not ok,
         'service':     core_svc,
-        'rules_count': len(rules),
+        'rules_count': len(_collect_all_enabled_rules()) if config_json is None else "N/A",
         'db_version':  db_version,
     }
 
@@ -691,5 +763,6 @@ def register_rules_routes(app):
     app.router.add_post  ('/api/rules/core-config/upload', core_config_upload_handler)
     app.router.add_get   ('/api/rules/core-configs',      core_configs_list_handler)
     app.router.add_get   ('/api/rules/core-config/latest', core_config_latest_handler)
+    app.router.add_get   ('/api/rules/core-config/preview', core_config_preview_handler)
     
     logger.info('[Rules] Routes registered OK')

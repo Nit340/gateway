@@ -286,7 +286,8 @@ async def get_device_details(request):
                    l.raw_filters, l.weight_filters, l.levels,
                    l.enabled, s.name as service_name,
                    COALESCE(l.lc_mode, 'single_ended') as lc_mode,
-                   l.device_path_ch2
+                   l.device_path_ch2,
+                   l.deadband, l.overload
             FROM loadcell_device l
             LEFT JOIN services s ON l.service_id = s.id
             WHERE l.id = ?
@@ -329,6 +330,8 @@ async def get_device_details(request):
             service_name = row[26]
             lc_mode = row[27]
             device_path_ch2 = row[28]
+            deadband = row[29]
+            overload = row[30]
             
             import json as _json
             def _parse(v):
@@ -367,6 +370,8 @@ async def get_device_details(request):
                     'tare_offset':     tare_offset,
                     'known_weight':    known_weight,
                     'known_weight_raw': known_weight_raw,
+                    'deadband':        deadband,
+                    'overload':        overload,
                     'raw_filters':     _parse(raw_filters_json),
                     'weight_filters':  _parse(weight_filters_json),
                     'levels':          _parse(levels_json)
@@ -535,9 +540,10 @@ async def add_device(request):
                     poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                     raw_min, raw_max,
                     capacity_min, capacity_max, unit,
-                    load_name, capacity_name
+                    load_name, capacity_name,
+                    deadband, overload
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 device_id,
                 device_name,
@@ -557,7 +563,9 @@ async def add_device(request):
                 config.get('capacity_max', 1000),
                 config.get('unit', 'kg'),
                 tag_weight,
-                tag_capacity
+                tag_capacity,
+                config.get('deadband', 0.0),
+                config.get('overload', 0.0)
             ))
 
             # Automatically create datapoints — use the device's chosen unit
@@ -761,7 +769,8 @@ async def update_device(request):
             for field in ('device_path', 'device_path_ch2', 'lc_mode',
                           'poll_ms',
                           'capacity_min', 'capacity_max', 'unit',
-                          'pipeline_server', 'pipeline_port', 'log_level'):
+                          'pipeline_server', 'pipeline_port', 'log_level',
+                          'deadband', 'overload'):
                 if field in config:
                     update_fields.append('{} = ?'.format(field))
                     values.append(config[field])
@@ -978,9 +987,10 @@ async def duplicate_device(request):
                     id, name, service_id, device_path, device_path_ch2, lc_mode,
                     poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                     raw_min, raw_max, capacity_min, capacity_max, unit,
-                    load_name, capacity_name, enabled
+                    load_name, capacity_name, enabled,
+                    deadband, overload
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 new_device_id, new_name, old_device.get('service_id'),
                 old_device.get('device_path'),
@@ -992,7 +1002,8 @@ async def duplicate_device(request):
                 old_device.get('raw_min'), old_device.get('raw_max'),
                 old_device.get('capacity_min'), old_device.get('capacity_max'),
                 old_device.get('unit'), new_tag_weight,
-                new_tag_capacity, old_device.get('enabled', 1)
+                new_tag_capacity, old_device.get('enabled', 1),
+                old_device.get('deadband', 0.0), old_device.get('overload', 0.0)
             ))
             
             # Duplicate loadcell datapoints
@@ -1174,36 +1185,38 @@ async def export_devices_csv(request):
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Device Path CH2', 'Mode', 'Capacity Min', 'Capacity Max', 'Unit', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 
+            'Poll MS', 'Resolution Bits', 'Effective Bits', 'Signed', 'Gain', 'Vref',
+            'Raw Min', 'Raw Max', 'Capacity Min', 'Capacity Max', 'Unit',
+            'Deadband', 'Overload', 'Publish Step', 'Enabled'
         ])
         
         # Export Loadcell devices
         cursor.execute('''
             SELECT l.id, l.name, l.device_path, l.device_path_ch2, l.lc_mode,
-                   l.capacity_min, l.capacity_max, l.unit, l.enabled
+                   l.poll_ms, l.resolution_bits, l.effective_bits, l.signed,
+                   l.gain, l.vref, l.raw_min, l.raw_max,
+                   l.capacity_min, l.capacity_max, l.unit, 
+                   l.deadband, l.overload, l.publish_step_grams, l.enabled
             FROM loadcell_device l
             ORDER BY l.id
         ''')
         
         for row in cursor.fetchall():
-            device_id = row[0]
-            name = row[1]
-            device_path = row[2]
-            device_path_ch2 = row[3]
-            lc_mode = row[4]
-            capacity_min = row[5]
-            capacity_max = row[6]
-            unit = row[7]
-            enabled = row[8]
+            (device_id, name, device_path, device_path_ch2, lc_mode,
+             poll_ms, res_bits, eff_bits, signed, gain, vref, raw_min, raw_max,
+             cap_min, cap_max, unit, deadband, overload, pub_step, enabled) = row
+            
             writer.writerow([
                 device_id, name, 'Loadcell', 'loadcell', '',
                 '', '', '',
                 '', '', '', '',
                 '', '', '', '',
                 device_path or '', device_path_ch2 or '', lc_mode or 'single_ended',
-                capacity_min if capacity_min is not None else 0,
-                capacity_max if capacity_max is not None else 1000,
-                unit or 'kg', '1' if enabled else '0'
+                poll_ms, res_bits, eff_bits, signed, gain, vref,
+                raw_min, raw_max, cap_min, cap_max, unit or 'kg',
+                deadband, overload, pub_step,
+                '1' if enabled else '0'
             ])
 
         # Export External devices
@@ -1243,7 +1256,8 @@ async def export_devices_csv(request):
                     ip or '', port or '', serial_port or '',
                     baud or '', data_bits or '', parity or '', stop_bits or '',
                     resp_to or '', byte_to or '', max_ret or '', poll_iv or '',
-                    '', '', '', '', '', '', '1' if enabled else '0'
+                    '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
+                    '1' if enabled else '0'
                 ])
         except Exception as e:
             logger.error("Error exporting external devices: {}".format(e))
@@ -1415,19 +1429,29 @@ async def import_devices_csv(request):
                             id, name, service_id, device_path, device_path_ch2, lc_mode,
                             poll_ms, resolution_bits, effective_bits, signed, gain, vref,
                             raw_min, raw_max, capacity_min, capacity_max, unit,
-                            load_name, capacity_name, enabled
+                            load_name, capacity_name, enabled,
+                            deadband, overload, publish_step_grams
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         device_id, name, service_id,
                         device_path, device_path_ch2, lc_mode,
-                        10, 24, 14, 0, 1, 5,
-                        0, 16383,
+                        int(row.get('Poll MS', 10) or 10),
+                        int(row.get('Resolution Bits', 24) or 24),
+                        int(row.get('Effective Bits', 14) or 14),
+                        1 if str(row.get('Signed', '0')) == '1' else 0,
+                        float(row.get('Gain', 1.0) or 1.0),
+                        float(row.get('Vref', 5.0) or 5.0),
+                        float(row.get('Raw Min', 0) or 0),
+                        float(row.get('Raw Max', 16383) or 16383),
                         float(row.get('Capacity Min', row.get('Capacity', 0)) or 0),
                         float(row.get('Capacity Max', row.get('Capacity', 1000)) or 1000),
                         row.get('Unit', 'kg') or 'kg',
                         tag_weight, tag_capacity,
-                        1 if row.get('Enabled', '1') == '1' else 0
+                        1 if row.get('Enabled', '1') == '1' else 0,
+                        float(row.get('Deadband', 0) or 0),
+                        float(row.get('Overload', 0) or 0),
+                        float(row.get('Publish Step', 1.0) or 1.0)
                     ))
                     
                     # Create datapoints — unit must match the device's chosen unit

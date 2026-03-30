@@ -976,6 +976,14 @@
                                     <div class="text-sm text-slate-700">${config.capacity_max ?? 1000} ${config.unit || 'kg'}</div>
                                 </div>
                                 <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Deadband</div>
+                                    <div class="text-sm text-slate-700">${config.deadband ?? 0} ${config.unit || 'kg'}</div>
+                                </div>
+                                <div>
+                                    <div class="text-xs text-slate-500 mb-0.5">Overload</div>
+                                    <div class="text-sm text-slate-700">${config.overload ?? 0} ${config.unit || 'kg'}</div>
+                                </div>
+                                <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Unit</div>
                                     <div class="text-sm text-slate-700 font-semibold">
                                         ${config.unit === 'ton'
@@ -1221,6 +1229,8 @@
                     raw_max: parseInt(document.getElementById('lcRawMax')?.value) ?? 16383,
                     capacity_min: parseFloat(document.getElementById('lcCapacityMin')?.value) || 0,
                     capacity_max: parseFloat(document.getElementById('lcCapacityMax')?.value) || 1000,
+                    deadband: parseFloat(document.getElementById('lcDeadband')?.value) || 0,
+                    overload: parseFloat(document.getElementById('lcOverload')?.value) || 0,
                     unit: document.getElementById('lcUnit')?.value?.trim() || 'kg',
                     load_name: 'load_weight',
                     capacity_name: 'capacity'
@@ -1463,9 +1473,13 @@
                 <!-- Capacity Specification -->
                 <div>
                     <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 border-b border-slate-100 pb-2">Capacity Specification</p>
-                    <div class="grid grid-cols-3 gap-3">
+                    <div class="grid grid-cols-2 gap-3 mt-3">
                         ${inp('editCapacityMin','Min', cfg.capacity_min||0,'number','step="0.1"')}
                         ${inp('editCapacityMax','Max', cfg.capacity_max||1000,'number','step="0.1"')}
+                    </div>
+                    <div class="grid grid-cols-3 gap-3 mt-3">
+                        ${inp('editDeadband','Deadband', cfg.deadband||0,'number','step="0.1"')}
+                        ${inp('editOverload','Overload', cfg.overload||0,'number','step="0.1"')}
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Unit</label>
                             <select id="editUnit" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
@@ -1523,6 +1537,8 @@
             if (g('editPollMs')) cfg.poll_ms = parseInt(g('editPollMs').value) || 10;
             if (g('editCapacityMin')) cfg.capacity_min = parseFloat(g('editCapacityMin').value) || 0;
             if (g('editCapacityMax')) cfg.capacity_max = parseFloat(g('editCapacityMax').value) || 1000;
+            if (g('editDeadband')) cfg.deadband = parseFloat(g('editDeadband').value) || 0;
+            if (g('editOverload')) cfg.overload = parseFloat(g('editOverload').value) || 0;
             if (g('editUnit')) cfg.unit = g('editUnit').value?.trim() || 'kg';
             // ADC protected fields (admin-only, always persisted)
             if (g('editLcResolutionBits')) cfg.resolution_bits = parseInt(g('editLcResolutionBits').value) || 24;

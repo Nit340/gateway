@@ -179,6 +179,87 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
       <p style="font-size:11px;color:var(--text3);margin-top:8px;">Change via <code style="background:var(--surface3);padding:1px 6px;border-radius:4px;font-size:11px;color:var(--text2);">GATEWAY_DB_FILE</code> environment variable on server startup.</p>
     </div>
 
+    <!-- Live Configuration Previews -->
+    <div style="margin-bottom:24px; animation: fadeIn 0.6s ease-out;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;background:var(--accent-glow);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <span class="mat" style="color:var(--accent);font-size:20px;">data_object</span>
+          </div>
+          <div>
+            <h2 style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin:0;letter-spacing:-0.01em;">Live Service Configurations</h2>
+            <p style="font-size:10px;color:var(--text3);margin:0;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;">Real-time sync from active rules & database</p>
+          </div>
+        </div>
+        <button onclick="loadConfigPreviews()" class="btn-outline-orange" style="padding:6px 14px;font-size:11px;border-radius:10px;">
+          <span class="mat" style="font-size:16px;">sync</span> Sync State
+        </button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:16px;">
+        <!-- Core Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(249,115,22,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(249,115,22,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--accent);font-size:16px;">terminal</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Core Pipeline</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-core" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--accent);opacity:0.6;"></div>
+          </div>
+        </div>
+
+        <!-- Modbus Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(96,165,250,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(96,165,250,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--blue);font-size:16px;">settings_ethernet</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Modbus Mapping</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-modbus" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--blue);opacity:0.6;"></div>
+          </div>
+        </div>
+
+        <!-- Loadcell Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(74,222,128,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(74,222,128,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--green);font-size:16px;">scale</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Loadcell Calibration</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-loadcell" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--green);opacity:0.6;"></div>
+          </div>
+        </div>
+
+        <!-- IoT Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(251,191,36,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(251,191,36,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--yellow);font-size:16px;">cloud_sync</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">IoT Cloud Sync</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-iot" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--yellow);opacity:0.6;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
   </main>
 </div>
 
@@ -197,15 +278,35 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
     window.location.href = '/admin/login';
   }
 
+  async function loadConfigPreviews() {
+    try {
+      const res = await fetch('/api/admin/config-previews');
+      const data = await res.json();
+      document.getElementById('preview-core').textContent     = JSON.stringify(data.core || {}, null, 2);
+      document.getElementById('preview-modbus').textContent   = JSON.stringify(data.modbus || {}, null, 2);
+      document.getElementById('preview-loadcell').textContent = JSON.stringify(data.loadcell || {}, null, 2);
+      document.getElementById('preview-iot').textContent      = JSON.stringify(data.iot_gateway || {}, null, 2);
+    } catch(e) {
+      console.error("Failed to load previews", e);
+    }
+  }
+
   async function loadStats() {
     try {
-      const [u] = await Promise.all([
+      const [u, m, l, d] = await Promise.all([
         fetch('/api/admin/users/admin').then(r=>r.json()),
+        fetch('/api/vfd/devices').then(r=>r.json()).catch(()=>({total:0})),
+        fetch('/api/loadcell/devices').then(r=>r.json()).catch(()=>({total:0})),
+        fetch('/api/vfd/datapoints').then(r=>r.json()).catch(()=>({total:0})),
       ]);
       document.getElementById('stat-users').textContent = (u.users||[]).length;
+      document.getElementById('stat-modbus').textContent = m.total || 0;
+      document.getElementById('stat-loadcell').textContent = l.total || 0;
+      document.getElementById('stat-datapoints').textContent = d.total || 0;
 
     } catch(e) {}
     document.getElementById('dbPath').textContent = 'Configured on server (see GATEWAY_DB_FILE env var)';
+    loadConfigPreviews();
   }
   loadStats();
 </script>

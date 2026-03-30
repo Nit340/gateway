@@ -254,15 +254,7 @@ def _clear_sent(config_type):
 _PERMANENT_WHITELIST = {"lan", "wlan", "lte", "network_status", "modbus_config"}
 
 # Suffixes appended to each whitelisted device name (excludes .raw, toggled separately)
-_DEVICE_DP_SUFFIXES = [
-    ".weight_kg",
-    ".unit",
-    ".known_weight_kg",
-    ".known_raw",
-    ".tared",
-    ".calibrated",
-    ".capacity",
-]
+_DEVICE_DP_SUFFIXES = []
 
 
 def add_whitelisted_device_name(name):
@@ -1756,9 +1748,9 @@ def _build_multi_loadcell_config(device_rows, source="auto_send"):
                          for lv in levels if lv.get("enabled", True)]
 
         _db_unit = r.get("unit") or "kg"
-        _cap_min_kg, _ = _normalise_to_kg(r.get("capacity_min") or 0,    _db_unit)
-        _cap_max_kg, _ = _normalise_to_kg(r.get("capacity_max") or 1000, _db_unit)
-        _kw_kg,      _ = _normalise_to_kg(r.get("known_weight") or 0,    _db_unit)
+        _cap_min = r.get("capacity_min") or 0
+        _cap_max = r.get("capacity_max") or 1000
+        _kw      = r.get("known_weight") or 0
 
         lc_entry = {
             "name": r["name"],
@@ -1778,14 +1770,14 @@ def _build_multi_loadcell_config(device_rows, source="auto_send"):
             },
             "specifications": {
                 "capacity": {
-                    "min": {"value": _cap_min_kg, "unit": "kg"},
-                    "max": {"value": _cap_max_kg, "unit": "kg"},
+                    "min": {"value": _cap_min, "unit": _db_unit},
+                    "max": {"value": _cap_max, "unit": _db_unit},
                 }
             },
             "levels":      {"type": "ratio", "parameters": {"ratios": active_levels}},
             "tare":        {"type": "manual", "parameters": {"offset_raw": r.get("tare_offset") or 0.0}},
             "calibration": {"type": "single_point" if r.get("lc_mode") == "single_ended" else "differential", "parameters": {
-                "ref_weight": {"value": _kw_kg, "unit": "kg"},
+                "ref_weight": {"value": _kw, "unit": _db_unit},
                 "ref_raw":    r.get("known_weight_raw") or 0.0,
             }},
             "filter": {"raw": active_raw, "weight": active_weight}
@@ -1828,7 +1820,7 @@ async def send_loadcell_config_now():
         conn.close()
 
         if not rows:
-            msg = "No enabled loadcell devices found"
+            msg = "No enabled loadcell devices found - skipping auto-send"
             logger.info("[LC-CFG] " + msg)
             return {"success": False, "error": msg}
 
@@ -2106,127 +2098,14 @@ async def pipeline_save_modbus_config(request):
         return web.json_response({"success": False, "error": "ilx_pipeline not available"})
 
     try:
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        # Read enabled external devices that use Modbus (ext-rtu or ext-tcp)
-        cursor.execute('''
-            SELECT
-                ed.id          AS tag_id,
-                ed.device_id,
-                ed.name        AS tag_name,
-                ed.slave_id,
-                ed.register_address,
-                ed.register_type,
-                ed.data_type,
-                ed.byte_order,
-                ed.word_order,
-                ed.scale_factor,
-                ed.offset,
-                ed.unit,
-                ed.writable,
-                1   AS retry_count,
-                100 AS timeout_ms,
-                1   AS register_count,
-                e.name          AS device_name,
-                e.protocol      AS ext_protocol,
-                e.serial_port,
-                e.baud_rate,
-                e.parity,
-                e.data_bits,
-                e.stop_bits,
-                e.ip_address,
-                e.port,
-                e.slave_id          AS device_slave_id,
-                e.response_timeout_ms,
-                e.byte_timeout_ms,
-                e.max_retries,
-                e.polling_interval_ms
-            FROM external_datapoints ed
-            JOIN external_device e ON ed.device_id = e.id
-            WHERE ed.enabled = 1
-              AND e.enabled  = 1
-              AND e.protocol IN ('ext-rtu', 'ext-tcp')
-            ORDER BY ed.device_id, ed.slave_id
-        ''')
-        rows = cursor.fetchall()
-        conn.close()
-
-        logger.info("[MODBUS-CFG] {} tags from external_datapoints".format(len(rows)))
-        if not rows:
+        config, rows, connection_map, assets = _build_current_modbus_config()
+        if not config:
             return web.json_response({
                 "success": False,
                 "error": "No Modbus tags found — add tags to External devices with Modbus RTU or TCP protocol"
             })
-
-        connection_map = {}
-        assets = []
-
-        for row in rows:
-            r      = dict(row)
-            dev_id = r['device_id']
-            name   = r['device_name'] or str(dev_id)
-            proto  = r['ext_protocol'] or 'ext-rtu'
-            is_tcp = 'tcp' in proto
-
-            if dev_id not in connection_map:
-                if is_tcp:
-                    connection_map[dev_id] = {
-                        "id":                name,
-                        "type":              "tcp",
-                        "host":              r.get('ip_address') or '127.0.0.1',
-                        "port":              r.get('port') or 502,
-                        "responseTimeoutMs": r.get('response_timeout_ms') or 100,
-                        "byteTimeoutMs":     r.get('byte_timeout_ms') or 100,
-                        "maxRetries":        r.get('max_retries') or 2,
-                        "pollingIntervalMs": r.get('polling_interval_ms') or 300,
-                    }
-                else:
-                    connection_map[dev_id] = {
-                        "id":                name,
-                        "type":              "rtu",
-                        "device":            r.get('serial_port') or '/dev/ttyUSB0',
-                        "baud":              r.get('baud_rate') or 9600,
-                        "parity":            r.get('parity') or 'N',
-                        "dataBits":          r.get('data_bits') or 8,
-                        "stopBits":          r.get('stop_bits') or 1,
-                        "responseTimeoutMs": r.get('response_timeout_ms') or 100,
-                        "byteTimeoutMs":     r.get('byte_timeout_ms') or 100,
-                        "maxRetries":        r.get('max_retries') or 2,
-                        "pollingIntervalMs": r.get('polling_interval_ms') or 300,
-                    }
-
-            assets.append({
-                "name":          r['tag_name'],
-                "connection_id": name,
-                "slaveId":       r['slave_id'] or r.get('device_slave_id') or 1,
-                "registerType":  r['register_type'] or 'holding',
-                "address":       r['register_address'] or 0,
-                "registerCount": r['register_count'] or 1,
-                "dataType":      r['data_type'] or 'uint16',
-                "scale":         r['scale_factor'] or 1.0,
-                "offset":        r['offset'] or 0.0,
-                "byteOrder":     r['byte_order'] or 'big',
-                "wordOrder":     r['word_order'] or 'big',
-                "retryCount":    r['retry_count'] or 1,
-                "timeoutMs":     r['timeout_ms'] or 100,
-                "writable":      bool(r['writable']),
-            })
-
-        new_version = get_next_pipeline_version("modbus")
-        with pipeline_state["lock"]:
-            pipeline_state["last_config_time"] = time.time()
-
-        config = {
-            "connections":   list(connection_map.values()),
-            "assets":        assets,
-            "version":       new_version,
-            "timestamp":     time.time(),
-            "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "source":        "web_ui",
-            "tag_count":     len(rows),
-        }
+        
+        new_version = config["version"]
         config_json = json.dumps(config, indent=2)
         logger.info("[MODBUS-CFG] Built v{}: {} connections, {} assets".format(
             new_version, len(connection_map), len(assets)))
@@ -2319,6 +2198,140 @@ async def send_modbus_config_now():
         return _json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
     except Exception:
         return {"success": False, "error": "could not parse response"}
+
+def _build_current_modbus_config():
+    """Helper to build Modbus config from DB without sending."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT
+                ed.id          AS tag_id,
+                ed.device_id,
+                ed.name        AS tag_name,
+                ed.slave_id,
+                ed.register_address,
+                ed.register_type,
+                ed.data_type,
+                ed.byte_order,
+                ed.word_order,
+                ed.scale_factor,
+                ed.offset,
+                ed.unit,
+                ed.writable,
+                1   AS retry_count,
+                100 AS timeout_ms,
+                1   AS register_count,
+                e.name          AS device_name,
+                e.protocol      AS ext_protocol,
+                e.serial_port,
+                e.baud_rate,
+                e.parity,
+                e.data_bits,
+                e.stop_bits,
+                e.ip_address,
+                e.port,
+                e.slave_id          AS device_slave_id,
+                e.response_timeout_ms,
+                e.byte_timeout_ms,
+                e.max_retries,
+                e.polling_interval_ms
+            FROM external_datapoints ed
+            JOIN external_device e ON ed.device_id = e.id
+            WHERE ed.enabled = 1
+              AND e.enabled  = 1
+              AND e.protocol IN ('ext-rtu', 'ext-tcp')
+            ORDER BY ed.device_id, ed.slave_id
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            return None, [], {}, []
+
+        connection_map = {}
+        assets = []
+        for row in rows:
+            r      = dict(row)
+            dev_id = r['device_id']
+            name   = r['device_name'] or str(dev_id)
+            proto  = r['ext_protocol'] or 'ext-rtu'
+            is_tcp = 'tcp' in proto
+            if dev_id not in connection_map:
+                if is_tcp:
+                    connection_map[dev_id] = {
+                        "id":                name,
+                        "type":              "tcp",
+                        "host":              r.get('ip_address') or '127.0.0.1',
+                        "port":              r.get('port') or 502,
+                        "responseTimeoutMs": r.get('response_timeout_ms') or 100,
+                        "byteTimeoutMs":     r.get('byte_timeout_ms') or 100,
+                        "maxRetries":        r.get('max_retries') or 2,
+                        "pollingIntervalMs": r.get('polling_interval_ms') or 300,
+                    }
+                else:
+                    connection_map[dev_id] = {
+                        "id":                name,
+                        "type":              "rtu",
+                        "device":            r.get('serial_port') or '/dev/ttyUSB0',
+                        "baud":              r.get('baud_rate') or 9600,
+                        "parity":            r.get('parity') or 'N',
+                        "dataBits":          r.get('data_bits') or 8,
+                        "stopBits":          r.get('stop_bits') or 1,
+                        "responseTimeoutMs": r.get('response_timeout_ms') or 100,
+                        "byteTimeoutMs":     r.get('byte_timeout_ms') or 100,
+                        "maxRetries":        r.get('max_retries') or 2,
+                        "pollingIntervalMs": r.get('polling_interval_ms') or 300,
+                    }
+            assets.append({
+                "name":          r['tag_name'],
+                "connection_id": name,
+                "slaveId":       r['slave_id'] or r.get('device_slave_id') or 1,
+                "registerType":  r['register_type'] or 'holding',
+                "address":       r['register_address'] or 0,
+                "registerCount": r['register_count'] or 1,
+                "dataType":      r['data_type'] or 'uint16',
+                "scale":         r['scale_factor'] or 1.0,
+                "offset":        r['offset'] or 0.0,
+                "byteOrder":     r['byte_order'] or 'big',
+                "wordOrder":     r['word_order'] or 'big',
+                "retryCount":    r['retry_count'] or 1,
+                "timeoutMs":     r['timeout_ms'] or 100,
+                "writable":      bool(r['writable']),
+            })
+
+        new_version = get_next_pipeline_version("modbus")
+        config = {
+            "connections":   list(connection_map.values()),
+            "assets":        assets,
+            "version":       new_version,
+            "timestamp":     time.time(),
+            "timestamp_str": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source":        "web_ui",
+            "tag_count":     len(rows),
+        }
+        return config, rows, connection_map, assets
+    except Exception as e:
+        logger.error("[MODBUS-CFG] _build error: {}".format(e))
+        return None, [], {}, []
+
+async def _build_current_loadcell_config():
+    """Helper to build Loadcell config from DB without sending."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM loadcell_device WHERE enabled = 1")
+        rows = cursor.fetchall()
+        conn.close()
+        if not rows:
+            return None
+        config, version = _build_multi_loadcell_config(rows, source="auto_preview")
+        return config
+    except Exception as e:
+        logger.error("[LC-CFG] _build error: {}".format(e))
+        return None
 # Add to pipeline.py - new save endpoint that updates the latest config
 async def pipeline_core_config_save_handler(request):
     """POST /api/pipeline/core-config/save
@@ -2346,6 +2359,23 @@ async def pipeline_core_config_save_handler(request):
     except json.JSONDecodeError as e:
         return web.json_response({"success": False, "error": "Invalid JSON: {}".format(e)}, status=400)
     
+    # Enforce Loadcell Params from DB (Source of Truth)
+    try:
+        from rules import _get_loadcell_service_params
+        lc_params = _get_loadcell_service_params()
+        if 'services' in config and 'loadcell' in config['services']:
+            lc = config['services']['loadcell']
+            lc['overload_threshold_grams'] = lc_params['overload_threshold_grams']
+            lc['overload_deadband_grams']  = lc_params['overload_deadband_grams']
+            lc['datapoint_name']            = lc_params['datapoint_name']
+            lc['unit_datapoint_name']       = lc_params['unit_datapoint_name']
+            # Re-serialize config_json with enforced values
+            config_json = json.dumps(config, indent=2)
+            logger.info("[CORE-CFG] Enforced DB loadcell params (deadband={}, overload={})".format(
+                lc_params['overload_deadband_grams'], lc_params['overload_threshold_grams']))
+    except Exception as lc_err:
+        logger.warning("[CORE-CFG] Could not enforce loadcell params: {}".format(lc_err))
+
     # Extract device names
     device_names = []
     if 'services' in config:
@@ -2477,6 +2507,10 @@ async def send_iot_gateway_config_now():
     try:
         from mqtt_cloud import build_iot_gateway_config
         config = build_iot_gateway_config()
+        if config is None:
+            msg = "No MQTT connections or mappings found - skipping auto-send"
+            logger.info("[IOT-CFG] " + msg)
+            return {"success": True, "pipeline_message": msg, "skipped": True}
     except Exception as e:
         logger.error("[IOT-CFG] build error: {}".format(e))
         return {"success": False, "error": "build failed: {}".format(e)}
@@ -2569,6 +2603,72 @@ async def pipeline_iot_gateway_config_view_handler(request):
         return web.json_response({"success": True, "config": json.loads(config)})
     except Exception as e:
         return web.json_response({"success": True, "config": config, "error": str(e)})
+
+
+async def pipeline_config_previews_handler(request):
+    """GET /api/admin/config-previews
+    Returns the current configuration JSON for all 4 services.
+    """
+    def _parse(val):
+        if not val: return None
+        if isinstance(val, dict): return val
+        try: return json.loads(val)
+        except: return {"raw": str(val)}
+
+    with pipeline_state["lock"]:
+        core_mem = _parse(pipeline_state.get("core_config"))
+        mb_mem   = _parse(pipeline_state.get("modbus_config"))
+        lc_mem   = _parse(pipeline_state.get("loadcell_config"))
+        iot_mem  = _parse(pipeline_state.get("iot_gateway_config"))
+
+    # Fallbacks for empty memory (e.g. after restart)
+    if not core_mem:
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            cursor = conn.cursor()
+            cursor.execute("SELECT config_json FROM core_configs ORDER BY updated_at DESC LIMIT 1")
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                core_mem = json.loads(row[0])
+                # Inject latest loadcell params (consistent with rules.py)
+                try:
+                    from rules import _get_loadcell_service_params
+                    lc_params = _get_loadcell_service_params()
+                    if 'services' in core_mem and 'loadcell' in core_mem['services']:
+                        lc = core_mem['services']['loadcell']
+                        lc['overload_threshold_grams'] = lc_params['overload_threshold_grams']
+                        lc['overload_deadband_grams']  = lc_params['overload_deadband_grams']
+                        lc['datapoint_name']            = lc_params['datapoint_name']
+                        lc['unit_datapoint_name']       = lc_params['unit_datapoint_name']
+                except: pass
+            else:
+                from rules import _collect_all_enabled_rules, _build_combined_core_config
+                rules_list = _collect_all_enabled_rules()
+                core_mem   = _build_combined_core_config(rules_list)
+        except: core_mem = {}
+
+    if not mb_mem:
+        mb_mem, _, _, _ = _build_current_modbus_config()
+        if not mb_mem: mb_mem = {}
+
+    if not lc_mem:
+        lc_mem = await _build_current_loadcell_config()
+        if not lc_mem: lc_mem = {}
+
+    if not iot_mem:
+        try:
+            from mqtt_cloud import build_iot_gateway_config
+            iot_mem = build_iot_gateway_config()
+            if not iot_mem: iot_mem = {}
+        except: iot_mem = {}
+
+    return web.json_response({
+        "core":        core_mem,
+        "modbus":      mb_mem,
+        "loadcell":    lc_mem,
+        "iot_gateway": iot_mem
+    })
 
 # ============================================================================
 # AUTO-SEND  -- fire immediately for all enabled targets
@@ -3028,6 +3128,17 @@ async def pipeline_load_raw_toggle_handler(request):
     with pipeline_state["lock"]:
         pipeline_state["load_raw_enabled"] = enabled
 
+    # Persist the change to the database
+    try:
+        import sqlite3 as _sq
+        _conn = _sq.connect(DB_FILE)
+        _cur = _conn.cursor()
+        _cur.execute("UPDATE general_configuration SET load_raw_enabled = ? WHERE id = 1", (1 if enabled else 0,))
+        _conn.commit()
+        _conn.close()
+    except Exception as _e:
+        logger.error("[PIPELINE] DB write error for load_raw_enabled: {}".format(_e))
+
     # Rebuild whitelist first -- adds/removes the exact raw datapoint strings
     rebuild_whitelist(include_raw=enabled)
 
@@ -3203,20 +3314,35 @@ def register_pipeline_routes(app):
 
     # -- Network route select ----------------------------------------------
     app.router.add_post('/api/pipeline/network-route-select', pipeline_network_route_select_handler)
+    app.router.add_get ('/api/admin/config-previews',         pipeline_config_previews_handler)
     # Register whitelisted device names from DB (permanent devices only),
-    # then build the initial whitelist with raw OFF.
+    # then build the initial whitelist with the persisted raw state.
+    include_raw = False
     try:
         import sqlite3 as _sq
         _conn = _sq.connect(DB_FILE)
         _conn.row_factory = _sq.Row
         _cur = _conn.cursor()
+        
+        # 1. Load whitelisted names
         _cur.execute("SELECT name FROM loadcell_device WHERE enabled = 1")
         for _row in _cur.fetchall():
-            add_whitelisted_device_name(_row["name"])
+            if _row["name"]:
+                add_whitelisted_device_name(_row["name"])
+        
+        # 2. Load persisted raw toggle state
+        _cur.execute("SELECT load_raw_enabled FROM general_configuration WHERE id = 1")
+        _gc_row = _cur.fetchone()
+        if _gc_row:
+            include_raw = bool(_gc_row["load_raw_enabled"])
+            with pipeline_state["lock"]:
+                pipeline_state["load_raw_enabled"] = include_raw
+                
         _conn.close()
     except Exception as _wl_err:
-        logger.info("[WHITELIST] Could not seed device names from DB: {}".format(_wl_err))
-    rebuild_whitelist(include_raw=False)
+        logger.info("[WHITELIST] Could not seed state from DB (standard for first boot): {}".format(_wl_err))
+
+    rebuild_whitelist(include_raw=include_raw)
 
     # Seed any missing pipeline_service_targets rows
     _seed_pipeline_targets()

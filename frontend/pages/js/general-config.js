@@ -230,6 +230,15 @@ console.log('general-config.js loaded');
         document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
             r.addEventListener('change', function () {
                 setNetworkMode(this.value);
+                
+                // If Auto-Connect is ON, we only change the UI tabs. 
+                // We do NOT show the switching modal and we do NOT send the route select command.
+                if (_acEnabled) {
+                    console.log('[NET-MODE] Auto is ON — skipping switching modal and pipeline command');
+                    updateGlobalMacDisplay();
+                    return;
+                }
+
                 showNetworkSwitchingModal(this.value);
                 // Send pipeline datapoint on radio click
                 // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1

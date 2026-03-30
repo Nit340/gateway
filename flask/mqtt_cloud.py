@@ -335,9 +335,13 @@ def build_iot_gateway_config():
     rows = cur.fetchall()
     db.close()
 
+    if not rows:
+        logger.info("[IOT-CFG] No enabled MQTT connections found - skipping config build")
+        return None
+
     servers          = {}
     all_mappings     = []
-    heartbeat_channel = 'default_subscribe'   # updated from local broker's first subscribe channel
+    heartbeat_channel = None   # Initialize as None
 
     for row in rows:
         cid, name, enabled, cfg_raw = row
@@ -376,7 +380,7 @@ def build_iot_gateway_config():
         # Use the first available if no default marked, but prioritize the 'mqtt' server
         if raw_sub:
             def_ch = _get_default_subscribe_channel_for_connection(cfg)
-            if server_key == 'mqtt' or heartbeat_channel == 'default_subscribe':
+            if server_key == 'mqtt' or heartbeat_channel is None:
                 heartbeat_channel = def_ch
 
         # Collect mappings   groups pass through as-is;
@@ -403,6 +407,10 @@ def build_iot_gateway_config():
                             'channel':    channel,
                             'datapoints': {dtype: [tag_entry]},
                         })
+
+    if not all_mappings:
+        logger.info("[IOT-CFG] No mappings found for enabled MQTT connections - skipping config build")
+        return None
 
     # -- 3. Assemble ---------------------------------------------------------
     return {

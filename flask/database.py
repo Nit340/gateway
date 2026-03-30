@@ -353,6 +353,9 @@ def create_tables(cursor):
             known_weight     REAL    DEFAULT 0.0,
             known_weight_raw REAL    DEFAULT 0.0,
 
+            deadband         REAL    DEFAULT 0.0,
+            overload         REAL    DEFAULT 0.0,
+
             raw_filters      TEXT    DEFAULT '[]',
             weight_filters   TEXT    DEFAULT '[]',
             levels           TEXT    DEFAULT '[]',
@@ -389,6 +392,8 @@ def create_tables(cursor):
         ('publish_step_grams', 'REAL    DEFAULT 1.0'),
         ('action_tare',        'TEXT    DEFAULT NULL'),
         ('action_calibrate',   'TEXT    DEFAULT NULL'),
+        ('deadband',           'REAL    DEFAULT 0.0'),
+        ('overload',           'REAL    DEFAULT 0.0'),
     ]:
         try:
             cursor.execute('ALTER TABLE loadcell_device ADD COLUMN {} {}'.format(_col, _defn))
@@ -750,6 +755,9 @@ def _migrate_existing_db(cursor):
     # Add auto_connect to general_configuration (persists Auto-connect toggle state)
     if 'auto_connect' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN auto_connect INTEGER DEFAULT 0")
+    # Add load_raw_enabled to general_configuration (persists the Raw toggle state)
+    if 'load_raw_enabled' not in gc_cols:
+        cursor.execute("ALTER TABLE general_configuration ADD COLUMN load_raw_enabled INTEGER DEFAULT 0")
 
     # Migration for modal table: remove modal_time column
     cursor.execute("PRAGMA table_info(modal)")
