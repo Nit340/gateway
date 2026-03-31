@@ -724,6 +724,12 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                     logger.error("[PIPELINE] Re-subscribe parse error: {}".format(parse_e))
                             with pipeline_state["lock"]:
                                 pipeline_state["subscribed_datapoints"] = subscribed
+
+                            # Watch for config updates from other services (e.g. Loadcell Service)
+                            # so the gateway backend receives and stores them in the DB.
+                            if hasattr(client, 'watch'):
+                                client.watch("loadcell_config")
+                                logger.info("[PIPELINE] Watching 'loadcell_config' for storage sync")
                         else:
                             client.refresh()
                     except Exception as e:

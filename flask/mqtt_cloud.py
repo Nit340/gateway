@@ -336,8 +336,10 @@ def build_iot_gateway_config():
     db.close()
 
     if not rows:
-        logger.info("[IOT-CFG] No enabled MQTT connections found - skipping config build")
-        return None
+        logger.info("[IOT-CFG] No enabled MQTT connections found - building empty config")
+        # Proceed to assemble a minimal empty config instead of returning None
+        # so the iot_gateway service is correctly "cleared" rather than skipped.
+        rows = []
 
     servers          = {}
     all_mappings     = []
@@ -409,8 +411,9 @@ def build_iot_gateway_config():
                         })
 
     if not all_mappings:
-        logger.info("[IOT-CFG] No mappings found for enabled MQTT connections - skipping config build")
-        return None
+        logger.info("[IOT-CFG] No mappings found for enabled MQTT connections - building empty config")
+        # Proceed to assemble minimal config to ensure service sync
+        all_mappings = []
 
     # -- 3. Assemble ---------------------------------------------------------
     return {

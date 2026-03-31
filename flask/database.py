@@ -821,8 +821,9 @@ def insert_default_data(cursor):
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('admin', _hash_password('admin'), 'Admin User', 'admin'))
     
-    # Metadata seed
-    for m in [('Gateway Name', 'string', 'System'), ('Uptime', 'int', 'Performance'), ('CPU Load', 'float', 'Hardware')]:
+    # Metadata seed - Optimized for initial PAL (gsm, wifi, ethernet)
+    cursor.execute('DELETE FROM metadata')
+    for m in [('lte', 'string', 'gsm'), ('wlan', 'string', 'wifi'), ('lan', 'string', 'ethernet')]:
         cursor.execute('INSERT OR IGNORE INTO metadata (name, datatype, component) VALUES (?, ?, ?)', m)
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('user', _hash_password('user123'), 'Regular User', 'user'))
