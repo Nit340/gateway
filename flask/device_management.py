@@ -91,6 +91,72 @@ def _delete_ext_device_file(device_id):
 # DATABASE CONNECTION HELPER
 # ============================================================================
 
+async def _trigger_loadcell_pipeline(device_id, action='save'):
+    """Build the core config from current DB state and send it to the pipeline immediately.
+    Skips the connection-check gate so the config is always dispatched on every loadcell save/edit.
+    """
+    try:
+        from rules import (
+            _build_combined_core_config, _collect_all_enabled_rules,
+            _save_core_config_to_db
+        )
+        from pipeline import (
+            pipeline_state, get_pipeline_service_name, get_pipeline_config_name,
+            get_next_pipeline_version, Config,
+            record_pipeline_send_success, record_pipeline_send_failure
+        )
+
+        # Always rebuild fresh from DB so latest loadcell params are included
+        rules = _collect_all_enabled_rules()
+        core_config = _build_combined_core_config(rules)
+        import json as _json
+        config_json = _json.dumps(core_config, indent=2)
+
+        # Persist to core_configs table
+        _save_core_config_to_db(
+            config_json,
+            device_names=[],
+            service_name=core_config.get('service_name', 'ilx_craneiq_core')
+        )
+
+        core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
+
+        with pipeline_state['lock']:
+            client    = pipeline_state.get('client')
+            connected = pipeline_state.get('connected', False)
+            services  = set(pipeline_state.get('connected_services', set()))
+
+        if connected and client and core_svc in services:
+            new_version = get_next_pipeline_version('core')
+            ok = client.publish_config(Config(
+                name    = get_pipeline_config_name('core'),
+                value   = config_json,
+                version = new_version,
+                service = core_svc,
+            ))
+            if ok:
+                record_pipeline_send_success('core', new_version, core_svc,
+                                             'Loadcell {} ({})'.format(action, device_id))
+                with pipeline_state['lock']:
+                    pipeline_state['core_config']         = config_json
+                    pipeline_state['core_config_pending'] = None
+                    pipeline_state['core_config_version'] = new_version
+                logger.info('[DeviceMgmt] Core config sent to pipeline after loadcell {} ({})'.format(action, device_id))
+            else:
+                record_pipeline_send_failure('core', 'publish_config returned False')
+                with pipeline_state['lock']:
+                    pipeline_state['core_config_pending'] = config_json
+                logger.warning('[DeviceMgmt] publish_config returned False -- queued')
+        else:
+            # Not connected yet — store as pending so pipeline.py sends it on reconnect
+            with pipeline_state['lock']:
+                pipeline_state['core_config_pending'] = config_json
+            logger.info('[DeviceMgmt] Pipeline not ready -- core config queued after loadcell {} ({})'.format(action, device_id))
+
+    except Exception as _e:
+        logger.warning('[DeviceMgmt] _trigger_loadcell_pipeline error: {}'.format(_e))
+
+
 def get_db_connection():
     """Get a database connection with proper timeout and WAL mode for concurrency"""
     conn = sqlite3.connect(DB_FILE, timeout=10.0)
@@ -652,7 +718,11 @@ async def add_device(request):
         
         # Initialize status tracker
         initialize_device_status(device_id, 'Online')
-        
+
+        # Send updated core config to pipeline immediately on every loadcell save
+        if device_type == 'loadcell':
+            await _trigger_loadcell_pipeline(device_id, 'add')
+
         return web.json_response({
             'success': True,
             'message': 'Device added successfully',
@@ -806,7 +876,11 @@ async def update_device(request):
         
         conn.commit()
         conn.close()
-        
+
+        # Send updated core config to pipeline immediately on every loadcell save
+        if not is_external:
+            await _trigger_loadcell_pipeline(device_id, 'update')
+
         return web.json_response({
             'success': True,
             'message': 'Device updated successfully'

@@ -453,24 +453,25 @@ def _get_loadcell_service_params():
         conn.close()
         if row:
             dev_name = row['name'] or "load"
-            dp_name = f"loadcells.{dev_name}.weight"
-            unit_name = f"loadcells.{dev_name}.unit"
+            # Build the full datapoint names with the proper prefix
+            dp_name = "loadcells.{}.weight".format(dev_name)
+            unit_name = "loadcells.{}.unit".format(dev_name)
             return {
                 'datapoint_name': dp_name,
                 'unit_datapoint_name': unit_name,
                 'overload_deadband_grams': row['deadband'] or 0.0,
-                'overload_threshold_grams': row['overload'] or 0.0
+                'overload_threshold_grams': row['overload'] or 0.0,
+                'device_name': dev_name  # Also return the device name for reference
             }
     except Exception as e:
         logger.error('[RULES] loadcell auto-discovery error: {} -- using defaults'.format(e))
     return {
-        'datapoint_name': 'weight',
+        'datapoint_name': 'weight',  # Fallback to default
         'unit_datapoint_name': 'unit',
         'overload_deadband_grams': 0.0,
-        'overload_threshold_grams': 0.0
+        'overload_threshold_grams': 0.0,
+        'device_name': None
     }
-
-
 def _build_combined_core_config(rules):
     """
     Build the full core_config dict from all enabled rules.
