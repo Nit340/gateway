@@ -706,7 +706,7 @@ def _flush_pending_for_service(client, svc):
                 already = key in _sent_versions
             if already:
                 logger.debug("Loadcell v{} already sent -- skip duplicate flush".format(pending_version))
-                return
+                pass  # fall through -- other service blocks still need to run
             try:
                 ok = client.publish_config(Config(
                     name    = get_pipeline_config_name("loadcell"),
@@ -761,7 +761,7 @@ def _flush_pending_for_service(client, svc):
                 already = key in _sent_versions
             if already:
                 logger.debug("IoT gateway v{} already sent -- skip duplicate flush".format(pending_version))
-                return
+                pass  # fall through
             try:
                 ok = client.publish_config(Config(
                     name    = get_pipeline_config_name("iot_gateway"),
@@ -792,7 +792,7 @@ def _flush_pending_for_service(client, svc):
                 already = key in _sent_versions
             if already:
                 logger.debug("Core v{} already sent -- skip duplicate flush".format(pending_version))
-                return
+                pass  # fall through
             try:
                 ok = client.publish_config(Config(
                     name    = get_pipeline_config_name("core"),
@@ -2708,6 +2708,23 @@ async def send_iot_gateway_config_now():
 
     if connected and client:
         target_service = _find_iot_gateway_service()
+
+        # Diagnose service-name mismatch: log what's connected vs what the DB says
+        if not target_service:
+            with pipeline_state["lock"]:
+                live_svcs = list(pipeline_state.get("connected_services", set()))
+            configured_name = get_pipeline_service_name("iot_gateway") or "iot_gateway_service"
+            logger.warning(
+                "[IOT-CFG] Service '{}' not in connected services {}. "
+                "Check Admin > Pipeline > IoT Gateway service name.".format(
+                    configured_name, live_svcs))
+            # Fallback: if exactly one service is connected (besides ourselves) try it
+            # so the config is not silently dropped when the name is slightly wrong.
+            candidates = [s for s in live_svcs if s not in ("web_ui",)]
+            if len(candidates) == 1:
+                target_service = candidates[0]
+                logger.warning("[IOT-CFG] Falling back to only connected service: '{}'".format(target_service))
+
         if target_service:
             try:
                 ok = client.publish_config(Config(
@@ -2738,13 +2755,12 @@ async def send_iot_gateway_config_now():
                     pipeline_state["iot_gateway_config_pending"] = config_json
                     pipeline_state["iot_gateway_config_version"] = new_version
         else:
-            pipeline_message = "Service '{}' not connected -- queued as pending".format(
-                get_pipeline_service_name("iot_gateway") or "iot_gateway_service")
+            pipeline_message = "No matching IoT Gateway service connected -- queued as pending"
             record_pipeline_send_failure("iot_gateway", pipeline_message)
             with pipeline_state["lock"]:
                 pipeline_state["iot_gateway_config_pending"] = config_json
                 pipeline_state["iot_gateway_config_version"] = new_version
-            logger.info("[IOT-CFG] " + pipeline_message)
+            logger.warning("[IOT-CFG] " + pipeline_message)
     else:
         pipeline_message = "Queued as pending (not connected)"
         record_pipeline_send_failure("iot_gateway", pipeline_message)

@@ -488,6 +488,7 @@ def create_tables(cursor):
             service_name TEXT    NOT NULL DEFAULT '',
             config_name  TEXT    NOT NULL DEFAULT '',
             enabled      BOOLEAN DEFAULT 1,
+            send_order   INTEGER DEFAULT 0,
             description  TEXT    DEFAULT '',
             updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -712,6 +713,14 @@ def _migrate_existing_db(cursor):
         cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN enabled BOOLEAN DEFAULT 1")
     if 'config_name' not in cols:
         cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN config_name TEXT NOT NULL DEFAULT ''")
+    if 'send_order' not in cols:
+        # Add send_order column and set default ordering: modbus=1, loadcell=2, iot_gateway=3, core=4
+        cursor.execute("ALTER TABLE pipeline_service_targets ADD COLUMN send_order INTEGER DEFAULT 0")
+        cursor.execute("UPDATE pipeline_service_targets SET send_order=1 WHERE config_type='modbus'")
+        cursor.execute("UPDATE pipeline_service_targets SET send_order=2 WHERE config_type='loadcell'")
+        cursor.execute("UPDATE pipeline_service_targets SET send_order=3 WHERE config_type='iot_gateway'")
+        cursor.execute("UPDATE pipeline_service_targets SET send_order=4 WHERE config_type='core'")
+        logger.info("[DB] Migration: added send_order column to pipeline_service_targets")
 
     # Add missing columns to external_datapoints
     cursor.execute("PRAGMA table_info(external_datapoints)")
@@ -828,14 +837,16 @@ def insert_default_data(cursor):
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('user', _hash_password('user123'), 'Regular User', 'user'))
 
-    for cfg_type, svc_name, cfg_name, desc in [
-        ('modbus', 'modbus_service', 'modbus_config', 'Modbus pipeline service name'),
-        ('loadcell', 'load_cell_service', 'loadcell_config', 'Load-cell pipeline service name'),
-        ('iot_gateway', 'iot-gateway', 'gateway_config', 'IoT gateway pipeline service name'),
-        ('core', 'ilx_craneiq_core', 'core_config', 'Core config pipeline service name'),
+    for cfg_type, svc_name, cfg_name, desc, order in [
+        ('modbus',      'modbus_service',    'modbus_config',   'Modbus pipeline service name',       1),
+        ('loadcell',    'load_cell_service', 'loadcell_config', 'Load-cell pipeline service name',     2),
+        ('iot_gateway', 'iot-gateway',       'gateway_config',  'IoT gateway pipeline service name',  3),
+        ('core',        'ilx_craneiq_core',  'core_config',     'Core config pipeline service name',  4),
     ]:
-        cursor.execute('INSERT OR IGNORE INTO pipeline_service_targets (config_type, service_name, config_name, description, enabled) VALUES (?, ?, ?, ?, 1)',
-                       (cfg_type, svc_name, cfg_name, desc))
+        cursor.execute(
+            'INSERT OR IGNORE INTO pipeline_service_targets '
+            '(config_type, service_name, config_name, description, enabled, send_order) VALUES (?, ?, ?, ?, 1, ?)',
+            (cfg_type, svc_name, cfg_name, desc, order))
 
     for cfg_type in ('modbus', 'loadcell', 'iot_gateway', 'core'):
         cursor.execute('INSERT OR IGNORE INTO pipeline_send_log (config_type, last_version, last_status) VALUES (?, 0, "never")', (cfg_type,))
@@ -948,10 +959,10 @@ def get_all_pipeline_service_targets():
     """Return all pipeline service target rows."""
     def _query():
         with get_cursor() as cursor:
-            cursor.execute('SELECT config_type, service_name, config_name, enabled, description, updated_at FROM pipeline_service_targets ORDER BY config_type')
+            cursor.execute('SELECT config_type, service_name, config_name, enabled, description, updated_at, COALESCE(send_order, 0) FROM pipeline_service_targets ORDER BY COALESCE(send_order, 0) ASC, config_type ASC')
             rows = cursor.fetchall()
             return [{'config_type': r[0], 'service_name': r[1], 'config_name': r[2] if r[2] else (r[0] + '_config'),
-                    'enabled': bool(r[3]), 'description': r[4], 'updated_at': r[5]} for r in rows]
+                    'enabled': bool(r[3]), 'description': r[4], 'updated_at': r[5], 'send_order': r[6]} for r in rows]
     
     try:
         return execute_with_retry(_query)
