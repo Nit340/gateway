@@ -99,42 +99,46 @@
         var progress = el('net-switching-progress');
         if (!modal) return;
 
-        // Fetch config from server
-        fetch('/api/modals')
-        .then(function(r) { return r.json(); })
-        .then(function(modals) {
-            var cfg = modals.find(function(m) { return m.intname === 'network-load'; }) || 
-                      { modal_text: 'Switching network mode, please wait...' };
-            
-            var duration = 3000; // Hardcoded 3 seconds as requested
-            var message  = cfg.modal_text || 'Switching network mode, please wait...';
-            
+        var duration = 3000;
+
+        // For auto mode, show a simple "Auto switching mode" message without hitting the server
+        if (newMode === 'auto') {
+            if (title) title.textContent = 'Auto Switching Mode';
+            if (text)  text.textContent  = 'Gateway will automatically select the best available network.';
+        } else {
             if (title) title.textContent = 'Switching to ' + newMode.toUpperCase() + '...';
-            if (text) text.textContent = message;
-            
-            modal.classList.remove('hidden');
-            if (progress) {
-                progress.style.width = '0%';
-                setTimeout(function() {
-                    progress.style.transition = 'width ' + duration + 'ms linear';
-                    progress.style.width = '100%';
-                }, 50);
-            }
-            
+            if (text)  text.textContent  = 'Please wait while we reconfigure your connection.';
+        }
+
+        modal.classList.remove('hidden');
+        if (progress) {
+            progress.style.transition = 'none';
+            progress.style.width = '0%';
             setTimeout(function() {
-                modal.classList.add('hidden');
-                if (progress) {
-                    progress.style.transition = 'none';
-                    progress.style.width = '0%';
-                }
-            }, duration);
+                progress.style.transition = 'width ' + duration + 'ms linear';
+                progress.style.width = '100%';
+            }, 50);
+        }
+
+        setTimeout(function() {
+            modal.classList.add('hidden');
+            if (progress) {
+                progress.style.transition = 'none';
+                progress.style.width = '0%';
+            }
+        }, duration);
+
+        // Best-effort fetch of custom modal text — silently ignored if server is unreachable
+        fetch('/api/modals')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(modals) {
+            if (!modals) return;
+            var cfg = modals.find(function(m) { return m.intname === 'network-load'; });
+            if (cfg && cfg.modal_text && newMode !== 'auto') {
+                if (text) text.textContent = cfg.modal_text;
+            }
         })
-        .catch(function(e) {
-            console.warn('[NET-MODAL] failed to fetch config:', e);
-            // Fallback
-            modal.classList.remove('hidden');
-            setTimeout(function() { modal.classList.add('hidden'); }, 3000);
-        });
+        .catch(function() { /* server unreachable — already showing fallback text */ });
     };
 
     var sendNetworkRouteSelect = function (routeKey) {
@@ -227,18 +231,22 @@
     };
 
     var initializeNetworkToggles = function () {
-        document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
-            r.addEventListener('change', function () {
-                setNetworkMode(this.value);
-                
-                // If Auto-Connect is ON, we only change the UI tabs. 
-                // We do NOT show the switching modal and we do NOT send the route select command.
-                if (_acEnabled) {
-
-                    updateGlobalMacDisplay();
-                    return;
-                }
-
+    document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            setNetworkMode(this.value);
+            
+            // ALWAYS send network_route_select for auto mode (value 0)
+            if (this.value === 'auto') {
+                // Send auto mode (0) - this should ALWAYS happen
+                sendNetworkRouteSelect('auto');
+                // Reset eth card selection highlight when switching to auto
+                _setEthCardSelected(null);
+                // Reset auto-highlight trackers
+                _autoHighlightedMode = null; 
+                _autoHighlightedEth = null;
+            } 
+            // For other modes, only send if Auto-Connect is OFF
+            else if (!_acEnabled) {
                 showNetworkSwitchingModal(this.value);
                 // Send pipeline datapoint on radio click
                 // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1
@@ -247,35 +255,37 @@
                 // Reset eth card selection highlight when switching away from ethernet
                 if (this.value !== 'ethernet') { _setEthCardSelected(null); }
                 // Reset auto-highlight trackers when leaving auto mode
-                if (this.value !== 'auto') { _autoHighlightedMode = null; _autoHighlightedEth = null; }
-                // Persist network_mode to DB immediately so page refresh keeps the selection
-                var modeToSave = this.value;
-                var payload = { network: { mode: modeToSave } };
-                if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
-                fetch('/api/general-configuration', {
-                    method: 'PUT',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                })
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
+                _autoHighlightedMode = null; 
+                _autoHighlightedEth = null;
+            }
+            
+            // Persist network_mode to DB immediately so page refresh keeps the selection
+            var modeToSave = this.value;
+            var payload = { network: { mode: modeToSave } };
+            if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
+            fetch('/api/general-configuration', {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
 
-                })
-                .catch(function (e) {
-                    console.warn('[NET-MODE] failed to persist network_mode:', e);
-                });
-                updateGlobalMacDisplay();
+            })
+            .catch(function (e) {
+                console.warn('[NET-MODE] failed to persist network_mode:', e);
             });
+            updateGlobalMacDisplay();
         });
-        document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
-            r.addEventListener('change', toggleIPAssignment);
-        });
-        var c = $('input[name="network-mode"]:checked');
-        setNetworkMode(c ? c.value : 'wifi');
-        toggleIPAssignment();
-    };
-
+    });
+    document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
+        r.addEventListener('change', toggleIPAssignment);
+    });
+    var c = $('input[name="network-mode"]:checked');
+    setNetworkMode(c ? c.value : 'wifi');
+    toggleIPAssignment();
+};
     var toggleIPAssignment = function () {
         var ip  = $('input[name="ip-assignment"]:checked');
         var box = el('static-ip-config');
@@ -767,11 +777,9 @@
             _stopAutoConnect();
             return;
         }
-        // Turn ON immediately so user sees it respond
+        // Turn ON — update UI only, no modal, no wifi connect call
         _acEnabled = true;
         _setAcUi(true, false);
-        // Send pipeline datapoint: 0 = auto
-        sendNetworkRouteSelect('auto');
         // Persist ON state to DB so it survives reload/reopen
         fetch('/api/general-configuration', {
             method: 'PUT',
@@ -779,22 +787,6 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ network: { auto_connect: true } })
         }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist ON:', e); });
-
-        var ssid = (el('wifi-ssid-value') || {}).value || '';
-        if (!ssid) {
-            showNotification('Auto-connect ON — select a network to connect', 'warning');
-            return;
-        }
-        _doOneConnect();
-        _acTimer = setInterval(function () {
-            if (!_acEnabled) return;
-            if (isUp((_cache.wlan || {}).state)) {
-                _stopAutoConnect();
-                showNotification('Auto-connect: already connected', 'success');
-                return;
-            }
-            _doOneConnect();
-        }, 15000);
     };
 
     var initWifiScanAndConnect = function () {

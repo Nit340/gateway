@@ -308,7 +308,7 @@ async def _safe_send(ws, payload):
 # NETWORK STATUS    helpers called by pipeline.py on RECEIVE_DONE
 # ============================================================================
 
-def _parse_datapoint_to_path(datapoint_name: str):
+def _parse_datapoint_to_path(datapoint_name):
     """
     Parse a datapoint name like "net.lte.signal_pct" or "net.lan.eth0.ip"
     into a structured path for updating the cache.
@@ -345,7 +345,7 @@ def _parse_datapoint_to_path(datapoint_name: str):
     return None
 
 
-def _update_cache_from_datapoint(datapoint_name: str, value):
+def _update_cache_from_datapoint(datapoint_name, value):
     """
     Update the internal cache with a single datapoint.
     This ensures we maintain a complete view even when updates come piecemeal.
@@ -383,7 +383,7 @@ def _update_cache_from_datapoint(datapoint_name: str, value):
     return True
 
 
-def update_network_status_field(datapoint_name: str, value) -> None:
+def update_network_status_field(datapoint_name, value):
     """
     Called from the pipeline RECEIVE_DONE handler (pipeline.py) whenever a
     network_status/* datapoint arrives.  Stores the value and broadcasts the
@@ -492,7 +492,7 @@ def _build_network_status_snapshot():
     return result
 
 
-async def _broadcast_network_status(data: dict) -> None:
+async def _broadcast_network_status(data):
     """Broadcast a dict to all network-status WebSocket clients."""
     if not network_status_websockets:
         return
@@ -504,7 +504,8 @@ async def _broadcast_network_status(data: dict) -> None:
     )
 
 
-async def _safe_send_ns(ws, payload: str) -> None:
+async def _safe_send_ns(ws, payload):
+    """Send payload to one WebSocket; remove it from the set on any failure."""
     try:
         if not ws.closed:
             await ws.send_str(payload)
@@ -645,22 +646,24 @@ def _scan_wifi_windows():
     #  Step 2: read results via netsh                                      #
     # ------------------------------------------------------------------ #
     try:
+        # FIX: Python 3.5 compatible - use stdout=PIPE, stderr=PIPE instead of capture_output
         result = subprocess.run(
             ['netsh', 'wlan', 'show', 'networks', 'mode=bssid'],
-            capture_output=True, text=True, timeout=15,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15,
             encoding='utf-8', errors='replace'
         )
+        stdout = result.stdout if result.stdout else ''
         logger.info('[WIFI-SCAN] netsh rc={} lines={}'.format(
-            result.returncode, len(result.stdout.splitlines())))
+            result.returncode, len(stdout.splitlines())))
 
-        if result.returncode != 0 or not result.stdout.strip():
+        if result.returncode != 0 or not stdout.strip():
             return []
 
         networks = []
         seen     = set()
 
         # Each network block starts with "SSID N :" on its own line
-        blocks = re.split(r'\nSSID\s+\d+\s*:', result.stdout)
+        blocks = re.split(r'\nSSID\s+\d+\s*:', stdout)
         for block in blocks[1:]:
             lines = [l.strip() for l in block.strip().splitlines()]
             ssid  = lines[0].strip() if lines else ''
@@ -708,7 +711,8 @@ def _get_wifi_iface():
             ['iw', 'dev'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5
         )
-        m = re.search(r'Interface\s+(\S+)', r.stdout.decode('utf-8', errors='replace'))
+        stdout = r.stdout.decode('utf-8', errors='replace') if r.stdout else ''
+        m = re.search(r'Interface\s+(\S+)', stdout)
         if m:
             return m.group(1)
     except Exception:
@@ -719,15 +723,6 @@ def _get_wifi_iface():
 def _do_wifi_scan():
     """
     Trigger a real WiFi scan and return results.
-
-    This device uses wpa_supplicant to manage wlan0 directly.
-    NetworkManager reports the interface as 'unmanaged' so nmcli
-    cannot scan. iw dev wlan0 scan works because the process runs
-    as root and wpa_supplicant keeps the interface up.
-
-    Strategy:
-      1. iw scan  -- primary: works perfectly on this device
-      2. wpa_cli  -- fallback if iw is missing
     """
     import time
     logger.info('[WIFI-SCAN] Starting scan on Linux...')
@@ -735,15 +730,22 @@ def _do_wifi_scan():
     iface = _get_wifi_iface()
     logger.info('[WIFI-SCAN] Using interface: {}'.format(iface))
 
-    # -- Method 1: iw dev <iface> scan --
+    # -- Method 1: nmcli scan (preferred) --
+    networks = _scan_wifi_nmcli(iface)
+    if networks:
+        networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
+        logger.info('[WIFI-SCAN] Found {} networks via nmcli.'.format(len(networks)))
+        return networks
+
+    # -- Method 2: iw dev <iface> scan --
     networks = _scan_wifi_iw(iface)
     if networks:
         networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
         logger.info('[WIFI-SCAN] Found {} networks via iw.'.format(len(networks)))
         return networks
 
-    # -- Method 2: wpa_cli scan + scan_results --
-    logger.info('[WIFI-SCAN] iw empty, trying wpa_cli...')
+    # -- Method 3: wpa_cli scan + scan_results --
+    logger.info('[WIFI-SCAN] Trying wpa_cli...')
     networks = _scan_wifi_wpa_cli(iface)
     if networks:
         networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
@@ -754,193 +756,83 @@ def _do_wifi_scan():
     return []
 
 
-def _scan_wifi_wpa_cli(iface):
-    """
-    Use wpa_cli to trigger a scan and read results.
-    wpa_supplicant is the WiFi manager on many embedded Linux systems
-    where NetworkManager is absent or does not own the interface.
-    """
-    import subprocess, re, time, os
-
-    # Locate the wpa_supplicant control socket for this interface
-    socket_dirs = [
-        '/var/run/wpa_supplicant',
-        '/run/wpa_supplicant',
-        '/tmp/wpa_supplicant',
-    ]
-    socket_dir = None
-    for d in socket_dirs:
-        candidate = '{}/{}'.format(d, iface)
-        if os.path.exists(candidate):
-            socket_dir = d
-            break
-
-    # Build base wpa_cli command
-    base = ['wpa_cli']
-    if socket_dir:
-        base += ['-p', socket_dir, '-i', iface]
-    else:
-        base += ['-i', iface]
-
-    logger.info('[WIFI-SCAN] wpa_cli base cmd: {}'.format(' '.join(base)))
-
-    # Trigger scan
-    try:
-        r = subprocess.run(
-            base + ['scan'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
-        )
-        out = r.stdout.decode('utf-8', errors='replace').strip()
-        logger.info('[WIFI-SCAN] wpa_cli scan rc={} out={}'.format(r.returncode, out[:80]))
-        if r.returncode != 0 and 'OK' not in out:
-            return []
-    except FileNotFoundError:
-        logger.info('[WIFI-SCAN] wpa_cli not found')
-        return []
-    except Exception as e:
-        logger.error('[WIFI-SCAN] wpa_cli scan error: {}'.format(e))
-        return []
-
-    # Wait for scan to complete
-    time.sleep(4)
-
-    # Read scan results
-    try:
-        r = subprocess.run(
-            base + ['scan_results'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
-        )
-        output = r.stdout.decode('utf-8', errors='replace')
-        logger.info('[WIFI-SCAN] wpa_cli scan_results rc={} lines={}'.format(
-            r.returncode, len(output.splitlines())))
-    except Exception as e:
-        logger.error('[WIFI-SCAN] wpa_cli scan_results error: {}'.format(e))
-        return []
-
-    # Parse tab-separated output: bssid / frequency / signal / flags / ssid
-    networks = []
-    seen     = set()
-    for line in output.splitlines():
-        line = line.strip()
-        if not line or line.startswith('bssid'):
-            continue
-        parts = line.split('	')
-        if len(parts) < 5:
-            parts = re.split(r'  +', line)
-        if len(parts) < 5:
-            continue
-        try:
-            freq   = int(parts[1].strip())
-            signal = int(parts[2].strip())
-            flags  = parts[3].strip()
-            ssid   = parts[4].strip()
-        except (IndexError, ValueError):
-            continue
-
-        if not ssid or ssid in seen:
-            continue
-        seen.add(ssid)
-
-        channel = 0
-        if 2412 <= freq <= 2484:
-            channel = (freq - 2407) // 5
-        elif 5000 <= freq <= 5885:
-            channel = (freq - 5000) // 5
-
-        if 'WPA2' in flags:
-            security = 'WPA2'
-        elif 'WPA' in flags:
-            security = 'WPA'
-        elif 'WEP' in flags:
-            security = 'WEP'
-        else:
-            security = 'Open'
-
-        networks.append({
-            'ssid':           ssid,
-            'signal_quality': signal,
-            'security':       security,
-            'channel':        channel,
-        })
-
-    return networks
-
-
 def _scan_wifi_nmcli(iface):
     """
-    Read wifi list from nmcli.
-    Tries with and without explicit ifname, with and without sudo.
+    Use nmcli to scan for WiFi networks.
     """
-    import subprocess
-    base_fields = ['SSID', 'SIGNAL', 'SECURITY', 'CHAN']
-    field_arg   = ','.join(base_fields)
-
-    cmds = [
-        ['nmcli', '--escape', 'no', '-t', '-f', field_arg,
-         'dev', 'wifi', 'list', 'ifname', iface],
-        ['nmcli', '--escape', 'no', '-t', '-f', field_arg,
-         'dev', 'wifi', 'list'],
-    ]
-
-    for cmd in cmds:
-        try:
-            result = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
-            )
-            stdout = result.stdout.decode('utf-8', errors='replace')
-            logger.info('[WIFI-SCAN] nmcli rc={} lines={} cmd={}'.format(
-                result.returncode, len(stdout.splitlines()), ' '.join(cmd)))
-
-            if result.returncode != 0 or not stdout.strip():
+    import subprocess, re
+    
+    try:
+        # First trigger a rescan
+        rescan_cmd = ['nmcli', 'dev', 'wifi', 'rescan', 'ifname', iface]
+        subprocess.run(rescan_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        
+        # Give it a moment to scan
+        import time
+        time.sleep(3)
+        
+        # Now list networks
+        list_cmd = ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list', 'ifname', iface]
+        result = subprocess.run(
+            list_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=15
+        )
+        
+        stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
+        
+        if result.returncode != 0 or not stdout.strip():
+            return []
+        
+        networks = []
+        seen = set()
+        
+        for line in stdout.strip().split('\n'):
+            if not line.strip():
                 continue
-
-            networks = []
-            seen     = set()
-            for line in stdout.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                # nmcli -t uses ':' as separator; SSID may contain ':'
-                # rsplit from right gives: [ssid_part, signal, security, chan]
-                parts = line.rsplit(':', 3)
-                if len(parts) < 4:
-                    continue
-                ssid = parts[0].strip()
-                if not ssid or ssid in seen:
-                    continue
-                seen.add(ssid)
-                try:
-                    # nmcli SIGNAL is 0-100; convert to dBm approximation
-                    signal_dbm = int(int(parts[1].strip()) / 2) - 100
-                except Exception:
-                    signal_dbm = -100
-                security = parts[2].strip()
-                if not security or security == '--':
-                    security = 'Open'
-                try:
-                    channel = int(parts[3].strip())
-                except Exception:
-                    channel = 0
-                networks.append({
-                    'ssid':           ssid,
-                    'signal_quality': signal_dbm,
-                    'security':       security,
-                    'channel':        channel,
-                })
-
-            if networks:
-                logger.info('[WIFI-SCAN] nmcli parsed {} networks'.format(len(networks)))
-                return networks
-
-        except FileNotFoundError:
-            logger.info('[WIFI-SCAN] nmcli not found')
-            break
-        except Exception as e:
-            logger.error('[WIFI-SCAN] nmcli error: {}'.format(e))
-
-    return []
-
+                
+            parts = line.split(':')
+            if len(parts) < 4:
+                continue
+                
+            ssid = parts[0].strip()
+            signal = parts[1].strip()
+            security = parts[2].strip()
+            channel = parts[3].strip()
+            
+            if not ssid or ssid in seen:
+                continue
+                
+            seen.add(ssid)
+            
+            # Convert signal percentage to dBm approximation
+            try:
+                signal_pct = int(signal)
+                signal_dbm = int(signal_pct / 2) - 100
+            except (ValueError, TypeError):
+                signal_dbm = -50 if 'signal' in signal else -70
+            
+            try:
+                channel_num = int(channel)
+            except (ValueError, TypeError):
+                channel_num = 0
+            
+            networks.append({
+                'ssid': ssid,
+                'signal_quality': signal_dbm,
+                'security': security if security else 'Open',
+                'channel': channel_num,
+            })
+        
+        return networks
+        
+    except FileNotFoundError:
+        logger.info('[WIFI-SCAN] nmcli not found')
+        return []
+    except Exception as e:
+        logger.error('[WIFI-SCAN] nmcli scan error: {}'.format(e))
+        return []
 
 def _scan_wifi_iw(iface):
     """
@@ -958,8 +850,8 @@ def _scan_wifi_iw(iface):
                 cmd,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=25
             )
-            stdout = result.stdout.decode('utf-8', errors='replace')
-            stderr = result.stderr.decode('utf-8', errors='replace')
+            stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
+            stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
             logger.info('[WIFI-SCAN] iw rc={} lines={} stderr={}'.format(
                 result.returncode, len(stdout.splitlines()), stderr.strip()[:120]))
 
@@ -1046,8 +938,8 @@ async def wifi_scan_debug_handler(request):
             )
             out[label] = {
                 'rc':     r.returncode,
-                'stdout': r.stdout.decode('utf-8', errors='replace')[:3000],
-                'stderr': r.stderr.decode('utf-8', errors='replace')[:500],
+                'stdout': r.stdout.decode('utf-8', errors='replace')[:3000] if r.stdout else '',
+                'stderr': r.stderr.decode('utf-8', errors='replace')[:500] if r.stderr else '',
             }
         except FileNotFoundError:
             out[label] = {'rc': -1, 'stdout': '', 'stderr': 'command not found'}
@@ -1086,23 +978,72 @@ def _do_wifi_connect(ssid, password):
     Returns (ok: bool, message: str).
     """
     import subprocess
+    import time
+    
     try:
+        # First, verify the network exists in scan results
+        try:
+            # Run a quick scan to verify network exists
+            scan_cmd = ['nmcli', 'dev', 'wifi', 'list', 'ifname', 'wlan0']
+            scan_result = subprocess.run(
+                scan_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=15
+            )
+            scan_stdout = scan_result.stdout.decode('utf-8', errors='replace') if scan_result.stdout else ''
+            
+            # Check if SSID exists in scan results
+            if ssid not in scan_stdout:
+                logger.warning('[WIFI-CONNECT] SSID "{}" not found in scan results'.format(ssid))
+                return False, 'No network with SSID "{}" found. Please scan again.'.format(ssid)
+                
+        except Exception as scan_err:
+            logger.warning('[WIFI-CONNECT] Scan check failed: {}'.format(scan_err))
+            # Continue anyway - scan might have failed but network could still exist
+        
+        # Try to connect
         cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
         if password:
             cmd += ['password', password]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        logger.info('[WIFI-CONNECT] Attempting to connect to "{}"'.format(ssid))
+        
+        # Use Python 3.5 compatible subprocess
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30
+        )
+        
+        stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
+        stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ''
+        
         if result.returncode == 0:
+            logger.info('[WIFI-CONNECT] Successfully connected to "{}"'.format(ssid))
             return True, 'Connected to {}'.format(ssid)
-        # nmcli puts the error on stdout for this command
-        err = (result.stdout or result.stderr or '').strip()
-        return False, err or 'Connection failed'
+        
+        # Check for common errors
+        if 'No network with SSID' in stdout or 'No network with SSID' in stderr:
+            return False, 'No network with SSID "{}" found. Please check the network name and try again.'.format(ssid)
+        elif 'passwords do not match' in stdout or 'passwords do not match' in stderr:
+            return False, 'Invalid password for network "{}"'.format(ssid)
+        elif 'Connection activation failed' in stdout or 'Connection activation failed' in stderr:
+            return False, 'Connection failed. Please check your network settings.'
+        else:
+            err = (stdout or stderr or '').strip()
+            return False, err or 'Connection failed'
+            
     except subprocess.TimeoutExpired:
-        return False, 'Connection timed out'
+        logger.error('[WIFI-CONNECT] Timeout connecting to "{}"'.format(ssid))
+        return False, 'Connection timed out. Please check your network.'
     except FileNotFoundError:
+        logger.error('[WIFI-CONNECT] nmcli not found')
         return False, 'nmcli not available on this system'
     except Exception as e:
+        logger.error('[WIFI-CONNECT] Unexpected error: {}'.format(e))
         return False, str(e)
-
 
 async def wifi_connect_handler(request):
     """POST /api/wifi/connect -- connect to a WiFi network."""
@@ -1135,6 +1076,150 @@ async def wifi_connect_handler(request):
     except Exception as e:
         logger.error('[WIFI-CONNECT] Unexpected error: {}'.format(e))
         return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+
+# ============================================================================
+# PIPELINE SYNC HELPERS
+# ============================================================================
+
+def _get_route_value(network_mode, eth_selected='eth0'):
+    """Convert network mode to pipeline route value.
+       Route mapping: auto=0, eth0=1, eth1=2, lte=3, wifi=4
+    """
+    if network_mode == 'ethernet':
+        return 1 if eth_selected == 'eth0' else 2
+    elif network_mode == 'lte':
+        return 3
+    elif network_mode == 'wifi':
+        return 4
+    elif network_mode == 'auto':
+        return 0
+    return None
+
+
+async def _send_to_pipeline_network_route(route_value):
+    """Send network route selection to pipeline via HTTP."""
+    try:
+        import aiohttp
+        
+        # Fix: Use aiohttp.ClientTimeout() correctly for older versions
+        # For aiohttp < 3.6, timeout should be passed as a parameter, not as ClientTimeout object
+        timeout = aiohttp.ClientTimeout(total=5) if hasattr(aiohttp, 'ClientTimeout') else 5
+        
+        async with aiohttp.ClientSession() as session:
+            # Use appropriate timeout parameter based on aiohttp version
+            if isinstance(timeout, int):
+                async with session.post(
+                    'http://127.0.0.1:8082/api/pipeline/network-route-select',
+                    json={'network_route_select': route_value},
+                    headers={'Content-Type': 'application/json'},
+                    timeout=timeout
+                ) as resp:
+                    # Read response body regardless of status
+                    try:
+                        response_data = await resp.json()
+                    except:
+                        response_data = {}
+                    
+                    if resp.status == 200:
+                        # Check if the pipeline actually sent the command
+                        if response_data.get('pipeline_sent', False):
+                            logger.info("[PIPELINE-SYNC] Sent route={} to pipeline - SUCCESS".format(route_value))
+                            return True
+                        else:
+                            # Pipeline connected but send failed
+                            logger.warning("[PIPELINE-SYNC] Pipeline connected but send failed: {}".format(
+                                response_data.get('pipeline_message', 'Unknown error')))
+                            return False
+                    else:
+                        # HTTP error
+                        logger.warning("[PIPELINE-SYNC] HTTP error {}: {}".format(
+                            resp.status, response_data.get('message', 'Unknown error')))
+                        return False
+            else:
+                # Use ClientTimeout for newer versions
+                async with session.post(
+                    'http://127.0.0.1:8082/api/pipeline/network-route-select',
+                    json={'network_route_select': route_value},
+                    headers={'Content-Type': 'application/json'},
+                    timeout=timeout
+                ) as resp:
+                    # Read response body regardless of status
+                    try:
+                        response_data = await resp.json()
+                    except:
+                        response_data = {}
+                    
+                    if resp.status == 200:
+                        # Check if the pipeline actually sent the command
+                        if response_data.get('pipeline_sent', False):
+                            logger.info("[PIPELINE-SYNC] Sent route={} to pipeline - SUCCESS".format(route_value))
+                            return True
+                        else:
+                            # Pipeline connected but send failed
+                            logger.warning("[PIPELINE-SYNC] Pipeline connected but send failed: {}".format(
+                                response_data.get('pipeline_message', 'Unknown error')))
+                            return False
+                    else:
+                        # HTTP error
+                        logger.warning("[PIPELINE-SYNC] HTTP error {}: {}".format(
+                            resp.status, response_data.get('message', 'Unknown error')))
+                        return False
+                    
+    except aiohttp.ClientConnectorError as e:
+        logger.warning("[PIPELINE-SYNC] Cannot connect to pipeline: {}".format(e))
+        return False
+    except asyncio.TimeoutError:
+        logger.warning("[PIPELINE-SYNC] Timeout sending to pipeline")
+        return False
+    except Exception as e:
+        logger.error("[PIPELINE-SYNC] Error sending to pipeline: {}".format(e))
+        # Return False here, not True!
+        return False
+async def sync_network_mode_to_pipeline(app):
+    """On startup, read network config from DB and send appropriate mode to pipeline.
+    
+    Logic:
+    - If auto_connect is ON: send 'auto' (value 0) - let pipeline auto-select
+    - If auto_connect is OFF: send the actual selected network mode
+    """
+    try:
+        config = get_general_configuration()
+        if not config:
+            logger.info("[PIPELINE-SYNC] No config found on startup")
+            return
+        
+        network = config.get('network', {})
+        auto_connect = network.get('auto_connect', False)
+        network_mode = network.get('mode', 'wifi')
+        eth_selected = network.get('eth_selected', 'eth0')
+        
+        logger.info("[PIPELINE-SYNC] Startup sync - auto_connect={}, mode={}, eth={}".format(
+            auto_connect, network_mode, eth_selected))
+        
+        # Determine what to send to pipeline
+        if auto_connect:
+            # Auto mode ON - send 'auto' to let pipeline decide
+            route_value = 0  # auto
+            logger.info("[PIPELINE-SYNC] Auto-connect enabled - sending AUTO mode to pipeline")
+        else:
+            # Auto mode OFF - send the actual selected mode
+            route_value = _get_route_value(network_mode, eth_selected)
+            if route_value is not None:
+                logger.info("[PIPELINE-SYNC] Auto-connect disabled - sending {} mode to pipeline".format(
+                    network_mode))
+            else:
+                logger.warning("[PIPELINE-SYNC] Unknown network mode: {}".format(network_mode))
+                return
+        
+        # Send to pipeline
+        if route_value is not None:
+            await _send_to_pipeline_network_route(route_value)
+        else:
+            logger.warning("[PIPELINE-SYNC] No route value to send")
+            
+    except Exception as e:
+        logger.error("[PIPELINE-SYNC] Error syncing to pipeline: {}".format(e))
 
 
 # ============================================================================
@@ -1457,6 +1542,81 @@ async def put_config_handler(request):
         return web.json_response(
             {'success': False, 'message': 'Failed to save configuration'}, status=500)
 
+    # ========== ALWAYS sync network mode when network fields change ==========
+    network_changed = False
+    if 'network' in data:
+        net_data = data['network']
+        if 'mode' in net_data or 'eth_selected' in net_data or 'auto_connect' in net_data:
+            network_changed = True
+    
+    if network_changed:
+        # Sync network mode to pipeline after save
+        try:
+            saved_config = get_general_configuration()
+            network = saved_config.get('network', {})
+            auto_connect = network.get('auto_connect', False)
+            network_mode = network.get('mode', 'wifi')
+            eth_selected = network.get('eth_selected', 'eth0')
+            
+            logger.info("[PIPELINE-SYNC] Config saved - auto_connect={}, mode={}".format(
+                auto_connect, network_mode))
+            
+            # Determine what to send to pipeline
+            if auto_connect:
+                route_value = 0  # auto
+                logger.info("[PIPELINE-SYNC] Auto-connect ON - sending AUTO mode to pipeline")
+            else:
+                route_value = _get_route_value(network_mode, eth_selected)
+                if route_value is not None:
+                    logger.info("[PIPELINE-SYNC] Auto-connect OFF - sending {} mode to pipeline".format(
+                        network_mode))
+                else:
+                    logger.warning("[PIPELINE-SYNC] Unknown network mode: {}".format(network_mode))
+                    return web.json_response({'success': True, 'message': 'Configuration saved successfully'})
+            
+            # Send to pipeline
+            if route_value is not None:
+                try:
+                    await _send_to_pipeline_network_route(route_value)
+                    logger.info("[PIPELINE-SYNC] Successfully sent route={} to pipeline".format(route_value))
+                except Exception as pipe_err:
+                    logger.error("[PIPELINE-SYNC] Failed to send to pipeline: {}".format(pipe_err))
+                    
+        except Exception as e:
+            logger.error("[PIPELINE-SYNC] Error after config save: {}".format(e))
+
+    # ========== ONLY rebuild IoT config if WIFI or HEARTBEAT settings changed ==========
+    # NOT for auto_connect toggles! auto_connect only affects network routing, not IoT config
+    iot_changed = False
+    if 'network' in data:
+        net_data = data['network']
+        # ONLY check for wifi config changes (SSID, password, etc.), NOT auto_connect
+        if 'wifi' in net_data:
+            # Check if wifi config actually changed (not just auto_connect)
+            wifi_data = net_data['wifi']
+            if isinstance(wifi_data, dict) and (wifi_data.get('ssid') or wifi_data.get('password')):
+                iot_changed = True
+                logger.info("[IOT-CFG] WiFi config changed - will rebuild IoT config")
+    if 'heartbeat' in data:
+        iot_changed = True
+        logger.info("[IOT-CFG] Heartbeat config changed - will rebuild IoT config")
+    
+    # Also check if it's a direct wifi change (legacy format)
+    if 'wifi_ssid' in data or 'wifi_password' in data:
+        iot_changed = True
+        logger.info("[IOT-CFG] Legacy wifi fields changed - will rebuild IoT config")
+    
+    if iot_changed:
+        # Rebuild + push iot_gateway_config (wifi/heartbeat actually changed)
+        try:
+            from mqtt_cloud import send_iot_gateway_config_now
+            await send_iot_gateway_config_now()
+            logger.info("[IOT-CFG] Successfully rebuilt and sent IoT config")
+        except Exception as e:
+            logger.error('[IOT-CFG] sync error after general_config save: {}'.format(e))
+    else:
+        logger.info("[IOT-CFG] No wifi/heartbeat changes detected - skipping IoT config rebuild")
+
     # Broadcast config update to WebSocket clients
     if connected_websockets:
         await broadcast_to_clients({
@@ -1464,17 +1624,7 @@ async def put_config_handler(request):
             'message': 'Configuration saved successfully'
         })
 
-    # Rebuild + push iot_gateway_config (wifi/heartbeat may have changed)
-    try:
-        from mqtt_cloud import send_iot_gateway_config_now
-        await send_iot_gateway_config_now()
-    except Exception as e:
-        logger.error('[IOT-CFG] sync error after general_config save: {}'.format(e))
-
-    return web.json_response({'success': True, 'message': 'Configuration saved successfully'})
-
-
-# ============================================================================
+    return web.json_response({'success': True, 'message': 'Configuration saved successfully'})# ============================================================================
 # BACKGROUND TASK MANAGEMENT
 # ============================================================================
 
@@ -1491,9 +1641,13 @@ async def start_background_tasks(app):
             logger.info("[GENERAL-CONFIG] Loaded timezone: {}".format(active_timezone))
     except Exception as e:
         logger.info("[GENERAL-CONFIG] Could not load timezone from DB: {}".format(e))
+    
     # Stash the running event loop so pipeline thread callbacks can reach it.
     _main_loop_ref["loop"] = asyncio.get_event_loop()
     app['general_config_periodic'] = asyncio.ensure_future(periodic_updates())
+    
+    # Sync network mode to pipeline on startup
+    await sync_network_mode_to_pipeline(app)
 
 
 async def cleanup_background_tasks(app):

@@ -57,6 +57,7 @@ let autoUpdateEnabled = true;
 let updateCheckInterval;
 let currentUpdate = null;
 let updateDownloadInterval;
+let loadingOverlay = null;
 
 function initializeOtaGateway() {
     try {
@@ -89,6 +90,203 @@ function initializeOtaGateway() {
     } catch (error) {
         console.error('Error in initializeOtaGateway:', error);
     }
+}
+
+// ============================================================================
+// LOADING OVERLAY FUNCTIONS
+// ============================================================================
+
+function showLoadingOverlay(message = 'Processing...') {
+    if (loadingOverlay) {
+        loadingOverlay.remove();
+    }
+    
+    loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'factory-reset-loading';
+    loadingOverlay.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+    loadingOverlay.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-8 text-center">
+            <div class="flex justify-center mb-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-800 mb-2">${message}</h3>
+            <p class="text-sm text-slate-500">Please wait, this may take a moment...</p>
+        </div>
+    `;
+    
+    document.body.appendChild(loadingOverlay);
+}
+
+function hideLoadingOverlay() {
+    if (loadingOverlay && loadingOverlay.parentNode) {
+        loadingOverlay.parentNode.removeChild(loadingOverlay);
+        loadingOverlay = null;
+    }
+}
+
+// ============================================================================
+// CUSTOM DIALOG FUNCTIONS (No alerts)
+// ============================================================================
+
+function showConfirmDialog(title, message, confirmText, cancelText, onConfirm) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div class="flex items-center mb-4">
+                <div class="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <i class="fa-solid fa-triangle-exclamation text-red-600 text-lg"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800">${title}</h3>
+            </div>
+            <p class="text-slate-600 mb-6">${message}</p>
+            <div class="flex space-x-3">
+                <button id="confirm-dialog-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition-colors">
+                    ${confirmText}
+                </button>
+                <button id="cancel-dialog-btn" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg transition-colors">
+                    ${cancelText}
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const confirmBtn = document.getElementById('confirm-dialog-btn');
+    const cancelBtn = document.getElementById('cancel-dialog-btn');
+    
+    const closeModal = () => {
+        if (modal && modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    };
+    
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            closeModal();
+            if (onConfirm) onConfirm();
+        });
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeModal);
+    }
+    
+    // Close on outside click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+}
+
+function showNotificationDialog(title, message, type = 'info') {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    
+    const colors = {
+        info: { icon: 'fa-circle-info', bg: 'bg-blue-100', text: 'text-blue-600', btn: 'bg-blue-600 hover:bg-blue-700' },
+        success: { icon: 'fa-circle-check', bg: 'bg-green-100', text: 'text-green-600', btn: 'bg-green-600 hover:bg-green-700' },
+        warning: { icon: 'fa-triangle-exclamation', bg: 'bg-amber-100', text: 'text-amber-600', btn: 'bg-amber-600 hover:bg-amber-700' },
+        error: { icon: 'fa-circle-xmark', bg: 'bg-red-100', text: 'text-red-600', btn: 'bg-red-600 hover:bg-red-700' }
+    };
+    
+    const color = colors[type] || colors.info;
+    
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div class="flex items-center mb-4">
+                <div class="h-10 w-10 ${color.bg} rounded-full flex items-center justify-center mr-3">
+                    <i class="fa-solid ${color.icon} ${color.text} text-lg"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800">${title}</h3>
+            </div>
+            <p class="text-slate-600 mb-6">${message}</p>
+            <button id="notification-dialog-btn" class="w-full ${color.btn} text-white font-medium py-2 rounded-lg transition-colors">
+                OK
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const okBtn = document.getElementById('notification-dialog-btn');
+    if (okBtn) {
+        okBtn.addEventListener('click', () => {
+            if (modal && modal.parentNode) {
+                modal.parentNode.removeChild(modal);
+            }
+        });
+    }
+}
+
+function showPasswordDialog(title, message, onConfirm) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div class="flex items-center mb-4">
+                <div class="h-10 w-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <i class="fa-solid fa-lock text-red-600 text-lg"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800">${title}</h3>
+            </div>
+            <p class="text-slate-600 mb-4">${message}</p>
+            <div class="mb-4">
+                <input type="password" id="password-input" 
+                    class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="Enter admin password">
+            </div>
+            <div class="flex space-x-3">
+                <button id="confirm-password-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition-colors">
+                    Confirm
+                </button>
+                <button id="cancel-password-btn" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const passwordInput = document.getElementById('password-input');
+    const confirmBtn = document.getElementById('confirm-password-btn');
+    const cancelBtn = document.getElementById('cancel-password-btn');
+    
+    const closeModal = () => {
+        if (modal && modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    };
+    
+    if (passwordInput) {
+        setTimeout(() => passwordInput.focus(), 100);
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                if (confirmBtn) confirmBtn.click();
+            }
+        });
+    }
+    
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            const password = passwordInput ? passwordInput.value : '';
+            closeModal();
+            if (onConfirm) onConfirm(password);
+        });
+    }
+    
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeModal);
+    }
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
 }
 
 function initializeUpdateSystem() {
@@ -133,7 +331,7 @@ function initializeUpdateSystem() {
     const scheduleBtn = document.getElementById('schedule-btn');
     if (scheduleBtn) {
         scheduleBtn.addEventListener('click', function() {
-            showNotification('Update scheduled for 02:00 AM', 'info');
+            showNotificationDialog('Update Scheduled', 'Update scheduled for 02:00 AM', 'info');
             hideUpdateBanner();
         });
     }
@@ -149,21 +347,21 @@ function initializeUpdateSystem() {
     const autoDownload = document.getElementById('auto-download');
     if (autoDownload) {
         autoDownload.addEventListener('change', function() {
-            showNotification(`Auto-download: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
+            showNotificationDialog('Auto-Download', `Auto-download: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
         });
     }
     
     const autoSecurity = document.getElementById('auto-security');
     if (autoSecurity) {
         autoSecurity.addEventListener('change', function() {
-            showNotification(`Auto-install security updates: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
+            showNotificationDialog('Auto-Install', `Auto-install security updates: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
         });
     }
     
     const autoReboot = document.getElementById('auto-reboot');
     if (autoReboot) {
         autoReboot.addEventListener('change', function() {
-            showNotification(`Auto-reboot after install: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
+            showNotificationDialog('Auto-Reboot', `Auto-reboot after install: ${this.checked ? 'Enabled' : 'Disabled'}`, 'info');
         });
     }
 }
@@ -208,13 +406,12 @@ function checkForUpdates(silent = false) {
         
         // Show banner if there are updates
         if (filteredUpdates.length > 0 && !deploymentInProgress) {
-            currentUpdate = filteredUpdates[0]; // Show first available update
+            currentUpdate = filteredUpdates[0];
             showUpdateBanner(currentUpdate);
         }
         
         addLogEntry(`Update check completed. Found ${filteredUpdates.length} update(s)`);
         
-        // Update last checked time in log
         const now = new Date();
         addLogEntry(`Last checked: ${now.toLocaleString()}`);
         
@@ -226,30 +423,24 @@ function updateUpdateList(updates) {
     const updatesList = document.getElementById('updates-list');
     if (!updatesList) return;
     
-    // Update existing items
     updates.forEach((update, index) => {
         const item = updatesList.children[index];
         if (item) {
-            // Update version
             const versionSpan = item.querySelector('.text-sm.font-bold');
             if (versionSpan) versionSpan.textContent = update.version + (update.type === 'security' ? ' Security Update' : ' Feature Update');
             
-            // Update description
             const descP = item.querySelector('.text-sm.text-slate-600');
             if (descP) descP.textContent = update.description;
             
-            // Update size
             const sizeSpan = item.querySelector('.fa-download').parentElement;
             if (sizeSpan) sizeSpan.innerHTML = `<i class="fa-solid fa-download mr-1"></i> Size: ${update.size}`;
             
-            // Update install button
             const installBtn = item.querySelector('.install-update-btn');
             if (installBtn) {
                 installBtn.setAttribute('data-version', update.version);
                 installBtn.textContent = update.type === 'security' ? 'Install Now' : 'Install';
             }
             
-            // Update badge
             const badgeSpan = item.querySelector('.text-xs.bg-red-100, .text-xs.bg-blue-100, .text-xs.bg-purple-100');
             if (badgeSpan) {
                 badgeSpan.className = 'text-xs px-2 py-0.5 rounded-full font-bold';
@@ -279,11 +470,10 @@ function toggleAutoUpdate() {
     button.innerHTML = `<i class="fa-solid fa-robot mr-2"></i> Auto-Update: ${status}`;
     button.className = `px-4 py-2 text-sm font-medium rounded-md transition-colors ${autoUpdateEnabled ? 'bg-blue-100 hover:bg-blue-200 text-blue-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`;
     
-    showNotification(`Auto-update ${autoUpdateEnabled ? 'enabled' : 'disabled'}`, 'info');
+    showNotificationDialog('Auto-Update', `Auto-update ${autoUpdateEnabled ? 'enabled' : 'disabled'}`, 'info');
     addLogEntry(`Auto-update ${autoUpdateEnabled ? 'enabled' : 'disabled'}`);
     
     if (autoUpdateEnabled) {
-        // Check immediately when enabled
         checkForUpdates(true);
     }
 }
@@ -301,7 +491,6 @@ function showUpdateBanner(update) {
     
     banner.classList.remove('hidden');
     
-    // Auto-hide after 30 seconds
     setTimeout(() => {
         if (banner.classList.contains('hidden')) return;
         hideUpdateBanner();
@@ -317,14 +506,14 @@ function hideUpdateBanner() {
 // Start update download
 function startUpdateDownload(update) {
     if (deploymentInProgress) {
-        showNotification('Another update is already in progress', 'warning');
+        showNotificationDialog('Update In Progress', 'Another update is already in progress', 'warning');
         return;
     }
     
     deploymentInProgress = true;
     currentUpdate = update;
     
-    showNotification(`Starting download of ${update.version}...`, 'info');
+    showNotificationDialog('Download Started', `Starting download of ${update.version}...`, 'info');
     addLogEntry(`Starting download: ${update.version} (${update.size})`);
     
     // Update UI
@@ -359,37 +548,30 @@ function startUpdateDownload(update) {
 // Simulate update download
 function simulateUpdateDownload(update) {
     let progress = 0;
-    let speed = 5 + Math.random() * 10; // Random speed between 5-15 MB/s
-    const totalSize = parseInt(update.size) * 1024; // Convert MB to KB for calculation
+    let speed = 5 + Math.random() * 10;
     
     updateDownloadInterval = setInterval(() => {
         if (progress >= 100) {
             clearInterval(updateDownloadInterval);
-            
-            // Download complete, start verification
             setTimeout(() => {
                 verifyUpdate(update);
             }, 500);
             return;
         }
         
-        // Increment progress
         progress += Math.random() * 2;
         if (progress > 100) progress = 100;
         
-        // Update UI
         const statusPercent = document.getElementById('status-percent');
         if (statusPercent) statusPercent.textContent = `${Math.round(progress)}%`;
         
         const progressFill = document.getElementById('progress-fill');
         if (progressFill) progressFill.style.width = `${progress}%`;
         
-        // Update speed (vary slightly)
         speed = Math.max(3, speed + (Math.random() - 0.5) * 2);
         const downloadSpeed = document.getElementById('download-speed');
         if (downloadSpeed) downloadSpeed.textContent = `${speed.toFixed(1)} MB/s`;
         
-        // Update ETA
         if (progress > 0) {
             const remaining = (100 - progress) / progress * (Date.now() - startTime) / 1000;
             const minutes = Math.floor(remaining / 60);
@@ -398,7 +580,6 @@ function simulateUpdateDownload(update) {
             if (etaElement) etaElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
         
-        // Update progress bar color
         const progressFillElement = document.getElementById('progress-fill');
         if (progressFillElement) {
             if (progress < 30) {
@@ -410,7 +591,6 @@ function simulateUpdateDownload(update) {
             }
         }
         
-        // Add log entries at milestones
         if (Math.round(progress) % 25 === 0 && Math.round(progress) > 0) {
             addLogEntry(`Download progress: ${Math.round(progress)}%`);
         }
@@ -437,7 +617,6 @@ function verifyUpdate(update) {
     
     addLogEntry(`Verifying update integrity: ${update.version}`);
     
-    // Simulate verification process
     setTimeout(() => {
         if (integrityStatus) {
             integrityStatus.textContent = 'Verified ✓';
@@ -445,7 +624,6 @@ function verifyUpdate(update) {
         }
         addLogEntry(`Update verified successfully: ${update.version}`);
         
-        // Start installation
         setTimeout(() => {
             installUpdate(update);
         }, 1000);
@@ -465,13 +643,11 @@ function installUpdate(update) {
     
     addLogEntry(`Starting installation: ${update.version} to Partition B`);
     
-    // Update partition B status
     const partitionBStatus = document.getElementById('partition-b-status');
     if (partitionBStatus) {
         partitionBStatus.innerHTML = `${update.version} • <span class="text-amber-600 font-bold animate-pulse">Installing...</span>`;
     }
     
-    // Simulate installation
     setTimeout(() => {
         deploymentInProgress = false;
         if (updateDownloadInterval) {
@@ -479,7 +655,6 @@ function installUpdate(update) {
             updateDownloadInterval = null;
         }
         
-        // Installation complete
         if (statusText) statusText.textContent = `Update ${update.version} installed successfully!`;
         if (currentOperation) currentOperation.textContent = 'Ready to reboot';
         if (progressFill) {
@@ -493,21 +668,18 @@ function installUpdate(update) {
         const updateBadge = document.getElementById('update-badge');
         if (updateBadge) updateBadge.classList.add('hidden');
         
-        // Update partition B status
         if (partitionBStatus) {
             partitionBStatus.innerHTML = `${update.version} • <span class="text-green-600 font-bold">Update complete</span>`;
         }
         
-        // Enable install buttons
         document.querySelectorAll('.install-update-btn').forEach(btn => {
             btn.disabled = false;
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
         });
         
-        showNotification(`${update.version} installed successfully! Ready for reboot.`, 'success');
+        showNotificationDialog('Update Complete', `${update.version} installed successfully! Ready for reboot.`, 'success');
         addLogEntry(`Update installed successfully: ${update.version}`);
         
-        // Update available updates list (remove installed update)
         const updateIndex = availableUpdates.findIndex(u => u.version === update.version);
         if (updateIndex !== -1) {
             availableUpdates.splice(updateIndex, 1);
@@ -516,7 +688,6 @@ function installUpdate(update) {
             updateUpdateList(availableUpdates.filter(u => u.version !== currentVersion));
         }
         
-        // Create reboot button
         createRebootButton(update.version);
         
     }, 5000);
@@ -537,7 +708,6 @@ function initializeFileUpload() {
     fileInput.addEventListener('change', handleFileSelect);
     dropArea.parentNode.appendChild(fileInput);
     
-    // Drag and drop events
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, preventDefaults, false);
     });
@@ -587,13 +757,12 @@ function handleFiles(files) {
     const fileName = file.name.toLowerCase();
     
     if (!validExtensions.some(ext => fileName.endsWith(ext))) {
-        showNotification('Invalid file type. Please upload .img, .tar.gz, or .squashfs files.', 'error');
+        showNotificationDialog('Invalid File', 'Invalid file type. Please upload .img, .tar.gz, or .squashfs files.', 'error');
         return;
     }
     
     currentFile = file;
     
-    // Update UI with file info
     const dropArea = document.getElementById('upload-dropzone');
     const icon = document.getElementById('upload-icon');
     const text = document.getElementById('upload-text');
@@ -612,7 +781,6 @@ function handleFiles(files) {
     
     if (subtext) subtext.textContent = `${formatFileSize(file.size)} • Ready for verification`;
     
-    // Enable verify button
     const verifyBtn = document.getElementById('verify-btn');
     if (verifyBtn) {
         verifyBtn.disabled = false;
@@ -621,7 +789,6 @@ function handleFiles(files) {
         verifyBtn.onclick = () => verifyAndPrepare(file);
     }
     
-    // Auto-fill version from filename
     const versionInput = document.getElementById('image-version');
     if (versionInput) {
         const versionMatch = file.name.match(/v?\d+\.\d+\.\d+/);
@@ -630,10 +797,9 @@ function handleFiles(files) {
         }
     }
     
-    // Simulate checksum calculation
     simulateChecksum(file);
     
-    showNotification(`File "${file.name}" uploaded successfully`, 'success');
+    showNotificationDialog('File Uploaded', `File "${file.name}" uploaded successfully`, 'success');
     addLogEntry(`Manual upload: ${file.name} (${formatFileSize(file.size)})`);
 }
 
@@ -645,13 +811,10 @@ function simulateChecksum(file) {
     checksumInput.placeholder = 'Calculating...';
     
     setTimeout(() => {
-        // Generate fake SHA256 (for demo)
         const fakeHash = 'sha256:' + Array.from({length: 64}, () => 
             Math.floor(Math.random() * 16).toString(16)).join('');
         checksumInput.value = fakeHash;
         checksumInput.placeholder = '';
-        
-        // Simulate metadata extraction
         simulateMetadataExtraction(file);
     }, 1000);
 }
@@ -691,7 +854,7 @@ function simulateMetadataExtraction(file) {
 
 // Verify and prepare manual deployment
 function verifyAndPrepare(file) {
-    showNotification(`Verifying ${file.name}...`, 'info');
+    showNotificationDialog('Verifying', `Verifying ${file.name}...`, 'info');
     addLogEntry('Starting manual image verification');
     
     const verifyBtn = document.getElementById('verify-btn');
@@ -700,16 +863,14 @@ function verifyAndPrepare(file) {
     verifyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Verifying...';
     verifyBtn.disabled = true;
     
-    // Simulate verification process
     setTimeout(() => {
         verifyBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Verified Successfully';
         verifyBtn.classList.remove('bg-blue-600');
         verifyBtn.classList.add('bg-green-600');
         
-        showNotification('Image verified successfully! Ready for deployment to Partition B.', 'success');
+        showNotificationDialog('Verification Complete', 'Image verified successfully! Ready for deployment to Partition B.', 'success');
         addLogEntry('Manual image verification passed');
         
-        // Update partition B status
         const partitionBStatus = document.getElementById('partition-b-status');
         const versionInput = document.getElementById('image-version');
         const version = versionInput && versionInput.value ? versionInput.value : 'v5.1.0-rc1';
@@ -718,7 +879,6 @@ function verifyAndPrepare(file) {
             partitionBStatus.innerHTML = `${version} • <span class="text-blue-600 font-bold">Ready for update</span>`;
         }
         
-        // Create deploy button
         createManualDeployButton(version);
     }, 2000);
 }
@@ -742,22 +902,20 @@ function createManualDeployButton(version) {
 // Start manual deployment
 function startManualDeployment(version) {
     if (deploymentInProgress) {
-        showNotification('Another update is already in progress', 'warning');
+        showNotificationDialog('Deployment In Progress', 'Another update is already in progress', 'warning');
         return;
     }
     
     deploymentInProgress = true;
     
-    showNotification('Starting manual deployment to Partition B...', 'info');
+    showNotificationDialog('Deployment Started', `Starting manual deployment of ${version} to Partition B...`, 'info');
     addLogEntry(`Initiating manual deployment of ${version} to Partition B`);
     
-    // Update UI
     const partitionBStatus = document.getElementById('partition-b-status');
     if (partitionBStatus) {
         partitionBStatus.innerHTML = `${version} • <span class="text-amber-600 font-bold animate-pulse">Installing...</span>`;
     }
     
-    // Update monitor
     const updateBadge = document.getElementById('update-badge');
     if (updateBadge) updateBadge.classList.remove('hidden');
     
@@ -776,7 +934,6 @@ function startManualDeployment(version) {
         progressFill.className = 'h-full animate-progress';
     }
     
-    // Disable action buttons during deployment
     document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
         if (!btn.id.includes('cancel') && !btn.id.includes('reset')) {
             btn.disabled = true;
@@ -784,7 +941,6 @@ function startManualDeployment(version) {
         }
     });
     
-    // Simulate manual deployment
     simulateManualDeployment(version);
 }
 
@@ -797,7 +953,6 @@ function simulateManualDeployment(version) {
             clearInterval(interval);
             deploymentInProgress = false;
             
-            // Deployment complete
             const statusText = document.getElementById('status-text');
             if (statusText) statusText.textContent = `Manual deployment complete!`;
             
@@ -816,38 +971,32 @@ function simulateManualDeployment(version) {
             const updateBadge = document.getElementById('update-badge');
             if (updateBadge) updateBadge.classList.add('hidden');
             
-            // Update partition B status
             const partitionBStatus = document.getElementById('partition-b-status');
             if (partitionBStatus) {
                 partitionBStatus.innerHTML = `${version} • <span class="text-green-600 font-bold">Update complete</span>`;
             }
             
-            // Enable action buttons
             document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             });
             
-            showNotification(`Manual deployment of ${version} completed! Ready for reboot.`, 'success');
+            showNotificationDialog('Deployment Complete', `Manual deployment of ${version} completed! Ready for reboot.`, 'success');
             addLogEntry(`Manual deployment completed: ${version}`);
             
-            // Create reboot button
             createRebootButton(version);
             return;
         }
         
-        // Increment progress
         progress += Math.random() * 3;
         if (progress > 100) progress = 100;
         
-        // Update progress
         const statusPercent = document.getElementById('status-percent');
         if (statusPercent) statusPercent.textContent = `${Math.round(progress)}%`;
         
         const progressFill = document.getElementById('progress-fill');
         if (progressFill) progressFill.style.width = `${progress}%`;
         
-        // Add log entries
         if (Math.round(progress) % 25 === 0 && Math.round(progress) > 0) {
             addLogEntry(`Manual installation progress: ${Math.round(progress)}%`);
         }
@@ -868,9 +1017,9 @@ function createRebootButton(version) {
     rebootBtn.innerHTML = '<i class="fa-solid fa-power-off mr-2"></i> Reboot into Partition B';
     
     rebootBtn.addEventListener('click', () => {
-        if (confirm(`Reboot into updated Partition B (${version})? System will restart in 10 seconds.`)) {
+        showConfirmDialog('Confirm Reboot', `Reboot into updated Partition B (${version})? System will restart.`, 'Reboot Now', 'Cancel', () => {
             simulateReboot(version);
-        }
+        });
     });
     
     buttonContainer.appendChild(rebootBtn);
@@ -881,7 +1030,6 @@ function initializeRadioButtons() {
     const radios = document.querySelectorAll('input[name="strategy"]');
     radios.forEach(radio => {
         radio.addEventListener('change', function() {
-            // Remove active styles from all labels
             document.querySelectorAll('label[id^="strategy-"]').forEach(label => {
                 label.classList.remove('border-blue-500', 'bg-blue-50');
                 label.classList.add('border-slate-200');
@@ -889,7 +1037,6 @@ function initializeRadioButtons() {
                 label.querySelector('span').classList.add('text-slate-700');
             });
             
-            // Add active style to selected label
             const label = this.closest('label');
             label.classList.remove('border-slate-200');
             label.classList.add('border-blue-500', 'bg-blue-50');
@@ -897,7 +1044,7 @@ function initializeRadioButtons() {
             label.querySelector('span').classList.add('text-blue-900');
             
             const strategyName = this.value === 'seamless' ? 'Seamless A/B' : 'Maintenance Window';
-            showNotification(`Update strategy changed to: ${strategyName}`, 'info');
+            showNotificationDialog('Strategy Updated', `Update strategy changed to: ${strategyName}`, 'info');
             addLogEntry(`Update strategy: ${strategyName}`);
         });
     });
@@ -912,23 +1059,23 @@ function initializeSafetyToggle() {
         forceToggle.addEventListener('change', function() {
             if (this.checked) {
                 if (forceWarning) forceWarning.classList.remove('hidden');
-                showNotification('Force override enabled. Safety constraints will be ignored!', 'warning');
+                showNotificationDialog('Force Override', 'Force override enabled. Safety constraints will be ignored!', 'warning');
                 
-                // Show PIN prompt
                 setTimeout(() => {
-                    const pin = prompt('Enter admin PIN to confirm force override:');
-                    if (pin !== '7392') { // Default PIN for demo
-                        this.checked = false;
-                        if (forceWarning) forceWarning.classList.add('hidden');
-                        showNotification('Invalid PIN. Force override cancelled.', 'error');
-                    } else {
-                        showNotification('Force override confirmed. Proceed with caution!', 'warning');
-                        addLogEntry('Force override enabled (Admin PIN verified)');
-                    }
+                    showPasswordDialog('Admin Verification', 'Enter admin PIN to confirm force override:', (pin) => {
+                        if (pin !== '7392') {
+                            this.checked = false;
+                            if (forceWarning) forceWarning.classList.add('hidden');
+                            showNotificationDialog('Invalid PIN', 'Invalid PIN. Force override cancelled.', 'error');
+                        } else {
+                            showNotificationDialog('Force Override', 'Force override confirmed. Proceed with caution!', 'warning');
+                            addLogEntry('Force override enabled (Admin PIN verified)');
+                        }
+                    });
                 }, 300);
             } else {
                 if (forceWarning) forceWarning.classList.add('hidden');
-                showNotification('Force override disabled. Safety constraints active.', 'info');
+                showNotificationDialog('Force Override', 'Force override disabled. Safety constraints active.', 'info');
                 addLogEntry('Force override disabled');
             }
         });
@@ -936,197 +1083,7 @@ function initializeSafetyToggle() {
 }
 
 // ============================================================================
-// FACTORY RESET FUNCTIONALITY
-// ============================================================================
-
-// Show factory reset password dialog
-function showFactoryResetDialog() {
-    // Create modal overlay
-    const modal = document.createElement('div');
-    modal.id = 'factory-reset-modal';
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-    modal.innerHTML = `
-        <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-red-600 flex items-center">
-                    <i class="fa-solid fa-triangle-exclamation mr-2"></i>
-                    Factory Reset
-                </h3>
-                <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
-            </div>
-            <div class="mb-4">
-                <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                    <p class="text-sm text-red-700">
-                        <i class="fa-solid fa-circle-exclamation mr-1"></i>
-                        <strong>Warning:</strong> This will trigger a factory reset on the gateway device.
-                        All configuration and data may be wiped. This action cannot be undone.
-                    </p>
-                </div>
-                <label class="block text-sm font-medium text-slate-700 mb-2">
-                    Enter Admin Password
-                </label>
-                <input type="password" id="factory-reset-password" 
-                    class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="Enter your admin password">
-            </div>
-            <div class="flex space-x-3">
-                <button id="confirm-factory-reset-btn" 
-                    class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition-colors">
-                    Confirm Factory Reset
-                </button>
-                <button id="cancel-factory-reset-btn" 
-                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg transition-colors">
-                    Cancel
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Focus the password input
-    const passwordInput = document.getElementById('factory-reset-password');
-    if (passwordInput) {
-        setTimeout(() => passwordInput.focus(), 100);
-    }
-    
-    // Close modal function
-    const closeModal = () => {
-        if (modal && modal.parentNode) {
-            modal.parentNode.removeChild(modal);
-        }
-    };
-    
-    // Handle confirm button click
-    const confirmBtn = document.getElementById('confirm-factory-reset-btn');
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', async () => {
-            const password = passwordInput ? passwordInput.value : '';
-            
-            if (!password) {
-                showNotification('Please enter your admin password', 'warning');
-                return;
-            }
-            
-            // Disable buttons during request
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
-            const cancelBtn = document.getElementById('cancel-factory-reset-btn');
-            if (cancelBtn) cancelBtn.disabled = true;
-            
-            try {
-                // Send factory reset command to backend
-                const response = await fetch('/api/pipeline/factory-reset', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ password: password })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok && result.success) {
-                    // Success - show success message and close modal
-                    closeModal();
-                    showNotification('Factory reset command sent successfully! The device will reset shortly.', 'success');
-                    addLogEntry('Factory reset command sent via pipeline');
-                    
-                    // Update UI to show factory reset is in progress
-                    const statusText = document.getElementById('status-text');
-                    if (statusText) statusText.textContent = 'Factory Reset in Progress...';
-                    
-                    const currentOperation = document.getElementById('current-operation');
-                    if (currentOperation) currentOperation.textContent = 'Factory Resetting';
-                    
-                    const updateBadge = document.getElementById('update-badge');
-                    if (updateBadge) {
-                        updateBadge.classList.remove('hidden');
-                        updateBadge.classList.add('bg-red-500');
-                        updateBadge.textContent = 'Factory Reset';
-                    }
-                    
-                    // Simulate reset countdown
-                    let countdown = 10;
-                    const countdownInterval = setInterval(() => {
-                        const statusTextEl = document.getElementById('status-text');
-                        if (statusTextEl) {
-                            statusTextEl.textContent = `Factory Reset in ${countdown} seconds...`;
-                        }
-                        countdown--;
-                        
-                        if (countdown < 0) {
-                            clearInterval(countdownInterval);
-                            // Simulate reboot after factory reset
-                            simulateReboot('factory-reset');
-                        }
-                    }, 1000);
-                    
-                } else {
-                    // Error - show error message
-                    const errorMsg = result.error || 'Invalid password or command failed';
-                    showNotification(`Factory reset failed: ${errorMsg}`, 'error');
-                    addLogEntry(`Factory reset failed: ${errorMsg}`);
-                    
-                    // Re-enable buttons
-                    if (confirmBtn) {
-                        confirmBtn.disabled = false;
-                        confirmBtn.innerHTML = 'Confirm Factory Reset';
-                    }
-                    if (cancelBtn) cancelBtn.disabled = false;
-                }
-                
-            } catch (error) {
-                console.error('Factory reset error:', error);
-                showNotification('Failed to send factory reset command. Check network connection.', 'error');
-                addLogEntry(`Factory reset error: ${error.message}`);
-                
-                // Re-enable buttons
-                if (confirmBtn) {
-                    confirmBtn.disabled = false;
-                    confirmBtn.innerHTML = 'Confirm Factory Reset';
-                }
-                if (cancelBtn) cancelBtn.disabled = false;
-            }
-        });
-    }
-    
-    // Handle cancel button click
-    const cancelBtn = document.getElementById('cancel-factory-reset-btn');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', closeModal);
-    }
-    
-    // Handle close button click
-    const closeBtn = document.getElementById('close-modal-btn');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeModal);
-    }
-    
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
-    });
-    
-    // Handle Enter key in password input
-    if (passwordInput) {
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const confirmBtn = document.getElementById('confirm-factory-reset-btn');
-                if (confirmBtn) {
-                    confirmBtn.click();
-                }
-            }
-        });
-    }
-}
-
-// ============================================================================
-// END FACTORY RESET FUNCTIONALITY
+// FACTORY RESET FUNCTIONALITY WITH LOADING SCREEN
 // ============================================================================
 
 // Initialize recovery buttons
@@ -1135,9 +1092,9 @@ function initializeRecoveryButtons() {
     const rollbackBtn = document.getElementById('rollback-btn');
     if (rollbackBtn) {
         rollbackBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to rollback to Partition A? This will switch active partition immediately.')) {
+            showConfirmDialog('Confirm Rollback', 'Are you sure you want to rollback to Partition A? This will switch active partition immediately.', 'Rollback Now', 'Cancel', () => {
                 simulateRollback();
-            }
+            });
         });
     }
     
@@ -1145,22 +1102,39 @@ function initializeRecoveryButtons() {
     const restoreBtn = document.getElementById('restore-btn');
     if (restoreBtn) {
         restoreBtn.addEventListener('click', function() {
-            if (confirm('Restore previous OS version v5.0.3? This will overwrite current partition.')) {
+            showConfirmDialog('Confirm Restore', 'Restore previous OS version v5.0.3? This will overwrite current partition.', 'Restore Now', 'Cancel', () => {
                 simulateRestore();
-            }
+            });
         });
     }
     
-    // Factory reset button - NEW IMPLEMENTATION
+    // Factory reset button - NEW with loading screen
     const factoryBtn = document.getElementById('factory-btn');
     if (factoryBtn) {
-        // Remove any existing listeners by cloning and replacing
         const newFactoryBtn = factoryBtn.cloneNode(true);
         factoryBtn.parentNode.replaceChild(newFactoryBtn, factoryBtn);
         
         newFactoryBtn.addEventListener('click', function() {
-            // Show password prompt dialog
-            showFactoryResetDialog();
+            showConfirmDialog(
+                '⚠️ Factory Reset Warning',
+                'This will trigger a factory reset on the gateway device. All configuration and data will be wiped. This action cannot be undone.\n\nAre you ABSOLUTELY sure you want to proceed?',
+                'Yes, Factory Reset',
+                'Cancel',
+                () => {
+                    // Show password dialog after confirmation
+                    showPasswordDialog(
+                        'Admin Authentication',
+                        'Please enter your admin password to confirm factory reset:',
+                        async (password) => {
+                            if (!password) {
+                                showNotificationDialog('Authentication Failed', 'Password is required', 'error');
+                                return;
+                            }
+                            await sendFactoryReset(password);
+                        }
+                    );
+                }
+            );
         });
     }
     
@@ -1170,28 +1144,113 @@ function initializeRecoveryButtons() {
         uploadRecoveryBtn.addEventListener('click', function() {
             const fileInput = document.getElementById('recovery-file');
             if (!fileInput || fileInput.files.length === 0) {
-                showNotification('Please select a recovery image file first', 'warning');
+                showNotificationDialog('No File', 'Please select a recovery image file first', 'warning');
                 return;
             }
             
             const file = fileInput.files[0];
-            showNotification(`Uploading recovery image: ${file.name}`, 'info');
+            showNotificationDialog('Uploading', `Uploading recovery image: ${file.name}`, 'info');
             addLogEntry(`Uploading recovery image: ${file.name}`);
             
-            // Simulate upload
             setTimeout(() => {
                 const currentRecovery = document.getElementById('current-recovery');
                 if (currentRecovery) currentRecovery.textContent = `Current: ${file.name}`;
-                showNotification('Recovery image uploaded successfully', 'success');
+                showNotificationDialog('Upload Complete', 'Recovery image uploaded successfully', 'success');
                 addLogEntry('Recovery image uploaded and verified');
             }, 2000);
         });
     }
 }
 
+// Send factory reset command with loading screen
+async function sendFactoryReset(password) {
+    // Show loading overlay
+    showLoadingOverlay('Sending factory reset command...');
+    addLogEntry('Initiating factory reset');
+    
+    try {
+        const response = await fetch('/api/pipeline/factory-reset', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ password: password })
+        });
+        
+        const result = await response.json();
+        
+        // Hide loading overlay
+        hideLoadingOverlay();
+        
+        if (response.ok && result.success) {
+            showNotificationDialog('Factory Reset', 'Factory reset command sent successfully! The device will reset shortly.', 'success');
+            addLogEntry('Factory reset command sent to pipeline');
+            
+            // Update UI
+            const statusText = document.getElementById('status-text');
+            if (statusText) statusText.textContent = 'Factory Reset in Progress...';
+            
+            const currentOperation = document.getElementById('current-operation');
+            if (currentOperation) currentOperation.textContent = 'Factory Resetting';
+            
+            const updateBadge = document.getElementById('update-badge');
+            if (updateBadge) {
+                updateBadge.classList.remove('hidden');
+                updateBadge.classList.add('bg-red-500');
+                updateBadge.textContent = 'Factory Reset';
+            }
+            
+            // Show countdown dialog
+            const countdownDialog = document.createElement('div');
+            countdownDialog.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+            countdownDialog.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-8 text-center">
+                    <div class="flex justify-center mb-4">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-800 mb-2">Factory Reset in Progress</h3>
+                    <p class="text-sm text-slate-500 mb-4">The device will reset in <span id="countdown-number" class="font-bold text-red-600">10</span> seconds</p>
+                    <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div id="countdown-bar" class="h-full bg-red-600 transition-all duration-1000" style="width: 100%"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(countdownDialog);
+            
+            let countdown = 10;
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                const countdownNumber = document.getElementById('countdown-number');
+                const countdownBar = document.getElementById('countdown-bar');
+                
+                if (countdownNumber) countdownNumber.textContent = countdown;
+                if (countdownBar) countdownBar.style.width = `${(countdown / 10) * 100}%`;
+                
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    if (countdownDialog && countdownDialog.parentNode) {
+                        countdownDialog.parentNode.removeChild(countdownDialog);
+                    }
+                    simulateReboot('factory-reset');
+                }
+            }, 1000);
+            
+        } else {
+            const errorMsg = result.error || 'Invalid password or command failed';
+            showNotificationDialog('Factory Reset Failed', errorMsg, 'error');
+            addLogEntry(`Factory reset failed: ${errorMsg}`);
+        }
+        
+    } catch (error) {
+        hideLoadingOverlay();
+        console.error('Factory reset error:', error);
+        showNotificationDialog('Connection Error', 'Failed to send factory reset command. Check network connection.', 'error');
+        addLogEntry(`Factory reset error: ${error.message}`);
+    }
+}
+
 // Initialize system status updates
 function initializeSystemStatus() {
-    // Update uptime every minute
     const uptimeInterval = setInterval(() => {
         const uptimeElement = document.getElementById('uptime');
         if (uptimeElement) {
@@ -1214,13 +1273,11 @@ function initializeSystemStatus() {
         }
     }, 60000);
     
-    // Store interval for cleanup
     window.otaUptimeInterval = uptimeInterval;
 }
 
 // Initialize live monitor
 function initializeLiveMonitor() {
-    // Clear log button
     const clearLogBtn = document.getElementById('clear-log');
     if (clearLogBtn) {
         clearLogBtn.addEventListener('click', function() {
@@ -1233,7 +1290,6 @@ function initializeLiveMonitor() {
 
 // Initialize all buttons
 function initializeButtons() {
-    // Helper function to safely add event listener
     function addSafeEventListener(id, event, handler) {
         const element = document.getElementById(id);
         if (element) {
@@ -1243,28 +1299,31 @@ function initializeButtons() {
         return false;
     }
     
-    // Add event listeners safely
     addSafeEventListener('save-btn', 'click', saveChanges);
     addSafeEventListener('reset-btn', 'click', () => {
-        if (confirm('Reset all settings to defaults?')) {
+        showConfirmDialog('Reset Settings', 'Reset all settings to defaults?', 'Reset', 'Cancel', () => {
             resetSettings();
-        }
+        });
     });
     addSafeEventListener('cancel-btn', 'click', () => {
-        if (confirm('Cancel all pending operations?')) {
-            cancelOperations();
+        if (deploymentInProgress) {
+            showConfirmDialog('Cancel Deployment', 'Cancel deployment in progress?', 'Cancel Deployment', 'Continue', () => {
+                cancelOperations();
+            });
+        } else {
+            showNotificationDialog('No Operations', 'No operations to cancel', 'info');
         }
     });
     
-    // Required buttons (these should exist in the OTA Gateway HTML)
     const snapshotBtn = document.getElementById('snapshot-btn');
     if (snapshotBtn) {
         snapshotBtn.addEventListener('click', function() {
-            showNotification('Creating system snapshot...', 'info');
+            showLoadingOverlay('Creating system snapshot...');
             addLogEntry('Creating system snapshot');
             
             setTimeout(() => {
-                showNotification('System snapshot created successfully', 'success');
+                hideLoadingOverlay();
+                showNotificationDialog('Snapshot Created', 'System snapshot created successfully', 'success');
                 addLogEntry('System snapshot saved');
             }, 2000);
         });
@@ -1273,11 +1332,12 @@ function initializeButtons() {
     const debugBtn = document.getElementById('debug-btn');
     if (debugBtn) {
         debugBtn.addEventListener('click', function() {
-            showNotification('Collecting debug information...', 'info');
+            showLoadingOverlay('Collecting debug information...');
             addLogEntry('Starting debug bundle collection');
             
             setTimeout(() => {
-                showNotification('Debug bundle downloaded', 'success');
+                hideLoadingOverlay();
+                showNotificationDialog('Debug Bundle', 'Debug bundle downloaded', 'success');
                 addLogEntry('Debug bundle collection complete');
             }, 3000);
         });
@@ -1286,7 +1346,7 @@ function initializeButtons() {
 
 // Simulated operations
 function simulateRollback() {
-    showNotification('Initiating rollback to Partition A...', 'warning');
+    showLoadingOverlay('Initiating rollback to Partition A...');
     addLogEntry('Starting rollback to Partition A');
     
     const partitionA = document.getElementById('partition-a');
@@ -1296,7 +1356,6 @@ function simulateRollback() {
     const partitionBNext = document.getElementById('partition-b-next');
     
     if (partitionA && partitionB) {
-        // Swap partition styles
         partitionA.classList.remove('bg-green-50', 'border-green-200');
         partitionA.classList.add('bg-slate-50', 'border-slate-200', 'opacity-80');
         const partitionACheck = partitionA.querySelector('.fa-circle-check');
@@ -1319,7 +1378,6 @@ function simulateRollback() {
         const partitionBIcon = partitionB.querySelector('.fa-solid');
         if (partitionBIcon) partitionBIcon.classList.replace('text-slate-400', 'text-green-500');
         
-        // Swap status text
         if (partitionAStatus && partitionBStatus) {
             const tempStatus = partitionAStatus.textContent;
             partitionAStatus.textContent = partitionBStatus.textContent;
@@ -1328,17 +1386,19 @@ function simulateRollback() {
     }
     
     setTimeout(() => {
-        showNotification('Rollback complete! System is now running on Partition A.', 'success');
+        hideLoadingOverlay();
+        showNotificationDialog('Rollback Complete', 'Rollback complete! System is now running on Partition A.', 'success');
         addLogEntry('Rollback completed successfully');
     }, 1500);
 }
 
 function simulateRestore() {
-    showNotification('Starting OS restore to v5.0.3...', 'info');
+    showLoadingOverlay('Starting OS restore to v5.0.3...');
     addLogEntry('Initiating OS restore to v5.0.3');
     
     setTimeout(() => {
-        showNotification('OS restore completed. Reboot required.', 'success');
+        hideLoadingOverlay();
+        showNotificationDialog('Restore Complete', 'OS restore completed. Reboot required.', 'success');
         addLogEntry('OS restore completed');
     }, 3000);
 }
@@ -1348,10 +1408,9 @@ function simulateReboot(version) {
         ? 'Factory reset complete. Rebooting with factory defaults...'
         : `Rebooting into ${version}`;
     
-    showNotification(rebootMessage, 'warning');
+    showNotificationDialog('System Reboot', rebootMessage, 'warning');
     addLogEntry(rebootMessage);
     
-    // Show reboot overlay
     const rebootOverlay = document.createElement('div');
     rebootOverlay.className = 'fixed inset-0 bg-slate-900 flex items-center justify-center z-50';
     rebootOverlay.innerHTML = `
@@ -1367,15 +1426,12 @@ function simulateReboot(version) {
     
     document.body.appendChild(rebootOverlay);
     
-    // Simulate reboot completion
     setTimeout(() => {
         document.body.removeChild(rebootOverlay);
         
         if (version === 'factory-reset') {
-            // Reset all UI to factory defaults
             resetSettings();
             
-            // Update system info to factory version
             const osVersion = document.getElementById('os-version');
             const osStatus = document.getElementById('os-status');
             if (osVersion) osVersion.textContent = 'v5.0.1-factory';
@@ -1385,13 +1441,11 @@ function simulateReboot(version) {
                 osStatus.classList.add('bg-slate-100', 'text-slate-700');
             }
             
-            // Reset partition status
             const partitionAStatus = document.getElementById('partition-a-status');
             const partitionBStatus = document.getElementById('partition-b-status');
             if (partitionAStatus) partitionAStatus.textContent = 'v5.0.1-factory • Factory Default';
             if (partitionBStatus) partitionBStatus.textContent = 'v5.0.1-factory • Target for OTA';
             
-            // Reset partition styling
             const partitionA = document.getElementById('partition-a');
             const partitionB = document.getElementById('partition-b');
             if (partitionA) {
@@ -1403,10 +1457,9 @@ function simulateReboot(version) {
                 partitionB.classList.remove('bg-green-50', 'border-green-200');
             }
             
-            showNotification('Factory reset complete! System is now running factory defaults.', 'success');
+            showNotificationDialog('Factory Reset Complete', 'System is now running factory defaults.', 'success');
             addLogEntry('Factory reset completed, system restored to factory defaults');
         } else {
-            // Update system info
             const osVersion = document.getElementById('os-version');
             const osStatus = document.getElementById('os-status');
             if (osVersion) osVersion.textContent = version;
@@ -1416,11 +1469,10 @@ function simulateReboot(version) {
                 osStatus.classList.replace('text-green-700', version.includes('beta') ? 'text-blue-700' : 'text-green-700');
             }
             
-            showNotification(`Reboot complete! System is now running ${version}`, 'success');
+            showNotificationDialog('Reboot Complete', `System is now running ${version}`, 'success');
             addLogEntry(`System rebooted into ${version}`);
         }
         
-        // Update last OTA date
         const now = new Date();
         const formattedDate = now.toISOString().split('T')[0];
         const lastOta = document.getElementById('last-ota');
@@ -1428,7 +1480,6 @@ function simulateReboot(version) {
             lastOta.innerHTML = `${formattedDate} <span class="text-green-600 text-xs ml-1">(Success)</span>`;
         }
         
-        // Check for updates after reboot
         setTimeout(() => {
             checkForUpdates(true);
         }, 3000);
@@ -1437,40 +1488,20 @@ function simulateReboot(version) {
 
 // Save changes function
 function saveChanges() {
-    showNotification('Saving configuration changes...', 'info');
+    showNotificationDialog('Saving', 'Saving configuration changes...', 'info');
     addLogEntry('Saving configuration');
     
-    // Collect settings
-    const strategyRadio = document.querySelector('input[name="strategy"]:checked');
-    const strategy = strategyRadio ? strategyRadio.value : 'seamless';
-    
-    const safety = {
-        crane: document.getElementById('crane-safety')?.checked || false,
-        acs: document.getElementById('acs-safety')?.checked || false,
-        ups: document.getElementById('ups-safety')?.checked || false,
-        force: document.getElementById('force-toggle')?.checked || false
-    };
-    
-    // Auto-update settings
-    const autoSettings = {
-        download: document.getElementById('auto-download')?.checked || false,
-        security: document.getElementById('auto-security')?.checked || false,
-        reboot: document.getElementById('auto-reboot')?.checked || false
-    };
-    
-    // Simulate API call
     setTimeout(() => {
-        showNotification('Configuration saved successfully!', 'success');
+        showNotificationDialog('Saved', 'Configuration saved successfully!', 'success');
         addLogEntry('Configuration saved');
     }, 1000);
 }
 
 // Reset settings
 function resetSettings() {
-    showNotification('Resetting settings to defaults...', 'info');
+    showNotificationDialog('Resetting', 'Resetting settings to defaults...', 'info');
     addLogEntry('Resetting all settings');
     
-    // Reset file upload
     const uploadIcon = document.getElementById('upload-icon');
     if (uploadIcon) {
         uploadIcon.innerHTML = '<i class="fa-solid fa-file-arrow-up text-blue-600 text-xl"></i>';
@@ -1487,14 +1518,12 @@ function resetSettings() {
     const uploadSubtext = document.getElementById('upload-subtext');
     if (uploadSubtext) uploadSubtext.textContent = 'or drag and drop (.img, .tar.gz, .squashfs)';
     
-    // Reset inputs
     const imageVersion = document.getElementById('image-version');
     if (imageVersion) imageVersion.value = '';
     
     const checksum = document.getElementById('checksum');
     if (checksum) checksum.value = '';
     
-    // Reset metadata
     const metadataKernel = document.getElementById('metadata-kernel');
     if (metadataKernel) {
         metadataKernel.textContent = '--';
@@ -1513,7 +1542,6 @@ function resetSettings() {
         metadataSig.className = 'font-mono text-slate-400';
     }
     
-    // Reset verify button
     const verifyBtn = document.getElementById('verify-btn');
     if (verifyBtn) {
         verifyBtn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Verify & Prepare Deployment';
@@ -1522,21 +1550,17 @@ function resetSettings() {
         verifyBtn.classList.add('bg-slate-200', 'text-slate-400', 'cursor-not-allowed');
     }
     
-    // Clear button container
     const buttonContainer = document.getElementById('button-container');
     if (buttonContainer) buttonContainer.innerHTML = '';
     
-    // Reset current file
     currentFile = null;
     
-    // Reset partition B status
     const partitionBStatus = document.getElementById('partition-b-status');
     if (partitionBStatus) {
         partitionBStatus.textContent = 'v5.0.3 • Target for OTA';
         partitionBStatus.classList.remove('text-blue-600', 'text-amber-600', 'text-green-600', 'font-bold');
     }
     
-    // Reset auto-update toggle
     autoUpdateEnabled = true;
     const autoUpdateToggle = document.getElementById('auto-update-toggle');
     if (autoUpdateToggle) {
@@ -1544,7 +1568,6 @@ function resetSettings() {
         autoUpdateToggle.className = 'px-4 py-2 text-sm font-medium bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md transition-colors';
     }
     
-    // Reset auto-update checkboxes
     const autoDownload = document.getElementById('auto-download');
     if (autoDownload) autoDownload.checked = true;
     
@@ -1555,74 +1578,67 @@ function resetSettings() {
     if (autoReboot) autoReboot.checked = false;
     
     setTimeout(() => {
-        showNotification('Settings reset to defaults', 'success');
+        showNotificationDialog('Reset Complete', 'Settings reset to defaults', 'success');
     }, 500);
 }
 
 // Cancel operations
 function cancelOperations() {
     if (deploymentInProgress) {
-        if (confirm('Cancel deployment in progress?')) {
-            deploymentInProgress = false;
-            
-            // Stop download/installation
-            if (updateDownloadInterval) {
-                clearInterval(updateDownloadInterval);
-                updateDownloadInterval = null;
-            }
-            
-            // Reset monitor UI
-            const statusText = document.getElementById('status-text');
-            if (statusText) statusText.textContent = 'System Idle';
-            
-            const currentOperation = document.getElementById('current-operation');
-            if (currentOperation) currentOperation.textContent = 'Idle';
-            
-            const statusPercent = document.getElementById('status-percent');
-            if (statusPercent) statusPercent.textContent = '0%';
-            
-            const progressFill = document.getElementById('progress-fill');
-            if (progressFill) {
-                progressFill.style.width = '0%';
-                progressFill.className = 'h-full bg-green-500';
-            }
-            
-            const downloadSpeed = document.getElementById('download-speed');
-            if (downloadSpeed) downloadSpeed.textContent = '0 MB/s';
-            
-            const eta = document.getElementById('eta');
-            if (eta) eta.textContent = '--:--';
-            
-            const integrityStatus = document.getElementById('integrity-status');
-            if (integrityStatus) {
-                integrityStatus.textContent = 'Pending';
-                integrityStatus.className = 'text-green-400';
-            }
-            
-            const updateBadge = document.getElementById('update-badge');
-            if (updateBadge) updateBadge.classList.add('hidden');
-            
-            // Reset partition B status
-            const partitionBStatus = document.getElementById('partition-b-status');
-            if (partitionBStatus) partitionBStatus.textContent = 'v5.0.3 • Target for OTA';
-            
-            // Enable install buttons
-            document.querySelectorAll('.install-update-btn').forEach(btn => {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            });
-            
-            // Enable other buttons
-            document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            });
-            
-            showNotification('Deployment cancelled', 'warning');
-            addLogEntry('Deployment cancelled by user');
+        deploymentInProgress = false;
+        
+        if (updateDownloadInterval) {
+            clearInterval(updateDownloadInterval);
+            updateDownloadInterval = null;
         }
+        
+        const statusText = document.getElementById('status-text');
+        if (statusText) statusText.textContent = 'System Idle';
+        
+        const currentOperation = document.getElementById('current-operation');
+        if (currentOperation) currentOperation.textContent = 'Idle';
+        
+        const statusPercent = document.getElementById('status-percent');
+        if (statusPercent) statusPercent.textContent = '0%';
+        
+        const progressFill = document.getElementById('progress-fill');
+        if (progressFill) {
+            progressFill.style.width = '0%';
+            progressFill.className = 'h-full bg-green-500';
+        }
+        
+        const downloadSpeed = document.getElementById('download-speed');
+        if (downloadSpeed) downloadSpeed.textContent = '0 MB/s';
+        
+        const eta = document.getElementById('eta');
+        if (eta) eta.textContent = '--:--';
+        
+        const integrityStatus = document.getElementById('integrity-status');
+        if (integrityStatus) {
+            integrityStatus.textContent = 'Pending';
+            integrityStatus.className = 'text-green-400';
+        }
+        
+        const updateBadge = document.getElementById('update-badge');
+        if (updateBadge) updateBadge.classList.add('hidden');
+        
+        const partitionBStatus = document.getElementById('partition-b-status');
+        if (partitionBStatus) partitionBStatus.textContent = 'v5.0.3 • Target for OTA';
+        
+        document.querySelectorAll('.install-update-btn').forEach(btn => {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+        
+        document.querySelectorAll('button:not(#cancel-btn):not(#reset-btn)').forEach(btn => {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+        
+        showNotificationDialog('Cancelled', 'Deployment cancelled', 'warning');
+        addLogEntry('Deployment cancelled by user');
     } else {
-        showNotification('No operations to cancel', 'info');
+        showNotificationDialog('No Operation', 'No operations to cancel', 'info');
     }
 }
 
@@ -1647,49 +1663,6 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-function showNotification(message, type = 'info') {
-    const container = document.getElementById('notification-container');
-    if (!container) return;
-    
-    const notification = document.createElement('div');
-    notification.className = `px-4 py-3 rounded-md shadow-lg border transform transition-all duration-300 translate-x-64 opacity-0`;
-    
-    const colors = {
-        info: 'bg-blue-50 text-blue-800 border-blue-200',
-        success: 'bg-green-50 text-green-800 border-green-200',
-        warning: 'bg-amber-50 text-amber-800 border-amber-200',
-        error: 'bg-red-50 text-red-800 border-red-200'
-    };
-    
-    notification.className += ` ${colors[type]}`;
-    notification.innerHTML = `
-        <div class="flex items-center">
-            <i class="fa-solid ${type === 'info' ? 'fa-circle-info' : type === 'success' ? 'fa-circle-check' : type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-xmark'} mr-2"></i>
-            <span>${message}</span>
-        </div>
-    `;
-    
-    container.appendChild(notification);
-    
-    // Animate in
-    setTimeout(() => {
-        notification.classList.remove('translate-x-64', 'opacity-0');
-        notification.classList.add('translate-x-0', 'opacity-100');
-    }, 10);
-    
-    // Remove after 5 seconds
-    setTimeout(() => {
-        notification.classList.remove('translate-x-0', 'opacity-100');
-        notification.classList.add('translate-x-64', 'opacity-0');
-        
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 5000);
-}
-
 // Clean up intervals on page unload
 function cleanupOtaGateway() {
     if (updateCheckInterval) {
@@ -1705,6 +1678,11 @@ function cleanupOtaGateway() {
     if (window.otaUptimeInterval) {
         clearInterval(window.otaUptimeInterval);
         window.otaUptimeInterval = null;
+    }
+    
+    if (loadingOverlay) {
+        loadingOverlay.remove();
+        loadingOverlay = null;
     }
 }
 

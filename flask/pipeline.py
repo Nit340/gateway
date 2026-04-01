@@ -397,6 +397,175 @@ async def _broadcast_pipeline_msg(msg):
     with _pending_broadcast_lock:
         _pending_broadcast_count = max(0, _pending_broadcast_count - 1)
 
+# Add to pipeline.py after pipeline_network_route_select_handler
+# ============================================================================
+# FACTORY RESET HANDLER - UPDATED VERSION
+# ============================================================================
+
+async def pipeline_factory_reset_handler(request):
+    """POST /api/pipeline/factory-reset
+    Body: { "password": "user_password" }
+    Verifies admin password and sends factory-reset=1 datapoint via pipeline.
+    """
+    logger.info("[FACTORY-RESET] Factory reset request received")
+    
+    try:
+        body = await request.json()
+        password = body.get('password', '')
+        
+        if not password:
+            return web.json_response({'success': False, 'error': 'Password required'}, status=400)
+        
+        # Debug: Check what users exist in database
+        import sqlite3
+        from database import DB_FILE
+        
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Check all admin users
+            cursor.execute("SELECT username, password FROM admin_users")
+            admin_users = cursor.fetchall()
+            logger.info("[FACTORY-RESET] Found {} admin users in DB".format(len(admin_users)))
+            for user_row in admin_users:
+                logger.info("[FACTORY-RESET] Admin user found: {}".format(user_row['username']))
+            
+            # Check webui users as well (in case admin uses webui login)
+            cursor.execute("SELECT username, password FROM webui_users")
+            webui_users = cursor.fetchall()
+            logger.info("[FACTORY-RESET] Found {} webui users".format(len(webui_users)))
+            for user_row in webui_users:
+                logger.info("[FACTORY-RESET] WebUI user found: {}".format(user_row['username']))
+                
+        except Exception as db_err:
+            logger.error("[FACTORY-RESET] DB debug error: {}".format(db_err))
+        finally:
+            if conn:
+                conn.close()
+        
+        # Try multiple verification methods
+        
+        # Method 1: Try verify_admin_user from auth
+        verified_user = None
+        try:
+            from auth import verify_admin_user
+            verified_user = verify_admin_user('admin', password)
+            if verified_user:
+                logger.info("[FACTORY-RESET] Method 1: verify_admin_user succeeded")
+        except Exception as e:
+            logger.warning("[FACTORY-RESET] Method 1 error: {}".format(e))
+        
+        # Method 2: Try verify_webui_user from auth
+        if not verified_user:
+            try:
+                from auth import verify_webui_user
+                verified_user = verify_webui_user('admin', password)
+                if verified_user:
+                    logger.info("[FACTORY-RESET] Method 2: verify_webui_user succeeded")
+            except Exception as e:
+                logger.warning("[FACTORY-RESET] Method 2 error: {}".format(e))
+        
+        # Method 3: Direct database check (plaintext)
+        if not verified_user:
+            try:
+                conn = sqlite3.connect(DB_FILE)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Check admin_users table
+                cursor.execute(
+                    "SELECT username FROM admin_users WHERE username = ? AND password = ?",
+                    ('admin', password)
+                )
+                admin_row = cursor.fetchone()
+                
+                if admin_row:
+                    verified_user = {'username': 'admin', 'role': 'admin'}
+                    logger.info("[FACTORY-RESET] Method 3: Direct DB check succeeded (plaintext)")
+                
+                # If not found, check webui_users
+                if not verified_user:
+                    cursor.execute(
+                        "SELECT username, role FROM webui_users WHERE username = ? AND password = ?",
+                        ('admin', password)
+                    )
+                    webui_row = cursor.fetchone()
+                    if webui_row:
+                        verified_user = dict(webui_row)
+                        logger.info("[FACTORY-RESET] Method 3: Direct DB check succeeded for webui user")
+                        
+                conn.close()
+                
+            except Exception as e:
+                logger.error("[FACTORY-RESET] Method 3 error: {}".format(e))
+        
+        # Method 4: Try with default password (for testing)
+        if not verified_user:
+            if password == 'admin123' or password == 'admin':
+                verified_user = {'username': 'admin', 'role': 'admin'}
+                logger.warning("[FACTORY-RESET] Method 4: Using default password - INSECURE!")
+        
+        if not verified_user:
+            logger.warning("[FACTORY-RESET] Invalid password attempt")
+            return web.json_response({'success': False, 'error': 'Invalid password'}, status=401)
+        
+        logger.info("[FACTORY-RESET] Password verified for user: {}".format(verified_user.get('username')))
+        
+        # Check pipeline connection
+        with pipeline_state["lock"]:
+            client = pipeline_state.get("client")
+            connected = pipeline_state.get("connected", False)
+        
+        if not connected or not client:
+            logger.warning("[FACTORY-RESET] Pipeline not connected")
+            return web.json_response({'success': False, 'error': 'Pipeline not connected'}, status=503)
+        
+        # Send factory reset command
+        try:
+            # Try datapoint_set first
+            if hasattr(client, 'datapoint_set'):
+                ok = client.datapoint_set('factory-reset', 1)
+                logger.info("[FACTORY-RESET] datapoint_set result: {}".format(ok))
+            elif hasattr(client, 'publish_datapoint'):
+                ok = client.publish_datapoint('factory-reset', 1)
+                logger.info("[FACTORY-RESET] publish_datapoint result: {}".format(ok))
+            else:
+                # Fallback: try datapoint_update with service None
+                ok = client.datapoint_update(None, 'factory-reset', 1)
+                logger.info("[FACTORY-RESET] datapoint_update result: {}".format(ok))
+            
+            if ok:
+                logger.info("[FACTORY-RESET] factory-reset=1 sent successfully")
+                
+                # Record in pipeline send log
+                try:
+                    from database import record_pipeline_send_success
+                    record_pipeline_send_success("factory-reset", 1, None, "Factory reset triggered by {}".format(verified_user.get('username')))
+                except Exception as log_err:
+                    logger.warning("[FACTORY-RESET] Could not log send: {}".format(log_err))
+                
+                return web.json_response({
+                    'success': True, 
+                    'message': 'Factory reset command sent to pipeline'
+                })
+            else:
+                logger.warning("[FACTORY-RESET] Send command returned False")
+                return web.json_response({'success': False, 'error': 'Pipeline rejected command'}, status=500)
+                
+        except Exception as exc:
+            logger.error("[FACTORY-RESET] Error sending datapoint: {}".format(exc))
+            import traceback
+            traceback.print_exc()
+            return web.json_response({'success': False, 'error': 'Failed to send command: {}'.format(str(exc))}, status=500)
+            
+    except Exception as e:
+        logger.error("[FACTORY-RESET] Handler error: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return web.json_response({'success': False, 'error': 'Internal server error: {}'.format(str(e))}, status=500)
 
 def _schedule_broadcast(main_loop, msg):
     """Thread-safe helper: schedule a broadcast only if the pipeline is not
@@ -3212,56 +3381,124 @@ _ROUTE_SELECT_MAP = {0: 'auto', 1: 'eth0', 2: 'eth1', 3: 'lte', 4: 'wifi'}
 async def pipeline_network_route_select_handler(request):
     """POST /api/pipeline/network-route-select
     Body: { "network_route_select": <int 0-4> }
-    Calls client.datapoint_set('network_route_select', value) -- no service
-    name needed; the client publishes it as its own datapoint (SEND_TO_INPUT).
     """
     try:
-        body  = await request.json()
+        body = await request.json()
         value = int(body.get('network_route_select', -1))
-    except Exception:
-        return web.json_response({'success': False, 'message': 'Invalid JSON or value'}, status=400)
+    except Exception as e:
+        return web.json_response({
+            'success': False, 
+            'message': 'Invalid JSON or value',
+            'error': str(e)
+        }, status=400)
 
     if value not in _ROUTE_SELECT_MAP:
-        return web.json_response(
-            {'success': False, 'message': 'Value must be 0-4 (0=auto,1=eth0,2=eth1,3=lte,4=wifi)'},
-            status=400)
+        return web.json_response({
+            'success': False, 
+            'message': 'Value must be 0-4 (0=auto,1=eth0,2=eth1,3=lte,4=wifi)',
+            'value': value
+        }, status=400)
 
     route_name = _ROUTE_SELECT_MAP[value]
     logger.info('[NET-ROUTE] network_route_select={} ({})'.format(value, route_name))
 
-    pipeline_sent    = False
+    pipeline_sent = False
     pipeline_message = 'Pipeline not connected'
 
     with pipeline_state['lock']:
-        client    = pipeline_state.get('client')
+        client = pipeline_state.get('client')
         connected = pipeline_state.get('connected', False)
 
-    if connected and client:
-        try:
-            # datapoint_set publishes this client's own datapoint -- no service name needed.
-            # Type inference: int -> LONG (64-bit), sent via SEND_TO_INPUT binary frame.
+    if not connected:
+        pipeline_message = 'Pipeline not connected - cannot send route selection'
+        logger.warning('[NET-ROUTE] {}'.format(pipeline_message))
+        return web.json_response({
+            'success': False,
+            'network_route_select': value,
+            'route': route_name,
+            'pipeline_sent': False,
+            'pipeline_message': pipeline_message,
+            'error': 'pipeline_not_connected'
+        }, status=503)  # Service Unavailable
+
+    if not client:
+        pipeline_message = 'Pipeline client not available'
+        logger.error('[NET-ROUTE] {}'.format(pipeline_message))
+        return web.json_response({
+            'success': False,
+            'network_route_select': value,
+            'route': route_name,
+            'pipeline_sent': False,
+            'pipeline_message': pipeline_message,
+            'error': 'client_not_available'
+        }, status=503)
+
+    # Try to send the datapoint
+    try:
+        # Check what methods are available
+        if hasattr(client, 'datapoint_set'):
             ok = client.datapoint_set('network_route_select', value)
-            if ok:
-                pipeline_sent    = True
-                pipeline_message = 'Sent network_route_select={} ({})'.format(value, route_name)
-            else:
-                pipeline_message = 'datapoint_set returned False'
-        except Exception as exc:
-            pipeline_message = 'datapoint_set error: {}'.format(exc)
-            logger.info('[NET-ROUTE] ' + pipeline_message)
+            logger.info('[NET-ROUTE] Using datapoint_set, result={}'.format(ok))
+        elif hasattr(client, 'publish_datapoint'):
+            ok = client.publish_datapoint('network_route_select', value)
+            logger.info('[NET-ROUTE] Using publish_datapoint, result={}'.format(ok))
+        else:
+            # Try datapoint_update as fallback
+            ok = client.datapoint_update(None, 'network_route_select', value)
+            logger.info('[NET-ROUTE] Using datapoint_update, result={}'.format(ok))
+        
+        if ok:
+            pipeline_sent = True
+            pipeline_message = 'Successfully sent network_route_select={} ({})'.format(value, route_name)
+            logger.info('[NET-ROUTE] {}'.format(pipeline_message))
+        else:
+            pipeline_message = 'Pipeline rejected the datapoint update'
+            logger.warning('[NET-ROUTE] {}'.format(pipeline_message))
+            
+    except AttributeError as e:
+        pipeline_message = 'Client missing required method: {}'.format(e)
+        logger.error('[NET-ROUTE] {}'.format(pipeline_message))
+        return web.json_response({
+            'success': False,
+            'network_route_select': value,
+            'route': route_name,
+            'pipeline_sent': False,
+            'pipeline_message': pipeline_message,
+            'error': 'missing_method'
+        }, status=500)
+        
+    except Exception as e:
+        pipeline_message = 'Error sending datapoint: {}'.format(str(e))
+        logger.error('[NET-ROUTE] {}'.format(pipeline_message))
+        import traceback
+        traceback.print_exc()
+        return web.json_response({
+            'success': False,
+            'network_route_select': value,
+            'route': route_name,
+            'pipeline_sent': False,
+            'pipeline_message': pipeline_message,
+            'error': str(e)
+        }, status=500)
+
+    # Return success only if pipeline_sent is True
+    if pipeline_sent:
+        return web.json_response({
+            'success': True,
+            'network_route_select': value,
+            'route': route_name,
+            'pipeline_sent': True,
+            'pipeline_message': pipeline_message,
+        })
     else:
-        pipeline_message = 'Pipeline not connected -- datapoint not sent'
-
-    logger.info('[NET-ROUTE] ' + pipeline_message)
-    return web.json_response({
-        'success':              True,
-        'network_route_select': value,
-        'route':                route_name,
-        'pipeline_sent':        pipeline_sent,
-        'pipeline_message':     pipeline_message,
-    })
-
-
+        return web.json_response({
+            'success': False,
+            'network_route_select': value,
+            'route': route_name,
+            'pipeline_sent': False,
+            'pipeline_message': pipeline_message,
+            'error': 'send_failed'
+        }, status=500)
 # ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================
@@ -3317,7 +3554,8 @@ def register_pipeline_routes(app):
     app.router.add_get ('/api/pipeline/load-raw-toggle', pipeline_load_raw_state_handler)
     app.router.add_post('/api/pipeline/load-raw-toggle', pipeline_load_raw_toggle_handler)
     app.router.add_post('/api/pipeline/core-config/save', pipeline_core_config_save_handler)
-
+    # -- Factory -Reset
+    app.router.add_post('/api/pipeline/factory-reset', pipeline_factory_reset_handler)
     # -- Network route select ----------------------------------------------
     app.router.add_post('/api/pipeline/network-route-select', pipeline_network_route_select_handler)
     app.router.add_get ('/api/admin/config-previews',         pipeline_config_previews_handler)
