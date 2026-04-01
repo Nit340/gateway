@@ -4,7 +4,7 @@
     'use strict';
         
     window.initializeDeviceManagement = function() {
-        console.log('Device Management page initialized');
+
         initDeviceManagementApp();
     };
 
@@ -258,7 +258,7 @@
 
     // ==================== INITIALIZATION ====================
     async function initApp() {
-        console.log('Initializing Device Management...');
+
 
         await fetchUserRole();
         await loadPortConfig();
@@ -268,7 +268,7 @@
         applyRoleAccess();
         startStatusPolling();
 
-        console.log('Device Management initialized successfully');
+
     }
 
     // ==================== ROLE BASED ACCESS ====================
@@ -283,7 +283,7 @@
             userRole = (window.__userRole || 'user').toLowerCase();
         }
         window.__userRole = userRole;
-        console.log('[DeviceMgmt] userRole =', userRole);
+
     }
 
     function isAdmin() {
@@ -431,7 +431,7 @@
             
             if (data.devices) {
                 devices = data.devices;
-                console.log('Loaded devices:', devices);
+
             } else {
                 devices = [];
                 console.warn('No devices returned from API');
@@ -446,7 +446,7 @@
     // ==================== REFRESH FUNCTIONALITY ====================
     async function refreshData() {
         if (isRefreshing) {
-            console.log('Refresh already in progress');
+
             return;
         }
         
@@ -459,7 +459,7 @@
                 refreshIcon.classList.add('fa-spin');
             }
             
-            console.log('Refreshing device data...');
+
             
             await loadDevices();
             renderDevicesTable();
@@ -480,7 +480,7 @@
     window.cleanupDeviceManagement = function() {
         eventListenersBoundToNode = null;
         if (_statusPollInterval) { clearInterval(_statusPollInterval); _statusPollInterval = null; }
-        console.log('Device Management cleaned up');
+
     };
 
     // ==================== SERVICE STATUS POLLING ====================
@@ -2343,12 +2343,12 @@
     function setupEventListeners() {
         const anchorNode = document.getElementById('addDeviceBtn');
         if (anchorNode && document.contains(anchorNode) && eventListenersBoundToNode === anchorNode) {
-            console.log('Event listeners already setup, skipping...');
+
             return;
         }
         eventListenersBoundToNode = anchorNode;
         
-        console.log('Setting up Device Management event listeners...');
+
         
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
@@ -2470,7 +2470,7 @@
 
         setupImportExportListeners();
 
-        console.log('Device Management event listeners setup complete');
+
     }
 
     // ==================== UTILITY ====================

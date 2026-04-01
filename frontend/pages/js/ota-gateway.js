@@ -1,6 +1,6 @@
 // This function will be called by the router when loading the page
 window.initOtaGateway = function() {
-    console.log('OTA Gateway page initialized');
+
     
     // Initialize all functionality for this page
     initializeOtaGateway();
@@ -61,7 +61,7 @@ let currentUpdate = null;
 let updateDownloadInterval;
 
 function initializeOtaGateway() {
-    console.log('Setting up OTA Gateway page functionality');
+
     
     try {
         // Initialize all OTA components
@@ -90,7 +90,7 @@ function initializeOtaGateway() {
         addLogEntry('Auto-update system: Enabled');
         addLogEntry('Next automatic check: ' + new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString());
         
-        console.log('OTA Gateway page setup complete');
+
     } catch (error) {
         console.error('Error in initializeOtaGateway:', error);
     }
@@ -1258,7 +1258,6 @@ function saveChanges() {
     
     // Simulate API call
     setTimeout(() => {
-        console.log('Settings saved:', { strategy, safety, autoSettings });
         showNotification('Configuration saved successfully!', 'success');
         addLogEntry('Configuration saved');
     }, 1000);
@@ -1506,7 +1505,7 @@ function cleanupOtaGateway() {
         window.otaUptimeInterval = null;
     }
     
-    console.log('OTA Gateway cleanup completed');
+
 }
 
 // Export for global access

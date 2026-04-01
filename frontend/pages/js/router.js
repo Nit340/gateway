@@ -107,7 +107,7 @@ class Router {
     navigateTo(page, updateHistory = true) {
         if (this.currentPage === page) return;
         
-        console.log(`Navigating from ${this.currentPage} to ${page}`);
+
         
         this.previousPage = this.currentPage;
         this.currentPage = page;
@@ -202,18 +202,18 @@ class Router {
         
         // Check if script is already loaded and cached
         if (this.loadedScripts.has(scriptName)) {
-            console.log(`Script ${scriptName} already loaded, reusing cached version`);
+
             return Promise.resolve();
         }
         
-        console.log(`Loading script: ${scriptName} for page: ${page}`);
+
         
         const loadPromise = new Promise(async (resolve, reject) => {
             try {
                 // Check if script is already in DOM (cached by browser)
                 const existingScript = document.querySelector(`script[src="${scriptName}"]`);
                 if (existingScript) {
-                    console.log(`Script ${scriptName} already exists in DOM`);
+
                     this.loadedScripts.add(scriptName);
                     resolve();
                     return;
@@ -226,7 +226,7 @@ class Router {
                 script.setAttribute('data-router-loaded', 'true');
                 
                 script.onload = () => {
-                    console.log(`Successfully loaded: ${scriptName}`);
+
                     this.loadedScripts.add(scriptName);
                     resolve();
                 };
@@ -264,7 +264,7 @@ class Router {
         // This forces the script to re-execute on next navigation
         // Fixes modal/event listener issues after navigation
         this.loadedScripts.delete(scriptName);
-        console.log(`? Cleared script cache for ${scriptName} to allow re-execution`);
+
         
         // Remove script promise (but keep in loadedScripts for caching)
         this.scriptPromises.delete(scriptName);
@@ -300,7 +300,7 @@ class Router {
                     try {
                         window.deviceWsConnection.close();
                     } catch (e) {
-                        console.log('Device WebSocket already closed');
+
                     }
                     window.deviceWsConnection = null;
                 }
@@ -330,7 +330,7 @@ class Router {
                     try {
                         window.mqttClient.end();
                     } catch (e) {
-                        console.log('MQTT client already disconnected');
+
                     }
                     window.mqttClient = null;
                 }
@@ -377,7 +377,7 @@ class Router {
                     try {
                         window.terminal.dispose();
                     } catch (e) {
-                        console.log('Terminal already disposed');
+
                     }
                     window.terminal = null;
                 }
@@ -406,7 +406,7 @@ class Router {
                 delete window.alerts_initialized;
                 this.initializedPages.delete(page);
                 if (typeof window.cleanupAlerts === 'function') {
-                    console.log('Cleaning up alerts');
+
                     window.cleanupAlerts();
                 }
                 break;
@@ -415,7 +415,7 @@ class Router {
                 delete window.rules_initialized;
                 this.initializedPages.delete(page);
                 if (typeof window.cleanupRules === 'function') {
-                    console.log('Cleaning up rules');
+
                     window.cleanupRules();
                 }
                 break;
@@ -424,7 +424,7 @@ class Router {
                 delete window.backup_initialized;
                 this.initializedPages.delete(page);
                 if (typeof window.cleanupBackup === 'function') {
-                    console.log('Cleaning up backup');
+
                     window.cleanupBackup();
                 }
                 break;
@@ -433,7 +433,7 @@ class Router {
                 delete window.notification_initialized;
                 this.initializedPages.delete(page);
                 if (typeof window.cleanupNotification === 'function') {
-                    console.log('Cleaning up notification');
+
                     window.cleanupNotification();
                 }
                 break;
@@ -441,13 +441,13 @@ class Router {
             case 'craneiq':
                 delete window.craneiq_initialized;
                 if (typeof window.cleanupCraneIQ === 'function') {
-                    console.log('Cleaning up CraneIQ');
+
                     window.cleanupCraneIQ();
                 }
                 break;
         }
         
-        console.log(`Cleaned up resources for page: ${page}`);
+
     }
     
     updateActiveNavLink() {
@@ -469,14 +469,14 @@ class Router {
         
         // Check if page is already initialized (prevent duplicate initialization)
         if (this.initializedPages.has(page)) {
-            console.log(`Page ${page} already initialized in this session, skipping...`);
+
             return;
         }
         
         // Also check global flag (extra protection)
         const globalFlag = `${page.replace(/-/g, '_')}_initialized`;
         if (window[globalFlag]) {
-            console.log(`Page ${page} already initialized (global flag), skipping...`);
+
             return;
         }
 
@@ -484,16 +484,16 @@ class Router {
         this.initializedPages.add(page);
         window[globalFlag] = true;
         
-        console.log(`Scheduling initialization for page: ${page}`);
+
         
         // Set a new timer for initialization
         this.currentInitializationTimer = setTimeout(() => {
-            console.log(`Executing initialization for page: ${page}`);
+
             
             switch(page) {
                 case 'general-configuration':
                     if (typeof window.initGeneralConfig === 'function') {
-                        console.log('Initializing General Configuration');
+
                         window.initGeneralConfig();
                         this.initializedPages.add(page);
                         window.general_configuration_initialized = true;
@@ -504,7 +504,7 @@ class Router {
                     
                 case 'device-management':
                     if (typeof window.initializeDeviceManagement === 'function') {
-                        console.log('Initializing Device Management');
+
                         window.initializeDeviceManagement();
                         this.initializedPages.add(page);
                         window.device_management_initialized = true;
@@ -515,7 +515,7 @@ class Router {
                     
                 case 'field-integration':
                     if (typeof window.initializeModbusMapping === 'function') {
-                        console.log('Initializing Modbus Mapping');
+
                         window.initializeModbusMapping();
                         this.initializedPages.add(page);
                         window.field_integration_initialized = true;
@@ -526,7 +526,7 @@ class Router {
                     
                 case 'mqtt-cloud':
                     if (typeof window.initMqttCloud === 'function') {
-                        console.log('Initializing MQTT Cloud');
+
                         window.initMqttCloud();
                         this.initializedPages.add(page);
                         window.mqtt_cloud_initialized = true;
@@ -537,7 +537,7 @@ class Router {
                     
                 case 'ota-gateway':
                     if (typeof window.initOtaGateway === 'function') {
-                        console.log('Initializing OTA Gateway');
+
                         window.initOtaGateway();
                         this.initializedPages.add(page);
                         window.ota_gateway_initialized = true;
@@ -548,7 +548,7 @@ class Router {
                     
                 case 'data-retention':
                     if (typeof window.initDataRetention === 'function') {
-                        console.log('Initializing Data Retention');
+
                         window.initDataRetention();
                         this.initializedPages.add(page);
                         window.data_retention_initialized = true;
@@ -559,7 +559,7 @@ class Router {
                     
                 case 'logging':
                     if (typeof window.initLogging === 'function') {
-                        console.log('Initializing Logging');
+
                         window.initLogging();
                         this.initializedPages.add(page);
                         window.logging_initialized = true;
@@ -570,7 +570,7 @@ class Router {
                     
                 case 'security':
                     if (typeof window.initSecurity === 'function') {
-                        console.log('Initializing Security');
+
                         window.initSecurity();
                         this.initializedPages.add(page);
                         window.security_initialized = true;
@@ -581,7 +581,7 @@ class Router {
                     
                 case 'diagnostics':
                     if (typeof window.initDiagnostics === 'function') {
-                        console.log('Initializing Diagnostics');
+
                         window.initDiagnostics();
                         this.initializedPages.add(page);
                         window.diagnostics_initialized = true;
@@ -592,7 +592,7 @@ class Router {
                     
                 case 'license':
                     if (typeof window.initLicense === 'function') {
-                        console.log('Initializing License');
+
                         window.initLicense();
                         this.initializedPages.add(page);
                         window.license_initialized = true;
@@ -603,7 +603,7 @@ class Router {
                     
                 case 'automation':
                     if (typeof window.initAutomation === 'function') {
-                        console.log('Initializing Automation');
+
                         window.initAutomation();
                         this.initializedPages.add(page);
                         window.automation_initialized = true;
@@ -614,7 +614,7 @@ class Router {
                     
                 case 'alerts':
                     if (typeof window.initAlerts === 'function') {
-                        console.log('Initializing Alerts');
+
                         window.initAlerts();
                         this.initializedPages.add(page);
                         window.alerts_initialized = true;
@@ -625,7 +625,7 @@ class Router {
 
                 case 'rules':
                     if (typeof window.initRules === 'function') {
-                        console.log('Initializing Rules');
+
                         window.initRules();
                         this.initializedPages.add(page);
                         window.rules_initialized = true;
@@ -635,7 +635,7 @@ class Router {
                     break;
                 case 'backup':
                     if (typeof window.initBackup === 'function') {
-                        console.log('Initializing Backup');
+
                         window.initBackup();
                         this.initializedPages.add(page);
                         window.backup_initialized = true;
@@ -646,7 +646,7 @@ class Router {
 
                 case 'notification':
                     if (typeof window.initNotification === 'function') {
-                        console.log('Initializing Notification');
+
                         window.initNotification();
                         this.initializedPages.add(page);
                         window.notification_initialized = true;
@@ -657,7 +657,7 @@ class Router {
                     
                 case 'craneiq':
                     if (typeof window.initCraneIQ === 'function') {
-                        console.log('Initializing CraneIQ');
+
                         window.initCraneIQ();
                         this.initializedPages.add(page);
                         window.craneiq_initialized = true;
@@ -667,7 +667,7 @@ class Router {
                     break;
                     
                 default:
-                    console.log(`No specific initialization for page: ${page}`);
+
             }
             
             this.currentInitializationTimer = null;

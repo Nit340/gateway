@@ -191,7 +191,7 @@ function saveMqttConnectionSettings() {
     if (typeof window.mqttFormLogic?.saveMqttConnectionSettings === 'function') {
         window.mqttFormLogic.saveMqttConnectionSettings();
     } else {
-        console.log('save connection: not wired yet');
+
     }
 }
 
@@ -199,7 +199,6 @@ function saveMqttTopicSettings() {
     if (typeof window.mqttFormLogic?.saveMqttTopicSettings === 'function') {
         window.mqttFormLogic.saveMqttTopicSettings();
     } else {
-        console.log('save channels: not wired yet'); 
     }
 }
 
@@ -207,7 +206,6 @@ function saveMqttPublishingSettings() {
     if (typeof window.mqttFormLogic?.saveMqttPublishingSettings === 'function') {
         window.mqttFormLogic.saveMqttPublishingSettings();
     } else {
-        console.log('save mappings: not wired yet'); 
     }
 }
 
@@ -215,7 +213,6 @@ function saveMqttAdvancedSettings() {
     if (typeof window.mqttFormLogic?.saveMqttAdvancedSettings === 'function') {
         window.mqttFormLogic.saveMqttAdvancedSettings();
     } else {
-        console.log('save advanced: not wired yet'); 
     }
 }
 

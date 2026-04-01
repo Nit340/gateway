@@ -148,12 +148,12 @@ if (typeof window.alertsLoaded === 'undefined') {
 
     // ========== CLEANUP ==========
     function cleanupAlerts() {
-        console.log('Alerts cleanup complete');
+
     }
 
     // ========== INIT ==========
     window.initAlerts = function() {
-        console.log('Initializing Alert Messages (Static Version)');
+
         // Nothing to initialize - using static HTML content
         showNotification('Alerts page loaded', 'info');
     };

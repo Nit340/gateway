@@ -411,7 +411,7 @@ function readFileAsText(file) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     initCommonEventListeners();
-    console.log('Common utilities initialized');
+
 });
 
 // Export functions for global access

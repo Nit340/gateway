@@ -3,7 +3,7 @@
 'use strict';
 
 window.initializeFtpForm = function () {
-    console.log('Initializing FTP form');
+
 
     // Anonymous login toggle — hides username/password fields
     const anonToggle   = document.getElementById('field-anonymous');
@@ -39,7 +39,7 @@ window.initializeFtpForm = function () {
         _applyMode();
     }
 
-    console.log('FTP form initialized successfully');
+
 };
 
 function generateFtpPassword(fieldId) {
@@ -48,7 +48,7 @@ function generateFtpPassword(fieldId) {
         'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'[b % 72]).join('');
 }
 
-function saveFtpSettings() { console.log('saveFtpSettings: not wired yet'); }
+function saveFtpSettings() { }
 
 window.ftpFormLogic = {
     initializeFtpForm,

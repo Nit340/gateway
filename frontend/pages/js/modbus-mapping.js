@@ -20,7 +20,7 @@ let _selectedGroupColor = 'blue';
 // ─── INIT ────────────────────────────────────────────────────────────────────
 
 function initializeModbusMapping() {
-    console.log('Initializing Modbus Mapping');
+
     _loadData();
     _bindStaticListeners();
 }
@@ -29,7 +29,7 @@ function initializeModbusMapping() {
 
 async function _loadData() {
     try {
-        console.log('Loading modbus mapping data...');
+
         const [devResp, tagResp, grpResp] = await Promise.all([
             fetch('/api/datapoints/devices'),
             fetch('/api/datapoints'),
@@ -41,18 +41,18 @@ async function _loadData() {
         }
         const devData = await devResp.json();
         _devices = devData.devices || [];
-        console.log('Loaded devices:', _devices);
+
 
         if (!tagResp.ok) {
             console.error('Failed to load tags:', tagResp.status);
         }
         const tagData = await tagResp.json();
         _tags = Array.isArray(tagData) ? tagData : (tagData.tags || []);
-        console.log('Loaded tags:', _tags);
+
 
         const grpData = await grpResp.json();
         _groups = grpData.groups || [];
-        console.log('Loaded groups:', _groups);
+
 
         // Populate group dropdowns
         _populateGroupDropdowns();
@@ -253,7 +253,7 @@ function _renderTagsBrowser() {
         d.addEventListener('click', function(e) {
             e.stopPropagation();
             const tagType = isLC ? 'loadcell' : (isExt ? 'external' : 'modbus');
-            console.log(`Tag card clicked: ID ${tag.id}, Type: ${tagType}, Name: ${tag.tag_name || tag.name}`);
+
             highlightTagRow(tag.id, tagType);
         });
         
@@ -416,7 +416,7 @@ function changeBrowserPage(newPage) {
 // ─── HIGHLIGHT TAG ROW ──────────────────────────────────────────────────────
 
 function highlightTagRow(tagId, tagType) {
-    console.log(`Attempting to highlight tag ID: ${tagId}, type: ${tagType}`);
+
     
     document.querySelectorAll('.tag-table-row').forEach(row => {
         row.classList.remove('bg-yellow-100', 'border-l-4', 'border-yellow-400', 'font-bold');
@@ -438,7 +438,7 @@ function highlightTagRow(tagId, tagType) {
     }
 
     if (targetRow) {
-        console.log(`Found row for tag ID ${tagId} (${tagType}), moving to top and highlighting`);
+
         
         const tbody = targetRow.parentElement;
         if (tbody && tbody.firstChild !== targetRow) {
@@ -849,7 +849,7 @@ async function _handleModbusCreate(e) {
         enabled: true
     };
     
-    console.log('Creating tag with payload:', payload);
+
 
     try {
         const resp = await fetch('/api/datapoints/modbus', {
@@ -974,7 +974,7 @@ async function _handleModbusEdit(e) {
         description: document.getElementById('editMbDescription').value.trim()
     };
     
-    console.log('Updating tag with payload:', payload);
+
 
     try {
         const resp = await fetch(`/api/datapoints/modbus/${tagId}`, {
@@ -1281,7 +1281,7 @@ function _vis(id) {
 }
 
 function _toast(msg, type = 'info') {
-    console.log(`[${type.toUpperCase()}] ${msg}`);
+
 
     const existing = document.querySelectorAll('.tm-toast');
     if (existing.length > 3) {
@@ -1339,7 +1339,7 @@ function _toast(msg, type = 'info') {
 
 // ─── SAVE MODBUS CONFIGURATION TO PIPELINE ───────────────────────────────────
 async function saveModbusConfig() {
-    console.log('[MODBUS-CFG] Save button clicked');
+
     
     const btn = document.getElementById('saveModbusConfigBtn');
     const origHTML = btn ? btn.innerHTML : '';
@@ -1494,7 +1494,7 @@ window._deleteTagGroup         = _deleteTagGroup;
                 document.getElementById('tagsList')         ||
                 document.getElementById('addMappingBtn');
     if (probe) {
-        console.log('[modbus-mapping] auto-init: page DOM detected, initializing');
+
         initializeModbusMapping();
     }
 

@@ -1,5 +1,5 @@
 // general-config.js
-console.log('general-config.js loaded');
+
 
 (function () {
     if (window._generalConfigInitialized || window._generalConfigInitializing) return;
@@ -148,7 +148,7 @@ console.log('general-config.js loaded');
         })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-            console.log('[NET-ROUTE] sent network_route_select=' + val + ' (' + routeKey + ')', d);
+
         })
         .catch(function (e) {
             console.warn('[NET-ROUTE] failed to send network_route_select:', e);
@@ -234,7 +234,7 @@ console.log('general-config.js loaded');
                 // If Auto-Connect is ON, we only change the UI tabs. 
                 // We do NOT show the switching modal and we do NOT send the route select command.
                 if (_acEnabled) {
-                    console.log('[NET-MODE] Auto is ON — skipping switching modal and pipeline command');
+
                     updateGlobalMacDisplay();
                     return;
                 }
@@ -260,7 +260,7 @@ console.log('general-config.js loaded');
                 })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
-                    console.log('[NET-MODE] persisted network_mode=' + modeToSave, d);
+
                 })
                 .catch(function (e) {
                     console.warn('[NET-MODE] failed to persist network_mode:', e);
@@ -317,7 +317,7 @@ console.log('general-config.js loaded');
             
             if (type === 'lte' && _cache.lte) {
                 _cache.lte[field] = value;
-                console.log('[CACHE] Updated LTE.' + field + ' =', value);
+
             } else if (type === 'wlan' && _cache.wlan) {
                 _cache.wlan[field] = value;
                 if (field === 'signal') {
@@ -325,14 +325,14 @@ console.log('general-config.js loaded');
                 } else if (field === 'signal_quality') {
                     _cache.wlan.signal = value;
                 }
-                console.log('[CACHE] Updated WLAN.' + field + ' =', value);
+
             } else if (type === 'lan' && _cache.lan) {
                 if (device && _cache.lan[device]) {
                     _cache.lan[device][field] = value;
-                    console.log('[CACHE] Updated LAN.' + device + '.' + field + ' =', value);
+
                 } else if (_cache.lan[field] !== undefined) {
                     _cache.lan[field] = value;
-                    console.log('[CACHE] Updated LAN.' + field + ' =', value);
+
                 }
             }
             return true;
@@ -346,7 +346,7 @@ console.log('general-config.js loaded');
             
             if (iface === 'lte' && _cache.lte) {
                 _cache.lte[field] = value;
-                console.log('[CACHE] Updated LTE.' + field + ' =', value);
+
             } else if (iface === 'wlan' && _cache.wlan) {
                 _cache.wlan[field] = value;
                 if (field === 'signal') {
@@ -354,18 +354,18 @@ console.log('general-config.js loaded');
                 } else if (field === 'signal_quality') {
                     _cache.wlan.signal = value;
                 }
-                console.log('[CACHE] Updated WLAN.' + field + ' =', value);
+
             } else if (iface === 'lan' && _cache.lan) {
                 if (parts.length >= 4) {
                     var eth = parts[2];  // 'eth0' or 'eth1'
                     var subfield = parts[3];
                     if (_cache.lan[eth]) {
                         _cache.lan[eth][subfield] = value;
-                        console.log('[CACHE] Updated LAN.' + eth + '.' + subfield + ' =', value);
+
                     }
                 } else if (_cache.lan[field] !== undefined) {
                     _cache.lan[field] = value;
-                    console.log('[CACHE] Updated LAN.' + field + ' =', value);
+
                 }
             }
             return true;
@@ -890,7 +890,7 @@ console.log('general-config.js loaded');
                 })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
-                    console.log('[ETH-SELECT] persisted eth_selected=' + iface, d);
+
                 })
                 .catch(function (e) {
                     console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
@@ -1076,7 +1076,7 @@ console.log('general-config.js loaded');
         _netAttempts++;
         var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         var url      = protocol + '//' + window.location.host + '/ws/network-status';
-        console.log('[NET] Connecting:', url);
+
         // Update status bar: first attempt = Connecting, subsequent = Reconnecting
         var bar = el('net-ws-status'); var icon = el('net-ws-icon'); var txt = el('net-ws-status-text');
         if (bar) {
@@ -1108,7 +1108,7 @@ console.log('general-config.js loaded');
         _netWs.onclose = function (ev) {
             _liveConnected = false;
             setLiveBtnState(false);
-            console.log('[NET] closed code='+ev.code);
+
             // On first failure (1006 = TCP refused), check if API is reachable
             // to distinguish nginx WS proxy issue from server down
             if (ev.code === 1006 && _netAttempts === 1) {
@@ -1170,7 +1170,7 @@ console.log('general-config.js loaded');
         var url = protocol+'//'+window.location.host+'/ws/general';
         try { window.ws = new WebSocket(url); } catch(e) { return; }
         window.ws.onopen = function () {
-            console.log('[WS/general] connected');
+
             _wsRetryDelay = 5000; // reset backoff
         };
         window.ws.onmessage = function (ev) {
