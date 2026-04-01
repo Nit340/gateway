@@ -118,7 +118,40 @@ class PipelineServer:
         # (PipelineSocket removes handle mapping BEFORE firing DISCONNECTED event)
         self._fd_to_handle_map: dict = {}   # raw OS fd → PipelineSocket handle
 
+        # ------ UI / API support ------
+        self._start_time: float = time.time()
+        from collections import deque
+        self._event_log: deque = deque(maxlen=300)   # ring-buffer of log dicts
+        self._sse_queues: list = []                  # list of queue.Queue for SSE clients
+        self._sse_lock = threading.Lock()
+
         self._running = False
+
+    # ------------------------------------------------------------------
+    # Event logging (used by handlers, readable by HTTP API)
+    # ------------------------------------------------------------------
+
+    def _log_event(self, kind: str, msg: str, data: dict = None):
+        """Append to in-memory log and push to all SSE subscribers."""
+        import queue as _q, json as _json
+        entry = {
+            "ts":   time.strftime("%H:%M:%S"),
+            "kind": kind,
+            "msg":  msg,
+            "data": data or {},
+        }
+        self._event_log.append(entry)
+        payload = "data: " + _json.dumps(entry) + "\n\n"
+        with self._sse_lock:
+            dead = []
+            for q in self._sse_queues:
+                try:
+                    q.put_nowait(payload)
+                except _q.Full:
+                    dead.append(q)
+            for q in dead:
+                self._sse_queues.remove(q)
+
 
     # ------------------------------------------------------------------
     # Public API
@@ -662,21 +695,310 @@ class PipelineServer:
 
 
 # ============================================================================
+# HTTP API server (served on --ui-port, default 7001)
+# ============================================================================
+
+import json as _json
+import queue as _queue
+import threading as _threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+
+# Loaded once, served as static HTML
+_UI_HTML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "ilx_pipeline_server_ui.html")
+
+
+class _APIHandler(BaseHTTPRequestHandler):
+    """Minimal HTTP handler that exposes the PipelineServer state as REST+SSE."""
+
+    server_ref: "PipelineServer" = None   # set after construction
+
+    def log_message(self, fmt, *args):    # silence default access log
+        pass
+
+    # ------------------------------------------------------------------ routing
+    def do_GET(self):
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path in ("/", "/index.html"):
+            self._serve_ui()
+        elif path == "/api/status":
+            self._json(self._status())
+        elif path == "/api/services":
+            self._json(self._services())
+        elif path == "/api/datapoints":
+            self._json(self._datapoints())
+        elif path == "/api/configs":
+            self._json(self._configs())
+        elif path == "/api/actions":
+            self._json(self._actions())
+        elif path == "/api/logs":
+            self._json(list(self.server_ref._event_log))
+        elif path == "/api/events":
+            self._sse_stream()
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        path = urlparse(self.path).path.rstrip("/")
+        length = int(self.headers.get("Content-Length", 0))
+        body = _json.loads(self.rfile.read(length)) if length else {}
+        s = self.server_ref
+        if path == "/api/notify":
+            msg = body.get("message", "test notification")
+            stype = int(body.get("type", 0))
+            s._log_event("NOTIFY", msg, {"type": stype})
+            # Broadcast a notification to all clients
+            frame = BFH.create_frame(CommandCode.PUBLISH_NOTIFICATION)
+            BFH.add_payload(frame, DataTypeCode.INT, struct.pack(">H", stype))
+            BFH.add_payload(frame, DataTypeCode.INT, struct.pack(">H", 1))
+            BFH.add_payload(frame, DataTypeCode.INT, struct.pack(">H", 0))
+            BFH.add_string_payload(frame, DataTypeCode.STRING, "server_ui")
+            BFH.add_string_payload(frame, DataTypeCode.STRING, "server")
+            BFH.add_string_payload(frame, DataTypeCode.STRING, msg)
+            s._broadcast(BFH.serialize_frame(frame))
+            self._json({"ok": True})
+        elif path == "/api/clear-datapoints":
+            with s._state_lock:
+                s._datapoint_cache.clear()
+            s._log_event("CLEAR", "Datapoint cache cleared by UI")
+            self._json({"ok": True})
+        elif path == "/api/clear-configs":
+            with s._state_lock:
+                s._config_store.clear()
+            s._log_event("CLEAR", "Config store cleared by UI")
+            self._json({"ok": True})
+        elif path == "/api/trigger-action":
+            name = body.get("name", "")
+            if name:
+                with s._state_lock:
+                    pub = s._action_store.get(name, "server_ui")
+                frame = BFH.create_frame(CommandCode.TRIGGER_ACTION)
+                BFH.add_string_payload(frame, DataTypeCode.STRING, name)
+                BFH.add_string_payload(frame, DataTypeCode.STRING, pub)
+                s._broadcast(BFH.serialize_frame(frame))
+                s._log_event("ACTION", f"Triggered action '{name}' from UI")
+            self._json({"ok": bool(name), "action": name})
+        else:
+            self.send_error(404)
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self._cors()
+        self.end_headers()
+
+    # ------------------------------------------------------------------ helpers
+    def _cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def _json(self, data):
+        body = _json.dumps(data, default=str).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_ui(self):
+        try:
+            with open(_UI_HTML_PATH, "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except FileNotFoundError:
+            fallback = b"<h1>UI not found</h1><p>Put ilx_pipeline_server_ui.html next to this script.</p>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(fallback)))
+            self.end_headers()
+            self.wfile.write(fallback)
+
+    def _sse_stream(self):
+        q = _queue.Queue(maxsize=100)
+        with self.server_ref._sse_lock:
+            self.server_ref._sse_queues.append(q)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self._cors()
+        self.end_headers()
+        # send a welcome heartbeat
+        try:
+            self.wfile.write(b": connected\n\n")
+            self.wfile.flush()
+            while True:
+                try:
+                    msg = q.get(timeout=15)
+                    self.wfile.write(msg.encode())
+                    self.wfile.flush()
+                except _queue.Empty:
+                    # keep-alive ping
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            with self.server_ref._sse_lock:
+                try:
+                    self.server_ref._sse_queues.remove(q)
+                except ValueError:
+                    pass
+
+    # ------------------------------------------------------------------ data builders
+    def _status(self):
+        s = self.server_ref
+        up = int(time.time() - s._start_time)
+        with s._state_lock:
+            svc_count = len(s._connected_services)
+            dp_total  = sum(len(v) for v in s._datapoint_cache.values())
+            cfg_count = len(s._config_store)
+            act_count = len(s._action_store)
+        return {
+            "running":   s._running,
+            "host":      s.host,
+            "port":      s.port,
+            "uptime_sec": up,
+            "services":  svc_count,
+            "datapoints": dp_total,
+            "configs":   cfg_count,
+            "actions":   act_count,
+            "sse_clients": len(s._sse_queues),
+        }
+
+    def _services(self):
+        s = self.server_ref
+        with s._state_lock:
+            return [
+                {"name": name, "handle": hdl}
+                for hdl, name in s._connected_services.items()
+            ]
+
+    def _datapoints(self):
+        s = self.server_ref
+        result = {}
+        with s._state_lock:
+            for svc, dps in s._datapoint_cache.items():
+                result[svc] = list(dps.keys())
+        return result
+
+    def _configs(self):
+        s = self.server_ref
+        with s._state_lock:
+            return list(s._config_store.keys())
+
+    def _actions(self):
+        s = self.server_ref
+        with s._state_lock:
+            return [{"name": n, "publisher": p} for n, p in s._action_store.items()]
+
+
+def start_http_server(pipeline_server: "PipelineServer", ui_port: int = 7001):
+    """Start the management HTTP server in a daemon thread."""
+    _APIHandler.server_ref = pipeline_server
+    httpd = HTTPServer(("0.0.0.0", ui_port), _APIHandler)
+    t = _threading.Thread(target=httpd.serve_forever, daemon=True, name="PipelineUIServer")
+    t.start()
+    logger.info("=" * 60)
+    logger.info(" Pipeline UI  →  http://127.0.0.1:%d", ui_port)
+    logger.info("=" * 60)
+    return httpd
+
+
+# ============================================================================
+# Patch _log_event calls into PipelineServer handlers
+# ============================================================================
+# We monkeypatch the connect/disconnect/action handlers AFTER the class is
+# defined so the original logic is untouched and we just append log calls.
+
+_orig_connect  = PipelineServer._handle_connect_service   # type: ignore[attr-defined]
+_orig_disconn  = PipelineServer._handle_disconnect        # type: ignore[attr-defined]
+_orig_action   = PipelineServer._handle_publish_action    # type: ignore[attr-defined]
+_orig_trigger  = PipelineServer._handle_trigger_action    # type: ignore[attr-defined]
+_orig_config   = PipelineServer._handle_publish_config    # type: ignore[attr-defined]
+_orig_notif    = PipelineServer._handle_publish_notification  # type: ignore[attr-defined]
+_orig_data     = PipelineServer._handle_send_to_input     # type: ignore[attr-defined]
+
+
+def _patched_connect(self, handle, frame):
+    _orig_connect(self, handle, frame)
+    with self._state_lock:
+        name = self._connected_services.get(handle, "?")
+    self._log_event("CONNECT", f"Service '{name}' connected", {"handle": handle, "service": name})
+
+def _patched_disconn(self, handle):
+    with self._state_lock:
+        name = self._connected_services.get(handle, f"handle={handle}")
+    _orig_disconn(self, handle)
+    self._log_event("DISCONNECT", f"Service '{name}' disconnected", {"service": name})
+
+def _patched_action(self, handle, frame):
+    _orig_action(self, handle, frame)
+    with self._state_lock:
+        actions = list(self._action_store.keys())
+    svc = self._service_name(handle)
+    self._log_event("ACTION", f"'{svc}' published action", {"service": svc, "actions": actions})
+
+def _patched_trigger(self, handle, frame):
+    svc = self._service_name(handle)
+    _orig_trigger(self, handle, frame)
+    self._log_event("TRIGGER", f"'{svc}' triggered action", {"service": svc})
+
+def _patched_config(self, handle, frame):
+    _orig_config(self, handle, frame)
+    svc = self._service_name(handle)
+    with self._state_lock:
+        cfgs = list(self._config_store.keys())
+    self._log_event("CONFIG", f"'{svc}' published config", {"service": svc, "configs": cfgs})
+
+def _patched_notif(self, handle, frame):
+    svc = self._service_name(handle)
+    _orig_notif(self, handle, frame)
+    self._log_event("NOTIFY", f"Notification from '{svc}'", {"service": svc})
+
+def _patched_data(self, handle, frame):
+    _orig_data(self, handle, frame)
+    svc = self._service_name(handle)
+    with self._state_lock:
+        dp_count = len(self._datapoint_cache.get(svc, {}))
+    self._log_event("DATA", f"'{svc}' → datapoint update ({dp_count} cached)", {"service": svc})
+
+
+PipelineServer._handle_connect_service       = _patched_connect   # type: ignore
+PipelineServer._handle_disconnect            = _patched_disconn   # type: ignore
+PipelineServer._handle_publish_action        = _patched_action    # type: ignore
+PipelineServer._handle_trigger_action        = _patched_trigger   # type: ignore
+PipelineServer._handle_publish_config        = _patched_config    # type: ignore
+PipelineServer._handle_publish_notification  = _patched_notif     # type: ignore
+PipelineServer._handle_send_to_input         = _patched_data      # type: ignore
+
+
+# ============================================================================
 # CLI entry point
 # ============================================================================
 
 def _build_args():
     p = argparse.ArgumentParser(
-        description="ILX/Innospace Pipeline Server – full simulation on port 7000",
+        description="ILX/Innospace Pipeline Server – full simulation + web UI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--host", default="0.0.0.0",
+    p.add_argument("--host",      default="0.0.0.0",
                    help="Bind address (0.0.0.0 = all interfaces)")
-    p.add_argument("--port", type=int, default=7000,
-                   help="TCP port to listen on")
+    p.add_argument("--port",      type=int, default=7000,
+                   help="Pipeline TCP port")
+    p.add_argument("--ui-port",   type=int, default=7001,
+                   help="Management UI HTTP port (0 = disable)")
     p.add_argument("--log-level", default="INFO",
                    choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                    help="Logging verbosity")
+    p.add_argument("--no-ui",     action="store_true",
+                   help="Disable the web UI")
     return p.parse_args()
 
 
@@ -685,6 +1007,10 @@ def main():
     logging.getLogger().setLevel(getattr(logging, args.log_level))
 
     server = PipelineServer(host=args.host, port=args.port)
+
+    if not args.no_ui and args.ui_port > 0:
+        start_http_server(server, ui_port=args.ui_port)
+
     server.run_forever()
 
 

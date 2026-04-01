@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ILX Pipeline Server — Management Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--bg2:#10101a;--bg3:#14141f;--surface:#1a1a28;--surface2:#20202f;--surface3:#28283a;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --text:#e8e8f0;--text2:#b0b0c8;--text3:#6868a0;
+  --accent:#7c6cfa;--accent2:#a855f7;--green:#22d3a0;--red:#f0504a;--yellow:#fbbf24;--blue:#38bdf8;--orange:#fb923c;
+  --glow:rgba(124,108,250,0.18);--card-shadow:0 4px 32px rgba(0,0,0,0.5);
+}
+html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5}
+/* ── layout ── */
+.layout{display:grid;grid-template-columns:220px 1fr;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
+/* ── top bar ── */
+.topbar{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 20px;background:rgba(20,20,31,0.95);border-bottom:1px solid var(--border);backdrop-filter:blur(12px);z-index:100}
+.topbar .logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;letter-spacing:-0.3px}
+.topbar .logo span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid}
+.badge.green{color:var(--green);border-color:rgba(34,211,160,0.25);background:rgba(34,211,160,0.08)}
+.badge.red{color:var(--red);border-color:rgba(240,80,74,0.25);background:rgba(240,80,74,0.08)}
+.badge.blue{color:var(--blue);border-color:rgba(56,189,248,0.2);background:rgba(56,189,248,0.06)}
+.badge.yellow{color:var(--yellow);border-color:rgba(251,191,36,0.25);background:rgba(251,191,36,0.08)}
+/* ── sidebar ── */
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.nav-section{font-size:9.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;padding:12px 8px 6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;transition:all .15s;color:var(--text2);font-weight:500;font-size:12.5px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:linear-gradient(135deg,rgba(124,108,250,0.18),rgba(168,85,247,0.1));color:var(--accent);border:1px solid rgba(124,108,250,0.2)}
+.nav-item .mat{font-size:18px}
+.nav-item .count{margin-left:auto;background:var(--surface3);color:var(--text3);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700}
+/* ── main ── */
+.main{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:18px}
+/* ── page panels ── */
+.page{display:none;flex-direction:column;gap:18px}
+.page.active{display:flex}
+/* ── cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--card-shadow)}
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.card-title{font-weight:700;font-size:14px;color:var(--text)}
+.card-icon{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(124,108,250,0.12);color:var(--accent)}
+.card-icon.green{background:rgba(34,211,160,0.1);color:var(--green)}
+.card-icon.orange{background:rgba(251,146,60,0.1);color:var(--orange)}
+.card-icon.blue{background:rgba(56,189,248,0.1);color:var(--blue)}
+.card-icon.red{background:rgba(240,80,74,0.1);color:var(--red)}
+/* ── stat grid ── */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--glow),transparent);opacity:.5}
+.stat-val{font-size:30px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1}
+.stat-label{color:var(--text3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;margin-top:4px}
+.stat-sub{color:var(--text2);font-size:11px;margin-top:8px}
+/* ── service list ── */
+.service-list{display:flex;flex-direction:column;gap:8px}
+.service-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;transition:.15s}
+.service-row:hover{border-color:rgba(124,108,250,0.3);background:var(--surface3)}
+.svc-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0;animation:pulse 2s infinite}
+.svc-name{font-weight:700;font-size:13px;color:var(--text)}
+.svc-handle{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);background:var(--surface3);padding:2px 8px;border-radius:6px;margin-left:auto}
+/* ── dp grid ── */
+.dp-section{margin-bottom:14px}
+.dp-section-title{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;padding:6px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.dp-grid{display:flex;flex-wrap:wrap;gap:6px}
+.dp-tag{background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:4px 10px;border-radius:8px;transition:.15s}
+.dp-tag:hover{border-color:rgba(124,108,250,0.35);color:var(--accent);background:rgba(124,108,250,0.06)}
+/* ── log ── */
+.log-feed{font-family:'JetBrains Mono',monospace;font-size:11.5px;display:flex;flex-direction:column;gap:3px;max-height:420px;overflow-y:auto;padding:4px}
+.log-feed::-webkit-scrollbar{width:4px}
+.log-feed::-webkit-scrollbar-track{background:transparent}
+.log-feed::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:4px}
+.log-entry{display:flex;gap:10px;align-items:flex-start;padding:6px 10px;border-radius:8px;border-left:3px solid transparent;transition:.1s}
+.log-entry:hover{background:var(--surface2)}
+.log-ts{color:var(--text3);min-width:58px;flex-shrink:0}
+.log-kind{min-width:70px;font-weight:700;font-size:10px;flex-shrink:0}
+.log-msg{color:var(--text2)}
+.kind-CONNECT{color:var(--green)}.kind-DISCONNECT{color:var(--red)}.kind-DATA{color:var(--blue)}
+.kind-CONFIG{color:var(--accent)}.kind-ACTION{color:var(--orange)}.kind-TRIGGER{color:var(--yellow)}
+.kind-NOTIFY{color:#e879f9}.kind-CLEAR{color:var(--text3)}
+.lborder-CONNECT{border-color:var(--green)}.lborder-DISCONNECT{border-color:var(--red)}
+.lborder-DATA{border-color:var(--blue)}.lborder-CONFIG{border-color:var(--accent)}
+.lborder-ACTION{border-color:var(--orange)}.lborder-TRIGGER{border-color:var(--yellow)}
+.lborder-NOTIFY{border-color:#e879f9}.lborder-CLEAR{border-color:var(--surface3)}
+/* ── action list ── */
+.action-list{display:flex;flex-direction:column;gap:8px}
+.action-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px}
+.action-name{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text)}
+.action-pub{font-size:11px;color:var(--text3);margin-left:4px}
+/* ── buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;transition:all .15s}
+.btn-accent{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 16px rgba(124,108,250,0.3)}
+.btn-accent:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(124,108,250,0.4)}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border2)}
+.btn-ghost:hover{background:var(--surface3);color:var(--text)}
+.btn-red{background:rgba(240,80,74,0.12);color:var(--red);border:1px solid rgba(240,80,74,0.2)}
+.btn-red:hover{background:rgba(240,80,74,0.2)}
+.btn-sm{padding:5px 12px;font-size:11.5px}
+.btn-trigger{background:rgba(251,146,60,0.12);color:var(--orange);border:1px solid rgba(251,146,60,0.2);padding:5px 14px;font-size:11.5px;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;transition:.15s}
+.btn-trigger:hover{background:rgba(251,146,60,0.25)}
+/* ── inputs ── */
+.field{background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:8px 12px;border-radius:10px;font-family:'Inter',sans-serif;font-size:12.5px;outline:none;width:100%}
+.field:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,108,250,0.12)}
+.field-row{display:flex;gap:8px;align-items:center}
+/* ── notify panel ── */
+.notify-type-bar{display:flex;gap:6px;margin-bottom:10px}
+.ntype{padding:5px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-size:11.5px;font-weight:600;transition:.12s}
+.ntype.active,.ntype:hover{background:rgba(232,121,249,0.12);color:#e879f9;border-color:rgba(232,121,249,0.25)}
+/* ── empty state ── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;color:var(--text3);gap:8px}
+.empty .mat{font-size:40px;opacity:.3}
+/* ── config tags ── */
+.cfg-pill{background:rgba(124,108,250,0.1);border:1px solid rgba(124,108,250,0.2);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 12px;border-radius:20px;display:inline-flex;align-items:center;gap:6px}
+/* ── topbar uptime ── */
+.uptime-label{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+/* ── alert ── */
+.alert{padding:10px 14px;border-radius:10px;font-size:12px;margin-bottom:10px;display:none}
+.alert.show{display:flex;align-items:center;gap:8px}
+.alert.success{background:rgba(34,211,160,0.1);border:1px solid rgba(34,211,160,0.2);color:var(--green)}
+.alert.error{background:rgba(240,80,74,0.1);border:1px solid rgba(240,80,74,0.2);color:var(--red)}
+/* ── scrollbar global ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="logo">
+      <span class="mat" style="color:var(--accent);font-size:22px">cable</span>
+      <div><span>ILX Pipeline</span> <span style="-webkit-text-fill-color:var(--text2);font-weight:400">Server</span></div>
+    </div>
+    <div id="serverBadge" class="badge green" style="margin-left:18px">
+      <span class="pulse-dot"></span> Running
+    </div>
+    <span class="uptime-label" id="uptime">↑ 0s</span>
+    <div class="topbar-right">
+      <span class="badge blue" id="portBadge">:7000</span>
+      <span class="badge yellow" id="sseCount">0 viewers</span>
+      <button class="btn btn-ghost btn-sm" onclick="refreshAll()">
+        <span class="mat" style="font-size:15px">refresh</span> Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="nav-section">Monitor</div>
+    <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+      <span class="mat">dashboard</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('services')" id="nav-services">
+      <span class="mat">device_hub</span> Services
+      <span class="count" id="cnt-services">0</span>
+    </div>
+    <div class="nav-item" onclick="showPage('datapoints')" id="nav-datapoints">
+      <span class="mat">data_object</span> Datapoints
+      <span class="count" id="cnt-dp">0</span>
+    </div>
+    <div class="nav-item" onclick="showPage('configs')" id="nav-configs">
+      <span class="mat">settings</span> Configs
+      <span class="count" id="cnt-cfg">0</span>
+    </div>
+    <div class="nav-item" onclick="showPage('actions')" id="nav-actions">
+      <span class="mat">bolt</span> Actions
+      <span class="count" id="cnt-act">0</span>
+    </div>
+
+    <div class="nav-section" style="margin-top:8px">Control</div>
+    <div class="nav-item" onclick="showPage('notify')" id="nav-notify">
+      <span class="mat">notifications</span> Broadcast
+    </div>
+    <div class="nav-item" onclick="showPage('logs')" id="nav-logs">
+      <span class="mat">terminal</span> Live Log
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="stat-val" id="d-services">0</div>
+          <div class="stat-label">Services</div>
+          <div class="stat-sub">Currently connected</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="d-dp">0</div>
+          <div class="stat-label">Datapoints</div>
+          <div class="stat-sub">Across all services</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="d-cfg">0</div>
+          <div class="stat-label">Configs</div>
+          <div class="stat-sub">Stored in cache</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="d-act">0</div>
+          <div class="stat-label">Actions</div>
+          <div class="stat-sub">Globally registered</div>
+        </div>
+      </div>
+
+      <!-- mini service list -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green"><span class="mat">device_hub</span></div>
+          <div class="card-title">Connected Services</div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="showPage('services')">View all</button>
+        </div>
+        <div id="dash-services" class="service-list">
+          <div class="empty"><span class="mat">device_hub</span><span>No services connected</span></div>
+        </div>
+      </div>
+
+      <!-- recent log -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><span class="mat">terminal</span></div>
+          <div class="card-title">Recent Events</div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="showPage('logs')">Full log</button>
+        </div>
+        <div id="dash-log" class="log-feed"></div>
+      </div>
+    </div>
+
+    <!-- SERVICES -->
+    <div class="page" id="page-services">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon green"><span class="mat">device_hub</span></div>
+          <div class="card-title">Connected Services</div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadServices()">
+            <span class="mat" style="font-size:14px">refresh</span>
+          </button>
+        </div>
+        <div id="svc-list" class="service-list">
+          <div class="empty"><span class="mat">device_hub</span><span>No services connected</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DATAPOINTS -->
+    <div class="page" id="page-datapoints">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon blue"><span class="mat">data_object</span></div>
+          <div class="card-title">Datapoint Cache</div>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="loadDatapoints()">
+              <span class="mat" style="font-size:14px">refresh</span>
+            </button>
+            <button class="btn btn-red btn-sm" onclick="clearDatapoints()">
+              <span class="mat" style="font-size:14px">delete_sweep</span> Clear
+            </button>
+          </div>
+        </div>
+        <div id="dp-container"></div>
+      </div>
+    </div>
+
+    <!-- CONFIGS -->
+    <div class="page" id="page-configs">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><span class="mat">settings</span></div>
+          <div class="card-title">Config Store</div>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="loadConfigs()">
+              <span class="mat" style="font-size:14px">refresh</span>
+            </button>
+            <button class="btn btn-red btn-sm" onclick="clearConfigs()">
+              <span class="mat" style="font-size:14px">delete_sweep</span> Clear
+            </button>
+          </div>
+        </div>
+        <div id="cfg-container" style="display:flex;flex-wrap:wrap;gap:8px;min-height:60px"></div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="page" id="page-actions">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon orange"><span class="mat">bolt</span></div>
+          <div class="card-title">Registered Actions</div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadActions()">
+            <span class="mat" style="font-size:14px">refresh</span>
+          </button>
+        </div>
+        <div id="act-list" class="action-list">
+          <div class="empty"><span class="mat">bolt</span><span>No actions registered</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BROADCAST / NOTIFY -->
+    <div class="page" id="page-notify">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background:rgba(232,121,249,0.1);color:#e879f9"><span class="mat">campaign</span></div>
+          <div class="card-title">Broadcast Notification</div>
+        </div>
+        <div id="notify-alert" class="alert"></div>
+        <p style="color:var(--text3);font-size:12px;margin-bottom:14px">Send a notification frame to <strong style="color:var(--text2)">all connected services</strong>.</p>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px;letter-spacing:.06em">Notification Type</div>
+          <div class="notify-type-bar">
+            <div class="ntype active" onclick="selectType(0,this)">0 — Alarm</div>
+            <div class="ntype" onclick="selectType(1,this)">1 — Warning</div>
+            <div class="ntype" onclick="selectType(2,this)">2 — Info</div>
+            <div class="ntype" onclick="selectType(3,this)">3 — Debug</div>
+          </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px;letter-spacing:.06em">Message</div>
+          <div class="field-row">
+            <input id="notify-msg" class="field" type="text" placeholder="Enter notification message…" value="Test notification from UI"/>
+            <button class="btn btn-accent" onclick="sendNotify()">
+              <span class="mat" style="font-size:16px">send</span> Broadcast
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon orange"><span class="mat">bolt</span></div>
+          <div class="card-title">Trigger Action</div>
+        </div>
+        <div id="trigger-alert" class="alert"></div>
+        <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Fire a registered action to all connected services.</p>
+        <div class="field-row">
+          <input id="trigger-name" class="field" type="text" placeholder="Action name, e.g. RESET_ALL"/>
+          <button class="btn btn-accent" onclick="triggerAction()">
+            <span class="mat" style="font-size:16px">flash_on</span> Trigger
+          </button>
+        </div>
+        <div id="action-quick" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+    </div>
+
+    <!-- LIVE LOG -->
+    <div class="page" id="page-logs">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><span class="mat">terminal</span></div>
+          <div class="card-title">Live Event Log</div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+            <span id="sse-badge" class="badge blue" style="font-size:10px;padding:3px 8px">● SSE</span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text3)">
+              <input id="auto-scroll" type="checkbox" checked style="accent-color:var(--accent)"/> Auto-scroll
+            </label>
+            <button class="btn btn-ghost btn-sm" onclick="clearLog()">
+              <span class="mat" style="font-size:14px">clear_all</span> Clear
+            </button>
+          </div>
+        </div>
+        <div id="log-feed" class="log-feed" style="max-height:600px"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const API = '';   // same origin
+let selectedNotifyType = 0;
+let sseConnected = false;
+let allActions = [];
+let startTime = Date.now();
+
+// ── page nav ──────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('nav-' + id).classList.add('active');
+  if (id === 'services')   loadServices();
+  if (id === 'datapoints') loadDatapoints();
+  if (id === 'configs')    loadConfigs();
+  if (id === 'actions')    loadActions();
+}
+
+// ── REST helpers ──────────────────────────────────────────────────────────
+async function api(path, opts) {
+  const r = await fetch(API + path, opts);
+  return r.json();
+}
+
+// ── status polling ────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const s = await api('/api/status');
+    document.getElementById('d-services').textContent = s.services;
+    document.getElementById('d-dp').textContent       = s.datapoints;
+    document.getElementById('d-cfg').textContent      = s.configs;
+    document.getElementById('d-act').textContent      = s.actions;
+    document.getElementById('cnt-services').textContent = s.services;
+    document.getElementById('cnt-dp').textContent      = s.datapoints;
+    document.getElementById('cnt-cfg').textContent     = s.configs;
+    document.getElementById('cnt-act').textContent     = s.actions;
+    document.getElementById('portBadge').textContent   = ':' + s.port;
+    document.getElementById('sseCount').textContent    = s.sse_clients + ' viewer' + (s.sse_clients !== 1 ? 's' : '');
+    const upSec = s.uptime_sec;
+    const h = Math.floor(upSec/3600), m = Math.floor((upSec%3600)/60), sec = upSec%60;
+    document.getElementById('uptime').textContent = '↑ ' +
+      (h ? h+'h ' : '') + (m ? m+'m ' : '') + sec + 's';
+    const running = s.running;
+    const badge = document.getElementById('serverBadge');
+    badge.className = 'badge ' + (running ? 'green' : 'red');
+    badge.innerHTML = (running ? '<span class="pulse-dot"></span> Running' : '● Stopped');
+
+    // dash services
+    loadDashServices();
+  } catch(e) {
+    document.getElementById('serverBadge').className = 'badge red';
+    document.getElementById('serverBadge').textContent = 'Unreachable';
+  }
+}
+
+async function loadDashServices() {
+  const svcs = await api('/api/services');
+  const el = document.getElementById('dash-services');
+  if (!svcs.length) {
+    el.innerHTML = '<div class="empty"><span class="mat">device_hub</span><span>No services connected</span></div>';
+    return;
+  }
+  el.innerHTML = svcs.map(s => `
+    <div class="service-row">
+      <div class="svc-dot"></div>
+      <div class="svc-name">${s.name}</div>
+      <div class="svc-handle">handle #${s.handle}</div>
+    </div>`).join('');
+}
+
+async function loadServices() {
+  const svcs = await api('/api/services');
+  const el = document.getElementById('svc-list');
+  if (!svcs.length) {
+    el.innerHTML = '<div class="empty"><span class="mat">device_hub</span><span>No services connected</span></div>';
+    return;
+  }
+  el.innerHTML = svcs.map(s => `
+    <div class="service-row">
+      <div class="svc-dot"></div>
+      <div>
+        <div class="svc-name">${s.name}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:2px">TCP client</div>
+      </div>
+      <div class="svc-handle">handle #${s.handle}</div>
+    </div>`).join('');
+}
+
+async function loadDatapoints() {
+  const data = await api('/api/datapoints');
+  const el = document.getElementById('dp-container');
+  const keys = Object.keys(data);
+  if (!keys.length) {
+    el.innerHTML = '<div class="empty"><span class="mat">data_object</span><span>Datapoint cache is empty</span></div>';
+    return;
+  }
+  el.innerHTML = keys.map(svc => `
+    <div class="dp-section">
+      <div class="dp-section-title">${svc} · ${data[svc].length} datapoints</div>
+      <div class="dp-grid">${data[svc].map(d => `<div class="dp-tag">${d}</div>`).join('')}</div>
+    </div>`).join('');
+}
+
+async function loadConfigs() {
+  const cfgs = await api('/api/configs');
+  const el = document.getElementById('cfg-container');
+  if (!cfgs.length) {
+    el.innerHTML = '<div class="empty" style="width:100%"><span class="mat">settings</span><span>Config store is empty</span></div>';
+    return;
+  }
+  el.innerHTML = cfgs.map(c => `
+    <div class="cfg-pill"><span class="mat" style="font-size:14px">article</span>${c}</div>`).join('');
+}
+
+async function loadActions() {
+  allActions = await api('/api/actions');
+  const el = document.getElementById('act-list');
+  if (!allActions.length) {
+    el.innerHTML = '<div class="empty"><span class="mat">bolt</span><span>No actions registered</span></div>';
+  } else {
+    el.innerHTML = allActions.map(a => `
+      <div class="action-row">
+        <span class="mat" style="color:var(--orange)">bolt</span>
+        <span class="action-name">${a.name}</span>
+        <span class="action-pub">by ${a.publisher}</span>
+        <button class="btn-trigger" style="margin-left:auto" onclick="quickTrigger('${a.name}')">
+          <span class="mat" style="font-size:13px;vertical-align:middle">flash_on</span> Trigger
+        </button>
+      </div>`).join('');
+  }
+  // update quick trigger chips
+  const qel = document.getElementById('action-quick');
+  if (allActions.length) {
+    qel.innerHTML = '<span style="font-size:11px;color:var(--text3);margin-right:4px">Quick:</span>' +
+      allActions.map(a => `<button class="btn-trigger" onclick="quickTrigger('${a.name}')">${a.name}</button>`).join('');
+  } else {
+    qel.innerHTML = '';
+  }
+}
+
+// ── actions ───────────────────────────────────────────────────────────────
+async function clearDatapoints() {
+  await api('/api/clear-datapoints', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  loadDatapoints();
+}
+
+async function clearConfigs() {
+  await api('/api/clear-configs', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  loadConfigs();
+}
+
+function selectType(val, el) {
+  selectedNotifyType = val;
+  document.querySelectorAll('.ntype').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function sendNotify() {
+  const msg = document.getElementById('notify-msg').value.trim();
+  if (!msg) return;
+  try {
+    await api('/api/notify', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, type: selectedNotifyType})
+    });
+    showAlert('notify-alert','success','✓ Notification broadcast to all services');
+  } catch(e) {
+    showAlert('notify-alert','error','✗ ' + e.message);
+  }
+}
+
+async function triggerAction() {
+  const name = document.getElementById('trigger-name').value.trim();
+  if (!name) return;
+  const res = await api('/api/trigger-action', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})
+  });
+  showAlert('trigger-alert', res.ok ? 'success' : 'error',
+    res.ok ? `✓ Action '${name}' triggered` : `✗ Unknown action '${name}'`);
+}
+
+async function quickTrigger(name) {
+  document.getElementById('trigger-name').value = name;
+  await triggerAction();
+}
+
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = 'alert show ' + type;
+  el.textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── log rendering ─────────────────────────────────────────────────────────
+function appendLog(entry, feedId) {
+  const el = document.getElementById(feedId);
+  if (!el) return;
+  const div = document.createElement('div');
+  div.className = `log-entry lborder-${entry.kind}`;
+  div.innerHTML = `<span class="log-ts">${entry.ts}</span><span class="log-kind kind-${entry.kind}">${entry.kind}</span><span class="log-msg">${entry.msg}</span>`;
+  el.appendChild(div);
+  if (feedId === 'log-feed' && document.getElementById('auto-scroll').checked) {
+    el.scrollTop = el.scrollHeight;
+  }
+  // keep dash-log to 8 entries
+  if (feedId === 'dash-log' && el.children.length > 8) el.removeChild(el.firstChild);
+}
+
+function clearLog() {
+  document.getElementById('log-feed').innerHTML = '';
+  document.getElementById('dash-log').innerHTML = '';
+}
+
+// ── SSE connection ────────────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource(API + '/api/events');
+  es.onopen = () => {
+    sseConnected = true;
+    document.getElementById('sse-badge').className = 'badge green';
+    document.getElementById('sse-badge').innerHTML = '● SSE';
+  };
+  es.onmessage = e => {
+    try {
+      const entry = JSON.parse(e.data);
+      appendLog(entry, 'log-feed');
+      appendLog(entry, 'dash-log');
+      // update counts on data/config/action events
+      if (['CONNECT','DISCONNECT','DATA','CONFIG','ACTION','TRIGGER'].includes(entry.kind)) {
+        pollStatus();
+      }
+    } catch(_) {}
+  };
+  es.onerror = () => {
+    sseConnected = false;
+    document.getElementById('sse-badge').className = 'badge red';
+    document.getElementById('sse-badge').innerHTML = '● SSE';
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+// ── full refresh ──────────────────────────────────────────────────────────
+async function loadLogs() {
+  const logs = await api('/api/logs');
+  const feed = document.getElementById('log-feed');
+  feed.innerHTML = '';
+  const dashFeed = document.getElementById('dash-log');
+  dashFeed.innerHTML = '';
+  logs.forEach(e => { appendLog(e, 'log-feed'); appendLog(e, 'dash-log'); });
+}
+
+function refreshAll() {
+  pollStatus();
+  loadLogs();
+  const active = document.querySelector('.page.active');
+  if (active) {
+    const id = active.id.replace('page-','');
+    if (id === 'services')   loadServices();
+    if (id === 'datapoints') loadDatapoints();
+    if (id === 'configs')    loadConfigs();
+    if (id === 'actions')    loadActions();
+  }
+}
+
+// ── init ──────────────────────────────────────────────────────────────────
+(function init() {
+  pollStatus();
+  loadLogs();
+  connectSSE();
+  setInterval(pollStatus, 4000);
+})();
+</script>
+</body>
+</html>
