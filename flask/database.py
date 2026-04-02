@@ -284,6 +284,8 @@ def create_tables(cursor):
             cell_apn            TEXT    DEFAULT 'internet',
             cell_username       TEXT    DEFAULT '',
             cell_password       TEXT    DEFAULT '',
+            auto_connect        INTEGER DEFAULT 1,
+            load_raw_enabled    INTEGER DEFAULT 0,
 
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -763,7 +765,7 @@ def _migrate_existing_db(cursor):
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN eth_selected TEXT DEFAULT 'eth0'")
     # Add auto_connect to general_configuration (persists Auto-connect toggle state)
     if 'auto_connect' not in gc_cols:
-        cursor.execute("ALTER TABLE general_configuration ADD COLUMN auto_connect INTEGER DEFAULT 0")
+        cursor.execute("ALTER TABLE general_configuration ADD COLUMN auto_connect INTEGER DEFAULT 1")
     # Add load_raw_enabled to general_configuration (persists the Raw toggle state)
     if 'load_raw_enabled' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN load_raw_enabled INTEGER DEFAULT 0")
