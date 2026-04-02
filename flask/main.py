@@ -646,13 +646,46 @@ async def start_background_tasks(app):
     import time
 
     async def _webui_session_watchdog():
+        # SESSION_IDLE_TIMEOUT: seconds a session can be idle before eviction.
+        # Previously 15 s -- far too short; an open WebSocket tab with no HTTP
+        # polling was kicked on the very next watchdog tick (every 5 s).
+        # 300 s (5 min) cleans up truly abandoned sessions without ever
+        # evicting an active user.
+        SESSION_IDLE_TIMEOUT = 300
+
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(30)   # check every 30 s is plenty
             now = time.time()
+
+            # Refresh last_ping for every token that has an open WebSocket so
+            # users watching live data are never considered idle.
+            try:
+                import general as _gen
+                _live_ws_tokens = set()
+                for _ws in list(_gen.connected_websockets):
+                    try:
+                        _tok = _ws._req.cookies.get('gw_webui_session')
+                        if _tok:
+                            _live_ws_tokens.add(_tok)
+                    except Exception:
+                        pass
+                for _ws in list(_gen.network_status_websockets):
+                    try:
+                        _tok = _ws._req.cookies.get('gw_webui_session')
+                        if _tok:
+                            _live_ws_tokens.add(_tok)
+                    except Exception:
+                        pass
+                for _tok in _live_ws_tokens:
+                    if _tok in WEBUI_SESSIONS and isinstance(WEBUI_SESSIONS[_tok], dict):
+                        WEBUI_SESSIONS[_tok]['last_ping'] = now
+            except Exception:
+                pass  # never crash the watchdog
+
             to_remove = []
             for token, info in list(WEBUI_SESSIONS.items()):
                 if isinstance(info, dict) and 'last_ping' in info:
-                    if now - info['last_ping'] > 15:
+                    if now - info['last_ping'] > SESSION_IDLE_TIMEOUT:
                         to_remove.append(token)
             for token in to_remove:
                 info = WEBUI_SESSIONS.pop(token, None)

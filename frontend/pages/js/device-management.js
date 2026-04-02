@@ -1483,8 +1483,8 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Unit</label>
                             <select id="editUnit" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
-                                <option value="kg" ${(!cfg.unit || cfg.unit==='kg')?'selected':''}>kg — Kilogram</option>
-                                <option value="ton" ${cfg.unit==='ton'?'selected':''}>ton — Metric Ton</option>
+                                <option value="kg" ${(!cfg.unit || cfg.unit==='kg')?'selected':''}>kg</option>
+                                <option value="ton" ${cfg.unit==='ton'?'selected':''}>ton</option>
                             </select>
                         </div>
                     </div>

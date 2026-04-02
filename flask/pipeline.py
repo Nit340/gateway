@@ -355,6 +355,8 @@ pipeline_state = {
     "loadcell_config_pending":      None,
     "iot_gateway_config_pending":   None,
     "core_config_pending":          None,
+    # pending network route selection
+    "network_route_pending":        None,
     # load_raw whitelist toggle (controlled via UI button)
     "load_raw_enabled":             False,
     # crash / restart tracking
@@ -814,6 +816,31 @@ def _flush_pending_for_service(client, svc):
                 logger.error("Flush core error: {}".format(e))
 
 
+def _flush_pending_network_route(client):
+    """Try to send the network_route_select datapoint if it is pending."""
+    with pipeline_state["lock"]:
+        pending = pipeline_state.get("network_route_pending")
+
+    if pending is not None:
+        try:
+            ok = False
+            if hasattr(client, 'datapoint_set'):
+                ok = client.datapoint_set('network_route_select', pending)
+            elif hasattr(client, 'publish_datapoint'):
+                ok = client.publish_datapoint('network_route_select', pending)
+            else:
+                ok = client.datapoint_update(None, 'network_route_select', pending)
+
+            if ok:
+                logger.info('[NET-ROUTE] DISPATCH SUCCESS: network_route_select={} sent to pipeline'.format(pending))
+                with pipeline_state["lock"]:
+                    pipeline_state["network_route_pending"] = None
+            else:
+                logger.error('[NET-ROUTE] DISPATCH FAILURE: Pipeline rejected setting network_route_select={}'.format(pending))
+        except Exception as e:
+            logger.error('[NET-ROUTE] Flushed pending route error: {}'.format(e))
+
+
 def _flush_all_pending():
     """After storing any pending config, check all currently connected services
     and flush immediately if the target service is already up.
@@ -828,6 +855,7 @@ def _flush_all_pending():
         return
     for svc in services:
         _flush_pending_for_service(client, svc)
+    _flush_pending_network_route(client)
 
 
 # ============================================================================
@@ -899,6 +927,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             if hasattr(client, 'watch'):
                                 client.watch("loadcell_config")
                                 logger.info("[PIPELINE] Watching 'loadcell_config' for storage sync")
+                            
+                            # Flush any pending network route as soon as we connect
+                            _flush_pending_network_route(client)
                         else:
                             client.refresh()
                     except Exception as e:
@@ -922,6 +953,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         pipeline_state["connected_services"].add(svc)
                     # Flush any config that was queued waiting for this service
                     _flush_pending_for_service(client, svc)
+                    _flush_pending_network_route(client)
 
                 # -- Service removed --------------------------------------
                 elif etype == EventType.SERVICE_REMOVED:
@@ -3400,7 +3432,15 @@ async def pipeline_network_route_select_handler(request):
     """
     try:
         body = await request.json()
-        value = int(body.get('network_route_select', -1))
+        # Accept both for backward compatibility, but prefer 'network_route_select'
+        value = body.get('network_route_select')
+        if value is None:
+            value = body.get('route_select')
+        
+        if value is not None:
+            value = int(value)
+        else:
+            value = -1
     except Exception as e:
         return web.json_response({
             'success': False, 
@@ -3418,103 +3458,23 @@ async def pipeline_network_route_select_handler(request):
     route_name = _ROUTE_SELECT_MAP[value]
     logger.info('[NET-ROUTE] network_route_select={} ({})'.format(value, route_name))
 
-    pipeline_sent = False
-    pipeline_message = 'Pipeline not connected'
-
     with pipeline_state['lock']:
+        pipeline_state['network_route_pending'] = value
         client = pipeline_state.get('client')
         connected = pipeline_state.get('connected', False)
-
-    if not connected:
-        pipeline_message = 'Pipeline not connected - cannot send route selection'
-        logger.warning('[NET-ROUTE] {}'.format(pipeline_message))
-        return web.json_response({
-            'success': False,
-            'network_route_select': value,
-            'route': route_name,
-            'pipeline_sent': False,
-            'pipeline_message': pipeline_message,
-            'error': 'pipeline_not_connected'
-        }, status=503)  # Service Unavailable
-
-    if not client:
-        pipeline_message = 'Pipeline client not available'
-        logger.error('[NET-ROUTE] {}'.format(pipeline_message))
-        return web.json_response({
-            'success': False,
-            'network_route_select': value,
-            'route': route_name,
-            'pipeline_sent': False,
-            'pipeline_message': pipeline_message,
-            'error': 'client_not_available'
-        }, status=503)
-
-    # Try to send the datapoint
-    try:
-        # Check what methods are available
-        if hasattr(client, 'datapoint_set'):
-            ok = client.datapoint_set('network_route_select', value)
-            logger.info('[NET-ROUTE] Using datapoint_set, result={}'.format(ok))
-        elif hasattr(client, 'publish_datapoint'):
-            ok = client.publish_datapoint('network_route_select', value)
-            logger.info('[NET-ROUTE] Using publish_datapoint, result={}'.format(ok))
-        else:
-            # Try datapoint_update as fallback
-            ok = client.datapoint_update(None, 'network_route_select', value)
-            logger.info('[NET-ROUTE] Using datapoint_update, result={}'.format(ok))
         
-        if ok:
-            pipeline_sent = True
-            pipeline_message = 'Successfully sent network_route_select={} ({})'.format(value, route_name)
-            logger.info('[NET-ROUTE] {}'.format(pipeline_message))
-        else:
-            pipeline_message = 'Pipeline rejected the datapoint update'
-            logger.warning('[NET-ROUTE] {}'.format(pipeline_message))
-            
-    except AttributeError as e:
-        pipeline_message = 'Client missing required method: {}'.format(e)
-        logger.error('[NET-ROUTE] {}'.format(pipeline_message))
-        return web.json_response({
-            'success': False,
-            'network_route_select': value,
-            'route': route_name,
-            'pipeline_sent': False,
-            'pipeline_message': pipeline_message,
-            'error': 'missing_method'
-        }, status=500)
-        
-    except Exception as e:
-        pipeline_message = 'Error sending datapoint: {}'.format(str(e))
-        logger.error('[NET-ROUTE] {}'.format(pipeline_message))
-        import traceback
-        traceback.print_exc()
-        return web.json_response({
-            'success': False,
-            'network_route_select': value,
-            'route': route_name,
-            'pipeline_sent': False,
-            'pipeline_message': pipeline_message,
-            'error': str(e)
-        }, status=500)
+    _flush_all_pending()
 
-    # Return success only if pipeline_sent is True
-    if pipeline_sent:
-        return web.json_response({
-            'success': True,
-            'network_route_select': value,
-            'route': route_name,
-            'pipeline_sent': True,
-            'pipeline_message': pipeline_message,
-        })
-    else:
-        return web.json_response({
-            'success': False,
-            'network_route_select': value,
-            'route': route_name,
-            'pipeline_sent': False,
-            'pipeline_message': pipeline_message,
-            'error': 'send_failed'
-        }, status=500)
+    pipeline_message = 'Network route queued/sent to pipeline'
+    logger.info('[NET-ROUTE] {}'.format(pipeline_message))
+    
+    return web.json_response({
+        'success': True,
+        'network_route_select': value,
+        'route': route_name,
+        'pipeline_sent': connected and client is not None,
+        'pipeline_message': pipeline_message
+    })
 # ============================================================================
 # ROUTE REGISTRATION
 # ============================================================================

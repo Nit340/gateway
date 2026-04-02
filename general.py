@@ -1138,20 +1138,21 @@ async def sync_network_mode_to_pipeline(app):
         network_mode = network.get('mode', 'wifi')
         eth_selected = network.get('eth_selected', 'eth0')
         
-        # Load explicitly including raw DB value for diagnosis
-        raw_db_auto = network.get('auto_connect')
-        logger.info("[PIPELINE-SYNC] Startup sync - DB state: auto_connect={} (raw={}), mode={}, eth={}".format(
-            auto_connect, raw_db_auto, network_mode, eth_selected))
+        logger.info("[PIPELINE-SYNC] Startup sync - auto_connect={}, mode={}, eth={}".format(
+            auto_connect, network_mode, eth_selected))
         
-        # Determine what to send to pipeline - Auto Connect switch takes priority for 'auto' mode (0)
-        # Using a loud check to ensure 0 is sent accurately
-        if auto_connect is True or auto_connect == 1 or auto_connect == 'true':
+        # Determine what to send to pipeline
+        if auto_connect:
+            # Auto mode ON - send 'auto' to let pipeline decide
             route_value = 0  # auto
-            logger.info("[PIPELINE-SYNC] Startup check PASSED: Auto-connect is ACTIVE -> Forced Route: 0")
+            logger.info("[PIPELINE-SYNC] Auto-connect enabled - sending AUTO mode to pipeline")
         else:
+            # Auto mode OFF - send the actual selected mode
             route_value = _get_route_value(network_mode, eth_selected)
-            logger.info("[PIPELINE-SYNC] Startup check: Auto-connect is OFF -> Selected Route: {}".format(route_value))
-            if route_value is None:
+            if route_value is not None:
+                logger.info("[PIPELINE-SYNC] Auto-connect disabled - sending {} mode to pipeline".format(
+                    network_mode))
+            else:
                 logger.warning("[PIPELINE-SYNC] Unknown network mode: {}".format(network_mode))
                 return
         
@@ -1503,60 +1504,50 @@ async def put_config_handler(request):
         return web.json_response(
             {'success': False, 'message': 'Failed to save configuration'}, status=500)
 
+    # ========== ALWAYS sync network mode when network fields change ==========
+    network_changed = False
     if 'network' in data:
+        net_data = data['network']
+        if 'mode' in net_data or 'eth_selected' in net_data or 'auto_connect' in net_data:
+            network_changed = True
+    
+    if network_changed:
         # Sync network mode to pipeline after save
         try:
-            # First, get current DB state to fill in gaps
             saved_config = get_general_configuration()
             network = saved_config.get('network', {})
+            auto_connect = network.get('auto_connect', False)
+            network_mode = network.get('mode', 'wifi')
+            eth_selected = network.get('eth_selected', 'eth0')
             
-            # Use data from incoming request if present, fallback to DB
-            net_data = data['network']
-            raw_ac = net_data.get('auto_connect', network.get('auto_connect', False))
+            logger.info("[PIPELINE-SYNC] Config saved - auto_connect={}, mode={}".format(
+                auto_connect, network_mode))
             
-            # CRITICAL: Robust truthy check (handles bool, int 0/1, string "true")
-            cur_auto_connect = bool(raw_ac) if not isinstance(raw_ac, str) else raw_ac.lower() == 'true'
-            
-            cur_mode         = net_data.get('mode',         network.get('mode', 'wifi'))
-            cur_eth_selected = net_data.get('eth_selected', network.get('eth_selected', 'eth0'))
-            
-            logger.info("[PIPELINE-SYNC] Save sync check - auto_connect={} (raw={}), mode={}, eth={}".format(
-                cur_auto_connect, raw_ac, cur_mode, cur_eth_selected))
-            
-            # Ensure target_route is 0 if auto_connect is TRUE
-            if cur_auto_connect:
-                target_route = 0
+            # Determine what to send to pipeline
+            if auto_connect:
+                route_value = 0  # auto
+                logger.info("[PIPELINE-SYNC] Auto-connect ON - sending AUTO mode to pipeline")
             else:
-                target_route = _get_route_value(cur_mode, cur_eth_selected)
+                route_value = _get_route_value(network_mode, eth_selected)
+                if route_value is not None:
+                    logger.info("[PIPELINE-SYNC] Auto-connect OFF - sending {} mode to pipeline".format(
+                        network_mode))
+                else:
+                    logger.warning("[PIPELINE-SYNC] Unknown network mode: {}".format(network_mode))
+                    return web.json_response({'success': True, 'message': 'Configuration saved successfully'})
             
-            should_sync = False
-            
-            # 1. If Auto Connect was explicitly toggled - ALWAYS sync the target (0 or specific)
-            if 'auto_connect' in net_data:
-                should_sync = True
-                logger.info("[PIPELINE-SYNC] ACTION: Toggled Auto-Connect -> syncing network_route_select={}".format(target_route))
-            
-            # 2. If it's NOT in Auto Connect mode, and the mode itself changed - SYNC the specific route
-            elif not cur_auto_connect:
-                if 'mode' in net_data or 'eth_selected' in net_data:
-                    should_sync = True
-                    logger.info("[PIPELINE-SYNC] ACTION: Mode changed while Auto is OFF -> syncing network_route_select={}".format(target_route))
-            
-            # 3. If it IS in Auto mode, and they clicked a radio button - SYNC 0 AGAIN just to be 100% sure
-            else:
-                should_sync = True
-                target_route = 0
-                logger.info("[PIPELINE-SYNC] ACTION: System in AUTO mode but radio clicked -> FORCING network_route_select=0")
-            
-            # Execute the sync
-            if should_sync and target_route is not None:
-                with pipeline_state["lock"]:
-                    pipeline_state["network_route_pending"] = target_route
-                _flush_all_pending()
-                logger.info("[PIPELINE-SYNC] Verification: Pushed network_route_select={} to pipeline queue".format(target_route))
-                
+            # Send to pipeline
+            if route_value is not None:
+                try:
+                    with pipeline_state["lock"]:
+                        pipeline_state["network_route_pending"] = route_value
+                    _flush_all_pending()
+                    logger.info("[PIPELINE-SYNC] Successfully pushed route={} to pipeline".format(route_value))
+                except Exception as pipe_err:
+                    logger.error("[PIPELINE-SYNC] Failed to push to pipeline: {}".format(pipe_err))
+                    
         except Exception as e:
-            logger.error("[PIPELINE-SYNC] Sync Error: {}".format(e))
+            logger.error("[PIPELINE-SYNC] Error after config save: {}".format(e))
 
     # ========== ONLY rebuild IoT config if WIFI or HEARTBEAT settings changed ==========
     # NOT for auto_connect toggles! auto_connect only affects network routing, not IoT config

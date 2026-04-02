@@ -141,23 +141,7 @@
         .catch(function() { /* server unreachable — already showing fallback text */ });
     };
 
-    var sendNetworkRouteSelect = function (routeKey) {
-        var val = _ROUTE_MAP[routeKey];
-        if (val === undefined) return;
-        fetch('/api/pipeline/network-route-select', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ network_route_select: val })
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
 
-        })
-        .catch(function (e) {
-            console.warn('[NET-ROUTE] failed to send network_route_select:', e);
-        });
-    };
 
     // =========================================================================
     // UPDATE GLOBAL MAC DISPLAY - shows only the MAC for the selected network mode
@@ -237,8 +221,6 @@
             
             // ALWAYS send network_route_select for auto mode (value 0)
             if (this.value === 'auto') {
-                // Send auto mode (0) - this should ALWAYS happen
-                sendNetworkRouteSelect('auto');
                 // Reset eth card selection highlight when switching to auto
                 _setEthCardSelected(null);
                 // Reset auto-highlight trackers
@@ -248,10 +230,6 @@
             // For other modes, only send if Auto-Connect is OFF
             else if (!_acEnabled) {
                 showNetworkSwitchingModal(this.value);
-                // Send pipeline datapoint on radio click
-                // ethernet radio maps to eth0 (1) by default; eth select buttons handle eth0/eth1
-                var routeKey = this.value === 'ethernet' ? (_selectedEth || 'eth0') : this.value;
-                sendNetworkRouteSelect(routeKey);
                 // Reset eth card selection highlight when switching away from ethernet
                 if (this.value !== 'ethernet') { _setEthCardSelected(null); }
                 // Reset auto-highlight trackers when leaving auto mode
@@ -261,7 +239,7 @@
             
             // Persist network_mode to DB immediately so page refresh keeps the selection
             var modeToSave = this.value;
-            var payload = { network: { mode: modeToSave } };
+            var payload = { network: { mode: modeToSave, auto_connect: _acEnabled } };
             if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
             fetch('/api/general-configuration', {
                 method: 'PUT',
@@ -761,7 +739,10 @@
         .then(function (data) {
             showNotification(data.message || 'Connected to ' + ssid, 'success');
             // If already connected stop retrying
-            if (isUp((_cache.wlan || {}).state)) { _stopAutoConnect(); }
+            if (isUp((_cache.wlan || {}).state)) { 
+                if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
+                _setAcUi(true, false);
+            }
             else { _setAcUi(true, false); }
         })
         .catch(function (err) {
@@ -865,9 +846,7 @@
             if (!card) return;
             card.addEventListener('click', function () {
                 _setEthCardSelected(iface);
-                showNetworkSwitchingModal(iface);
                 _selectedEth = iface;
-                sendNetworkRouteSelect(iface);  // 1=eth0, 2=eth1 — pipeline datapoint
                 // Persist eth_selected + network_mode to DB immediately so refresh survives
                 fetch('/api/general-configuration', {
                     method: 'PUT',
@@ -887,6 +866,9 @@
                 .catch(function (e) {
                     console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
                 });
+                if (!_acEnabled) {
+                    showNetworkSwitchingModal(iface);
+                }
                 updateGlobalMacDisplay();
             });
         });
@@ -1366,6 +1348,7 @@
             network: {
                 mode: getRadioValue('[name="network-mode"]') || 'wifi',
                 eth_selected: _ethSel,
+                auto_connect: _acEnabled,
                 wifi: {
                     ssid:     (function(){ var h=el('wifi-ssid-value'); return h?h.value:getInputValue('[name="wifi-ssid"]'); }()),
                     password: getInputValue('[name="wifi-password"]'),
@@ -1566,7 +1549,8 @@
                     _acTimer = setInterval(function () {
                         if (!_acEnabled) return;
                         if (isUp((_cache.wlan || {}).state)) {
-                            _stopAutoConnect();
+                            if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
+                            _setAcUi(true, false);
                             showNotification('Auto-connect: already connected', 'success');
                             return;
                         }
@@ -1617,13 +1601,35 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 })
-                .then(function(r){ return r.json(); })
-                .then(function(data){
-                    var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
-                    var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
+                .then(function(r){
+                    // Capture status before consuming the body
+                    var ok     = r.ok;
+                    var status = r.status;
+                    return r.json().then(function(data){ return { ok: ok, status: status, data: data }; });
+                })
+                .then(function(res){
+                    var fmt  = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+                    var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
+
+                    if (!res.ok) {
+                        // Server returned an error (401, 400 No Internet, 500 NTP fail, etc.)
+                        var errMsg = (res.data && (res.data.error || res.data.detail)) || ('Server error ' + res.status);
+                        // Fall back to browser time so the UI is never left blank
+                        var ist         = getISTNow();
+                        var displayDate = formatDate(ist.date, fmt);
+                        var raw24       = formatTime(ist.time);
+                        var displayTime = formatTimeDisplay(raw24, tfmt);
+                        setInputValue('[name="date"]', displayDate);
+                        setInputValue('[name="time"]', raw24);
+                        updateTimeDisplayLabel(raw24);
+                        showNotification('Sync failed: ' + errMsg + '  \u2014 showing browser time', 'warning');
+                        return;
+                    }
+
+                    // Success path
+                    var data        = res.data;
                     var displayDate = data.formatted_date || formatDate(data.current_date, fmt);
-                    // Always store 24h in input; format for display/notification separately
-                    var raw24   = formatTime(data.current_time || '');
+                    var raw24       = formatTime(data.current_time || '');
                     var displayTime = formatTimeDisplay(raw24, tfmt);
                     setInputValue('[name="date"]', displayDate);
                     setInputValue('[name="time"]', raw24);
@@ -1631,7 +1637,7 @@
                     showNotification('Time synchronized  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'success');
                 })
                 .catch(function(){
-                    // Server unreachable  use browser IST time directly
+                    // Network-level failure (server unreachable) — use browser time
                     var ist     = getISTNow();
                     var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
                     var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
@@ -1641,7 +1647,7 @@
                     setInputValue('[name="date"]', displayDate);
                     setInputValue('[name="time"]', raw24);
                     updateTimeDisplayLabel(raw24);
-                    showNotification('Time set from browser  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'warning');
+                    showNotification('Server unreachable  \u2014 time set from browser  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'warning');
                 })
                 .then(function(){ nsy.innerHTML=orig; nsy.disabled=false; });
             });
@@ -1659,7 +1665,6 @@
         window._generalConfigInitializing = true;
         window._generalConfigInitialized  = true;
         initializeButtons();
-        initializeNetworkToggles();
         initializePasswordToggles();
         initWifiScanAndConnect();
         initEthernetSelectButtons();
@@ -1669,9 +1674,16 @@
         // Auto-connect network status WebSocket on page open
         _netActive = true;
         connectNetworkStatusWs();
+        // IMPORTANT: Load config FIRST so _acEnabled is set from DB before
+        // initializeNetworkToggles() binds listeners that check _acEnabled.
+        // This prevents the wifi radio from sending a spurious route=4 on
+        // page load when auto-connect is actually ON in the database.
         loadConfiguration()
-        .then(function () { window._generalConfigInitializing=false; })
-        .catch(function (err) { console.error('Load error:',err); showNotification('Failed to load config','warning'); window._generalConfigInitializing=false; });
+        .then(function () {
+            initializeNetworkToggles();
+            window._generalConfigInitializing=false;
+        })
+        .catch(function (err) { console.error('Load error:',err); showNotification('Failed to load config','warning'); initializeNetworkToggles(); window._generalConfigInitializing=false; });
     };
 
     window.cleanupGeneralConfig = cleanup;
