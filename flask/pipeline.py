@@ -817,9 +817,33 @@ def _flush_pending_for_service(client, svc):
 
 
 def _flush_pending_network_route(client):
-    """Try to send the network_route_select datapoint if it is pending."""
+    """Try to send the network_route_select datapoint if it is pending.
+
+    Auto-connect guard:
+      - If auto_connect = 1 in DB  -> ALWAYS send 0 (auto), override any pending value.
+      - If auto_connect = 0 in DB  -> Send the stored pending value as-is.
+      - If nothing is pending        -> no-op.
+    """
+    # Read auto_connect state from DB so the enforcement is always fresh.
+    _auto_on = False
+    try:
+        from database import get_general_configuration
+        _cfg = get_general_configuration()
+        _raw_ac = (_cfg.get('network') or {}).get('auto_connect', False)
+        _auto_on = bool(_raw_ac) if not isinstance(_raw_ac, str) else _raw_ac.lower() == 'true'
+    except Exception as _e:
+        logger.warning('[NET-ROUTE] Could not read auto_connect from DB: {}'.format(_e))
+
     with pipeline_state["lock"]:
         pending = pipeline_state.get("network_route_pending")
+
+    # If auto_connect is ON, override pending to 0 (auto) regardless of stored value
+    if _auto_on:
+        if pending != 0:
+            logger.info('[NET-ROUTE] auto_connect=ON -> overriding pending={} to 0 (auto)'.format(pending))
+        pending = 0
+        with pipeline_state["lock"]:
+            pipeline_state["network_route_pending"] = 0
 
     if pending is not None:
         try:
@@ -832,7 +856,7 @@ def _flush_pending_network_route(client):
                 ok = client.datapoint_update(None, 'network_route_select', pending)
 
             if ok:
-                logger.info('[NET-ROUTE] DISPATCH SUCCESS: network_route_select={} sent to pipeline'.format(pending))
+                logger.info('[NET-ROUTE] DISPATCH SUCCESS: network_route_select={} sent to pipeline (auto_connect={})'.format(pending, _auto_on))
                 with pipeline_state["lock"]:
                     pipeline_state["network_route_pending"] = None
             else:
@@ -951,9 +975,10 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     logger.info("[PIPELINE] SERVICE_ADDED: '{}'".format(svc))
                     with pipeline_state["lock"]:
                         pipeline_state["connected_services"].add(svc)
-                    # Flush any config that was queued waiting for this service
+                    # Flush any config that was queued waiting for this service.
+                    # NOTE: network_route_select is a global datapoint (no service owner),
+                    # so it is flushed on PIPELINE_CONNECTED only -- NOT here.
                     _flush_pending_for_service(client, svc)
-                    _flush_pending_network_route(client)
 
                 # -- Service removed --------------------------------------
                 elif etype == EventType.SERVICE_REMOVED:
@@ -3429,6 +3454,12 @@ _ROUTE_SELECT_MAP = {0: 'auto', 1: 'eth0', 2: 'eth1', 3: 'lte', 4: 'wifi'}
 async def pipeline_network_route_select_handler(request):
     """POST /api/pipeline/network-route-select
     Body: { "network_route_select": <int 0-4> }
+
+    Auto-connect guard:
+      - If auto_connect = 1 in general_configuration, manual route selection is
+        BLOCKED (returns 403). The pipeline is always in auto (0) mode when
+        auto_connect is enabled; no other route can be forced while it is on.
+      - If auto_connect = 0, the requested route is queued and flushed normally.
     """
     try:
         body = await request.json()
@@ -3455,19 +3486,49 @@ async def pipeline_network_route_select_handler(request):
             'value': value
         }, status=400)
 
+    # ---- Auto-connect guard ------------------------------------------------
+    # When auto_connect is ON, the pipeline controls network routing
+    # automatically. Reject any manual route-select requests except for
+    # value=0 (which is the auto mode itself -- allowed so the UI can
+    # explicitly acknowledge and re-confirm the auto state).
+    _auto_on = False
+    try:
+        from database import get_general_configuration
+        _cfg = get_general_configuration()
+        _raw_ac = (_cfg.get('network') or {}).get('auto_connect', False)
+        _auto_on = bool(_raw_ac) if not isinstance(_raw_ac, str) else _raw_ac.lower() == 'true'
+    except Exception as _e:
+        logger.warning('[NET-ROUTE] Could not read auto_connect: {}'.format(_e))
+
+    if _auto_on and value != 0:
+        logger.warning(
+            '[NET-ROUTE] BLOCKED: Manual network_route_select={} rejected -- '
+            'auto_connect is ON (only route=0/auto is permitted)'.format(value)
+        )
+        return web.json_response({
+            'success': False,
+            'blocked': True,
+            'reason': 'auto_connect is enabled -- manual network route selection is not allowed. '
+                      'Disable the Auto-Connect toggle in General Configuration first.',
+            'network_route_select': value,
+            'route': _ROUTE_SELECT_MAP[value],
+        }, status=403)
+    # ---- End guard ---------------------------------------------------------
+
     route_name = _ROUTE_SELECT_MAP[value]
-    logger.info('[NET-ROUTE] network_route_select={} ({})'.format(value, route_name))
+    logger.info('[NET-ROUTE] network_route_select={} ({}) -- auto_connect={}'.format(
+        value, route_name, _auto_on))
 
     with pipeline_state['lock']:
         pipeline_state['network_route_pending'] = value
         client = pipeline_state.get('client')
         connected = pipeline_state.get('connected', False)
-        
+
     _flush_all_pending()
 
     pipeline_message = 'Network route queued/sent to pipeline'
     logger.info('[NET-ROUTE] {}'.format(pipeline_message))
-    
+
     return web.json_response({
         'success': True,
         'network_route_select': value,

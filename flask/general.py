@@ -1523,37 +1523,48 @@ async def put_config_handler(request):
             logger.info("[PIPELINE-SYNC] Save sync check - auto_connect={} (raw={}), mode={}, eth={}".format(
                 cur_auto_connect, raw_ac, cur_mode, cur_eth_selected))
             
-            # Ensure target_route is 0 if auto_connect is TRUE
-            if cur_auto_connect:
-                target_route = 0
-            else:
-                target_route = _get_route_value(cur_mode, cur_eth_selected)
-            
-            should_sync = False
-            
-            # 1. If Auto Connect was explicitly toggled - ALWAYS sync the target (0 or specific)
+            # Determine what to sync to pipeline
+            should_sync  = False
+            target_route = None
+
+            # 1. Auto-Connect toggle was explicitly changed
             if 'auto_connect' in net_data:
-                should_sync = True
-                logger.info("[PIPELINE-SYNC] ACTION: Toggled Auto-Connect -> syncing network_route_select={}".format(target_route))
-            
-            # 2. If it's NOT in Auto Connect mode, and the mode itself changed - SYNC the specific route
-            elif not cur_auto_connect:
+                if cur_auto_connect:
+                    # Turned ON -> force route 0 (auto)
+                    target_route = 0
+                    should_sync  = True
+                    logger.info("[PIPELINE-SYNC] ACTION: Auto-Connect toggled ON -> force network_route_select=0")
+                else:
+                    # Turned OFF -> send the currently selected mode
+                    target_route = _get_route_value(cur_mode, cur_eth_selected)
+                    should_sync  = True
+                    logger.info("[PIPELINE-SYNC] ACTION: Auto-Connect toggled OFF -> network_route_select={}".format(target_route))
+
+            # 2. Auto-Connect is ON and user changed a radio/mode field
+            #    -> block non-zero route; re-enforce 0 to pipeline
+            elif cur_auto_connect:
                 if 'mode' in net_data or 'eth_selected' in net_data:
-                    should_sync = True
-                    logger.info("[PIPELINE-SYNC] ACTION: Mode changed while Auto is OFF -> syncing network_route_select={}".format(target_route))
-            
-            # 3. If it IS in Auto mode, and they clicked a radio button - SYNC 0 AGAIN just to be 100% sure
-            else:
-                should_sync = True
-                target_route = 0
-                logger.info("[PIPELINE-SYNC] ACTION: System in AUTO mode but radio clicked -> FORCING network_route_select=0")
-            
+                    target_route = 0
+                    should_sync  = True
+                    logger.info(
+                        "[PIPELINE-SYNC] ACTION: Mode changed but auto_connect=ON "
+                        "-> BLOCKED non-zero route, re-enforcing network_route_select=0"
+                    )
+                else:
+                    logger.info("[PIPELINE-SYNC] auto_connect=ON, no mode change -> no pipeline sync needed")
+
+            # 3. Auto-Connect is OFF and mode/eth explicitly changed
+            elif 'mode' in net_data or 'eth_selected' in net_data:
+                target_route = _get_route_value(cur_mode, cur_eth_selected)
+                should_sync  = True
+                logger.info("[PIPELINE-SYNC] ACTION: Mode changed, auto_connect=OFF -> network_route_select={}".format(target_route))
+
             # Execute the sync
             if should_sync and target_route is not None:
                 with pipeline_state["lock"]:
                     pipeline_state["network_route_pending"] = target_route
                 _flush_all_pending()
-                logger.info("[PIPELINE-SYNC] Verification: Pushed network_route_select={} to pipeline queue".format(target_route))
+                logger.info("[PIPELINE-SYNC] Pushed network_route_select={} to pipeline queue".format(target_route))
                 
         except Exception as e:
             logger.error("[PIPELINE-SYNC] Sync Error: {}".format(e))
