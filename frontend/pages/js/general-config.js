@@ -1392,10 +1392,13 @@
                     live_tech:          l.tech          || ''
                 }
             },
-            heartbeat: {
-    interval:          parseInt(getInputValue('[name="heartbeat-interval"]')) || 30,
-    offline_threshold: parseInt(getInputValue('[name="offline-threshold"]'))  || 120
-},
+            heartbeat: (function () {
+    var rawInterval  = parseInt(getInputValue('[name="heartbeat-interval"]'));
+    var rawThreshold = parseInt(getInputValue('[name="offline-threshold"]'));
+    var interval          = (!isNaN(rawInterval)  && rawInterval  >= 0) ? rawInterval  : 30;
+    var offline_threshold = (!isNaN(rawThreshold) && rawThreshold >= 0) ? rawThreshold : 120;
+    return { interval: interval, offline_threshold: offline_threshold };
+}()),
             mac_address: (function () { var m=$('[data-mac-address]'); return m?m.textContent.trim():''; }())
         };
     };
@@ -1432,6 +1435,19 @@
     
     var handleSaveConfiguration = function () {
         var btn = el('save-btn'); if (!btn) return;
+
+        // Validate heartbeat fields — reject negatives before sending
+        var hbRaw = parseInt(getInputValue('[name="heartbeat-interval"]'));
+        var otRaw = parseInt(getInputValue('[name="offline-threshold"]'));
+        if (!isNaN(hbRaw) && hbRaw < 0) {
+            showNotification('Heartbeat interval cannot be negative.', 'warning');
+            return;
+        }
+        if (!isNaN(otRaw) && otRaw < 0) {
+            showNotification('Offline threshold cannot be negative.', 'warning');
+            return;
+        }
+
         var orig = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving…';
         btn.disabled  = true;

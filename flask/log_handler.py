@@ -44,7 +44,7 @@ _LEVEL_NO    = {l: getattr(logging, l) for l in VALID_LEVELS}
 # Per-module settings  { module: {'enabled': bool, 'level': 'DEBUG'} }
 # ---------------------------------------------------------------------------
 _settings_lock = threading.Lock()
-_settings = {m: {'enabled': True, 'level': 'DEBUG'} for m in ALL_MODULES}
+_settings = {m: {'enabled': False, 'level': 'DEBUG'} for m in ALL_MODULES}
 
 def _is_allowed(module: str, level: str) -> bool:
     """Return True if this log entry should be shown/stored."""

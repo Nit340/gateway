@@ -879,7 +879,11 @@ def _flush_all_pending():
         return
     for svc in services:
         _flush_pending_for_service(client, svc)
-    _flush_pending_network_route(client)
+    # Only flush network_route_select if the network_status service is already
+    # present -- must not be sent before that service has appeared, matching
+    # the same SERVICE_ADDED gate used in the pipeline event handler.
+    if "network_status" in services:
+        _flush_pending_network_route(client)
 
 
 # ============================================================================
@@ -952,8 +956,10 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                 client.watch("loadcell_config")
                                 logger.info("[PIPELINE] Watching 'loadcell_config' for storage sync")
                             
-                            # Flush any pending network route as soon as we connect
-                            _flush_pending_network_route(client)
+                            # NOTE: network_route_select is intentionally NOT flushed here.
+                            # It must wait until the network_status SERVICE_ADDED event fires
+                            # so the network service is ready to receive it (same queue pattern
+                            # as modbus/loadcell/iot_gateway configs).
                         else:
                             client.refresh()
                     except Exception as e:
@@ -975,10 +981,16 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                     logger.info("[PIPELINE] SERVICE_ADDED: '{}'".format(svc))
                     with pipeline_state["lock"]:
                         pipeline_state["connected_services"].add(svc)
-                    # Flush any config that was queued waiting for this service.
-                    # NOTE: network_route_select is a global datapoint (no service owner),
-                    # so it is flushed on PIPELINE_CONNECTED only -- NOT here.
+                    # Flush any config queued waiting for this service.
                     _flush_pending_for_service(client, svc)
+                    # network_route_select must be sent to the network_status
+                    # service -- only flush it once that service has appeared,
+                    # exactly like modbus/loadcell/iot_gateway wait for their
+                    # own SERVICE_ADDED before sending.
+                    _NET_ROUTE_SERVICE = "network_status"
+                    if svc == _NET_ROUTE_SERVICE:
+                        logger.info("[NET-ROUTE] '{}' service appeared -- flushing pending network route".format(svc))
+                        _flush_pending_network_route(client)
 
                 # -- Service removed --------------------------------------
                 elif etype == EventType.SERVICE_REMOVED:
@@ -2452,9 +2464,10 @@ def _build_current_modbus_config():
                 ed.offset,
                 ed.unit,
                 ed.writable,
-                1   AS retry_count,
-                100 AS timeout_ms,
-                1   AS register_count,
+                ed.retry_count,
+                ed.timeout_ms,
+                ed.register_count,
+                tg.name         AS group_name,
                 e.name          AS device_name,
                 e.protocol      AS ext_protocol,
                 e.serial_port,
@@ -2471,6 +2484,7 @@ def _build_current_modbus_config():
                 e.polling_interval_ms
             FROM external_datapoints ed
             JOIN external_device e ON ed.device_id = e.id
+            LEFT JOIN tag_groups tg ON tg.id = ed.group_id
             WHERE ed.enabled = 1
               AND e.enabled  = 1
               AND e.protocol IN ('ext-rtu', 'ext-tcp')
@@ -2516,7 +2530,7 @@ def _build_current_modbus_config():
                         "maxRetries":        r.get('max_retries') or 2,
                         "pollingIntervalMs": r.get('polling_interval_ms') or 300,
                     }
-            assets.append({
+            asset = {
                 "name":          r['tag_name'],
                 "connection_id": name,
                 "slaveId":       r['slave_id'] or r.get('device_slave_id') or 1,
@@ -2524,14 +2538,18 @@ def _build_current_modbus_config():
                 "address":       r['register_address'] or 0,
                 "registerCount": r['register_count'] or 1,
                 "dataType":      r['data_type'] or 'uint16',
-                "scale":         r['scale_factor'] or 1.0,
-                "offset":        r['offset'] or 0.0,
+                "scale":         r['scale_factor'] if r['scale_factor'] is not None else 1.0,
+                "offset":        r['offset'] if r['offset'] is not None else 0.0,
                 "byteOrder":     r['byte_order'] or 'big',
                 "wordOrder":     r['word_order'] or 'big',
-                "retryCount":    r['retry_count'] or 1,
-                "timeoutMs":     r['timeout_ms'] or 100,
+                "retryCount":    r['retry_count'] if r['retry_count'] is not None else 3,
+                "timeoutMs":     r['timeout_ms'] if r['timeout_ms'] is not None else 1000,
                 "writable":      bool(r['writable']),
-            })
+            }
+            # Only include "group" field when a group is assigned
+            if r['group_name']:
+                asset["group"] = r['group_name']
+            assets.append(asset)
 
         new_version = get_next_pipeline_version("modbus")
         config = {

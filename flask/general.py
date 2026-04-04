@@ -1484,6 +1484,24 @@ async def put_config_handler(request):
     except Exception:
         return web.json_response({'success': False, 'message': 'Invalid JSON'}, status=400)
 
+    # Validate heartbeat fields — reject negative values
+    heartbeat = data.get('heartbeat', {})
+    if isinstance(heartbeat, dict):
+        for field in ('interval', 'offline_threshold'):
+            val = heartbeat.get(field)
+            if val is not None:
+                try:
+                    if int(val) < 0:
+                        return web.json_response(
+                            {'success': False, 'message': 'heartbeat.{} cannot be negative'.format(field)},
+                            status=400
+                        )
+                except (TypeError, ValueError):
+                    return web.json_response(
+                        {'success': False, 'message': 'heartbeat.{} must be an integer'.format(field)},
+                        status=400
+                    )
+
     try:
         success = update_general_configuration(data)
     except Exception as e:
