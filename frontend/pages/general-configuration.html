@@ -15,21 +15,21 @@
         font-weight: 500;
         color: #475569;
     }
-    
+
     .net-tab.active {
         background: #2563EB;
         color: white;
     }
-    
+
     .net-tab.active i {
         color: white;
     }
-    
+
     .net-tab:hover:not(.active) {
         background: #EFF6FF;
         color: #1E40AF;
     }
-    
+
     /* Signal strength bars - matching the exact theme */
     .signal-strength {
         display: flex;
@@ -37,62 +37,62 @@
         gap: 3px;
         height: 24px;
     }
-    
+
     .signal-bar {
         width: 6px;
         border-radius: 2px;
         transition: background-color 0.3s;
         background-color: #E2E8F0;
     }
-    
+
     .signal-bar.excellent {
         background-color: #10B981;
     }
-    
+
     .signal-bar.good {
         background-color: #3B82F6;
     }
-    
+
     .signal-bar.fair {
         background-color: #F59E0B;
     }
-    
+
     .signal-bar.poor {
         background-color: #EF4444;
     }
-    
+
     .signal-bar.none {
         background-color: #E2E8F0;
     }
 
     /* Section badges - matching exact theme */
-    .badge-primary { 
-        background: #EFF6FF; 
-        color: #2563EB; 
+    .badge-primary {
+        background: #EFF6FF;
+        color: #2563EB;
         font-size: 0.75rem;
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
     }
-    
-    .badge-success { 
-        background: #F0FDF4; 
-        color: #10B981; 
+
+    .badge-success {
+        background: #F0FDF4;
+        color: #10B981;
         font-size: 0.75rem;
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
     }
-    
-    .badge-warning { 
-        background: #FFF7ED; 
-        color: #F59E0B; 
+
+    .badge-warning {
+        background: #FFF7ED;
+        color: #F59E0B;
         font-size: 0.75rem;
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
     }
-    
-    .badge-slate { 
-        background: #F1F5F9; 
-        color: #475569; 
+
+    .badge-slate {
+        background: #F1F5F9;
+        color: #475569;
         font-size: 0.75rem;
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
@@ -102,19 +102,33 @@
     .gc-toast {
         animation: slideIn 0.3s ease-out;
     }
-    
+
     .gc-toast.hide {
         animation: slideOut 0.3s ease-in forwards;
     }
-    
+
     @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
     }
-    
+
     @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
     }
 
     /* Radio button styling - matching exact theme */
@@ -130,13 +144,13 @@
         cursor: pointer;
         transition: all 0.2s;
     }
-    
+
     input[type="radio"]:checked {
         border-color: #2563EB;
         background-color: #2563EB;
         box-shadow: inset 0 0 0 3px white;
     }
-    
+
     input[type="radio"]:focus {
         outline: none;
         ring: 2px solid #2563EB;
@@ -160,10 +174,23 @@
         transition: background 0.12s;
         border-bottom: 1px solid #f1f5f9;
     }
-    .wifi-network-item:last-child { border-bottom: none; }
-    .wifi-network-item:hover  { background: #EFF6FF; }
-    .wifi-network-item.selected { background: #EFF6FF; }
-    .wifi-network-item.selected .wifi-net-name { color: #2563EB; font-weight: 600; }
+
+    .wifi-network-item:last-child {
+        border-bottom: none;
+    }
+
+    .wifi-network-item:hover {
+        background: #EFF6FF;
+    }
+
+    .wifi-network-item.selected {
+        background: #EFF6FF;
+    }
+
+    .wifi-network-item.selected .wifi-net-name {
+        color: #2563EB;
+        font-weight: 600;
+    }
 
     /* Mini signal arc bars (4 arcs, like a phone) */
     .wifi-signal-icon {
@@ -172,6 +199,7 @@
         height: 14px;
         flex-shrink: 0;
     }
+
     .wifi-signal-icon span {
         position: absolute;
         bottom: 0;
@@ -180,23 +208,60 @@
         border: 2px solid #CBD5E1;
         transform: translateX(-50%);
     }
-    .wifi-signal-icon span.lit { border-color: #2563EB; }
-    .wifi-signal-icon span.lit.fair   { border-color: #F59E0B; }
-    .wifi-signal-icon span.lit.poor   { border-color: #EF4444; }
-    .wifi-signal-icon .arc1 { width:4px;  height:4px;  }
-    .wifi-signal-icon .arc2 { width:8px;  height:8px;  }
-    .wifi-signal-icon .arc3 { width:12px; height:12px; }
-    .wifi-signal-icon .arc4 { width:16px; height:16px; }
+
+    .wifi-signal-icon span.lit {
+        border-color: #2563EB;
+    }
+
+    .wifi-signal-icon span.lit.fair {
+        border-color: #F59E0B;
+    }
+
+    .wifi-signal-icon span.lit.poor {
+        border-color: #EF4444;
+    }
+
+    .wifi-signal-icon .arc1 {
+        width: 4px;
+        height: 4px;
+    }
+
+    .wifi-signal-icon .arc2 {
+        width: 8px;
+        height: 8px;
+    }
+
+    .wifi-signal-icon .arc3 {
+        width: 12px;
+        height: 12px;
+    }
+
+    .wifi-signal-icon .arc4 {
+        width: 16px;
+        height: 16px;
+    }
 
     /* Scanning pulse animation */
     @keyframes wifiScanPulse {
-        0%,100% { opacity:1; } 50% { opacity:0.35; }
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.35;
+        }
     }
-    .wifi-scanning .wifi-network-item { animation: wifiScanPulse 1s infinite; }
+
+    .wifi-scanning .wifi-network-item {
+        animation: wifiScanPulse 1s infinite;
+    }
+
     section {
         transition: all 0.2s ease;
     }
-    
+
     section:hover {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     }
@@ -204,20 +269,21 @@
 
 <!-- Main Content -->
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    
+
     <!-- Page Header - matching exact theme -->
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-slate-900">General Configuration</h1>
-        <p class="text-slate-500 text-sm mt-1">Establish gateway identity, network, time, and operational behavior. Required before activating any device, safety logic, or protocol communication.</p>
+        <p class="text-slate-500 text-sm mt-1">Establish gateway identity, network, time, and operational behavior.
+            Required before activating any device, safety logic, or protocol communication.</p>
     </div>
 
     <div class="space-y-8">
-        
+
         <!-- SECTION A: Gateway Identity -->
         <section id="section-identity" class="bg-white rounded-xl shadow-sm border border-border p-6">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-regular fa-id-card mr-2 text-primary"></i> 
+                    <i class="fa-regular fa-id-card mr-2 text-primary"></i>
                     <span class="mr-2">Gateway Identity</span>
                     <span class="text-xs font-normal text-slate-500">SECTION A</span>
                 </h2>
@@ -225,86 +291,92 @@
                     Required for ERP/Cloud Integration
                 </div>
             </div>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Gateway Name -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">
                         Gateway Name <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" name="gateway-name" value="Univa-GW-01" 
+                    <input type="text" name="gateway-name" value="Univa-GW-01"
                         class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary placeholder-slate-400"
                         placeholder="Enter gateway name">
                     <p class="text-xs text-slate-500 mt-1">Human-readable ID used in cloud UI dashboards</p>
                 </div>
-                
+
                 <!-- Serial Number -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Serial Number</label>
                     <div class="relative">
-                        <input type="text" name="serial-number" value="GW2025-1190021" readonly 
+                        <input type="text" name="serial-number" value="GW2025-1190021" readonly
                             class="w-full bg-slate-100 font-mono rounded-lg border-slate-200 border px-3 py-2 text-sm text-slate-600">
                         <i class="fa-solid fa-lock absolute right-3 top-2.5 text-slate-400 text-xs"></i>
                     </div>
                 </div>
-                
+
                 <!-- Deployment Site -->
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-slate-700 mb-1">
                         Deployment Site <span class="text-red-500">*</span>
                     </label>
-                    <input type="text" name="deployment-site" value="Chennai Port - Zone A" 
+                    <input type="text" name="deployment-site" value="Chennai Port - Zone A"
                         class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                         placeholder="Site name or description">
                 </div>
-                
-               <!-- Location Mode -->
-<div class="md:col-span-2">
-    <label class="block text-sm font-medium text-slate-700 mb-3">Location Mode</label>
-    <div class="flex items-center space-x-6">
-        <label class="flex items-center cursor-pointer">
-            <input type="radio" name="location-mode" value="manual" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-            <span class="ml-2 text-sm text-slate-700">Manual Entry</span>
-        </label>
-        <div class="relative group">
-            <label class="flex items-center cursor-not-allowed opacity-50">
-                <input type="radio" name="location-mode" value="gps" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" disabled>
-                <span class="ml-2 text-sm text-slate-500">GPS Automatic</span>
-            </label>
-            <!-- Tooltip -->
-            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-10">
-                <i class="fa-solid fa-circle-exclamation mr-1"></i>
-                Current hardware does not have GPS
-                <!-- Tooltip arrow -->
-                <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
-            </div>
-        </div>
-    </div>
-</div>
-                
+
+                <!-- Location Mode -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700 mb-3">Location Mode</label>
+                    <div class="flex items-center space-x-6">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="location-mode" value="manual"
+                                class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                            <span class="ml-2 text-sm text-slate-700">Manual Entry</span>
+                        </label>
+                        <div class="relative group">
+                            <label class="flex items-center cursor-not-allowed opacity-50">
+                                <input type="radio" name="location-mode" value="gps"
+                                    class="h-4 w-4 text-primary focus:ring-primary border-slate-300" disabled>
+                                <span class="ml-2 text-sm text-slate-500">GPS Automatic</span>
+                            </label>
+                            <!-- Tooltip -->
+                            <div
+                                class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-10">
+                                <i class="fa-solid fa-circle-exclamation mr-1"></i>
+                                Current hardware does not have GPS
+                                <!-- Tooltip arrow -->
+                                <div
+                                    class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Latitude & Longitude -->
                 <div class="grid grid-cols-2 gap-4 md:col-span-2">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Latitude</label>
-                        <input type="text" name="latitude" value="12.99123" 
+                        <input type="text" name="latitude" value="12.99123"
                             class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                             placeholder="0.000000">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Longitude</label>
-                        <input type="text" name="longitude" value="80.12312" 
+                        <input type="text" name="longitude" value="80.12312"
                             class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                             placeholder="0.000000">
                     </div>
                 </div>
-                
+
                 <!-- Asset ID -->
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-slate-700 mb-1">Asset/Crane ID</label>
-                    <input type="text" name="asset-id" value="CRN-CT-12" 
+                    <input type="text" name="asset-id" value="CRN-CT-12"
                         class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                         placeholder="Optional asset identifier">
-                    <p class="text-xs text-slate-500 mt-1">Used by CraneIQ for zoning, map overlays, and anti-collision</p>
+                    <p class="text-xs text-slate-500 mt-1">Used by CraneIQ for zoning, map overlays, and anti-collision
+                    </p>
                 </div>
             </div>
         </section>
@@ -313,7 +385,7 @@
         <section id="section-time" class="bg-white rounded-xl shadow-sm border border-border p-6">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-regular fa-clock mr-2 text-primary"></i> 
+                    <i class="fa-regular fa-clock mr-2 text-primary"></i>
                     <span class="mr-2">Date, Time &amp; Localization</span>
                     <span class="text-xs font-normal text-slate-500">SECTION B</span>
                 </h2>
@@ -322,29 +394,32 @@
                 </div>
             </div>
 
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Timezone -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">
                         Active Timezone <span class="text-red-500">*</span>
                     </label>
-                    <select name="timezone" id="timezone-select" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                    <select name="timezone" id="timezone-select"
+                        class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
                         <option value="Asia/Kolkata">IST -- Asia/Kolkata (GMT+05:30)</option>
                         <option value="UTC">UTC -- Coordinated Universal Time (GMT+00:00)</option>
                         <option value="Europe/London">GMT -- Europe/London (GMT+00:00)</option>
                         <option value="Asia/Shanghai">CST -- Asia/Shanghai, China (GMT+08:00)</option>
                         <option value="Asia/Tokyo">JST -- Asia/Tokyo, Japan (GMT+09:00)</option>
                     </select>
-                    <p class="text-xs text-slate-500 mt-1">System time is set from the NTP server then converted to this timezone</p>
+                    <p class="text-xs text-slate-500 mt-1">System time is set from the NTP server then converted to this
+                        timezone</p>
                 </div>
-                
+
                 <!-- NTP Server -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">
                         NTP Server <span class="text-red-500">*</span>
                     </label>
-                    <select name="ntp-server" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                    <select name="ntp-server"
+                        class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
                         <option value="time.google.com">time.google.com (Google)</option>
                         <option value="pool.ntp.org">pool.ntp.org (NTP Pool Project)</option>
                     </select>
@@ -353,17 +428,19 @@
                 <!-- Date Format -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Date Format</label>
-                    <select name="date-format" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                    <select name="date-format"
+                        class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
                         <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                         <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                         <option value="YYYY-MM-DD">YYYY-MM-DD</option>
                     </select>
                 </div>
-                
+
                 <!-- Time Format -->
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Time Format</label>
-                    <div class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-50 text-slate-600 flex items-center justify-between">
+                    <div
+                        class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-50 text-slate-600 flex items-center justify-between">
                         <span>24-Hour Format (24:00)</span>
                         <i class="fa-solid fa-lock text-[10px] text-slate-400"></i>
                     </div>
@@ -380,11 +457,13 @@
                             class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary font-mono w-36">
                         <input type="text" name="time" placeholder="HH:MM"
                             class="rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary font-mono w-28">
-                        <button type="button" class="sync-time-btn text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors">
+                        <button type="button"
+                            class="sync-time-btn text-primary hover:text-primaryHover font-medium text-sm px-4 py-2 border border-primary/30 rounded-lg hover:bg-blue-50 transition-colors">
                             <i class="fa-solid fa-rotate mr-2"></i> Sync Now
                         </button>
                     </div>
-                    <p class="text-xs text-slate-500 mt-1">Showing current time in <strong id="manual-tz-hint">IST (UTC+05:30)</strong>  updates live with timezone &amp; format selection</p>
+                    <p class="text-xs text-slate-500 mt-1">Showing current time in <strong id="manual-tz-hint">IST
+                            (UTC+05:30)</strong> updates live with timezone &amp; format selection</p>
                 </div>
             </div>
         </section>
@@ -399,13 +478,16 @@
                 </h2>
                 <div class="flex items-center gap-3">
                     <!-- Live indicator (auto-connected) -->
-                    <span id="live-btn-network" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 transition-colors"><i class="fa-solid fa-tower-broadcast"></i> Live</span>
+                    <span id="live-btn-network"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-slate-400 transition-colors"><i
+                            class="fa-solid fa-tower-broadcast"></i> Live</span>
                     <div class="badge-warning">Defines MQTT, Modbus TCP, OTA, and Cloud API connections</div>
                 </div>
             </div>
 
-                        <!-- WebSocket connection status bar -->
-            <div id="net-ws-status" class="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs">
+            <!-- WebSocket connection status bar -->
+            <div id="net-ws-status"
+                class="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs">
                 <i class="fa-solid fa-circle-notch fa-spin text-slate-400" id="net-ws-icon"></i>
                 <span id="net-ws-status-text">Connecting to live network data...</span>
             </div>
@@ -415,21 +497,26 @@
                 <label class="block text-sm font-medium text-slate-700 mb-3">Network Mode</label>
                 <div class="flex flex-wrap items-center gap-4 mb-3">
                     <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="network-mode" value="ethernet" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-ethernet mr-2"></i> Ethernet</span>
+                        <input type="radio" name="network-mode" value="ethernet"
+                            class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i
+                                class="fa-solid fa-ethernet mr-2"></i> Ethernet</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="network-mode" value="wifi" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-wifi mr-2"></i> WiFi</span>
+                        <input type="radio" name="network-mode" value="wifi"
+                            class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i
+                                class="fa-solid fa-wifi mr-2"></i> WiFi</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="network-mode" value="lte" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
+                        <input type="radio" name="network-mode" value="lte"
+                            class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i
+                                class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
                     </label>
 
                     <!-- Auto-Connect toggle -->
-                    <button type="button" id="wifi-auto-connect-btn"
-                        title="Auto Connect"
+                    <button type="button" id="wifi-auto-connect-btn" title="Auto Connect"
                         class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 text-slate-500 bg-white hover:bg-slate-50 transition-all"
                         aria-pressed="false">
                         <span id="ac-track"
@@ -448,31 +535,45 @@
 
                 <!-- Live status cards: hidden until Live connected -->
                 <div id="eth-live-panel" class="mb-4 grid grid-cols-2 gap-3">
-                    <div id="eth0-card" class="relative cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all focus:outline-none" tabindex="0">
+                    <div id="eth0-card"
+                        class="relative cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all focus:outline-none"
+                        tabindex="0">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth0</span>
-                                <span id="eth0-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                                <span id="eth0-state-badge"
+                                    class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                             </div>
-                            <div id="eth0-radio" class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors">
-                                <i id="eth0-radio-icon" class="fa-solid fa-check text-[10px] text-white opacity-0 transition-opacity"></i>
+                            <div id="eth0-radio"
+                                class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors">
+                                <i id="eth0-radio-icon"
+                                    class="fa-solid fa-check text-[10px] text-white opacity-0 transition-opacity"></i>
                             </div>
                         </div>
-                        <div class="text-xs text-slate-500 mt-2">IP &nbsp;<span id="eth0-ip"  class="font-mono text-slate-800">--</span></div>
-                        <div class="text-xs text-slate-500">MAC <span id="eth0-mac" class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500 mt-2">IP &nbsp;<span id="eth0-ip"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500">MAC <span id="eth0-mac"
+                                class="font-mono text-slate-800">--</span></div>
                     </div>
-                    <div id="eth1-card" class="relative cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all focus:outline-none" tabindex="0">
+                    <div id="eth1-card"
+                        class="relative cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-1.5 transition-all focus:outline-none"
+                        tabindex="0">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">eth1</span>
-                                <span id="eth1-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                                <span id="eth1-state-badge"
+                                    class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                             </div>
-                            <div id="eth1-radio" class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors">
-                                <i id="eth1-radio-icon" class="fa-solid fa-check text-[10px] text-white opacity-0 transition-opacity"></i>
+                            <div id="eth1-radio"
+                                class="w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors">
+                                <i id="eth1-radio-icon"
+                                    class="fa-solid fa-check text-[10px] text-white opacity-0 transition-opacity"></i>
                             </div>
                         </div>
-                        <div class="text-xs text-slate-500 mt-2">IP &nbsp;<span id="eth1-ip"  class="font-mono text-slate-800">--</span></div>
-                        <div class="text-xs text-slate-500">MAC <span id="eth1-mac" class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500 mt-2">IP &nbsp;<span id="eth1-ip"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div class="text-xs text-slate-500">MAC <span id="eth1-mac"
+                                class="font-mono text-slate-800">--</span></div>
                     </div>
                 </div>
 
@@ -487,7 +588,8 @@
                 <div id="wifi-live-panel" class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <!-- state + signal bars row -->
                     <div class="flex items-center justify-between mb-2">
-                        <span id="wifi-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        <span id="wifi-state-badge"
+                            class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                         <div class="flex items-center gap-2">
                             <div class="signal-strength" id="wifi-signal-bars">
                                 <div class="signal-bar none" style="height:4px"></div>
@@ -500,8 +602,8 @@
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-500">
-                        <div>IP &nbsp;&nbsp;<span id="wifi-ip"   class="font-mono text-slate-800">--</span></div>
-                        <div>MAC &nbsp;<span id="wifi-mac"  class="font-mono text-slate-800">--</span></div>
+                        <div>IP &nbsp;&nbsp;<span id="wifi-ip" class="font-mono text-slate-800">--</span></div>
+                        <div>MAC &nbsp;<span id="wifi-mac" class="font-mono text-slate-800">--</span></div>
                         <div>BSSID <span id="wifi-bssid" class="font-mono text-slate-800">--</span></div>
                         <div>Freq &nbsp;<span id="wifi-freq" class="font-mono text-slate-800">--</span></div>
                     </div>
@@ -510,22 +612,24 @@
                 <!-- Editable fields (SSID + password only) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID <span
+                                class="text-red-500">*</span></label>
 
                         <!-- SSID display + Scan button -->
                         <div class="flex gap-2">
-                            <div class="flex-1 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+                            <div
+                                class="flex-1 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
                                 <i class="fa-solid fa-wifi text-primary text-xs flex-shrink-0"></i>
                                 <span id="wifi-ssid-label" class="truncate text-slate-800"></span>
                             </div>
-                            <button type="button" id="wifi-scan-btn"
-                                title="Select Network"
+                            <button type="button" id="wifi-scan-btn" title="Select Network"
                                 class="flex items-center justify-center w-10 h-9 rounded-lg border border-primary text-primary bg-white hover:bg-blue-50 transition-colors flex-shrink-0">
                                 <i class="fa-solid fa-rotate text-sm" id="wifi-scan-icon"></i>
                             </button>
                         </div>
                         <input type="hidden" name="wifi-ssid" id="wifi-ssid-value" value="Univa-Guest">
-                        <p class="text-xs text-slate-500 mt-1" id="wifi-ssid-hint">Click Select Network to find available networks</p>
+                        <p class="text-xs text-slate-500 mt-1" id="wifi-ssid-hint">Click Select Network to find
+                            available networks</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
@@ -533,7 +637,8 @@
                             <input type="password" name="wifi-password" value="password123"
                                 class="wifi-password-input w-full rounded-lg border-slate-300 border px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                 placeholder="WiFi password">
-                            <button type="button" class="toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-primary">
+                            <button type="button"
+                                class="toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-primary">
                                 <i class="fa-solid fa-eye"></i>
                             </button>
                         </div>
@@ -546,7 +651,8 @@
                 <h3 class="text-sm font-semibold text-slate-900 mb-3">Cellular / LTE Configuration</h3>
 
                 <!-- Power-off alert: shown ONLY when power = 0. No other live UI shown. -->
-                <div id="lte-power-off-alert" class="hidden mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                <div id="lte-power-off-alert"
+                    class="hidden mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
                     <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>
                     <span>No GSM / LTE modem detected &mdash; hardware power state is off.</span>
                 </div>
@@ -554,23 +660,32 @@
                 <!-- Live status strip: shown only when power = 1 AND Live connected -->
                 <div id="lte-live-panel" class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="flex items-center justify-between mb-2">
-                        <span id="lte-state-badge" class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        <span id="lte-state-badge"
+                            class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-slate-400">Signal</span>
                             <div class="w-28 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                <div id="lte-signal-fill" class="h-full bg-emerald-500 rounded-full transition-all" style="width:0%"></div>
+                                <div id="lte-signal-fill" class="h-full bg-emerald-500 rounded-full transition-all"
+                                    style="width:0%"></div>
                             </div>
                             <span id="lte-signal-pct" class="text-xs font-mono text-slate-600">--%</span>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-500">
-                        <div>IP &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-ip"            class="font-mono text-slate-800">--</span></div>
-                        <div>Operator &nbsp;<span id="lte-operator-name" class="font-mono text-slate-800">--</span></div>
-                        <div>Op ID &nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-operator-id"   class="font-mono text-slate-800">--</span></div>
-                        <div>Tech &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-tech"          class="font-mono text-slate-800">--</span></div>
-                        <div>IMEI &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-imei"          class="font-mono text-slate-800">--</span></div>
-                        <div>ICCID &nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-iccid"         class="font-mono text-slate-800">--</span></div>
-                        <div>IMSI &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-imsi"          class="font-mono text-slate-800">--</span></div>
+                        <div>IP &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-ip"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div>Operator &nbsp;<span id="lte-operator-name" class="font-mono text-slate-800">--</span>
+                        </div>
+                        <div>Op ID &nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-operator-id"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div>Tech &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-tech"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div>IMEI &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-imei"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div>ICCID &nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-iccid"
+                                class="font-mono text-slate-800">--</span></div>
+                        <div>IMSI &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="lte-imsi"
+                                class="font-mono text-slate-800">--</span></div>
                     </div>
                 </div>
 
@@ -583,16 +698,19 @@
                     <label class="block text-sm font-medium text-slate-700 mb-3">Hardware Addresses </label>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div id="global-mac-eth-row" style="display:none;">
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Ethernet MAC</div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Ethernet MAC
+                            </div>
                             <div class="font-mono text-xs text-slate-800" id="global-mac-eth">--</div>
                             <div class="text-[9px] text-slate-400 mt-0.5" id="global-mac-eth-label">Auto</div>
                         </div>
                         <div id="global-mac-wifi-row" style="display:none;">
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">WiFi MAC</div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">WiFi MAC
+                            </div>
                             <div class="font-mono text-xs text-slate-800" id="global-mac-wifi">--</div>
                         </div>
                         <div id="global-mac-lte-row" style="display:none;">
-                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">LTE (IMEI)</div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">LTE (IMEI)
+                            </div>
                             <div class="font-mono text-xs text-slate-800" id="global-mac-lte">--</div>
                         </div>
                     </div>
@@ -604,7 +722,7 @@
         <section id="section-heartbeat" class="bg-white rounded-xl shadow-sm border border-border p-6">
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-slate-800 flex items-center">
-                    <i class="fa-solid fa-heart-pulse mr-2 text-primary"></i> 
+                    <i class="fa-solid fa-heart-pulse mr-2 text-primary"></i>
                     <span class="mr-2">System Heartbeat & Cloud Health</span>
                     <span class="text-xs font-normal text-slate-500">SECTION D</span>
                 </h2>
@@ -612,12 +730,12 @@
                     Monitors gateway connectivity
                 </div>
             </div>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Heartbeat Interval</label>
                     <div class="flex items-center">
-                        <input type="number" name="heartbeat-interval" value="30" min="10" max="3600" 
+                        <input type="number" name="heartbeat-interval" value="30" min="10" max="3600"
                             class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                         <span class="ml-2 text-sm text-slate-700">seconds</span>
                     </div>
@@ -626,7 +744,7 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Offline Threshold</label>
                     <div class="flex items-center">
-                        <input type="number" name="offline-threshold" value="120" min="30" max="3600" 
+                        <input type="number" name="offline-threshold" value="120" min="30" max="3600"
                             class="w-32 rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                         <span class="ml-2 text-sm text-slate-700">seconds</span>
                     </div>
@@ -636,18 +754,22 @@
         </section>
 
     </div>
-    
+
     <!-- Footer with Action Buttons - matching exact theme -->
     <footer class="mt-8 pb-8">
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
+        <div
+            class="flex flex-col sm:flex-row items-center justify-between gap-4 p-6 bg-white rounded-xl shadow-sm border border-border">
             <div class="text-sm text-slate-500">
-                <p><i class="fa-solid fa-circle-info mr-1"></i> Fields marked with <span class="text-red-500">*</span> are required for gateway operation.</p>
+                <p><i class="fa-solid fa-circle-info mr-1"></i> Fields marked with <span class="text-red-500">*</span>
+                    are required for gateway operation.</p>
             </div>
             <div class="flex items-center space-x-4">
-                <button type="button" id="refresh-btn" class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                <button type="button" id="refresh-btn"
+                    class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                     <i class="fa-solid fa-rotate mr-2"></i> Refresh
                 </button>
-                <button type="button" id="save-btn" class="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-sm">
+                <button type="button" id="save-btn"
+                    class="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primaryHover rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary shadow-sm">
                     <i class="fa-solid fa-floppy-disk mr-2"></i> Save Changes
                 </button>
             </div>
@@ -656,13 +778,15 @@
 </div>
 
 <!-- Full page loader override -->
-<div id="gc-page-loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+<div id="gc-page-loader"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
     <div class="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center min-w-[300px]">
         <div id="gc-loader-icon-container" class="mb-4">
             <i class="fa-solid fa-circle-notch fa-spin text-4xl text-primary"></i>
         </div>
         <div class="text-lg font-semibold text-slate-800" id="gc-loader-main">Processing</div>
-        <div class="text-sm text-slate-500 mt-1 text-center" id="gc-loader-sub">Please wait while settings are applied...</div>
+        <div class="text-sm text-slate-500 mt-1 text-center" id="gc-loader-sub">Please wait while settings are
+            applied...</div>
     </div>
 </div>
 
@@ -670,22 +794,27 @@
 <div id="net-switching-modal" class="fixed inset-0 z-[100] hidden">
     <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden transform transition-all">
+        <div
+            class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden transform transition-all">
             <div class="p-8 text-center" id="net-switching-content">
                 <!-- Loading Animation - Simple Spinner -->
                 <div class="mb-6 flex justify-center">
                     <div class="relative w-16 h-16">
                         <div class="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-                        <div class="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <div
+                            class="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin">
+                        </div>
                     </div>
                 </div>
-                
+
                 <h3 id="net-switching-title" class="text-xl font-bold text-slate-900 mb-2">Switching Network...</h3>
-                <p id="net-switching-text" class="text-slate-500 text-sm">Please wait while we reconfigure your connection.</p>
-                
+                <p id="net-switching-text" class="text-slate-500 text-sm">Please wait while we reconfigure your
+                    connection.</p>
+
                 <!-- Progress bar -->
                 <div class="mt-8 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div id="net-switching-progress" class="bg-primary h-full w-0 transition-all duration-300 ease-linear"></div>
+                    <div id="net-switching-progress"
+                        class="bg-primary h-full w-0 transition-all duration-300 ease-linear"></div>
                 </div>
             </div>
         </div>
@@ -693,6 +822,7 @@
 </div>
 
 <!-- Toast Container -->
-<div id="gc-toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2"></div>
+<div id="gc-toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2">
+</div>
 
 <!-- REMOVED the inline script that was causing double initialization

@@ -432,10 +432,23 @@ async def webui_login_api(request):
     max_sessions = get_webui_user_max_sessions(user['id'])
     active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
     if len(active_tokens) >= max_sessions:
-        if max_sessions == 1:
-            return web.json_response({'success': False, 'error': 'Session limit is 1. Another user is already logged in.'}, status=403)
-        else:
-            return web.json_response({'success': False, 'error': 'Session limit reached. Cannot allow more concurrent view-only sessions.'}, status=403)
+        # Instead of rejecting, we kick out the user's oldest session. This perfectly handles scenarios
+        # where the user's device changes IP (Wi-Fi to LTE) and initiates a new connection with the
+        # same credentials without explicitly logging out.
+        oldest_token = None
+        oldest_time = None
+        for t in active_tokens:
+            login_time = WEBUI_SESSIONS[t].get('logged_in_at', '')
+            if not oldest_time or login_time < oldest_time:
+                oldest_token = t
+                oldest_time = login_time
+        
+        if oldest_token:
+            WEBUI_SESSIONS.pop(oldest_token, None)
+            try:
+                WEBUI_USER_TOKENS[user['username']].remove(oldest_token)
+            except ValueError:
+                pass
 
     # Enforce global session limit (max 2 sessions total across all users)
     if len(WEBUI_SESSIONS) >= 2:
@@ -777,6 +790,24 @@ async def start_background_tasks(app):
                     else:
                         logger.info("[MAIN] Startup unit update skipped -- client={} lc_svc={}".format(
                             bool(_client), _lc_svc))
+
+                    # Force network route based on auto_connect
+                    try:
+                        _cur = _conn.cursor() # Needs to be re-opened or just a new query
+                        _conn = _gdc()
+                        _cur = _conn.cursor()
+                        _cur.execute("SELECT auto_connect, network_mode FROM general_configuration LIMIT 1")
+                        _gc_row = _cur.fetchone()
+                        _conn.close()
+                        if _gc_row and _client:
+                            _auto = _gc_row[0]
+                            _mode = _gc_row[1]
+                            _target_route = 0 if _auto == 1 else (1 if _mode == 'lte' else (2 if _mode == 'wifi' else 3))
+                            _ok = _client.datapoint_update(None, 'network_route_select', _target_route)
+                            logger.info("[MAIN] Startup: Dispatched network_route_select={} (auto={}, mode={}) - ok={}".format(_target_route, _auto, _mode, _ok))
+                    except Exception as _ne:
+                        logger.error("[MAIN] Startup route update error: {}".format(_ne))
+
                 except Exception as _e:
                     logger.error("[MAIN] Startup unit update error: {}".format(_e))
             try:
@@ -1155,6 +1186,17 @@ def create_app():
     app.router.add_post('/api/admin/db/table/{table}', api_db_insert)
     app.router.add_put('/api/admin/db/table/{table}/{id}', api_db_update)
     app.router.add_delete('/api/admin/db/table/{table}/{id}', api_db_delete)
+    
+    async def api_save_factory_default(request):
+        import shutil, os
+        from database import DB_FILE
+        try:
+            factory_db = os.path.join(os.path.dirname(DB_FILE), 'factory_default.db')
+            shutil.copyfile(DB_FILE, factory_db)
+            return web.json_response({'success': True})
+        except Exception as e:
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+    app.router.add_post('/api/admin/save-factory-default', api_save_factory_default)
 
     app.router.add_get('/api/admin/users/admin', api_admin_users_get)
     app.router.add_post('/api/admin/users/admin', api_admin_users_post)

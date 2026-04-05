@@ -11,52 +11,52 @@
 
     var setInputValue = function (s, v) {
         if (v === undefined || v === null) return;
-        var el = $(s); if (el) { el.value = v; el.dispatchEvent(new Event('change', {bubbles:true})); }
+        var el = $(s); if (el) { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); }
     };
     var setRadioValue = function (s, v) {
         if (v === undefined || v === null) return;
         document.querySelectorAll(s).forEach(function (r) {
-            if (r.value === v) { r.checked = true; r.dispatchEvent(new Event('change', {bubbles:true})); }
+            if (r.value === v) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
         });
     };
     var setSelectValue = function (s, v) {
         if (v === undefined || v === null) return;
-        var el = $(s); if (el) { el.value = v; el.dispatchEvent(new Event('change', {bubbles:true})); }
+        var el = $(s); if (el) { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); }
     };
-    var getInputValue  = function (s) { var e=$(s); return e?e.value:''; };
-    var getRadioValue  = function (s) { var e=$(s+':checked'); return e?e.value:''; };
-    var getSelectValue = function (s) { var e=$(s); return e?e.value:''; };
+    var getInputValue = function (s) { var e = $(s); return e ? e.value : ''; };
+    var getRadioValue = function (s) { var e = $(s + ':checked'); return e ? e.value : ''; };
+    var getSelectValue = function (s) { var e = $(s); return e ? e.value : ''; };
 
-    var el  = function (id) { return document.getElementById(id); };
-    var txt = function (id, v) { var e=el(id); if(e && v!==undefined && v!==null && v!=='') e.textContent=v; };
-    var show = function (id) { var e=el(id); if(e) e.classList.remove('hidden'); };
-    var hide = function (id) { var e=el(id); if(e) e.classList.add('hidden'); };
-    var isUp = function (v)  { return v===1||v===true||v==='1'; };
+    var el = function (id) { return document.getElementById(id); };
+    var txt = function (id, v) { var e = el(id); if (e && v !== undefined && v !== null && v !== '') e.textContent = v; };
+    var show = function (id) { var e = el(id); if (e) e.classList.remove('hidden'); };
+    var hide = function (id) { var e = el(id); if (e) e.classList.add('hidden'); };
+    var isUp = function (v) { return v === 1 || v === true || v === '1'; };
 
     // =========================================================================
     // FIELD TIMESTAMP TRACKING FOR STALE DATA DETECTION
     // =========================================================================
     var _fieldTimestamps = {};
     var _FIELD_TIMEOUT = 30000; // 30 seconds - fields older than this are shown as "--"
-    
-    var updateFieldTimestamp = function(datapoint) {
+
+    var updateFieldTimestamp = function (datapoint) {
         _fieldTimestamps[datapoint] = Date.now();
     };
-    
-    var isFieldStale = function(datapoint) {
+
+    var isFieldStale = function (datapoint) {
         var ts = _fieldTimestamps[datapoint];
         if (!ts) return true;
-        
+
         // MAC addresses and IMEI/Serial should have a much longer timeout (1 hour)
         var timeout = _FIELD_TIMEOUT;
         if (datapoint.includes('.mac') || datapoint.includes('.imei') || datapoint.includes('.iccid') || datapoint.includes('.imsi')) {
             timeout = 3600000; // 1 hour
         }
-        
+
         return (Date.now() - ts) > timeout;
     };
-    
-    var markAllFieldsStale = function() {
+
+    var markAllFieldsStale = function () {
         // Clear all timestamps EXCEPT for hardware identifiers that don't change often
         var newTimestamps = {};
         for (var dp in _fieldTimestamps) {
@@ -76,11 +76,11 @@
             btn.parentNode.replaceChild(f, btn);
             f.addEventListener('click', function (e) {
                 e.preventDefault();
-                var inp  = this.closest('.relative').querySelector('input');
+                var inp = this.closest('.relative').querySelector('input');
                 var type = inp.getAttribute('type') === 'password' ? 'text' : 'password';
                 inp.setAttribute('type', type);
                 var ic = this.querySelector('i');
-                if (ic) ic.className = type==='password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+                if (ic) ic.className = type === 'password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
             });
         });
     };
@@ -89,13 +89,15 @@
     // NETWORK ROUTE SELECT  -- sends pipeline datapoint on radio/auto change
     //   "0": "auto", "1": "eth0", "2": "eth1", "3": "lte", "4": "wifi"
     // =========================================================================
-    var _ROUTE_MAP = { auto: 0, eth0: 1, eth1: 2, lte: 3, wifi: 4,
-                       ethernet: 1 /* radio value alias */ };
+    var _ROUTE_MAP = {
+        auto: 0, eth0: 1, eth1: 2, lte: 3, wifi: 4,
+        ethernet: 1 /* radio value alias */
+    };
 
     var showNetworkSwitchingModal = function (newMode) {
         var modal = el('net-switching-modal');
         var title = el('net-switching-title');
-        var text  = el('net-switching-text');
+        var text = el('net-switching-text');
         var progress = el('net-switching-progress');
         if (!modal) return;
 
@@ -104,23 +106,23 @@
         // For auto mode, show a simple "Auto switching mode" message without hitting the server
         if (newMode === 'auto') {
             if (title) title.textContent = 'Auto Switching Mode';
-            if (text)  text.textContent  = 'Gateway will automatically select the best available network.';
+            if (text) text.textContent = 'Gateway will automatically select the best available network.';
         } else {
             if (title) title.textContent = 'Switching to ' + newMode.toUpperCase() + '...';
-            if (text)  text.textContent  = 'Please wait while we reconfigure your connection.';
+            if (text) text.textContent = 'Please wait while we reconfigure your connection.';
         }
 
         modal.classList.remove('hidden');
         if (progress) {
             progress.style.transition = 'none';
             progress.style.width = '0%';
-            setTimeout(function() {
+            setTimeout(function () {
                 progress.style.transition = 'width ' + duration + 'ms linear';
                 progress.style.width = '100%';
             }, 50);
         }
 
-        setTimeout(function() {
+        setTimeout(function () {
             modal.classList.add('hidden');
             if (progress) {
                 progress.style.transition = 'none';
@@ -130,15 +132,15 @@
 
         // Best-effort fetch of custom modal text — silently ignored if server is unreachable
         fetch('/api/modals')
-        .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(modals) {
-            if (!modals) return;
-            var cfg = modals.find(function(m) { return m.intname === 'network-load'; });
-            if (cfg && cfg.modal_text && newMode !== 'auto') {
-                if (text) text.textContent = cfg.modal_text;
-            }
-        })
-        .catch(function() { /* server unreachable — already showing fallback text */ });
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (modals) {
+                if (!modals) return;
+                var cfg = modals.find(function (m) { return m.intname === 'network-load'; });
+                if (cfg && cfg.modal_text && newMode !== 'auto') {
+                    if (text) text.textContent = cfg.modal_text;
+                }
+            })
+            .catch(function () { /* server unreachable — already showing fallback text */ });
     };
 
 
@@ -146,18 +148,18 @@
     // =========================================================================
     // UPDATE GLOBAL MAC DISPLAY - shows only the MAC for the selected network mode
     // =========================================================================
-    var updateGlobalMacDisplay = function() {
+    var updateGlobalMacDisplay = function () {
         var mode = getRadioValue('[name="network-mode"]') || 'wifi';
-        
+
         // Hide all global MAC rows first
         var ethRow = el('global-mac-eth-row');
         var wifiRow = el('global-mac-wifi-row');
         var lteRow = el('global-mac-lte-row');
-        
+
         if (ethRow) ethRow.style.display = 'none';
         if (wifiRow) wifiRow.style.display = 'none';
         if (lteRow) lteRow.style.display = 'none';
-        
+
         // Show only the one for the selected mode and populate its value
         if (mode === 'ethernet') {
             if (ethRow) {
@@ -204,78 +206,78 @@
     // NETWORK MODE TAB
     // =========================================================================
     var setNetworkMode = function (mode) {
-        document.querySelectorAll('input[name="network-mode"]').forEach(function (r) { r.checked = r.value===mode; });
-        ['ethernet-config','wifi-config','cellular-config'].forEach(function (id) {
+        document.querySelectorAll('input[name="network-mode"]').forEach(function (r) { r.checked = r.value === mode; });
+        ['ethernet-config', 'wifi-config', 'cellular-config'].forEach(function (id) {
             var e = el(id); if (e) e.style.display = 'none';
         });
-        var map = {ethernet:'ethernet-config', wifi:'wifi-config', lte:'cellular-config'};
-        var e = el(map[mode]||'wifi-config');
+        var map = { ethernet: 'ethernet-config', wifi: 'wifi-config', lte: 'cellular-config' };
+        var e = el(map[mode] || 'wifi-config');
         if (e) e.style.display = 'block';
         updateGlobalMacDisplay();
     };
 
     var initializeNetworkToggles = function () {
-    document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
-        r.addEventListener('change', function () {
-            setNetworkMode(this.value);
-            
-            // ALWAYS send network_route_select for auto mode (value 0)
-            if (this.value === 'auto') {
-                // Reset eth card selection highlight when switching to auto
-                _setEthCardSelected(null);
-                // Reset auto-highlight trackers
-                _autoHighlightedMode = null; 
-                _autoHighlightedEth = null;
-            } 
-            // For other modes, only send if Auto-Connect is OFF
-            else if (!_acEnabled) {
-                showNetworkSwitchingModal(this.value);
-                // Reset eth card selection highlight when switching away from ethernet
-                if (this.value !== 'ethernet') { _setEthCardSelected(null); }
-                // Reset auto-highlight trackers when leaving auto mode
-                _autoHighlightedMode = null; 
-                _autoHighlightedEth = null;
-            }
-            
-            // Persist network_mode to DB immediately so page refresh keeps the selection
-            var modeToSave = this.value;
-            var payload = { network: { mode: modeToSave, auto_connect: _acEnabled } };
-            if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
-            fetch('/api/general-configuration', {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
+        document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
+            r.addEventListener('change', function () {
+                setNetworkMode(this.value);
 
-            })
-            .catch(function (e) {
-                console.warn('[NET-MODE] failed to persist network_mode:', e);
+                // ALWAYS send network_route_select for auto mode (value 0)
+                if (this.value === 'auto') {
+                    // Reset eth card selection highlight when switching to auto
+                    _setEthCardSelected(null);
+                    // Reset auto-highlight trackers
+                    _autoHighlightedMode = null;
+                    _autoHighlightedEth = null;
+                }
+                // For other modes, only send if Auto-Connect is OFF
+                else if (!_acEnabled) {
+                    showNetworkSwitchingModal(this.value);
+                    // Reset eth card selection highlight when switching away from ethernet
+                    if (this.value !== 'ethernet') { _setEthCardSelected(null); }
+                    // Reset auto-highlight trackers when leaving auto mode
+                    _autoHighlightedMode = null;
+                    _autoHighlightedEth = null;
+                }
+
+                // Persist network_mode to DB immediately so page refresh keeps the selection
+                var modeToSave = this.value;
+                var payload = { network: { mode: modeToSave, auto_connect: _acEnabled } };
+                if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
+                fetch('/api/general-configuration', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+
+                    })
+                    .catch(function (e) {
+                        console.warn('[NET-MODE] failed to persist network_mode:', e);
+                    });
+                updateGlobalMacDisplay();
             });
-            updateGlobalMacDisplay();
         });
-    });
-    document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
-        r.addEventListener('change', toggleIPAssignment);
-    });
-    var c = $('input[name="network-mode"]:checked');
-    setNetworkMode(c ? c.value : 'wifi');
-    toggleIPAssignment();
-};
+        document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
+            r.addEventListener('change', toggleIPAssignment);
+        });
+        var c = $('input[name="network-mode"]:checked');
+        setNetworkMode(c ? c.value : 'wifi');
+        toggleIPAssignment();
+    };
     var toggleIPAssignment = function () {
-        var ip  = $('input[name="ip-assignment"]:checked');
+        var ip = $('input[name="ip-assignment"]:checked');
         var box = el('static-ip-config');
         if (!box) return;
         if (ip && ip.value === 'static') box.classList.remove('hidden');
-        else                             box.classList.add('hidden');
+        else box.classList.add('hidden');
     };
 
     // =========================================================================
     // LIVE CACHE  (never blanked   old values persist until overwritten)
     // =========================================================================
-    var _cache = { lan: { eth0:{}, eth1:{} }, wlan:{}, lte:{} };
+    var _cache = { lan: { eth0: {}, eth1: {} }, wlan: {}, lte: {} };
     var _liveConnected = false;
 
     var mergeInto = function (target, src) {
@@ -284,25 +286,25 @@
             var v = src[k];
             if (v !== null && v !== undefined && v !== '') {
                 if (typeof v === 'object' && !Array.isArray(v)) {
-                    if (!target[k]||typeof target[k]!=='object') target[k]={};
+                    if (!target[k] || typeof target[k] !== 'object') target[k] = {};
                     mergeInto(target[k], v);
                 } else { target[k] = v; }
             }
         });
     };
-    
+
     // =========================================================================
     // UPDATE CACHE FROM DELTA (single field update)
     // =========================================================================
-    var updateCacheFromDelta = function(datapoint, value, path) {
+    var updateCacheFromDelta = function (datapoint, value, path) {
         updateFieldTimestamp(datapoint);
-        
+
         // If path is provided, use it for structured update
         if (path) {
             var type = path.type;  // 'lte', 'wlan', 'lan'
             var device = path.device;  // 'eth0', 'eth1' for lan
             var field = path.field;
-            
+
             if (type === 'lte' && _cache.lte) {
                 _cache.lte[field] = value;
 
@@ -325,13 +327,13 @@
             }
             return true;
         }
-        
+
         // Fallback: parse datapoint string if path not provided
         var parts = datapoint.split('.');
         if (parts.length >= 3 && parts[0] === 'net') {
             var iface = parts[1];  // 'lte', 'wlan', 'lan'
             var field = parts[2];  // 'signal_pct', 'operator_name', etc.
-            
+
             if (iface === 'lte' && _cache.lte) {
                 _cache.lte[field] = value;
 
@@ -358,7 +360,7 @@
             }
             return true;
         }
-        
+
         return false;
     };
 
@@ -368,19 +370,19 @@
     // Priority: eth0 > eth1 > wlan > lte  (first connected one wins)
     // =========================================================================
     var _autoHighlightedMode = null;   // tracks what auto last highlighted
-    var _autoHighlightedEth  = null;
+    var _autoHighlightedEth = null;
 
     var _autoHighlight = function () {
         var mode = getRadioValue('[name="network-mode"]') || 'wifi';
         if (mode !== 'auto') return;
 
-        var e0State  = (!isFieldStale('net.lan.eth0.state'))  ? _cache.lan.eth0.state  : null;
-        var e1State  = (!isFieldStale('net.lan.eth1.state'))  ? _cache.lan.eth1.state  : null;
-        var wState   = (!isFieldStale('net.wlan.state'))      ? _cache.wlan.state      : null;
-        var lState   = (!isFieldStale('net.lte.state'))       ? _cache.lte.state       : null;
+        var e0State = (!isFieldStale('net.lan.eth0.state')) ? _cache.lan.eth0.state : null;
+        var e1State = (!isFieldStale('net.lan.eth1.state')) ? _cache.lan.eth1.state : null;
+        var wState = (!isFieldStale('net.wlan.state')) ? _cache.wlan.state : null;
+        var lState = (!isFieldStale('net.lte.state')) ? _cache.lte.state : null;
 
         var activeMode = null;
-        var activeEth  = null;
+        var activeEth = null;
 
         if (isUp(e0State)) {
             activeMode = 'ethernet'; activeEth = 'eth0';
@@ -395,7 +397,7 @@
         // Only update DOM when something changed to avoid flicker
         if (activeMode === _autoHighlightedMode && activeEth === _autoHighlightedEth) return;
         _autoHighlightedMode = activeMode;
-        _autoHighlightedEth  = activeEth;
+        _autoHighlightedEth = activeEth;
 
         // Show the config panel for the active interface
         ['ethernet-config', 'wifi-config', 'cellular-config'].forEach(function (id) {
@@ -412,7 +414,7 @@
         } else {
             _setEthCardSelected(null);
         }
-        
+
         updateGlobalMacDisplay();
     };
 
@@ -430,22 +432,22 @@
     var renderEthernet = function () {
         var e0 = _cache.lan.eth0 || {};
         var e1 = _cache.lan.eth1 || {};
-        
+
         // Check for stale data - show "--" if field hasn't updated recently
-        txt('eth0-ip',  (e0.ip && !isFieldStale('net.lan.eth0.ip')) ? e0.ip : '--');
+        txt('eth0-ip', (e0.ip && !isFieldStale('net.lan.eth0.ip')) ? e0.ip : '--');
         txt('eth0-mac', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac : '--');
-        
+
         var eth0State = e0.state;
         if (isFieldStale('net.lan.eth0.state')) eth0State = null;
         stateBadge('eth0-state-badge', isUp(eth0State));
-        
-        txt('eth1-ip',  (e1.ip && !isFieldStale('net.lan.eth1.ip')) ? e1.ip : '--');
+
+        txt('eth1-ip', (e1.ip && !isFieldStale('net.lan.eth1.ip')) ? e1.ip : '--');
         txt('eth1-mac', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac : '--');
-        
+
         var eth1State = e1.state;
         if (isFieldStale('net.lan.eth1.state')) eth1State = null;
         stateBadge('eth1-state-badge', isUp(eth1State));
-        
+
         updateGlobalMacDisplay();
         _autoHighlight();
     };
@@ -464,21 +466,21 @@
     };
 
     var updateWifiBars = function (dbm) {
-        var bars    = document.querySelectorAll('#wifi-signal-bars .signal-bar');
-        var classes = ['none','poor','fair','good','excellent'];
-        var level   = dbmToBars(dbm);
-        bars.forEach(function (b) { b.className='signal-bar none'; });
-        for (var i=0; i<=level; i++) { if(bars[i]) bars[i].className='signal-bar '+classes[i]; }
+        var bars = document.querySelectorAll('#wifi-signal-bars .signal-bar');
+        var classes = ['none', 'poor', 'fair', 'good', 'excellent'];
+        var level = dbmToBars(dbm);
+        bars.forEach(function (b) { b.className = 'signal-bar none'; });
+        for (var i = 0; i <= level; i++) { if (bars[i]) bars[i].className = 'signal-bar ' + classes[i]; }
     };
 
     var renderWifi = function () {
         var w = _cache.wlan;
-        
+
         // Check for stale data
         var state = w.state;
         if (isFieldStale('net.wlan.state')) state = null;
         stateBadge('wifi-state-badge', isUp(state));
-        
+
         // signal_quality is dBm (signed negative number)
         var wifiSignal = (w.signal_quality !== undefined && w.signal_quality !== null) ? w.signal_quality : w.signal;
         var signalStale = isFieldStale('net.wlan.signal') && isFieldStale('net.wlan.signal_quality');
@@ -490,14 +492,14 @@
             var e = el('wifi-signal-dbm');
             if (e) e.textContent = '--';
         }
-        
-        txt('wifi-ip',   (w.ip && !isFieldStale('net.wlan.ip')) ? w.ip : '--');
-        txt('wifi-mac',  (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac : '--');
+
+        txt('wifi-ip', (w.ip && !isFieldStale('net.wlan.ip')) ? w.ip : '--');
+        txt('wifi-mac', (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac : '--');
         txt('wifi-bssid', (w.bssid && !isFieldStale('net.wlan.bssid')) ? w.bssid : '--');
-        
+
         var freq = (w.frequency && !isFieldStale('net.wlan.frequency')) ? w.frequency + ' MHz' : '--';
         txt('wifi-freq', freq);
-        
+
         // Sync label with live wlan.ssid (only if user hasn't already picked one)
         if (w.ssid && !isFieldStale('net.wlan.ssid')) {
             var hid = el('wifi-ssid-value');
@@ -507,7 +509,7 @@
                 if (lbl) lbl.textContent = w.ssid;
             }
         }
-        
+
         updateGlobalMacDisplay();
         _autoHighlight();
     };
@@ -517,7 +519,7 @@
     // Click Select Network -> dropdown opens with results -> click a row -> label updates
     // =========================================================================
     var _wifiNetworks = [];
-    var _wifiPanel    = null;
+    var _wifiPanel = null;
 
     // Signal level 0-4 from dBm
     var _dbmLevel = function (dbm) {
@@ -533,15 +535,15 @@
     var _wifiArcIcon = function (dbm) {
         var lvl = _dbmLevel(dbm);
         var color = lvl >= 3 ? '#2563eb' : lvl === 2 ? '#f59e0b' : '#ef4444';
-        var dim   = '#e2e8f0';
-        var arcs  = '';
-        var sizes = [[4,4],[8,8],[12,12],[16,16]];
+        var dim = '#e2e8f0';
+        var arcs = '';
+        var sizes = [[4, 4], [8, 8], [12, 12], [16, 16]];
         for (var i = 0; i < 4; i++) {
             var w = sizes[i][0], h = sizes[i][1];
             var c = (i < lvl) ? color : dim;
             arcs += '<span style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);' +
-                    'width:' + w + 'px;height:' + h + 'px;border-radius:50%;' +
-                    'border:2px solid ' + c + ';"></span>';
+                'width:' + w + 'px;height:' + h + 'px;border-radius:50%;' +
+                'border:2px solid ' + c + ';"></span>';
         }
         return '<span style="position:relative;display:inline-block;width:18px;height:16px;flex-shrink:0;">' + arcs + '</span>';
     };
@@ -566,14 +568,14 @@
         var btn = el('wifi-scan-btn');
         if (!btn || !_wifiPanel) return;
         var r = btn.getBoundingClientRect();
-        _wifiPanel.style.left  = r.left + 'px';
+        _wifiPanel.style.left = r.left + 'px';
         _wifiPanel.style.width = Math.max(r.right - r.left + 200, 260) + 'px';
         // Open below or above depending on space
         if (window.innerHeight - r.bottom > 200) {
-            _wifiPanel.style.top    = (r.bottom + 6) + 'px';
+            _wifiPanel.style.top = (r.bottom + 6) + 'px';
             _wifiPanel.style.bottom = 'auto';
         } else {
-            _wifiPanel.style.top    = 'auto';
+            _wifiPanel.style.top = 'auto';
             _wifiPanel.style.bottom = (window.innerHeight - r.top + 6) + 'px';
         }
     };
@@ -593,21 +595,21 @@
         }
         p.innerHTML = networks.map(function (n) {
             var ssid = n.ssid || '';
-            var dbm  = n.signal_quality || -100;
-            var sec  = n.security || 'Open';
-            var ch   = n.channel ? 'ch ' + n.channel : '';
+            var dbm = n.signal_quality || -100;
+            var sec = n.security || 'Open';
+            var ch = n.channel ? 'ch ' + n.channel : '';
             var lock = (sec && sec.toLowerCase() !== 'open')
                 ? '<i class="fa-solid fa-lock" style="color:#94a3b8;font-size:11px;"></i>' : '';
-            return '<div class="wifi-row" data-ssid="' + ssid.replace(/"/g,'&quot;') + '" ' +
+            return '<div class="wifi-row" data-ssid="' + ssid.replace(/"/g, '&quot;') + '" ' +
                 'style="display:flex;align-items:center;gap:12px;padding:11px 14px;' +
                 'cursor:pointer;border-bottom:1px solid #f1f5f9;">' +
                 _wifiArcIcon(dbm) +
                 '<span style="flex:1;min-width:0;">' +
-                  '<span style="display:block;font-size:13px;font-weight:500;color:#1e293b;' +
-                         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ssid + '</span>' +
-                  '<span style="font-size:11px;color:#94a3b8;">' + sec + (ch ? ' · ' + ch : '') + '</span>' +
+                '<span style="display:block;font-size:13px;font-weight:500;color:#1e293b;' +
+                'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ssid + '</span>' +
+                '<span style="font-size:11px;color:#94a3b8;">' + sec + (ch ? ' · ' + ch : '') + '</span>' +
                 '</span>' + lock +
-            '</div>';
+                '</div>';
         }).join('');
 
         // Hover + click
@@ -631,12 +633,12 @@
     };
 
     var _doScanWifi = function () {
-        var btn  = el('wifi-scan-btn');
+        var btn = el('wifi-scan-btn');
         var icon = el('wifi-scan-icon');
         var hint = el('wifi-ssid-hint');
 
         // Button loading state
-        if (btn)  btn.disabled = true;
+        if (btn) btn.disabled = true;
         if (icon) icon.className = 'fa-solid fa-rotate fa-spin text-sm';
         if (hint) hint.textContent = 'Searching for networks...';
 
@@ -650,30 +652,30 @@
         p.style.display = 'block';
 
         fetch('/api/wifi/scan', { credentials: 'same-origin' })
-        .then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
-        .then(function (data) {
-            var networks = Array.isArray(data) ? data : (data.networks || []);
-            _wifiNetworks = networks;
-            _renderPanel(networks);
-            _positionPanel();
-            var count = networks.length;
-            if (hint) hint.textContent = count + ' network' + (count !== 1 ? 's' : '') + ' found — click one to select';
-        })
-        .catch(function (err) {
-            if (p) p.innerHTML =
-                '<div style="padding:20px;text-align:center;color:#ef4444;">' +
-                '<i class="fa-solid fa-triangle-exclamation" style="display:block;margin-bottom:8px;"></i>' +
-                'Network search failed: ' + err.message + '</div>';
-            if (hint) hint.textContent = 'Network search failed';
-        })
-        .then(function () {
-            // Always restore button
-            if (btn)  btn.disabled = false;
-            if (icon) icon.className = 'fa-solid fa-rotate text-sm';
-        });
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function (data) {
+                var networks = Array.isArray(data) ? data : (data.networks || []);
+                _wifiNetworks = networks;
+                _renderPanel(networks);
+                _positionPanel();
+                var count = networks.length;
+                if (hint) hint.textContent = count + ' network' + (count !== 1 ? 's' : '') + ' found — click one to select';
+            })
+            .catch(function (err) {
+                if (p) p.innerHTML =
+                    '<div style="padding:20px;text-align:center;color:#ef4444;">' +
+                    '<i class="fa-solid fa-triangle-exclamation" style="display:block;margin-bottom:8px;"></i>' +
+                    'Network search failed: ' + err.message + '</div>';
+                if (hint) hint.textContent = 'Network search failed';
+            })
+            .then(function () {
+                // Always restore button
+                if (btn) btn.disabled = false;
+                if (icon) icon.className = 'fa-solid fa-rotate text-sm';
+            });
     };
 
     // =========================================================================
@@ -681,29 +683,29 @@
     // Toggles auto-connect on/off. When ON, retries connection every 15 s
     // until the WS reports state=1 (connected), then stops automatically.
     // =========================================================================
-    var _acEnabled   = false;
-    var _acTimer     = null;
+    var _acEnabled = false;
+    var _acTimer = null;
 
     var _setAcUi = function (enabled, busy) {
         var track = el('ac-track');
         var thumb = el('ac-thumb');
         var label = el('ac-label');
-        var btn   = el('wifi-auto-connect-btn');
+        var btn = el('wifi-auto-connect-btn');
         if (!track || !thumb) return;
 
         if (busy) {
             track.style.background = '#93c5fd';
-            thumb.style.transform  = 'translateX(12px)';
+            thumb.style.transform = 'translateX(12px)';
             if (label) label.textContent = 'Connecting…';
             if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.style.borderColor = '#93c5fd'; btn.style.color = '#2563eb'; }
         } else if (enabled) {
             track.style.background = '#2563eb';
-            thumb.style.transform  = 'translateX(12px)';
+            thumb.style.transform = 'translateX(12px)';
             if (label) label.textContent = 'Auto';
             if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.style.borderColor = '#2563eb'; btn.style.color = '#2563eb'; btn.style.background = '#eff6ff'; }
         } else {
             track.style.background = '#cbd5e1';
-            thumb.style.transform  = 'translateX(0px)';
+            thumb.style.transform = 'translateX(0px)';
             if (label) label.textContent = 'Auto';
             if (btn) { btn.setAttribute('aria-pressed', 'false'); btn.style.borderColor = '#cbd5e1'; btn.style.color = '#64748b'; btn.style.background = '#fff'; }
         }
@@ -732,24 +734,24 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ssid: ssid, password: pass })
         })
-        .then(function (r) {
-            if (!r.ok) return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); });
-            return r.json();
-        })
-        .then(function (data) {
-            showNotification(data.message || 'Connected to ' + ssid, 'success');
-            // If already connected stop retrying
-            if (isUp((_cache.wlan || {}).state)) { 
-                if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
+            .then(function (r) {
+                if (!r.ok) return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); });
+                return r.json();
+            })
+            .then(function (data) {
+                showNotification(data.message || 'Connected to ' + ssid, 'success');
+                // If already connected stop retrying
+                if (isUp((_cache.wlan || {}).state)) {
+                    if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
+                    _setAcUi(true, false);
+                }
+                else { _setAcUi(true, false); }
+            })
+            .catch(function (err) {
+                // Stay enabled; retry on next tick
                 _setAcUi(true, false);
-            }
-            else { _setAcUi(true, false); }
-        })
-        .catch(function (err) {
-            // Stay enabled; retry on next tick
-            _setAcUi(true, false);
-            console.warn('Auto-connect attempt failed:', err.message);
-        });
+                console.warn('Auto-connect attempt failed:', err.message);
+            });
     };
 
     var _toggleAutoConnect = function () {
@@ -826,17 +828,17 @@
             if (!card) return;
             if (iface === which) {
                 card.style.borderColor = '#2563EB';
-                card.style.background  = '#EFF6FF';
+                card.style.background = '#EFF6FF';
                 if (radio) radio.className = 'w-5 h-5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center transition-colors';
                 if (icon) icon.classList.remove('opacity-0');
             } else {
                 card.style.borderColor = '';
-                card.style.background  = '';
+                card.style.background = '';
                 if (radio) radio.className = 'w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors';
                 if (icon) icon.classList.add('opacity-0');
             }
         });
-        
+
         updateGlobalMacDisplay();
     };
 
@@ -859,13 +861,13 @@
                         }
                     })
                 })
-                .then(function (r) { return r.json(); })
-                .then(function (d) {
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
 
-                })
-                .catch(function (e) {
-                    console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
-                });
+                    })
+                    .catch(function (e) {
+                        console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
+                    });
                 if (!_acEnabled) {
                     showNetworkSwitchingModal(iface);
                 }
@@ -902,15 +904,15 @@
         }
 
         show('lte-live-panel');
-        
+
         // State badge - check for stale
         var state = l.state;
         if (isFieldStale('net.lte.state')) state = null;
         stateBadge('lte-state-badge', isUp(state));
 
         // Signal percent bar
-        var pct = (!isFieldStale('net.lte.signal_pct') && l.signal_pct !== undefined) 
-            ? parseInt(l.signal_pct) || 0 
+        var pct = (!isFieldStale('net.lte.signal_pct') && l.signal_pct !== undefined)
+            ? parseInt(l.signal_pct) || 0
             : 0;
         var fill = el('lte-signal-fill');
         if (fill) fill.style.width = pct + '%';
@@ -919,14 +921,14 @@
         var pctEl = el('lte-signal-pct');
         if (pctEl) pctEl.textContent = pct + '%';
 
-        txt('lte-ip',            (!isFieldStale('net.lte.ip') && l.ip) ? l.ip : '--');
+        txt('lte-ip', (!isFieldStale('net.lte.ip') && l.ip) ? l.ip : '--');
         txt('lte-operator-name', (!isFieldStale('net.lte.operator_name') && l.operator_name) ? l.operator_name : '--');
-        txt('lte-operator-id',   (!isFieldStale('net.lte.operator_id') && l.operator_id) ? l.operator_id : '--');
-        txt('lte-tech',          (!isFieldStale('net.lte.tech') && l.tech) ? l.tech : '--');
-        txt('lte-imei',          (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
-        txt('lte-iccid',         (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
-        txt('lte-imsi',          (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
-        
+        txt('lte-operator-id', (!isFieldStale('net.lte.operator_id') && l.operator_id) ? l.operator_id : '--');
+        txt('lte-tech', (!isFieldStale('net.lte.tech') && l.tech) ? l.tech : '--');
+        txt('lte-imei', (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
+        txt('lte-iccid', (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
+        txt('lte-imsi', (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
+
         updateGlobalMacDisplay();
         _autoHighlight();
     };
@@ -936,7 +938,7 @@
     // =========================================================================
     var applySnapshot = function (data) {
         if (!data) return;
-        
+
         // Handle delta update (single field)
         if (data.type === 'network_status_delta' && data.datapoint) {
             updateCacheFromDelta(data.datapoint, data.value, data.path);
@@ -950,17 +952,17 @@
             }
             return;
         }
-        
+
         // Handle full snapshot (initial or requested)
         if (data.type === 'network_status_initial' && data.data) {
             // Reset stale timestamps since we're getting fresh data
             markAllFieldsStale();
-            
+
             // Update cache with full snapshot
             mergeInto(_cache.lan, data.data.lan || {});
             mergeInto(_cache.wlan, data.data.wlan || {});
             mergeInto(_cache.lte, data.data.lte || {});
-            
+
             // Update timestamps for all fields in the snapshot
             if (data.data.lan) {
                 updateTimestampsFromObject(data.data.lan, 'net.lan');
@@ -971,14 +973,14 @@
             if (data.data.lte) {
                 updateTimestampsFromObject(data.data.lte, 'net.lte');
             }
-            
+
             // Render all panels
             renderEthernet();
             renderWifi();
             renderLte();
             return;
         }
-        
+
         // Legacy support for old format (direct data without type wrapper)
         if (data.lan || data.wlan || data.lte) {
             markAllFieldsStale();
@@ -990,8 +992,8 @@
             renderLte();
         }
     };
-    
-    var updateTimestampsFromObject = function(obj, prefix) {
+
+    var updateTimestampsFromObject = function (obj, prefix) {
         if (!obj || typeof obj !== 'object') return;
         for (var key in obj) {
             if (obj.hasOwnProperty(key)) {
@@ -1007,10 +1009,10 @@
     // =========================================================================
     // LIVE BUTTON + WEBSOCKET
     // =========================================================================
-    var _netWs        = null;
-    var _netActive    = false;
+    var _netWs = null;
+    var _netActive = false;
     var _netReconnect = null;
-    var _netAttempts  = 0;   // connection attempt counter
+    var _netAttempts = 0;   // connection attempt counter
 
     var setLiveBtnState = function (connected) {
         // Update indicator badge
@@ -1024,14 +1026,14 @@
                 : '<i class="fa-solid fa-tower-broadcast"></i> Live';
         }
         // Update status bar
-        var bar  = el('net-ws-status');
+        var bar = el('net-ws-status');
         var icon = el('net-ws-icon');
-        var txt  = el('net-ws-status-text');
+        var txt = el('net-ws-status-text');
         if (bar) {
             if (connected) {
                 bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs';
                 if (icon) icon.className = 'fa-solid fa-circle-dot fa-beat text-emerald-500';
-                if (txt)  txt.textContent = 'Live network data ';
+                if (txt) txt.textContent = 'Live network data ';
             } else {
                 bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs';
                 if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-amber-400';
@@ -1049,14 +1051,14 @@
         if (_netWs && (_netWs.readyState === WebSocket.OPEN || _netWs.readyState === WebSocket.CONNECTING)) return;
         _netAttempts++;
         var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        var url      = protocol + '//' + window.location.host + '/ws/network-status';
+        var url = protocol + '//' + window.location.host + '/ws/network-status';
 
         // Update status bar: first attempt = Connecting, subsequent = Reconnecting
         var bar = el('net-ws-status'); var icon = el('net-ws-icon'); var txt = el('net-ws-status-text');
         if (bar) {
             bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs';
             if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-slate-400';
-            if (txt)  txt.textContent = _netAttempts <= 1 ? 'Connecting to live network data...' : 'Reconnecting... (attempt ' + _netAttempts + ')';
+            if (txt) txt.textContent = _netAttempts <= 1 ? 'Connecting to live network data...' : 'Reconnecting... (attempt ' + _netAttempts + ')';
         }
         try { _netWs = new WebSocket(url); }
         catch (e) { return; }
@@ -1065,9 +1067,9 @@
             _liveConnected = true;
             _netAttempts = 0;
             setLiveBtnState(true);
-            _netWs.send(JSON.stringify({type:'get_snapshot'}));
+            _netWs.send(JSON.stringify({ type: 'get_snapshot' }));
         };
-        
+
         _netWs.onmessage = function (ev) {
             try {
                 var msg = JSON.parse(ev.data);
@@ -1075,9 +1077,9 @@
                 if (msg.type === 'network_status_initial' || msg.type === 'network_status_update' || msg.type === 'network_status_delta') {
                     applySnapshot(msg);
                 }
-            } catch(e) { console.warn('[NET] parse error', e); }
+            } catch (e) { console.warn('[NET] parse error', e); }
         };
-        
+
         _netWs.onerror = function (e) { /* connection error handled in onclose */ };
         _netWs.onclose = function (ev) {
             _liveConnected = false;
@@ -1086,19 +1088,19 @@
             // On first failure (1006 = TCP refused), check if API is reachable
             // to distinguish nginx WS proxy issue from server down
             if (ev.code === 1006 && _netAttempts === 1) {
-                fetch('/api/general-configuration', {credentials:'same-origin'})
-                .then(function(r) {
-                    if (r.ok) {
-                        // API works but WS fails = nginx not proxying /ws/ correctly
-                        var txt = el('net-ws-status-text');
-                        var bar = el('net-ws-status');
-                        var icon = el('net-ws-icon');
-                        if (bar) bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs';
-                        if (icon) icon.className = 'fa-solid fa-triangle-exclamation text-red-500';
-                        if (txt)  txt.textContent = 'Server reachable but WebSocket failed   check nginx /ws/ proxy config (proxy_read_timeout, Connection upgrade)';
-                    }
-                })
-                .catch(function() { /* server unreachable - normal reconnect message shown */ });
+                fetch('/api/general-configuration', { credentials: 'same-origin' })
+                    .then(function (r) {
+                        if (r.ok) {
+                            // API works but WS fails = nginx not proxying /ws/ correctly
+                            var txt = el('net-ws-status-text');
+                            var bar = el('net-ws-status');
+                            var icon = el('net-ws-icon');
+                            if (bar) bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs';
+                            if (icon) icon.className = 'fa-solid fa-triangle-exclamation text-red-500';
+                            if (txt) txt.textContent = 'Server reachable but WebSocket failed   check nginx /ws/ proxy config (proxy_read_timeout, Connection upgrade)';
+                        }
+                    })
+                    .catch(function () { /* server unreachable - normal reconnect message shown */ });
             }
             // Exponential backoff: 3s, 6s, 12s ... max 30s
             var delay = Math.min(3000 * Math.pow(2, Math.min(_netAttempts - 1, 0)), 30000);
@@ -1106,17 +1108,17 @@
         };
         // keepalive
         var ping = setInterval(function () {
-            if (_netWs && _netWs.readyState===WebSocket.OPEN) _netWs.send(JSON.stringify({type:'ping'}));
+            if (_netWs && _netWs.readyState === WebSocket.OPEN) _netWs.send(JSON.stringify({ type: 'ping' }));
             else clearInterval(ping);
         }, 30000);
     };
 
     var disconnectNetworkStatusWs = function () {
-        _netActive    = false;
+        _netActive = false;
         _liveConnected = false;
-        _netAttempts  = 0;
+        _netAttempts = 0;
         clearTimeout(_netReconnect);
-        if (_netWs) { _netWs.close(1000,'user stopped'); _netWs=null; }
+        if (_netWs) { _netWs.close(1000, 'user stopped'); _netWs = null; }
         setLiveBtnState(false);
         hideLivePanels();
         var txt = el('net-ws-status-text');
@@ -1127,9 +1129,9 @@
 
     // Public API
     window.networkStatusLive = {
-        connect:    function () { _netActive=true; connectNetworkStatusWs(); },
+        connect: function () { _netActive = true; connectNetworkStatusWs(); },
         disconnect: disconnectNetworkStatusWs,
-        cache:      function () { return _cache; }
+        cache: function () { return _cache; }
     };
 
     // =========================================================================
@@ -1138,11 +1140,11 @@
     var _wsRetryDelay = 5000;
     var _wsRetryTimer = null;
     var initializeWebSocket = function () {
-        if (window.ws && (window.ws.readyState===WebSocket.OPEN||window.ws.readyState===WebSocket.CONNECTING)) return;
+        if (window.ws && (window.ws.readyState === WebSocket.OPEN || window.ws.readyState === WebSocket.CONNECTING)) return;
         clearTimeout(_wsRetryTimer);
-        var protocol = window.location.protocol==='https:'?'wss:':'ws:';
-        var url = protocol+'//'+window.location.host+'/ws/general';
-        try { window.ws = new WebSocket(url); } catch(e) { return; }
+        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var url = protocol + '//' + window.location.host + '/ws/general';
+        try { window.ws = new WebSocket(url); } catch (e) { return; }
         window.ws.onopen = function () {
 
             _wsRetryDelay = 5000; // reset backoff
@@ -1164,7 +1166,7 @@
                     setInputValue('[name="time"]', displayTime);
                     updateTimeDisplayLabel(raw24);
                 }
-            } catch(e) {}
+            } catch (e) { }
         };
         window.ws.onerror = function (e) { /* handled in onclose */ };
         window.ws.onclose = function () {
@@ -1196,9 +1198,9 @@
         var offsetStr = tz === 'GMT' ? '+00:00' : '+05:30'; // IST default
         var d = new Date(parts[0] + '-' + parts[1] + '-' + parts[2] + 'T12:00:00' + offsetStr);
         fmt = fmt || getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
-        var dd   = String(d.toLocaleDateString('en-IN', {day:'2-digit',   timeZone: tz})).padStart(2,'0');
-        var mm   = String(d.toLocaleDateString('en-IN', {month:'2-digit', timeZone: tz})).padStart(2,'0');
-        var yyyy = d.toLocaleDateString('en-IN', {year:'numeric', timeZone: tz});
+        var dd = String(d.toLocaleDateString('en-IN', { day: '2-digit', timeZone: tz })).padStart(2, '0');
+        var mm = String(d.toLocaleDateString('en-IN', { month: '2-digit', timeZone: tz })).padStart(2, '0');
+        var yyyy = d.toLocaleDateString('en-IN', { year: 'numeric', timeZone: tz });
         if (fmt === 'MM/DD/YYYY') return mm + '/' + dd + '/' + yyyy;
         if (fmt === 'YYYY-MM-DD') return yyyy + '-' + mm + '-' + dd;
         return dd + '/' + mm + '/' + yyyy; // DD/MM/YYYY default
@@ -1210,7 +1212,7 @@
         var parts = hhmm.split(':');
         var h = parseInt(parts[0]) || 0;
         var min = (parts[1] || '00').substring(0, 2);
-        return String(h).padStart(2,'0') + ':' + min;
+        return String(h).padStart(2, '0') + ':' + min;
     };
 
     // Returns a human-readable string (Strictly 24-hour)
@@ -1219,19 +1221,19 @@
         var parts = hhmm.split(':');
         var h = parseInt(parts[0]) || 0;
         var min = (parts[1] || '00').substring(0, 2);
-        return String(h).padStart(2,'0') + ':' + min;
+        return String(h).padStart(2, '0') + ':' + min;
     };
 
     // Updates the optional display label next to the time input (if present)
     var updateTimeDisplayLabel = function (hhmm) {
-        var fmt  = getSelectValue('[name="time-format"]') || '24-hour';
-        var lbl  = document.querySelector('[data-time-display]');
+        var fmt = getSelectValue('[name="time-format"]') || '24-hour';
+        var lbl = document.querySelector('[data-time-display]');
         if (lbl) lbl.textContent = formatTimeDisplay(hhmm, fmt);
     };
 
     // Get current date+time strings in the active timezone from the browser
     var getISTNow = function () {
-        var tz  = getActiveTimezone();
+        var tz = getActiveTimezone();
         var now = new Date();
         var dateStr = now.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
         var timeStr = now.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
@@ -1245,7 +1247,7 @@
 
     // Build a formatted date string from a JS Date for the active date-format
     var _buildDateStr = function (now, tz, dateFmt) {
-        var d     = now.toLocaleDateString('en-GB', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
+        var d = now.toLocaleDateString('en-GB', { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' });
         var parts = d.split('/'); // [DD, MM, YYYY]
         if (dateFmt === 'MM/DD/YYYY') return parts[1] + '/' + parts[0] + '/' + parts[2];
         if (dateFmt === 'YYYY-MM-DD') return parts[2] + '-' + parts[1] + '-' + parts[0];
@@ -1261,8 +1263,8 @@
 
     // Push current date+time into the two inputs every second
     var _tickInputs = function () {
-        var now     = new Date();
-        var tz      = getActiveTimezone();
+        var now = new Date();
+        var tz = getActiveTimezone();
         var dateFmt = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
 
         var dateEl = document.querySelector('[name="date"]');
@@ -1301,7 +1303,7 @@
     };
 
     var showNotification = function (msg, type) {
-        type = type||'success';
+        type = type || 'success';
         var c = el('gc-toast-container');
         if (!c) {
             c = document.createElement('div');
@@ -1310,13 +1312,13 @@
             document.body.appendChild(c);
         }
         var n = document.createElement('div');
-        var colors = {success:' bg-emerald-50 border-emerald-200 text-emerald-800',error:' bg-red-50 border-red-200 text-red-800',warning:' bg-yellow-50 border-yellow-200 text-yellow-800',info:' bg-blue-50 border-blue-200 text-blue-800'};
-        var icons  = {success:'fa-circle-check',error:'fa-circle-exclamation',warning:'fa-triangle-exclamation',info:'fa-circle-info'};
-        n.className = 'gc-toast px-4 py-3 rounded-lg shadow-lg border transition-all duration-300'+(colors[type]||colors.info);
-        n.innerHTML = '<div class="flex items-center"><i class="fa-solid '+(icons[type]||'fa-circle-info')+' mr-3"></i><span class="font-medium">'+msg+'</span><button class="ml-4 text-slate-400 hover:text-slate-600" onclick="this.parentElement.parentElement.remove()"><i class="fa-solid fa-times"></i></button></div>';
+        var colors = { success: ' bg-emerald-50 border-emerald-200 text-emerald-800', error: ' bg-red-50 border-red-200 text-red-800', warning: ' bg-yellow-50 border-yellow-200 text-yellow-800', info: ' bg-blue-50 border-blue-200 text-blue-800' };
+        var icons = { success: 'fa-circle-check', error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+        n.className = 'gc-toast px-4 py-3 rounded-lg shadow-lg border transition-all duration-300' + (colors[type] || colors.info);
+        n.innerHTML = '<div class="flex items-center"><i class="fa-solid ' + (icons[type] || 'fa-circle-info') + ' mr-3"></i><span class="font-medium">' + msg + '</span><button class="ml-4 text-slate-400 hover:text-slate-600" onclick="this.parentElement.parentElement.remove()"><i class="fa-solid fa-times"></i></button></div>';
         c.appendChild(n);
         setTimeout(function () {
-            if (n.parentNode) { n.classList.add('hide'); setTimeout(function(){if(n.parentNode)n.remove();},300); }
+            if (n.parentNode) { n.classList.add('hide'); setTimeout(function () { if (n.parentNode) n.remove(); }, 300); }
         }, 5000);
     };
 
@@ -1324,24 +1326,24 @@
     // COLLECT FORM DATA  (live cache included in payload)
     // =========================================================================
     var collectFormData = function () {
-        var l   = _cache.lte  || {};
-        var w   = _cache.wlan || {};
-        var e0  = (_cache.lan||{}).eth0 || {};
-        var e1  = (_cache.lan||{}).eth1 || {};
+        var l = _cache.lte || {};
+        var w = _cache.wlan || {};
+        var e0 = (_cache.lan || {}).eth0 || {};
+        var e1 = (_cache.lan || {}).eth1 || {};
         var _ethSel = _selectedEth || 'eth0';
         return {
             gateway_identity: {
-                name:            getInputValue('[name="gateway-name"]')    || 'Univa-GW-01',
-                serial_number:   getInputValue('[name="serial-number"]')   || 'GW2025-1190021',
+                name: getInputValue('[name="gateway-name"]') || 'Univa-GW-01',
+                serial_number: getInputValue('[name="serial-number"]') || 'GW2025-1190021',
                 deployment_site: getInputValue('[name="deployment-site"]') || 'Chennai Port - Zone A',
-                location_mode:   getRadioValue('[name="location-mode"]')   || 'manual',
-                latitude:        parseFloat(getInputValue('[name="latitude"]'))  || 12.99123,
-                longitude:       parseFloat(getInputValue('[name="longitude"]')) || 80.12312,
-                asset_id:        getInputValue('[name="asset-id"]')        || 'CRN-CT-12'
+                location_mode: getRadioValue('[name="location-mode"]') || 'manual',
+                latitude: parseFloat(getInputValue('[name="latitude"]')) || 12.99123,
+                longitude: parseFloat(getInputValue('[name="longitude"]')) || 80.12312,
+                asset_id: getInputValue('[name="asset-id"]') || 'CRN-CT-12'
             },
             date_time: {
-                timezone:    getActiveTimezone(),
-                ntp_server:  getSelectValue('[name="ntp-server"]')  || 'time.google.com',
+                timezone: getActiveTimezone(),
+                ntp_server: getSelectValue('[name="ntp-server"]') || 'time.google.com',
                 date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
                 time_format: getSelectValue('[name="time-format"]') || '24-hour'
             },
@@ -1350,63 +1352,63 @@
                 eth_selected: _ethSel,
                 auto_connect: _acEnabled,
                 wifi: {
-                    ssid:     (function(){ var h=el('wifi-ssid-value'); return h?h.value:getInputValue('[name="wifi-ssid"]'); }()),
+                    ssid: (function () { var h = el('wifi-ssid-value'); return h ? h.value : getInputValue('[name="wifi-ssid"]'); }()),
                     password: getInputValue('[name="wifi-password"]'),
                     // live snapshot
-                    live_state:          w.state,
+                    live_state: w.state,
                     live_signal_quality: w.signal_quality,
-                    live_ip:             w.ip    || '',
-                    live_mac:            w.mac   || '',
-                    live_bssid:          w.bssid || '',
-                    live_frequency:      w.frequency || 0
+                    live_ip: w.ip || '',
+                    live_mac: w.mac || '',
+                    live_bssid: w.bssid || '',
+                    live_frequency: w.frequency || 0
                 },
                 ethernet: {
                     ip_assignment: getRadioValue('[name="ip-assignment"]') || 'dhcp',
-                    static_ip:     getInputValue('[name="static-ip"]'),
-                    subnet_mask:   getInputValue('[name="subnet-mask"]'),
-                    gateway:       getInputValue('[name="gateway"]'),
-                    dns1:          getInputValue('[name="dns1"]'),
-                    dns2:          getInputValue('[name="dns2"]'),
+                    static_ip: getInputValue('[name="static-ip"]'),
+                    subnet_mask: getInputValue('[name="subnet-mask"]'),
+                    gateway: getInputValue('[name="gateway"]'),
+                    dns1: getInputValue('[name="dns1"]'),
+                    dns2: getInputValue('[name="dns2"]'),
                     // live snapshot
-                    live_eth0_ip:    e0.ip    || '',
-                    live_eth0_mac:   e0.mac   || '',
+                    live_eth0_ip: e0.ip || '',
+                    live_eth0_mac: e0.mac || '',
                     live_eth0_state: e0.state,
-                    live_eth1_ip:    e1.ip    || '',
-                    live_eth1_mac:   e1.mac   || '',
+                    live_eth1_ip: e1.ip || '',
+                    live_eth1_mac: e1.mac || '',
                     live_eth1_state: e1.state
                 },
                 cellular: {
-                    apn:      getInputValue('[name="apn"]')             || 'internet',
+                    apn: getInputValue('[name="apn"]') || 'internet',
                     username: getInputValue('[name="cellular-username"]'),
                     password: getInputValue('[name="cellular-password"]'),
                     // live snapshot
-                    live_state:         l.state,
-                    live_power:         l.power,
-                    live_signal_pct:    l.signal_pct,
-                    live_imei:          l.imei          || '',
-                    live_operator_id:   l.operator_id   || '',
+                    live_state: l.state,
+                    live_power: l.power,
+                    live_signal_pct: l.signal_pct,
+                    live_imei: l.imei || '',
+                    live_operator_id: l.operator_id || '',
                     live_operator_name: l.operator_name || '',
-                    live_ip:            l.ip            || '',
-                    live_iccid:         l.iccid         || '',
-                    live_imsi:          l.imsi          || '',
-                    live_tech:          l.tech          || ''
+                    live_ip: l.ip || '',
+                    live_iccid: l.iccid || '',
+                    live_imsi: l.imsi || '',
+                    live_tech: l.tech || ''
                 }
             },
             heartbeat: (function () {
-    var rawInterval  = parseInt(getInputValue('[name="heartbeat-interval"]'));
-    var rawThreshold = parseInt(getInputValue('[name="offline-threshold"]'));
-    var interval          = (!isNaN(rawInterval)  && rawInterval  >= 0) ? rawInterval  : 30;
-    var offline_threshold = (!isNaN(rawThreshold) && rawThreshold >= 0) ? rawThreshold : 120;
-    return { interval: interval, offline_threshold: offline_threshold };
-}()),
-            mac_address: (function () { var m=$('[data-mac-address]'); return m?m.textContent.trim():''; }())
+                var rawInterval = parseInt(getInputValue('[name="heartbeat-interval"]'));
+                var rawThreshold = parseInt(getInputValue('[name="offline-threshold"]'));
+                var interval = (!isNaN(rawInterval) && rawInterval >= 0) ? rawInterval : 30;
+                var offline_threshold = (!isNaN(rawThreshold) && rawThreshold >= 0) ? rawThreshold : 120;
+                return { interval: interval, offline_threshold: offline_threshold };
+            }()),
+            mac_address: (function () { var m = $('[data-mac-address]'); return m ? m.textContent.trim() : ''; }())
         };
     };
 
     // =========================================================================
     // SAVE
     // =========================================================================
-    var toggleLoader = function(show, text, isSuccess) {
+    var toggleLoader = function (show, text, isSuccess) {
         var loader = el('gc-page-loader');
         if (!loader) return;
         var sub = el('gc-loader-sub');
@@ -1414,7 +1416,7 @@
         var iconContainer = el('gc-loader-icon-container');
 
         if (text && sub) sub.textContent = text;
-        
+
         if (isSuccess === true) {
             if (mainText) mainText.textContent = 'Success';
             if (iconContainer) iconContainer.innerHTML = '<i class="fa-solid fa-circle-check text-5xl text-emerald-500 mb-2"></i>';
@@ -1432,7 +1434,7 @@
             loader.classList.add('opacity-0', 'pointer-events-none');
         }
     };
-    
+
     var handleSaveConfiguration = function () {
         var btn = el('save-btn'); if (!btn) return;
 
@@ -1450,39 +1452,39 @@
 
         var orig = btn.innerHTML;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Saving…';
-        btn.disabled  = true;
-        btn.classList.remove('bg-primary','hover:bg-primaryHover');
-        btn.classList.add('bg-gray-500','cursor-wait');
+        btn.disabled = true;
+        btn.classList.remove('bg-primary', 'hover:bg-primaryHover');
+        btn.classList.add('bg-gray-500', 'cursor-wait');
 
         toggleLoader(true, 'Please wait while settings are applied...');
 
         fetch('/api/general-configuration', {
-            method:'PUT', credentials:'same-origin',
-            headers:{'Content-Type':'application/json','Accept':'application/json'},
+            method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(collectFormData())
         })
-        .then(function (r) { if(!r.ok) return r.json().then(function(e){throw new Error(e.message||'HTTP '+r.status);}); return r.json(); })
-        .then(function (result) {
-            toggleLoader(true, 'Configuration saved successfully!', true);
-            btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Save Success';
-            btn.classList.remove('bg-gray-500','cursor-wait');
-            btn.classList.add('bg-emerald-600','hover:bg-emerald-700');
-            window.dispatchEvent(new Event('gateway-config-saved'));
-            setTimeout(function () { 
-                toggleLoader(false);
-                btn.innerHTML=orig; btn.classList.remove('bg-emerald-600','hover:bg-emerald-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; 
-            }, 2000);
-        })
-        .catch(function (err) {
-            toggleLoader(true, err.message, false);
-            btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
-            btn.classList.remove('bg-gray-500','cursor-wait');
-            btn.classList.add('bg-red-600','hover:bg-red-700');
-            setTimeout(function () { 
-                toggleLoader(false);
-                btn.innerHTML=orig; btn.classList.remove('bg-red-600','hover:bg-red-700'); btn.classList.add('bg-primary','hover:bg-primaryHover'); btn.disabled=false; 
-            }, 3000);
-        });
+            .then(function (r) { if (!r.ok) return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); }); return r.json(); })
+            .then(function (result) {
+                toggleLoader(true, 'Configuration saved successfully!', true);
+                btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Save Success';
+                btn.classList.remove('bg-gray-500', 'cursor-wait');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                window.dispatchEvent(new Event('gateway-config-saved'));
+                setTimeout(function () {
+                    toggleLoader(false);
+                    btn.innerHTML = orig; btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700'); btn.classList.add('bg-primary', 'hover:bg-primaryHover'); btn.disabled = false;
+                }, 2000);
+            })
+            .catch(function (err) {
+                toggleLoader(true, err.message, false);
+                btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-2"></i> Failed!';
+                btn.classList.remove('bg-gray-500', 'cursor-wait');
+                btn.classList.add('bg-red-600', 'hover:bg-red-700');
+                setTimeout(function () {
+                    toggleLoader(false);
+                    btn.innerHTML = orig; btn.classList.remove('bg-red-600', 'hover:bg-red-700'); btn.classList.add('bg-primary', 'hover:bg-primaryHover'); btn.disabled = false;
+                }, 3000);
+            });
     };
 
     // =========================================================================
@@ -1490,48 +1492,48 @@
     // =========================================================================
     var loadConfiguration = function () {
         return new Promise(function (resolve, reject) {
-            fetch('/api/general-configuration', {credentials:'same-origin'})
-            .then(function (r) { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-            .then(function (cfg) {
-                populateFormWithConfig(cfg);
-                // Only set date/time from _realtime if server provides it,
-                // otherwise leave as-is (WS time_update will keep it current)
-                if (cfg._realtime) {
-                    if (cfg._realtime.current_date) setInputValue('[name="date"]', formatDate(cfg._realtime.current_date));
-                    if (cfg._realtime.current_time) {
-                        var raw24 = formatTime(cfg._realtime.current_time);
-                        // Use saved time_format (already populated by populateFormWithConfig)
-                        var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
-                        var displayTime = formatTimeDisplay(raw24, tfmt);
-                        setInputValue('[name="time"]', displayTime);
-                        updateTimeDisplayLabel(raw24);
+            fetch('/api/general-configuration', { credentials: 'same-origin' })
+                .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(function (cfg) {
+                    populateFormWithConfig(cfg);
+                    // Only set date/time from _realtime if server provides it,
+                    // otherwise leave as-is (WS time_update will keep it current)
+                    if (cfg._realtime) {
+                        if (cfg._realtime.current_date) setInputValue('[name="date"]', formatDate(cfg._realtime.current_date));
+                        if (cfg._realtime.current_time) {
+                            var raw24 = formatTime(cfg._realtime.current_time);
+                            // Use saved time_format (already populated by populateFormWithConfig)
+                            var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
+                            var displayTime = formatTimeDisplay(raw24, tfmt);
+                            setInputValue('[name="time"]', displayTime);
+                            updateTimeDisplayLabel(raw24);
+                        }
                     }
-                }
-                resolve(cfg);
-            }).catch(reject);
+                    resolve(cfg);
+                }).catch(reject);
         });
     };
 
     var populateFormWithConfig = function (cfg) {
         if (cfg.gateway_identity) {
             var id = cfg.gateway_identity;
-            setInputValue('[name="gateway-name"]',    id.name);
-            setInputValue('[name="serial-number"]',   id.serial_number);
+            setInputValue('[name="gateway-name"]', id.name);
+            setInputValue('[name="serial-number"]', id.serial_number);
             setInputValue('[name="deployment-site"]', id.deployment_site);
-            setRadioValue('[name="location-mode"]',   id.location_mode);
-            setInputValue('[name="latitude"]',        id.latitude);
-            setInputValue('[name="longitude"]',       id.longitude);
-            setInputValue('[name="asset-id"]',        id.asset_id);
+            setRadioValue('[name="location-mode"]', id.location_mode);
+            setInputValue('[name="latitude"]', id.latitude);
+            setInputValue('[name="longitude"]', id.longitude);
+            setInputValue('[name="asset-id"]', id.asset_id);
         }
         if (cfg.date_time) {
-            setSelectValue('[name="timezone"]',    cfg.date_time.timezone);
-            setSelectValue('[name="ntp-server"]',  cfg.date_time.ntp_server);
+            setSelectValue('[name="timezone"]', cfg.date_time.timezone);
+            setSelectValue('[name="ntp-server"]', cfg.date_time.ntp_server);
             setSelectValue('[name="date-format"]', cfg.date_time.date_format);
             setSelectValue('[name="time-format"]', cfg.date_time.time_format);
         }
         if (cfg.network) {
-            var n=cfg.network, w=n.wifi||{}, e=n.ethernet||{}, c=n.cellular||{};
-            setInputValue('[name="wifi-ssid"]',         w.ssid     ||'');
+            var n = cfg.network, w = n.wifi || {}, e = n.ethernet || {}, c = n.cellular || {};
+            setInputValue('[name="wifi-ssid"]', w.ssid || '');
             // Sync label + hidden input
             if (w.ssid) {
                 var hid = el('wifi-ssid-value');
@@ -1539,17 +1541,17 @@
                 var lbl = el('wifi-ssid-label');
                 if (lbl) lbl.textContent = w.ssid;
             }
-            setInputValue('[name="wifi-password"]',     w.password ||'');
-            setRadioValue('[name="ip-assignment"]',     e.ip_assignment||'dhcp');
-            setInputValue('[name="static-ip"]',         e.static_ip||'');
-            setInputValue('[name="subnet-mask"]',       e.subnet_mask||'');
-            setInputValue('[name="gateway"]',           e.gateway||'');
-            setInputValue('[name="dns1"]',              e.dns1||'');
-            setInputValue('[name="dns2"]',              e.dns2||'');
-            setInputValue('[name="apn"]',               c.apn||'internet');
-            setInputValue('[name="cellular-username"]', c.username||'');
-            setInputValue('[name="cellular-password"]', c.password||'');
-            setNetworkMode(n.mode||'wifi');
+            setInputValue('[name="wifi-password"]', w.password || '');
+            setRadioValue('[name="ip-assignment"]', e.ip_assignment || 'dhcp');
+            setInputValue('[name="static-ip"]', e.static_ip || '');
+            setInputValue('[name="subnet-mask"]', e.subnet_mask || '');
+            setInputValue('[name="gateway"]', e.gateway || '');
+            setInputValue('[name="dns1"]', e.dns1 || '');
+            setInputValue('[name="dns2"]', e.dns2 || '');
+            setInputValue('[name="apn"]', c.apn || 'internet');
+            setInputValue('[name="cellular-username"]', c.username || '');
+            setInputValue('[name="cellular-password"]', c.password || '');
+            setNetworkMode(n.mode || 'wifi');
             // Restore persisted ethernet interface selection
             if (n.mode === 'ethernet') {
                 var savedEth = n.eth_selected || 'eth0';
@@ -1577,9 +1579,9 @@
         }
         if (cfg.heartbeat) {
             setInputValue('[name="heartbeat-interval"]', cfg.heartbeat.interval);
-            setInputValue('[name="offline-threshold"]',  cfg.heartbeat.offline_threshold);
+            setInputValue('[name="offline-threshold"]', cfg.heartbeat.offline_threshold);
         }
-        if (cfg.mac_address) { var m=$('[data-mac-address]'); if(m) m.textContent=cfg.mac_address; }
+        if (cfg.mac_address) { var m = $('[data-mac-address]'); if (m) m.textContent = cfg.mac_address; }
         updateGlobalMacDisplay();
     };
 
@@ -1591,7 +1593,7 @@
         if (refreshBtn) {
             var nb = refreshBtn.cloneNode(true);
             refreshBtn.parentNode.replaceChild(nb, refreshBtn);
-            nb.addEventListener('click', function () { if(confirm('Refresh? Unsaved changes will be lost.')) location.reload(); });
+            nb.addEventListener('click', function () { if (confirm('Refresh? Unsaved changes will be lost.')) location.reload(); });
         }
         var saveBtn = el('save-btn');
         if (saveBtn) {
@@ -1604,72 +1606,72 @@
             var nsy = syncBtn.cloneNode(true);
             syncBtn.parentNode.replaceChild(nsy, syncBtn);
             nsy.addEventListener('click', function () {
-                var orig=this.innerHTML; this.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-2"></i>'; this.disabled=true;
+                var orig = this.innerHTML; this.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>'; this.disabled = true;
                 var payload = {
-                    timezone:    getActiveTimezone(),
-                    ntp_server:  getSelectValue('[name="ntp-server"]')  || 'time.google.com',
+                    timezone: getActiveTimezone(),
+                    ntp_server: getSelectValue('[name="ntp-server"]') || 'time.google.com',
                     date_format: getSelectValue('[name="date-format"]') || 'DD/MM/YYYY',
                     time_format: getSelectValue('[name="time-format"]') || '24-hour'
                 };
                 fetch('/api/sync-time', {
                     method: 'POST',
                     credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 })
-                .then(function(r){
-                    // Capture status before consuming the body
-                    var ok     = r.ok;
-                    var status = r.status;
-                    return r.json().then(function(data){ return { ok: ok, status: status, data: data }; });
-                })
-                .then(function(res){
-                    var fmt  = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
-                    var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
+                    .then(function (r) {
+                        // Capture status before consuming the body
+                        var ok = r.ok;
+                        var status = r.status;
+                        return r.json().then(function (data) { return { ok: ok, status: status, data: data }; });
+                    })
+                    .then(function (res) {
+                        var fmt = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+                        var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
 
-                    if (!res.ok) {
-                        // Server returned an error (401, 400 No Internet, 500 NTP fail, etc.)
-                        var errMsg = (res.data && (res.data.error || res.data.detail)) || ('Server error ' + res.status);
-                        // Fall back to browser time so the UI is never left blank
-                        var ist         = getISTNow();
-                        var displayDate = formatDate(ist.date, fmt);
-                        var raw24       = formatTime(ist.time);
+                        if (!res.ok) {
+                            // Server returned an error (401, 400 No Internet, 500 NTP fail, etc.)
+                            var errMsg = (res.data && (res.data.error || res.data.detail)) || ('Server error ' + res.status);
+                            // Fall back to browser time so the UI is never left blank
+                            var ist = getISTNow();
+                            var displayDate = formatDate(ist.date, fmt);
+                            var raw24 = formatTime(ist.time);
+                            var displayTime = formatTimeDisplay(raw24, tfmt);
+                            setInputValue('[name="date"]', displayDate);
+                            setInputValue('[name="time"]', raw24);
+                            updateTimeDisplayLabel(raw24);
+                            showNotification('Sync failed: ' + errMsg + '  \u2014 showing browser time', 'warning');
+                            return;
+                        }
+
+                        // Success path
+                        var data = res.data;
+                        var displayDate = data.formatted_date || formatDate(data.current_date, fmt);
+                        var raw24 = formatTime(data.current_time || '');
                         var displayTime = formatTimeDisplay(raw24, tfmt);
                         setInputValue('[name="date"]', displayDate);
                         setInputValue('[name="time"]', raw24);
                         updateTimeDisplayLabel(raw24);
-                        showNotification('Sync failed: ' + errMsg + '  \u2014 showing browser time', 'warning');
-                        return;
-                    }
-
-                    // Success path
-                    var data        = res.data;
-                    var displayDate = data.formatted_date || formatDate(data.current_date, fmt);
-                    var raw24       = formatTime(data.current_time || '');
-                    var displayTime = formatTimeDisplay(raw24, tfmt);
-                    setInputValue('[name="date"]', displayDate);
-                    setInputValue('[name="time"]', raw24);
-                    updateTimeDisplayLabel(raw24);
-                    showNotification('Time synchronized  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'success');
-                })
-                .catch(function(){
-                    // Network-level failure (server unreachable) — use browser time
-                    var ist     = getISTNow();
-                    var fmt     = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
-                    var tfmt    = getSelectValue('[name="time-format"]') || '24-hour';
-                    var displayDate = formatDate(ist.date, fmt);
-                    var raw24   = formatTime(ist.time);
-                    var displayTime = formatTimeDisplay(raw24, tfmt);
-                    setInputValue('[name="date"]', displayDate);
-                    setInputValue('[name="time"]', raw24);
-                    updateTimeDisplayLabel(raw24);
-                    showNotification('Server unreachable  \u2014 time set from browser  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'warning');
-                })
-                .then(function(){ nsy.innerHTML=orig; nsy.disabled=false; });
+                        showNotification('Time synchronized  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'success');
+                    })
+                    .catch(function () {
+                        // Network-level failure (server unreachable) — use browser time
+                        var ist = getISTNow();
+                        var fmt = getSelectValue('[name="date-format"]') || 'DD/MM/YYYY';
+                        var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
+                        var displayDate = formatDate(ist.date, fmt);
+                        var raw24 = formatTime(ist.time);
+                        var displayTime = formatTimeDisplay(raw24, tfmt);
+                        setInputValue('[name="date"]', displayDate);
+                        setInputValue('[name="time"]', raw24);
+                        updateTimeDisplayLabel(raw24);
+                        showNotification('Server unreachable  \u2014 time set from browser  ' + displayDate + ' ' + displayTime + ' (' + getActiveTimezone() + ')', 'warning');
+                    })
+                    .then(function () { nsy.innerHTML = orig; nsy.disabled = false; });
             });
         }
     };
-    
+
     // =========================================================================
     // INIT
     // =========================================================================
@@ -1679,7 +1681,7 @@
         // Strong double-init guard - set both flags immediately
         if (window._generalConfigInitialized || window._generalConfigInitializing) return;
         window._generalConfigInitializing = true;
-        window._generalConfigInitialized  = true;
+        window._generalConfigInitialized = true;
         initializeButtons();
         initializePasswordToggles();
         initWifiScanAndConnect();
@@ -1695,15 +1697,15 @@
         // This prevents the wifi radio from sending a spurious route=4 on
         // page load when auto-connect is actually ON in the database.
         loadConfiguration()
-        .then(function () {
-            initializeNetworkToggles();
-            window._generalConfigInitializing=false;
-        })
-        .catch(function (err) { console.error('Load error:',err); showNotification('Failed to load config','warning'); initializeNetworkToggles(); window._generalConfigInitializing=false; });
+            .then(function () {
+                initializeNetworkToggles();
+                window._generalConfigInitializing = false;
+            })
+            .catch(function (err) { console.error('Load error:', err); showNotification('Failed to load config', 'warning'); initializeNetworkToggles(); window._generalConfigInitializing = false; });
     };
 
     window.cleanupGeneralConfig = cleanup;
-    window.showNotification     = showNotification;
+    window.showNotification = showNotification;
 
     // Router handles initialization - no auto-trigger needed
 })();

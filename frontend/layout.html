@@ -571,18 +571,18 @@
                 detail: function(e){ return '<strong>Cause:</strong> Browser is offline (navigator.onLine = false)<br><strong>Detail:</strong> '+e; }
             },
             SERVER_CRASH: {
-                
-                badge:'Server Crash', badgeClass:'sa-badge-crash',
-                title:'Gateway Server Crashed',
-                desc:'The gateway server stopped responding. It may be restarting — please wait and retry.',
-                detail: function(e){ return '<strong>Cause:</strong> Server process exited or became unreachable<br><strong>Likely:</strong> Service crash · OOM · Hardware fault · Firmware update<br><strong>Detail:</strong> '+e; }
+                icon:'🔌', iconClass:'sa-icon-network',
+                badge:'Reconnecting', badgeClass:'sa-badge-network',
+                title:'Reconnecting to Gateway',
+                desc:'The network connection dropped or IP address changed. The gateway may also be restarting.',
+                detail: function(e){ return '<strong>Cause:</strong> Connection could not be established<br><strong>Likely:</strong> Network switched (e.g. Wi-Fi to LTE) · Gateway IP changed · Service restart<br><strong>Detail:</strong> '+e; }
             },
             SERVER_DISCONNECT: {
-                icon:'🔌', iconClass:'sa-icon-crash',
-                badge:'Server Disconnected', badgeClass:'sa-badge-crash',
-                title:'Server Disconnected',
-                desc:'The gateway server closed the connection unexpectedly. It may be restarting.',
-                detail: function(e){ return '<strong>Cause:</strong> HTTP connection closed before response<br><strong>Likely:</strong> Server restart · Graceful shutdown · Network path interrupted<br><strong>Detail:</strong> '+e; }
+                icon:'🔌', iconClass:'sa-icon-network',
+                badge:'Disconnected', badgeClass:'sa-badge-network',
+                title:'Connection Dropped',
+                desc:'The connection to the gateway was interrupted. It may be rebooting or switching networks.',
+                detail: function(e){ return '<strong>Cause:</strong> HTTP connection closed unexpectedly<br><strong>Likely:</strong> Network path interrupted · Server reboot<br><strong>Detail:</strong> '+e; }
             },
             TIMEOUT: {
                 icon:'⏱', iconClass:'sa-icon-timeout',
@@ -691,9 +691,16 @@
             .then(function (res) {
                 clearTimeout(tid);
                 if (res.ok) {
-                    // Session still valid — apply viewer/editor role
-                    hideAlert();
-                    applyRole();
+                    var wasAlerting = document.getElementById('serverAlertOverlay').classList.contains('show');
+                    // Session still valid
+                    if (wasAlerting) {
+                        // We were disconnected (IP change / network drop) but are now reconnected.
+                        // Force a full page reload so all WebSockets and frontend state reconnect seamlessly.
+                        window.location.reload();
+                    } else {
+                        hideAlert();
+                        applyRole();
+                    }
                 } else if (res.status === 401 || res.status === 403) {
                     // Session expired — clear cookies and go to login
                     clearCookies();

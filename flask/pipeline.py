@@ -516,52 +516,60 @@ async def pipeline_factory_reset_handler(request):
         
         logger.info("[FACTORY-RESET] Password verified for user: {}".format(verified_user.get('username')))
         
-        # Check pipeline connection
-        with pipeline_state["lock"]:
-            client = pipeline_state.get("client")
-            connected = pipeline_state.get("connected", False)
-        
-        if not connected or not client:
-            logger.warning("[FACTORY-RESET] Pipeline not connected")
-            return web.json_response({'success': False, 'error': 'Pipeline not connected'}, status=503)
-        
-        # Send factory reset command
+        # Restore python database from factory default if available
         try:
-            # Try datapoint_set first
-            if hasattr(client, 'datapoint_set'):
-                ok = client.datapoint_set('factory-reset', 1)
-                logger.info("[FACTORY-RESET] datapoint_set result: {}".format(ok))
-            elif hasattr(client, 'publish_datapoint'):
-                ok = client.publish_datapoint('factory-reset', 1)
-                logger.info("[FACTORY-RESET] publish_datapoint result: {}".format(ok))
-            else:
-                # Fallback: try datapoint_update with service None
-                ok = client.datapoint_update(None, 'factory-reset', 1)
-                logger.info("[FACTORY-RESET] datapoint_update result: {}".format(ok))
-            
-            if ok:
-                logger.info("[FACTORY-RESET] factory-reset=1 sent successfully")
+            import shutil, os
+            from database import DB_FILE
+            factory_db = os.path.join(os.path.dirname(DB_FILE), 'factory_default.db')
+            if os.path.exists(factory_db):
+                import sqlite3
+                conn = sqlite3.connect(DB_FILE)
+                conn.execute('ATTACH DATABASE ? AS factory', (factory_db,))
                 
-                # Record in pipeline send log
-                try:
-                    from database import record_pipeline_send_success
-                    record_pipeline_send_success("factory-reset", 1, None, "Factory reset triggered by {}".format(verified_user.get('username')))
-                except Exception as log_err:
-                    logger.warning("[FACTORY-RESET] Could not log send: {}".format(log_err))
+                cursor = conn.cursor()
+                # Get all tables from main database
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                tables = [row[0] for row in cursor.fetchall()]
                 
-                return web.json_response({
-                    'success': True, 
-                    'message': 'Factory reset command sent to pipeline'
-                })
+                conn.execute('PRAGMA foreign_keys = OFF')
+                
+                for table in tables:
+                    try:
+                        # Remove all the existing data
+                        conn.execute(f'DELETE FROM main.{table}')
+                        # Replace it with factory reset data
+                        conn.execute(f'INSERT INTO main.{table} SELECT * FROM factory.{table}')
+                    except Exception as e:
+                        logger.warning(f"[FACTORY-RESET] Could not migrate table {table}: {e}")
+                
+                conn.commit()
+                conn.execute('DETACH DATABASE factory')
+                conn.execute('PRAGMA foreign_keys = ON')
+                conn.close()
+                
+                logger.info(f"[FACTORY-RESET] Cleared all existing data and restored from {factory_db}")
+                msg = 'Gateway database successfully restored to factory defaults.'
             else:
-                logger.warning("[FACTORY-RESET] Send command returned False")
-                return web.json_response({'success': False, 'error': 'Pipeline rejected command'}, status=500)
+                logger.warning("[FACTORY-RESET] No factory_default.db found. No changes made.")
+                msg = 'Warning: No factory default database was found. Current database is retained.'
+
+            # Record the action
+            try:
+                from database import record_pipeline_send_success
+                record_pipeline_send_success("factory-reset", 1, None, f"Local factory reset triggered by {verified_user.get('username')}")
+            except Exception as log_err:
+                logger.warning(f"[FACTORY-RESET] Could not log send: {log_err}")
+
+            return web.json_response({
+                'success': True, 
+                'message': msg
+            })
                 
         except Exception as exc:
-            logger.error("[FACTORY-RESET] Error sending datapoint: {}".format(exc))
+            logger.error(f"[FACTORY-RESET] Error during factory reset: {exc}")
             import traceback
             traceback.print_exc()
-            return web.json_response({'success': False, 'error': 'Failed to send command: {}'.format(str(exc))}, status=500)
+            return web.json_response({'success': False, 'error': f'Failed to reset: {str(exc)}'}, status=500)
             
     except Exception as e:
         logger.error("[FACTORY-RESET] Handler error: {}".format(e))

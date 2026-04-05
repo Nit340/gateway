@@ -107,6 +107,9 @@ input.field::placeholder{color:var(--text3);}
 <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
   <header>
     <h1 class="topbar-title">Database Manager</h1>
+    <button onclick="saveFactoryReset()" id="saveFactoryBtn" class="btn-primary" style="margin-right: 10px; background: var(--red);">
+      <span class="mat" style="font-size:16px;">save</span> Save Factory DB
+    </button>
     <button onclick="openInsertModal()" id="insertBtn" style="display:none;" class="btn-primary">
       <span class="mat" style="font-size:16px;">add</span> Insert Row
     </button>
@@ -153,6 +156,18 @@ input.field::placeholder{color:var(--text3);}
   let editRowId = null;
 
   async function logout() { await fetch('/admin/logout'); window.location.href='/admin/login'; }
+
+  async function saveFactoryReset() {
+    if (!confirm('Save the current database configuration as the factory default? Future firmware factory resets will revert the gateway to this database state.')) return;
+    try {
+      const r = await fetch('/api/admin/save-factory-default', { method: 'POST' });
+      const d = await r.json();
+      if (d.success) toast('Factory default database saved successfully!');
+      else toast('Failed to save factory default: ' + (d.error || 'Unknown error'), false);
+    } catch(e) {
+      toast('Error saving factory default: ' + e.message, false);
+    }
+  }
 
   function toast(msg, ok=true) {
     const t = document.getElementById('toast');

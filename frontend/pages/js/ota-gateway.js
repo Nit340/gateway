@@ -1048,18 +1048,36 @@ function showFactoryResetDialog() {
                         updateBadge.textContent = 'Factory Reset';
                     }
                     
-                    // Simulate reset countdown
-                    let countdown = 10;
+                    // Simulate reset countdown (take 1 minute to simulate DB restore)
+                    let countdown = 60;
                     const countdownInterval = setInterval(() => {
                         const statusTextEl = document.getElementById('status-text');
                         if (statusTextEl) {
-                            statusTextEl.textContent = `Factory Reset in ${countdown} seconds...`;
+                            statusTextEl.textContent = `Restoring DB Configuration: ${countdown}s remaining...`;
                         }
+                        
+                        // Update progress bar
+                        const progressFill = document.getElementById('progress-fill');
+                        const statusPercent = document.getElementById('status-percent');
+                        if (progressFill && statusPercent) {
+                            const percent = Math.round(((60 - countdown) / 60) * 100);
+                            progressFill.style.width = `${percent}%`;
+                            progressFill.className = 'h-full bg-red-500 transition-all duration-1000';
+                            statusPercent.textContent = `${percent}%`;
+                            statusPercent.className = 'text-red-500 font-bold';
+                        }
+                        
+                        // Add occasional log entries
+                        if (countdown % 15 === 0 && countdown > 0) {
+                            addLogEntry(`Restoring tables... ${countdown}s left`);
+                        }
+
                         countdown--;
                         
                         if (countdown < 0) {
                             clearInterval(countdownInterval);
                             // Simulate reboot after factory reset
+                            if (statusTextEl) statusTextEl.textContent = 'Database Restored. Rebooting...';
                             simulateReboot('factory-reset');
                         }
                     }, 1000);
