@@ -131,30 +131,108 @@
         }
     }
 
-    /* Radio button styling - matching exact theme */
-    input[type="radio"] {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 1rem;
-        height: 1rem;
-        border: 2px solid #CBD5E1;
-        border-radius: 50%;
-        margin-right: 0.5rem;
+    /* ── Instagram-style segmented tab switcher ── */
+    .net-mode-tabbar {
+        display: inline-flex;
+        align-items: center;
+        background: #f1f5f9;
+        border-radius: 999px;
+        padding: 3px;
+        gap: 2px;
         position: relative;
+    }
+
+    .net-mode-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 14px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: #64748b;
+        background: transparent;
+        border: none;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
+        position: relative;
+        white-space: nowrap;
+        user-select: none;
+        z-index: 1;
     }
 
-    input[type="radio"]:checked {
-        border-color: #2563EB;
-        background-color: #2563EB;
-        box-shadow: inset 0 0 0 3px white;
+    .net-mode-tab i {
+        font-size: 0.72rem;
     }
 
-    input[type="radio"]:focus {
-        outline: none;
-        ring: 2px solid #2563EB;
-        ring-offset: 2px;
+    .net-mode-tab:hover:not(.active):not(.connected) {
+        color: #334155;
+    }
+
+    .net-mode-tab.active {
+        color: #2563EB;
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Connected — full green pill highlight */
+    .tab-dot {
+        display: none;
+    }
+
+    .net-mode-tab.connected {
+        color: #ffffff;
+        background: #10b981;
+        box-shadow: 0 1px 6px rgba(16, 185, 129, 0.35);
+    }
+
+    .net-mode-tab.connected i {
+        color: #ffffff;
+    }
+
+    /* If active AND connected, green wins */
+    .net-mode-tab.active.connected {
+        color: #ffffff;
+        background: #10b981;
+        box-shadow: 0 1px 6px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Connect button */
+    .net-connect-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 14px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1.5px solid #2563EB;
+        color: #2563EB;
+        background: #eff6ff;
+        transition: all 0.18s ease;
+    }
+
+    .net-connect-btn:hover:not(:disabled) {
+        background: #2563EB;
+        color: #fff;
+    }
+
+    .net-connect-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    .net-connect-btn.is-connected {
+        border-color: #10b981;
+        color: #059669;
+        background: #f0fdf4;
+    }
+
+    .net-connect-btn.is-connected:hover:not(:disabled) {
+        background: #10b981;
+        color: #fff;
+        border-color: #10b981;
     }
 
     /* Form input focus styling */
@@ -485,35 +563,27 @@
                 </div>
             </div>
 
-            <!-- WebSocket connection status bar -->
-            <div id="net-ws-status"
-                class="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs">
-                <i class="fa-solid fa-circle-notch fa-spin text-slate-400" id="net-ws-icon"></i>
-                <span id="net-ws-status-text">Connecting to live network data...</span>
-            </div>
-
-            <!-- Network Mode Selection -->
+            <!-- Network Mode Selection — compact pill tabs -->
             <div class="mb-6">
-                <label class="block text-sm font-medium text-slate-700 mb-3">Network Mode</label>
-                <div class="flex flex-wrap items-center gap-4 mb-3">
-                    <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="network-mode" value="ethernet"
-                            class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i
-                                class="fa-solid fa-ethernet mr-2"></i> Ethernet</span>
-                    </label>
-                    <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="network-mode" value="wifi"
-                            class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
-                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i
-                                class="fa-solid fa-wifi mr-2"></i> WiFi</span>
-                    </label>
-                    <label class="flex items-center cursor-pointer">
-                        <input type="radio" name="network-mode" value="lte"
-                            class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
-                        <span class="ml-2 text-sm text-slate-700 flex items-center"><i
-                                class="fa-solid fa-signal mr-2"></i> LTE/4G</span>
-                    </label>
+                <div class="flex items-center justify-between mb-3">
+                    <!-- Pill tab switcher -->
+                    <div class="net-mode-tabbar" id="net-mode-tabbar">
+                        <button type="button" class="net-mode-tab" id="net-tab-ethernet" data-mode="ethernet">
+
+                            <i class="fa-solid fa-ethernet"></i>
+                            Ethernet
+                        </button>
+                        <button type="button" class="net-mode-tab active" id="net-tab-wifi" data-mode="wifi">
+
+                            <i class="fa-solid fa-wifi"></i>
+                            WiFi
+                        </button>
+                        <button type="button" class="net-mode-tab" id="net-tab-lte" data-mode="lte">
+
+                            <i class="fa-solid fa-signal"></i>
+                            LTE / 4G
+                        </button>
+                    </div>
 
                     <!-- Auto-Connect toggle -->
                     <button type="button" id="wifi-auto-connect-btn" title="Auto Connect"
@@ -527,11 +597,22 @@
                         <span id="ac-label">Auto</span>
                     </button>
                 </div>
+
+                <!-- Hidden radio inputs — JS logic unchanged -->
+                <input type="radio" name="network-mode" value="ethernet" id="net-radio-ethernet" class="sr-only">
+                <input type="radio" name="network-mode" value="wifi" id="net-radio-wifi" class="sr-only" checked>
+                <input type="radio" name="network-mode" value="lte" id="net-radio-lte" class="sr-only">
             </div>
 
             <!-- -- ETHERNET ---------------------------------------------------- -->
             <div id="ethernet-config" class="mb-6 hidden">
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">Ethernet Configuration</h3>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-slate-900">Ethernet Configuration</h3>
+                    <button type="button" id="eth-connect-btn" class="net-connect-btn">
+                        <i class="fa-solid fa-plug"></i>
+                        <span id="eth-connect-label">Connect</span>
+                    </button>
+                </div>
 
                 <!-- Live status cards: hidden until Live connected -->
                 <div id="eth-live-panel" class="mb-4 grid grid-cols-2 gap-3">
@@ -582,14 +663,22 @@
 
             <!-- -- WIFI -------------------------------------------------------- -->
             <div id="wifi-config" class="mb-6">
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">WiFi Configuration</h3>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-slate-900">WiFi Configuration</h3>
+                    <button type="button" id="wifi-connect-btn" class="net-connect-btn">
+                        <i class="fa-solid fa-wifi"></i>
+                        <span id="wifi-connect-label">Connect</span>
+                    </button>
+                </div>
 
-                <!-- Live status strip: hidden until Live connected -->
+                <!-- Live status strip -->
                 <div id="wifi-live-panel" class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                    <!-- state + signal bars row -->
                     <div class="flex items-center justify-between mb-2">
-                        <span id="wifi-state-badge"
-                            class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                        <div class="flex items-center gap-2">
+                            <span id="wifi-state-badge"
+                                class="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-500">--</span>
+                            <span id="wifi-live-ssid" class="text-xs font-semibold text-slate-700"></span>
+                        </div>
                         <div class="flex items-center gap-2">
                             <div class="signal-strength" id="wifi-signal-bars">
                                 <div class="signal-bar none" style="height:4px"></div>
@@ -609,13 +698,11 @@
                     </div>
                 </div>
 
-                <!-- Editable fields (SSID + password only) -->
+                <!-- Editable fields -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">SSID <span
                                 class="text-red-500">*</span></label>
-
-                        <!-- SSID display + Scan button -->
                         <div class="flex gap-2">
                             <div
                                 class="flex-1 flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
@@ -648,16 +735,22 @@
 
             <!-- -- LTE --------------------------------------------------------- -->
             <div id="cellular-config" class="mb-6 hidden">
-                <h3 class="text-sm font-semibold text-slate-900 mb-3">Cellular / LTE Configuration</h3>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-slate-900">Cellular / LTE Configuration</h3>
+                    <button type="button" id="lte-connect-btn" class="net-connect-btn">
+                        <i class="fa-solid fa-signal"></i>
+                        <span id="lte-connect-label">Connect</span>
+                    </button>
+                </div>
 
-                <!-- Power-off alert: shown ONLY when power = 0. No other live UI shown. -->
+                <!-- Power-off alert -->
                 <div id="lte-power-off-alert"
                     class="hidden mb-4 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
                     <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>
                     <span>No GSM / LTE modem detected &mdash; hardware power state is off.</span>
                 </div>
 
-                <!-- Live status strip: shown only when power = 1 AND Live connected -->
+                <!-- Live status strip -->
                 <div id="lte-live-panel" class="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="flex items-center justify-between mb-2">
                         <span id="lte-state-badge"
@@ -689,7 +782,33 @@
                     </div>
                 </div>
 
-
+                <!-- APN / Username / Password -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">APN</label>
+                        <input type="text" name="cellular-apn" value="airtelgprs.com"
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+                            placeholder="e.g. internet">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                        <input type="text" name="cellular-username" value=""
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+                            placeholder="optional">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <div class="relative">
+                            <input type="password" name="cellular-password" value=""
+                                class="w-full rounded-lg border border-slate-300 px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+                                placeholder="optional">
+                            <button type="button"
+                                class="toggle-password absolute right-3 top-2.5 text-slate-400 hover:text-primary">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- MAC Addresses (live updated from active interfaces) -->
@@ -790,36 +909,6 @@
     </div>
 </div>
 
-<!-- Network Switching Modal -->
-<div id="net-switching-modal" class="fixed inset-0 z-[100] hidden">
-    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div
-            class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden transform transition-all">
-            <div class="p-8 text-center" id="net-switching-content">
-                <!-- Loading Animation - Simple Spinner -->
-                <div class="mb-6 flex justify-center">
-                    <div class="relative w-16 h-16">
-                        <div class="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
-                        <div
-                            class="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin">
-                        </div>
-                    </div>
-                </div>
-
-                <h3 id="net-switching-title" class="text-xl font-bold text-slate-900 mb-2">Switching Network...</h3>
-                <p id="net-switching-text" class="text-slate-500 text-sm">Please wait while we reconfigure your
-                    connection.</p>
-
-                <!-- Progress bar -->
-                <div class="mt-8 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div id="net-switching-progress"
-                        class="bg-primary h-full w-0 transition-all duration-300 ease-linear"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Toast Container -->
 <div id="gc-toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2">

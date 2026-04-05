@@ -94,54 +94,7 @@
         ethernet: 1 /* radio value alias */
     };
 
-    var showNetworkSwitchingModal = function (newMode) {
-        var modal = el('net-switching-modal');
-        var title = el('net-switching-title');
-        var text = el('net-switching-text');
-        var progress = el('net-switching-progress');
-        if (!modal) return;
-
-        var duration = 3000;
-
-        // For auto mode, show a simple "Auto switching mode" message without hitting the server
-        if (newMode === 'auto') {
-            if (title) title.textContent = 'Auto Switching Mode';
-            if (text) text.textContent = 'Gateway will automatically select the best available network.';
-        } else {
-            if (title) title.textContent = 'Switching to ' + newMode.toUpperCase() + '...';
-            if (text) text.textContent = 'Please wait while we reconfigure your connection.';
-        }
-
-        modal.classList.remove('hidden');
-        if (progress) {
-            progress.style.transition = 'none';
-            progress.style.width = '0%';
-            setTimeout(function () {
-                progress.style.transition = 'width ' + duration + 'ms linear';
-                progress.style.width = '100%';
-            }, 50);
-        }
-
-        setTimeout(function () {
-            modal.classList.add('hidden');
-            if (progress) {
-                progress.style.transition = 'none';
-                progress.style.width = '0%';
-            }
-        }, duration);
-
-        // Best-effort fetch of custom modal text — silently ignored if server is unreachable
-        fetch('/api/modals')
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (modals) {
-                if (!modals) return;
-                var cfg = modals.find(function (m) { return m.intname === 'network-load'; });
-                if (cfg && cfg.modal_text && newMode !== 'auto') {
-                    if (text) text.textContent = cfg.modal_text;
-                }
-            })
-            .catch(function () { /* server unreachable — already showing fallback text */ });
-    };
+    // Switching modal removed — tab switching is instant, Connect button handles connection
 
 
 
@@ -213,33 +166,81 @@
         var map = { ethernet: 'ethernet-config', wifi: 'wifi-config', lte: 'cellular-config' };
         var e = el(map[mode] || 'wifi-config');
         if (e) e.style.display = 'block';
+        // Sync tab bar visual state
+        document.querySelectorAll('.net-mode-tab').forEach(function (tab) {
+            if (tab.dataset.mode === mode) tab.classList.add('active');
+            else tab.classList.remove('active');
+        });
         updateGlobalMacDisplay();
     };
 
+    // =========================================================================
+    // NETWORK MODE TABS — sync visual tab state with hidden radio value
+    // =========================================================================
+    var _syncNetworkTabs = function (activeMode) {
+        document.querySelectorAll('.net-mode-tab').forEach(function (tab) {
+            var mode = tab.dataset.mode;
+            tab.classList.remove('active');
+            if (mode === activeMode) {
+                tab.classList.add('active');
+            }
+        });
+    };
+
+    // Called from renderEthernet / renderWifi / renderLte to update connected dots + button style
+    var _updateTabConnectedState = function (mode, connected) {
+        var tab = document.getElementById('net-tab-' + mode);
+        if (tab) {
+            if (connected) {
+                tab.classList.add('connected');
+            } else {
+                tab.classList.remove('connected');
+            }
+        }
+
+        // Update the connect button label/style for this mode
+        var btnId = mode + '-connect-btn';
+        var labelId = mode + '-connect-label';
+        var btn = document.getElementById(btnId);
+        var lbl = document.getElementById(labelId);
+        if (btn) {
+            if (connected) {
+                btn.classList.add('is-connected');
+                if (lbl) lbl.textContent = 'Connected';
+            } else {
+                btn.classList.remove('is-connected');
+                if (lbl) lbl.textContent = 'Connect';
+            }
+        }
+    };
+
+    // =========================================================================
+    // CONNECT BUTTONS — removed, no backend calls needed
+    // =========================================================================
+    var _initConnectButtons = function () { /* no-op */ };
+
     var initializeNetworkToggles = function () {
+        // ── Tab bar: click tab → check hidden radio → trigger change ──
+        document.querySelectorAll('.net-mode-tab').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var mode = this.dataset.mode;
+                var radio = document.getElementById('net-radio-' + mode);
+                if (radio && !radio.checked) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        });
+
+        // ── Hidden radio change → update tabs + panels only (no modal, no connect) ──
         document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
             r.addEventListener('change', function () {
                 setNetworkMode(this.value);
+                _syncNetworkTabs(this.value);
+                if (this.value !== 'ethernet') { _setEthCardSelected(null); }
+                _autoHighlightedMode = null;
+                _autoHighlightedEth = null;
 
-                // ALWAYS send network_route_select for auto mode (value 0)
-                if (this.value === 'auto') {
-                    // Reset eth card selection highlight when switching to auto
-                    _setEthCardSelected(null);
-                    // Reset auto-highlight trackers
-                    _autoHighlightedMode = null;
-                    _autoHighlightedEth = null;
-                }
-                // For other modes, only send if Auto-Connect is OFF
-                else if (!_acEnabled) {
-                    showNetworkSwitchingModal(this.value);
-                    // Reset eth card selection highlight when switching away from ethernet
-                    if (this.value !== 'ethernet') { _setEthCardSelected(null); }
-                    // Reset auto-highlight trackers when leaving auto mode
-                    _autoHighlightedMode = null;
-                    _autoHighlightedEth = null;
-                }
-
-                // Persist network_mode to DB immediately so page refresh keeps the selection
                 var modeToSave = this.value;
                 var payload = { network: { mode: modeToSave, auto_connect: _acEnabled } };
                 if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
@@ -250,20 +251,23 @@
                     body: JSON.stringify(payload)
                 })
                     .then(function (r) { return r.json(); })
-                    .then(function (d) {
-
-                    })
                     .catch(function (e) {
                         console.warn('[NET-MODE] failed to persist network_mode:', e);
                     });
                 updateGlobalMacDisplay();
             });
         });
+
+        // ── Connect buttons ──
+        _initConnectButtons();
+
         document.querySelectorAll('input[name="ip-assignment"]').forEach(function (r) {
             r.addEventListener('change', toggleIPAssignment);
         });
-        var c = $('input[name="network-mode"]:checked');
-        setNetworkMode(c ? c.value : 'wifi');
+        var c = document.querySelector('input[name="network-mode"]:checked');
+        var initMode = c ? c.value : 'wifi';
+        setNetworkMode(initMode);
+        _syncNetworkTabs(initMode);
         toggleIPAssignment();
     };
     var toggleIPAssignment = function () {
@@ -450,12 +454,11 @@
 
         updateGlobalMacDisplay();
         _autoHighlight();
-    };
+        // Update ethernet tab connected indicator
+        var e0Up = isUp((_cache.lan.eth0 || {}).state);
+        var e1Up = isUp((_cache.lan.eth1 || {}).state);
 
-    // =========================================================================
-    // RENDER WIFI
-    // Fields: state, signal_quality (dBm signed), ssid, bssid, mac, ip, frequency
-    // =========================================================================
+    };
     var dbmToBars = function (dbm) {
         dbm = parseInt(dbm) || 0;
         if (dbm >= -55) return 4;
@@ -479,7 +482,23 @@
         // Check for stale data
         var state = w.state;
         if (isFieldStale('net.wlan.state')) state = null;
-        stateBadge('wifi-state-badge', isUp(state));
+        var wifiUp = isUp(state);
+        stateBadge('wifi-state-badge', wifiUp);
+
+        // Green panel when connected
+        var panel = el('wifi-live-panel');
+        if (panel) {
+            panel.style.background = wifiUp ? '#f0fdf4' : '';
+            panel.style.borderColor = wifiUp ? '#86efac' : '';
+        }
+
+        // Show SSID in live panel
+        var liveSsid = el('wifi-live-ssid');
+        if (liveSsid) {
+            var ssidVal = (w.ssid && !isFieldStale('net.wlan.ssid')) ? w.ssid : '';
+            liveSsid.textContent = ssidVal ? 'SSID : ' + ssidVal : '';
+            liveSsid.style.color = wifiUp ? '#15803d' : '';
+        }
 
         // signal_quality is dBm (signed negative number)
         var wifiSignal = (w.signal_quality !== undefined && w.signal_quality !== null) ? w.signal_quality : w.signal;
@@ -512,12 +531,8 @@
 
         updateGlobalMacDisplay();
         _autoHighlight();
+        _updateTabConnectedState('wifi', wifiUp);
     };
-
-    // =========================================================================
-    // WIFI SCAN & PICKER
-    // Click Select Network -> dropdown opens with results -> click a row -> label updates
-    // =========================================================================
     var _wifiNetworks = [];
     var _wifiPanel = null;
 
@@ -724,35 +739,7 @@
         }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist OFF:', e); });
     };
 
-    var _doOneConnect = function () {
-        var ssid = (el('wifi-ssid-value') || {}).value || '';
-        var pass = getInputValue('[name="wifi-password"]');
-        if (!ssid) { _stopAutoConnect(); showNotification('Select a network first', 'warning'); return; }
-        _setAcUi(true, true);
-        fetch('/api/wifi/connect', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ssid: ssid, password: pass })
-        })
-            .then(function (r) {
-                if (!r.ok) return r.json().then(function (e) { throw new Error(e.message || 'HTTP ' + r.status); });
-                return r.json();
-            })
-            .then(function (data) {
-                showNotification(data.message || 'Connected to ' + ssid, 'success');
-                // If already connected stop retrying
-                if (isUp((_cache.wlan || {}).state)) {
-                    if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
-                    _setAcUi(true, false);
-                }
-                else { _setAcUi(true, false); }
-            })
-            .catch(function (err) {
-                // Stay enabled; retry on next tick
-                _setAcUi(true, false);
-                console.warn('Auto-connect attempt failed:', err.message);
-            });
-    };
+    var _doOneConnect = function () { /* no backend for now */ };
 
     var _toggleAutoConnect = function () {
         // Always toggle — never block the click
@@ -849,28 +836,6 @@
             card.addEventListener('click', function () {
                 _setEthCardSelected(iface);
                 _selectedEth = iface;
-                // Persist eth_selected + network_mode to DB immediately so refresh survives
-                fetch('/api/general-configuration', {
-                    method: 'PUT',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        network: {
-                            mode: 'ethernet',
-                            eth_selected: iface
-                        }
-                    })
-                })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) {
-
-                    })
-                    .catch(function (e) {
-                        console.warn('[ETH-SELECT] failed to persist eth_selected:', e);
-                    });
-                if (!_acEnabled) {
-                    showNetworkSwitchingModal(iface);
-                }
                 updateGlobalMacDisplay();
             });
         });
@@ -908,7 +873,8 @@
         // State badge - check for stale
         var state = l.state;
         if (isFieldStale('net.lte.state')) state = null;
-        stateBadge('lte-state-badge', isUp(state));
+        var lteUp = isUp(state);
+        stateBadge('lte-state-badge', lteUp);
 
         // Signal percent bar
         var pct = (!isFieldStale('net.lte.signal_pct') && l.signal_pct !== undefined)
@@ -931,6 +897,7 @@
 
         updateGlobalMacDisplay();
         _autoHighlight();
+
     };
 
     // =========================================================================
@@ -1015,7 +982,6 @@
     var _netAttempts = 0;   // connection attempt counter
 
     var setLiveBtnState = function (connected) {
-        // Update indicator badge
         var btn = el('live-btn-network');
         if (btn) {
             btn.className = connected
@@ -1025,109 +991,70 @@
                 ? '<i class="fa-solid fa-circle-dot fa-beat"></i> Live'
                 : '<i class="fa-solid fa-tower-broadcast"></i> Live';
         }
-        // Update status bar
-        var bar = el('net-ws-status');
-        var icon = el('net-ws-icon');
-        var txt = el('net-ws-status-text');
-        if (bar) {
-            if (connected) {
-                bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs';
-                if (icon) icon.className = 'fa-solid fa-circle-dot fa-beat text-emerald-500';
-                if (txt) txt.textContent = 'Live network data ';
-            } else {
-                bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs';
-                if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-amber-400';
-                if (txt && txt.textContent.indexOf('Connecting') === -1) txt.textContent = 'Reconnecting to live network data...';
-            }
-        }
     };
 
-    var hideLivePanels = function () {
-        // Panels stay visible; just hide the power-off alert
-        hide('lte-power-off-alert');
-    };
+    var hideLivePanels = function () { hide('lte-power-off-alert'); };
 
     var connectNetworkStatusWs = function () {
-        if (_netWs && (_netWs.readyState === WebSocket.OPEN || _netWs.readyState === WebSocket.CONNECTING)) return;
-        _netAttempts++;
-        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        var url = protocol + '//' + window.location.host + '/ws/network-status';
+        _liveConnected = true;
+        setLiveBtnState(true);
 
-        // Update status bar: first attempt = Connecting, subsequent = Reconnecting
-        var bar = el('net-ws-status'); var icon = el('net-ws-icon'); var txt = el('net-ws-status-text');
-        if (bar) {
-            bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-500 text-xs';
-            if (icon) icon.className = 'fa-solid fa-circle-notch fa-spin text-slate-400';
-            if (txt) txt.textContent = _netAttempts <= 1 ? 'Connecting to live network data...' : 'Reconnecting... (attempt ' + _netAttempts + ')';
-        }
-        try { _netWs = new WebSocket(url); }
-        catch (e) { return; }
+        // WiFi — connected
+        mergeInto(_cache.wlan, {
+            state: 1,
+            ssid: 'Univa-Guest',
+            signal_quality: -58,
+            ip: '192.168.1.105',
+            mac: 'DC:A6:32:1B:4F:9E',
+            bssid: 'E4:CA:12:88:3A:01',
+            frequency: 2437
+        });
 
-        _netWs.onopen = function () {
-            _liveConnected = true;
-            _netAttempts = 0;
-            setLiveBtnState(true);
-            _netWs.send(JSON.stringify({ type: 'get_snapshot' }));
-        };
+        // Ethernet — no link
+        mergeInto(_cache.lan, {
+            eth0: { state: 0, ip: '--', mac: 'B8:27:EB:44:2C:10' },
+            eth1: { state: 0, ip: '--', mac: 'B8:27:EB:44:2C:11' }
+        });
 
-        _netWs.onmessage = function (ev) {
-            try {
-                var msg = JSON.parse(ev.data);
-                // Handle both snapshot and delta messages
-                if (msg.type === 'network_status_initial' || msg.type === 'network_status_update' || msg.type === 'network_status_delta') {
-                    applySnapshot(msg);
-                }
-            } catch (e) { console.warn('[NET] parse error', e); }
-        };
+        // LTE — powered on, not connected (state=0, but show static details)
+        mergeInto(_cache.lte, {
+            power: 1,
+            state: 0,
+            signal_pct: 72,
+            ip: '10.134.22.87',
+            operator_name: 'Airtel IN',
+            operator_id: '40445',
+            tech: 'LTE',
+            imei: '356938035643809',
+            iccid: '89914503641234567890',
+            imsi: '404451234567890'
+        });
 
-        _netWs.onerror = function (e) { /* connection error handled in onclose */ };
-        _netWs.onclose = function (ev) {
-            _liveConnected = false;
-            setLiveBtnState(false);
+        var now = Date.now();
+        ['net.wlan.state', 'net.wlan.ssid', 'net.wlan.signal', 'net.wlan.signal_quality',
+            'net.wlan.ip', 'net.wlan.mac', 'net.wlan.bssid', 'net.wlan.frequency',
+            'net.lan.eth0.state', 'net.lan.eth0.ip', 'net.lan.eth0.mac',
+            'net.lan.eth1.state', 'net.lan.eth1.ip', 'net.lan.eth1.mac',
+            'net.lte.power', 'net.lte.state', 'net.lte.signal_pct', 'net.lte.ip',
+            'net.lte.operator_name', 'net.lte.operator_id', 'net.lte.tech',
+            'net.lte.imei', 'net.lte.iccid', 'net.lte.imsi'
+        ].forEach(function (k) { _fieldTimestamps[k] = now; });
 
-            // On first failure (1006 = TCP refused), check if API is reachable
-            // to distinguish nginx WS proxy issue from server down
-            if (ev.code === 1006 && _netAttempts === 1) {
-                fetch('/api/general-configuration', { credentials: 'same-origin' })
-                    .then(function (r) {
-                        if (r.ok) {
-                            // API works but WS fails = nginx not proxying /ws/ correctly
-                            var txt = el('net-ws-status-text');
-                            var bar = el('net-ws-status');
-                            var icon = el('net-ws-icon');
-                            if (bar) bar.className = 'mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs';
-                            if (icon) icon.className = 'fa-solid fa-triangle-exclamation text-red-500';
-                            if (txt) txt.textContent = 'Server reachable but WebSocket failed   check nginx /ws/ proxy config (proxy_read_timeout, Connection upgrade)';
-                        }
-                    })
-                    .catch(function () { /* server unreachable - normal reconnect message shown */ });
-            }
-            // Exponential backoff: 3s, 6s, 12s ... max 30s
-            var delay = Math.min(3000 * Math.pow(2, Math.min(_netAttempts - 1, 0)), 30000);
-            if (_netActive) _netReconnect = setTimeout(connectNetworkStatusWs, delay);
-        };
-        // keepalive
-        var ping = setInterval(function () {
-            if (_netWs && _netWs.readyState === WebSocket.OPEN) _netWs.send(JSON.stringify({ type: 'ping' }));
-            else clearInterval(ping);
-        }, 30000);
+        renderEthernet();
+        renderWifi();
+        renderLte();
+
+        // Force WiFi tab green since WiFi is connected
+        _updateTabConnectedState('wifi', true);
     };
 
     var disconnectNetworkStatusWs = function () {
-        _netActive = false;
         _liveConnected = false;
-        _netAttempts = 0;
-        clearTimeout(_netReconnect);
-        if (_netWs) { _netWs.close(1000, 'user stopped'); _netWs = null; }
         setLiveBtnState(false);
-        hideLivePanels();
-        var txt = el('net-ws-status-text');
-        if (txt) txt.textContent = 'Reconnecting...';
     };
 
-    var initLiveButton = function () { /* auto-connect - no button click needed */ };
+    var initLiveButton = function () { /* no-op */ };
 
-    // Public API
     window.networkStatusLive = {
         connect: function () { _netActive = true; connectNetworkStatusWs(); },
         disconnect: disconnectNetworkStatusWs,
