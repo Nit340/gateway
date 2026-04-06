@@ -200,14 +200,17 @@
     </div>
 
     <script>
-        // ── Auto-check: if already logged in, skip login ──────────
+        // ── Auto-check: run ONCE only on load (no polling) ──────────
+        let authCheckDone = false;
         (async function () {
+            if (authCheckDone) return;
+            authCheckDone = true;
             try {
                 const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
                 if (res.ok) {
                     window.location.replace('/layout.html');
                 }
-            } catch (e) { /* server unreachable, stay on login */ }
+            } catch (e) { /* server unreachable – stay on login, no loop */ }
         })();
 
         // ── Show "session expired" banner if coming from app ───────
@@ -215,31 +218,42 @@
             document.getElementById('expiredBanner').classList.add('show');
         }
 
-        async function handleLogin(e) {
-            e.preventDefault();
+        // ── Retry state ─────────────────────────────────────────────
+        let retryTimer = null;
 
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-            const btn      = document.getElementById('loginBtn');
-            const banner   = document.getElementById('errorBanner');
-            const errMsg   = document.getElementById('errorMessage');
+        function clearRetry() {
+            if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
+        }
 
-            // Clear previous errors
+        function showError(msg) {
+            clearRetry();
+            const banner = document.getElementById('errorBanner');
+            const errMsg = document.getElementById('errorMessage');
+            errMsg.textContent = msg;
+            banner.classList.add('show');
+            // Banner stays visible until user types or retries — never auto-dismissed
+        }
+
+        function showRetrying(username, password) {
+            clearRetry();
+            const banner = document.getElementById('errorBanner');
+            const errMsg = document.getElementById('errorMessage');
+            errMsg.innerHTML = 'Could not reach server. Retrying…';
+            banner.classList.add('show');
+
+            retryTimer = setTimeout(() => {
+                retryTimer = null;
+                doLogin(username, password);
+            }, 5000);
+        }
+
+        async function doLogin(username, password) {
+            const btn    = document.getElementById('loginBtn');
+            const banner = document.getElementById('errorBanner');
+            const errMsg = document.getElementById('errorMessage');
+
+            clearRetry();
             banner.classList.remove('show');
-            document.getElementById('expiredBanner').classList.remove('show');
-            document.getElementById('username').classList.remove('error');
-            document.getElementById('password').classList.remove('error');
-
-            // Basic client-side check
-            if (!username || !password) {
-                errMsg.textContent = 'Please enter both username and password.';
-                banner.classList.add('show');
-                if (!username) document.getElementById('username').classList.add('error');
-                if (!password) document.getElementById('password').classList.add('error');
-                return;
-            }
-
-            // Show loading state
             btn.disabled = true;
             btn.classList.add('loading');
 
@@ -255,6 +269,7 @@
                 if (data.success) {
                     window.location.replace('/layout.html');
                 } else {
+                    // Wrong credentials – show error, stay put, no retry loop
                     errMsg.textContent = data.error || 'Invalid username or password.';
                     banner.classList.add('show');
                     document.getElementById('username').classList.add('error');
@@ -263,17 +278,43 @@
                     document.getElementById('password').focus();
                 }
             } catch (err) {
-                errMsg.textContent = 'Could not reach server. Please try again.';
-                banner.classList.add('show');
+                // Network/server unreachable – show retrying countdown
+                showRetrying(username, password);
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('loading');
             }
         }
 
-        // Clear error on input
+        async function handleLogin(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const banner   = document.getElementById('errorBanner');
+
+            // Clear previous errors
+            clearRetry();
+            banner.classList.remove('show');
+            document.getElementById('expiredBanner').classList.remove('show');
+            document.getElementById('username').classList.remove('error');
+            document.getElementById('password').classList.remove('error');
+
+            // Basic client-side check
+            if (!username || !password) {
+                showError('Please enter both username and password.');
+                if (!username) document.getElementById('username').classList.add('error');
+                if (!password) document.getElementById('password').classList.add('error');
+                return;
+            }
+
+            await doLogin(username, password);
+        }
+
+        // Clear error on input (also cancels any retry countdown)
         ['username', 'password'].forEach(id => {
             document.getElementById(id).addEventListener('input', () => {
+                clearRetry();
                 document.getElementById(id).classList.remove('error');
                 document.getElementById('errorBanner').classList.remove('show');
                 document.getElementById('expiredBanner').classList.remove('show');

@@ -836,10 +836,69 @@ def insert_default_data(cursor):
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('admin', _hash_password('admin'), 'Admin User', 'admin'))
     
-    # Metadata seed - Optimized for initial PAL (gsm, wifi, ethernet)
+    # Metadata seed - All 36 parameters from Device Metadata Report (source: Univa-gateway)
     cursor.execute('DELETE FROM metadata')
-    for m in [('lte', 'string', 'gsm'), ('wlan', 'string', 'wifi'), ('lan', 'string', 'ethernet')]:
-        cursor.execute('INSERT OR IGNORE INTO metadata (name, datatype, component) VALUES (?, ?, ?)', m)
+    _metadata_params = [
+        # Section 1: System Information
+        ('device_hostname',         'string'),
+        ('operating_system_version','string'),
+        ('kernel_version',          'string'),
+        ('system_architecture',     'string'),
+        ('system_uptime',           'string'),
+        ('current_date_timezone',   'string'),
+        ('firmware_version',        'string'),
+        # Section 2: CPU Information
+        ('processor_model',         'string'),
+        ('number_of_cpu_cores',     'int'),
+        ('cpu_clock_frequency',     'float'),
+        ('system_load_average',     'float'),
+        # Section 3: Memory Information
+        ('total_ram',               'float'),
+        ('used_ram',                'float'),
+        ('free_ram',                'float'),
+        ('available_ram',           'float'),
+        ('buffers_and_cache',       'float'),
+        ('swap_memory',             'float'),
+        # Section 4: Storage Information
+        ('total_storage_capacity',  'float'),
+        ('used_storage_space',      'float'),
+        ('available_storage_space', 'float'),
+        ('storage_usage_percentage','float'),
+        ('mount_points',            'string'),
+        ('flash_partition_layout',  'string'),
+        # Section 5: CPU Usage
+        ('total_cpu_usage',         'float'),
+        # Section 6: Network Status - LAN
+        ('eth0_mac_address',        'string'),
+        ('eth1_mac_address',        'string'),
+        ('eth0_ip_address',         'string'),
+        ('eth0_connection_state',   'string'),
+        ('eth1_ip_address',         'string'),
+        ('eth1_connection_state',   'string'),
+        # Section 7: Network Status - WLAN
+        ('wifi_mac_address',        'string'),
+        ('connected_ssid',          'string'),
+        ('access_point_bssid',      'string'),
+        ('wifi_ip_address',         'string'),
+        ('wifi_frequency_mhz',      'float'),
+        ('wifi_connection_state',   'string'),
+        # Section 8: Network Status - LTE
+        ('device_imei',             'string'),
+        ('sim_imsi',                'string'),
+        ('sim_iccid',               'string'),
+        ('cellular_ip_address',     'string'),
+        ('operator_name',           'string'),
+        ('operator_id',             'string'),
+        ('network_technology',      'string'),
+        ('signal_strength_percent', 'float'),
+        ('transmit_power_level',    'float'),
+        ('cellular_connection_state','string'),
+    ]
+    for name, datatype in _metadata_params:
+        cursor.execute(
+            'INSERT OR IGNORE INTO metadata (name, datatype, source, component) VALUES (?, ?, ?, ?)',
+            (name, datatype, 'Univa-gateway', None)
+        )
     cursor.execute('INSERT OR IGNORE INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
                    ('user', _hash_password('user123'), 'Regular User', 'user'))
 

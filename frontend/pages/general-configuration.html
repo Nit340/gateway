@@ -565,37 +565,33 @@
 
             <!-- Network Mode Selection — compact pill tabs -->
             <div class="mb-6">
-                <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center mb-3">
                     <!-- Pill tab switcher -->
                     <div class="net-mode-tabbar" id="net-mode-tabbar">
                         <button type="button" class="net-mode-tab" id="net-tab-ethernet" data-mode="ethernet">
-
                             <i class="fa-solid fa-ethernet"></i>
                             Ethernet
                         </button>
                         <button type="button" class="net-mode-tab active" id="net-tab-wifi" data-mode="wifi">
-
                             <i class="fa-solid fa-wifi"></i>
                             WiFi
                         </button>
                         <button type="button" class="net-mode-tab" id="net-tab-lte" data-mode="lte">
-
                             <i class="fa-solid fa-signal"></i>
                             LTE / 4G
                         </button>
+                        <!-- Auto-Connect toggle — placed right after LTE tab -->
+                        <button type="button" id="wifi-auto-connect-btn" title="Auto Connect"
+                            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 text-slate-500 bg-white hover:bg-slate-50 transition-all ml-2"
+                            aria-pressed="false">
+                            <span id="ac-track"
+                                style="display:inline-flex;align-items:center;width:28px;height:16px;border-radius:9999px;padding:2px;background:#cbd5e1;transition:background .25s;flex-shrink:0;">
+                                <span id="ac-thumb"
+                                    style="width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .25s;transform:translateX(0px);display:block;"></span>
+                            </span>
+                            <span id="ac-label">Auto</span>
+                        </button>
                     </div>
-
-                    <!-- Auto-Connect toggle -->
-                    <button type="button" id="wifi-auto-connect-btn" title="Auto Connect"
-                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 text-slate-500 bg-white hover:bg-slate-50 transition-all"
-                        aria-pressed="false">
-                        <span id="ac-track"
-                            style="display:inline-flex;align-items:center;width:28px;height:16px;border-radius:9999px;padding:2px;background:#cbd5e1;transition:background .25s;flex-shrink:0;">
-                            <span id="ac-thumb"
-                                style="width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .25s;transform:translateX(0px);display:block;"></span>
-                        </span>
-                        <span id="ac-label">Auto</span>
-                    </button>
                 </div>
 
                 <!-- Hidden radio inputs — JS logic unchanged -->

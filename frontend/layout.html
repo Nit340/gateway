@@ -631,18 +631,15 @@
         function startCountdown() {
             _retrySeconds = 10;
             clearInterval(_retryTimer);
-            tick();
+            var el = document.getElementById('sa-countdown');
+            if (el) el.innerHTML = 'Retrying\u2026';
             _retryTimer = setInterval(function () {
                 _retrySeconds--;
-                tick();
                 if (_retrySeconds <= 0) { clearInterval(_retryTimer); doRetry(); }
             }, 1000);
         }
 
-        function tick() {
-            var el = document.getElementById('sa-countdown');
-            if (el) el.innerHTML = 'Auto-retrying in <span>' + _retrySeconds + 's</span>\u2026';
-        }
+        function tick() {}
 
         function classifyError(err) {
             if (!navigator.onLine) return 'NO_NETWORK';
@@ -653,12 +650,16 @@
         }
 
         /* ── Global Fetch Interceptor ── */
+        // Only intercepts 5xx server errors on /api/ calls.
+        // 4xx errors (400, 404, 409 etc.) are normal application responses
+        // and must NOT trigger the overlay — they're handled by each page script.
         var originalFetch = window.fetch;
         window.fetch = function() {
             var url = arguments[0];
             return originalFetch.apply(this, arguments).then(function(res) {
-                if (!res.ok && res.status >= 400 && typeof url === 'string' && url.indexOf('/api/') !== -1) {
-                    if (url.indexOf('/api/auth/status') === -1 && url.indexOf('/api/auth/session-role') === -1 && url.indexOf('/api/auth/login') === -1) {
+                if (res.status >= 500 && typeof url === 'string' && url.indexOf('/api/') !== -1) {
+                    // Skip auth endpoints — they report their own errors
+                    if (url.indexOf('/api/auth/') === -1) {
                         if (typeof showAlert !== 'undefined') {
                             showAlert('SERVER_ERROR', 'HTTP ' + res.status + ' ' + res.statusText);
                         }
@@ -666,6 +667,9 @@
                 }
                 return res;
             }).catch(function(err) {
+                // Only show network error overlay if we're actually online.
+                // If we're offline the offline/online event handlers deal with it.
+                if (!navigator.onLine) { throw err; }
                 if (typeof url === 'string' && url.indexOf('/api/auth/status') === -1) {
                     if (typeof showAlert !== 'undefined' && typeof classifyError !== 'undefined') {
                         showAlert(classifyError(err), err ? err.message : 'Fetch Error');
@@ -687,20 +691,17 @@
             var ctrl = new AbortController();
             var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
 
-            fetch('/api/auth/status', { credentials: 'same-origin', signal: ctrl.signal })
+            fetch('/api/auth/status', { credentials: 'same-origin', signal: ctrl.signal, cache: 'no-store' })
             .then(function (res) {
                 clearTimeout(tid);
                 if (res.ok) {
-                    var wasAlerting = document.getElementById('serverAlertOverlay').classList.contains('show');
-                    // Session still valid
-                    if (wasAlerting) {
-                        // We were disconnected (IP change / network drop) but are now reconnected.
-                        // Force a full page reload so all WebSockets and frontend state reconnect seamlessly.
-                        window.location.reload();
-                    } else {
-                        hideAlert();
-                        applyRole();
-                    }
+                    // Session valid — hide any overlay, stay on page, apply role.
+                    // Previously this did window.location.reload() when wasAlerting,
+                    // which caused a disruptive page reload on every network switch.
+                    // We no longer reload — the session cookie survived and the
+                    // frontend keeps its current state.
+                    hideAlert();
+                    applyRole();
                 } else if (res.status === 401 || res.status === 403) {
                     // Session expired — clear cookies and go to login
                     clearCookies();
@@ -772,13 +773,52 @@
 
         /* ── Go offline while page is open ── */
         window.addEventListener('offline', function () {
+            // Show the overlay but DON'T start auto-redirect.
+            // A network switch (WiFi→LTE) triggers offline briefly — we wait
+            // for the 'online' event to confirm whether the session survived.
             showAlert('NO_NETWORK', 'navigator.onLine became false');
         });
 
-        /* ── Periodic heartbeat every 5 s to detect crashes mid-session ── */
+        /* ── Come back online after a network switch ── */
+        window.addEventListener('online', function () {
+            // Give the OS 1.5 s to fully establish the new route, then silently
+            // re-verify the session.  If the cookie is still valid we just hide
+            // the overlay and carry on — NO page reload, NO login redirect.
+            setTimeout(function () {
+                var ctrl = new AbortController();
+                var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
+                fetch('/api/auth/status', { credentials: 'same-origin', signal: ctrl.signal, cache: 'no-store' })
+                .then(function(r) {
+                    clearTimeout(tid);
+                    if (r.ok) {
+                        // Session survived the network switch — just hide overlay
+                        hideAlert();
+                        applyRole();
+                    } else if (r.status === 401 || r.status === 403) {
+                        // Truly expired — go to login
+                        clearCookies();
+                        window.location.replace('/?expired=1');
+                    } else {
+                        showAlert('SERVER_ERROR', 'HTTP ' + r.status);
+                    }
+                })
+                .catch(function(err) {
+                    clearTimeout(tid);
+                    if (err && err.name === 'AbortError') { showAlert('TIMEOUT', 'Aborted after 8 s'); return; }
+                    // Still unreachable — keep overlay, let auto-retry handle it
+                    showAlert(classifyError(err), err ? err.message : 'Reconnect failed');
+                });
+            }, 1500);
+        });
+
+        /* ── Periodic heartbeat every 30 s to detect crashes mid-session ── */
+        // Reduced from 5 s to 30 s — 5 s was generating false SERVER_ERROR
+        // popups during normal page-load bursts and slow API responses.
+        // 30 s is frequent enough to detect a real crash within half a minute.
         setInterval(function () {
             if (document.getElementById('serverAlertOverlay').classList.contains('show')) return;
-            fetch('/api/auth/status', { credentials: 'same-origin' })
+            if (!navigator.onLine) return; // don't heartbeat while we know we're offline
+            fetch('/api/auth/status', { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r){
                 if (!r.ok) {
                     if (r.status === 401 || r.status === 403) { clearCookies(); window.location.replace('/?expired=1'); }
@@ -789,9 +829,10 @@
                 }
             })
             .catch(function(err){
+                if (!navigator.onLine) return; // ignore — offline event will handle it
                 showAlert(classifyError(err), err ? err.message : 'Heartbeat failed');
             });
-        }, 5000);
+        }, 30000);
 
         /* ── Initial check on page load ── */
         checkSession();
@@ -1093,7 +1134,7 @@
         // Logout handler
         async function handleLogout() {
             try {
-                await fetch('/api/auth/logout', { method: 'POST' });
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
             } catch (e) {}
             // Clear auth cookies
             document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
@@ -1103,6 +1144,16 @@
         }
 
         window.handleLogout = handleLogout;
+
+        // Keep-alive ping every 45 s — touches last_ping on the server so the
+        // session watchdog never evicts an active tab between heartbeats.
+        // This runs independently of the 30 s heartbeat in the overlay script.
+        setInterval(function keepAlive() {
+            if (!navigator.onLine) return;
+            // Use the raw originalFetch so we bypass the overlay interceptor
+            var f = (typeof originalFetch !== 'undefined') ? originalFetch : window.fetch;
+            f('/api/auth/status', { credentials: 'same-origin', cache: 'no-store' }).catch(function(){});
+        }, 45000);
 
         // --- Expose user_role globally so page scripts can read it immediately ---
         // Also handles per-user page visibility restrictions.

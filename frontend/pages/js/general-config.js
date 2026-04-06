@@ -89,11 +89,6 @@
     // NETWORK ROUTE SELECT  -- sends pipeline datapoint on radio/auto change
     //   "0": "auto", "1": "eth0", "2": "eth1", "3": "lte", "4": "wifi"
     // =========================================================================
-    var _ROUTE_MAP = {
-        auto: 0, eth0: 1, eth1: 2, lte: 3, wifi: 4,
-        ethernet: 1 /* radio value alias */
-    };
-
     // Switching modal removed — tab switching is instant, Connect button handles connection
 
 
@@ -187,22 +182,19 @@
         });
     };
 
-    // Called from renderEthernet / renderWifi / renderLte to update connected dots + button style
+    // Called from renderEthernet / renderWifi / renderLte to update tab dot + connect button.
+    // Driven purely by live pipeline state — multiple modes can be green simultaneously
+    // (e.g. ethernet and wifi both physically up at the same time).
     var _updateTabConnectedState = function (mode, connected) {
+        // Tab dot
         var tab = document.getElementById('net-tab-' + mode);
         if (tab) {
-            if (connected) {
-                tab.classList.add('connected');
-            } else {
-                tab.classList.remove('connected');
-            }
+            if (connected) tab.classList.add('connected');
+            else tab.classList.remove('connected');
         }
-
-        // Update the connect button label/style for this mode
-        var btnId = mode + '-connect-btn';
-        var labelId = mode + '-connect-label';
-        var btn = document.getElementById(btnId);
-        var lbl = document.getElementById(labelId);
+        // Connect button visual reflects live physical state
+        var btn = document.getElementById(mode + '-connect-btn');
+        var lbl = document.getElementById(mode + '-connect-label');
         if (btn) {
             if (connected) {
                 btn.classList.add('is-connected');
@@ -215,9 +207,41 @@
     };
 
     // =========================================================================
-    // CONNECT BUTTONS — removed, no backend calls needed
+    // CONNECT BUTTONS — sends network route ONLY when Connect is clicked.
+    //   Route map: "0": "auto", "1": "eth0", "2": "eth1", "3": "lte", "4": "wifi"
+    //
+    //   Green state on tab + button comes from live WebSocket data via
+    //   _updateTabConnectedState(), NOT from this click handler.
+    //   Both ethernet and wifi can be green simultaneously if both are up.
     // =========================================================================
-    var _initConnectButtons = function () { /* no-op */ };
+    var _ROUTE_MAP = { ethernet: 1, wifi: 4, lte: 3 };
+
+    var _sendNetworkRoute = function (mode) {
+        var routeNum = _ROUTE_MAP[mode] !== undefined ? _ROUTE_MAP[mode] : 4;
+        fetch('/api/pipeline', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ datapoint: 'net.route', value: routeNum })
+        })
+            .then(function (r) { return r.json(); })
+            .catch(function (e) { console.warn('[CONNECT] failed to send network route:', e); });
+    };
+
+    var _initConnectButtons = function () {
+        ['ethernet', 'wifi', 'lte'].forEach(function (mode) {
+            var btn = document.getElementById(mode + '-connect-btn');
+            if (!btn || btn.dataset.connectBound) return;
+            btn.dataset.connectBound = '1';
+            btn.addEventListener('click', function () {
+                // Only send the route — do not touch green state here.
+                // Green state is updated by renderEthernet/renderWifi/renderLte
+                // from real pipeline data received over the WebSocket.
+                _sendNetworkRoute(mode);
+                showNotification('Connecting via ' + mode.toUpperCase() + '…', 'info');
+            });
+        });
+    };
 
     var initializeNetworkToggles = function () {
         // ── Tab bar: click tab → check hidden radio → trigger change ──
@@ -232,7 +256,7 @@
             });
         });
 
-        // ── Hidden radio change → update tabs + panels only (no modal, no connect) ──
+        // ── Hidden radio change → update tabs + panels only (no route sent, no modal) ──
         document.querySelectorAll('input[name="network-mode"]').forEach(function (r) {
             r.addEventListener('change', function () {
                 setNetworkMode(this.value);
@@ -241,8 +265,13 @@
                 _autoHighlightedMode = null;
                 _autoHighlightedEth = null;
 
+                // Only persist the selected mode to DB — do NOT send network route here.
+                // auto_connect is intentionally excluded: including it triggers the backend
+                // PIPELINE-SYNC block that re-enforces route=0 whenever auto_connect=ON,
+                // which would prevent the Connect button from ever sending a non-zero route.
+                // auto_connect is persisted separately inside _toggleAutoConnect.
                 var modeToSave = this.value;
-                var payload = { network: { mode: modeToSave, auto_connect: _acEnabled } };
+                var payload = { network: { mode: modeToSave } };
                 if (modeToSave === 'ethernet') { payload.network.eth_selected = _selectedEth || 'eth0'; }
                 fetch('/api/general-configuration', {
                     method: 'PUT',
@@ -454,10 +483,10 @@
 
         updateGlobalMacDisplay();
         _autoHighlight();
-        // Update ethernet tab connected indicator
-        var e0Up = isUp((_cache.lan.eth0 || {}).state);
-        var e1Up = isUp((_cache.lan.eth1 || {}).state);
-
+        // Update ethernet tab + button green state from live data (either port up = connected)
+        var e0Up = isUp(eth0State);
+        var e1Up = isUp(eth1State);
+        _updateTabConnectedState('ethernet', e0Up || e1Up);
     };
     var dbmToBars = function (dbm) {
         dbm = parseInt(dbm) || 0;
@@ -996,61 +1025,49 @@
     var hideLivePanels = function () { hide('lte-power-off-alert'); };
 
     var connectNetworkStatusWs = function () {
-        _liveConnected = true;
-        setLiveBtnState(true);
+        if (_netWs && (_netWs.readyState === WebSocket.OPEN || _netWs.readyState === WebSocket.CONNECTING)) return;
+        if (_netReconnect) { clearTimeout(_netReconnect); _netReconnect = null; }
 
-        // WiFi — connected
-        mergeInto(_cache.wlan, {
-            state: 1,
-            ssid: 'Univa-Guest',
-            signal_quality: -58,
-            ip: '192.168.1.105',
-            mac: 'DC:A6:32:1B:4F:9E',
-            bssid: 'E4:CA:12:88:3A:01',
-            frequency: 2437
-        });
+        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var url = protocol + '//' + window.location.host + '/ws/network-status';
+        try { _netWs = new WebSocket(url); } catch (e) { console.warn('[NET-STATUS] WebSocket create failed:', e); return; }
 
-        // Ethernet — no link
-        mergeInto(_cache.lan, {
-            eth0: { state: 0, ip: '--', mac: 'B8:27:EB:44:2C:10' },
-            eth1: { state: 0, ip: '--', mac: 'B8:27:EB:44:2C:11' }
-        });
+        _netWs.onopen = function () {
+            _liveConnected = true;
+            _netAttempts = 0;
+            setLiveBtnState(true);
+        };
 
-        // LTE — powered on, not connected (state=0, but show static details)
-        mergeInto(_cache.lte, {
-            power: 1,
-            state: 0,
-            signal_pct: 72,
-            ip: '10.134.22.87',
-            operator_name: 'Airtel IN',
-            operator_id: '40445',
-            tech: 'LTE',
-            imei: '356938035643809',
-            iccid: '89914503641234567890',
-            imsi: '404451234567890'
-        });
+        _netWs.onmessage = function (ev) {
+            try {
+                var data = JSON.parse(ev.data);
+                applySnapshot(data);
+            } catch (e) { console.warn('[NET-STATUS] bad message:', e); }
+        };
 
-        var now = Date.now();
-        ['net.wlan.state', 'net.wlan.ssid', 'net.wlan.signal', 'net.wlan.signal_quality',
-            'net.wlan.ip', 'net.wlan.mac', 'net.wlan.bssid', 'net.wlan.frequency',
-            'net.lan.eth0.state', 'net.lan.eth0.ip', 'net.lan.eth0.mac',
-            'net.lan.eth1.state', 'net.lan.eth1.ip', 'net.lan.eth1.mac',
-            'net.lte.power', 'net.lte.state', 'net.lte.signal_pct', 'net.lte.ip',
-            'net.lte.operator_name', 'net.lte.operator_id', 'net.lte.tech',
-            'net.lte.imei', 'net.lte.iccid', 'net.lte.imsi'
-        ].forEach(function (k) { _fieldTimestamps[k] = now; });
+        _netWs.onclose = function () {
+            _liveConnected = false;
+            _netWs = null;
+            setLiveBtnState(false);
+            if (_netActive) {
+                // Exponential back-off: 2s, 4s, 8s … capped at 30s
+                var delay = Math.min(30000, 2000 * Math.pow(2, _netAttempts));
+                _netAttempts++;
+                _netReconnect = setTimeout(connectNetworkStatusWs, delay);
+            }
+        };
 
-        renderEthernet();
-        renderWifi();
-        renderLte();
-
-        // Force WiFi tab green since WiFi is connected
-        _updateTabConnectedState('wifi', true);
+        _netWs.onerror = function () {
+            if (_netWs) { _netWs.close(); }
+        };
     };
 
     var disconnectNetworkStatusWs = function () {
+        _netActive = false;
         _liveConnected = false;
         setLiveBtnState(false);
+        if (_netReconnect) { clearTimeout(_netReconnect); _netReconnect = null; }
+        if (_netWs) { _netWs.close(); _netWs = null; }
     };
 
     var initLiveButton = function () { /* no-op */ };
