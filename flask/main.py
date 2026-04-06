@@ -74,6 +74,7 @@ from tag_mapping import (
     update_loadcell_datapoint,
     get_all_tag_groups, add_tag_group, update_tag_group,
     delete_tag_group, assign_tags_to_group,
+    download_tag_template,
 )
 from mqtt_cloud import register_cloud_routes
 from auth import register_auth_routes
@@ -1346,6 +1347,7 @@ def create_app():
     app.router.add_post('/api/tag-groups/{group_id}/assign-tags', assign_tags_to_group)
 
     app.router.add_get('/api/datapoints', get_all_datapoints)
+    app.router.add_get('/api/datapoints/template/csv', download_tag_template)
     app.router.add_post('/api/datapoints/modbus', add_modbus_datapoint)
     app.router.add_put('/api/datapoints/modbus/{id}', update_modbus_datapoint)
     app.router.add_put('/api/datapoints/loadcell/{id}', update_loadcell_datapoint)

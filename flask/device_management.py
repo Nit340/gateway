@@ -45,47 +45,7 @@ def _require_webui_session(request):
 
     return session.get('username') if isinstance(session, dict) else session
 
-# ============================================================================
-# EXTERNAL DEVICE FILE STORAGE
-# Each external device is stored as an individual JSON file:
-#   /mnt/data/external_devices/<device_id>.json
-# ============================================================================
 
-_EXT_DEVICE_DIR = os.environ.get('EXT_DEVICE_DIR', '/mnt/data/external_devices')
-
-def _ensure_ext_dir():
-    os.makedirs(_EXT_DEVICE_DIR, exist_ok=True)
-
-def _ext_device_path(device_id):
-    return os.path.join(_EXT_DEVICE_DIR, '{}.json'.format(device_id))
-
-def _write_ext_device_file(device_id, payload):
-    """Write a single external device JSON file."""
-    _ensure_ext_dir()
-    path = _ext_device_path(device_id)
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
-
-def _read_ext_device_file(device_id):
-    """Read a single external device JSON file. Returns dict or None."""
-    path = _ext_device_path(device_id)
-    if not os.path.isfile(path):
-        return None
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.info('[EXT] Failed to read {}: {}'.format(path, e))
-        return None
-
-def _delete_ext_device_file(device_id):
-    """Delete the external device JSON file if it exists."""
-    path = _ext_device_path(device_id)
-    try:
-        if os.path.isfile(path):
-            os.remove(path)
-    except Exception as e:
-        logger.info('[EXT] Failed to delete {}: {}'.format(path, e))
 
 # ============================================================================
 # DATABASE CONNECTION HELPER
@@ -683,36 +643,6 @@ async def add_device(request):
                 config.get('port')        if ext_protocol == 'ext-tcp' else None,
             ))
 
-            # Build file payload with only the relevant fields per protocol
-            file_payload = {
-                'id': device_id,
-                'name': data.get('name', 'External Device'),
-                'protocol': ext_protocol,
-                'device_type': device_type_val,
-                'model_name': model_name,
-                'slave_id': config.get('slave_id', 1),
-                'response_timeout_ms': config.get('response_timeout_ms', 100),
-                'byte_timeout_ms': config.get('byte_timeout_ms', 100),
-                'max_retries': config.get('max_retries', 2),
-                'polling_interval_ms': config.get('polling_interval_ms', 300),
-                'enabled': True,
-                'created_at': datetime.utcnow().isoformat()
-            }
-            if ext_protocol == 'ext-rtu':
-                file_payload.update({
-                    'serial_port': config.get('serial_port', '/dev/ttymxc5'),
-                    'baud_rate':   config.get('baud_rate', 9600),
-                    'data_bits':   config.get('data_bits', 8),
-                    'parity':      config.get('parity', 'N'),
-                    'stop_bits':   config.get('stop_bits', 1),
-                })
-            else:
-                file_payload.update({
-                    'ip_address': config.get('ip_address', ''),
-                    'port':       config.get('port', 502),
-                })
-            _write_ext_device_file(device_id, file_payload)
-        
         conn.commit()
         conn.close()
         
@@ -798,36 +728,6 @@ async def update_device(request):
                 device_id
             ))
 
-            # Update per-device JSON file with protocol-specific fields only
-            file_payload = {
-                'id': device_id,
-                'name': new_name,
-                'protocol': new_protocol,
-                'device_type': device_type_val,
-                'model_name': model_name,
-                'slave_id': config.get('slave_id', 1),
-                'response_timeout_ms': config.get('response_timeout_ms', 100),
-                'byte_timeout_ms': config.get('byte_timeout_ms', 100),
-                'max_retries': config.get('max_retries', 2),
-                'polling_interval_ms': config.get('polling_interval_ms', 300),
-                'enabled': True,
-                'updated_at': datetime.utcnow().isoformat()
-            }
-            if new_protocol == 'ext-rtu':
-                file_payload.update({
-                    'serial_port': config.get('serial_port', '/dev/ttymxc5'),
-                    'baud_rate':   config.get('baud_rate', 9600),
-                    'data_bits':   config.get('data_bits', 8),
-                    'parity':      config.get('parity', 'N'),
-                    'stop_bits':   config.get('stop_bits', 1),
-                })
-            else:
-                file_payload.update({
-                    'ip_address': config.get('ip_address', ''),
-                    'port':       config.get('port', 502),
-                })
-            _write_ext_device_file(device_id, file_payload)
-        
         else:
             # Update Loadcell device
             config = data.get('config', {})
@@ -913,11 +813,7 @@ async def delete_device(request):
         except Exception:
             pass
         
-        conn.commit()
         conn.close()
-        
-        # Remove per-device JSON file if it exists
-        _delete_ext_device_file(device_id)
         
         remove_device_status(device_id)
         
@@ -1185,35 +1081,6 @@ async def duplicate_device(request):
                     ''', (new_device_id,) + dp)
             except Exception:
                 ext_dps = []
-
-            # Write per-device JSON file
-            file_payload = {
-                'id': new_device_id, 'name': new_name,
-                'protocol': ext_proto,
-                'device_type': old_ext.get('device_type', ''),
-                'model_name': old_ext.get('model_name', ''),
-                'slave_id': old_ext.get('slave_id', 1),
-                'response_timeout_ms': old_ext.get('response_timeout_ms', 100),
-                'byte_timeout_ms': old_ext.get('byte_timeout_ms', 100),
-                'max_retries': old_ext.get('max_retries', 2),
-                'polling_interval_ms': old_ext.get('polling_interval_ms', 300),
-                'enabled': True,
-                'created_at': datetime.utcnow().isoformat()
-            }
-            if ext_proto == 'ext-rtu':
-                file_payload.update({
-                    'serial_port': old_ext.get('serial_port', '/dev/ttymxc5'),
-                    'baud_rate':   old_ext.get('baud_rate', 9600),
-                    'data_bits':   old_ext.get('data_bits', 8),
-                    'parity':      old_ext.get('parity', 'N'),
-                    'stop_bits':   old_ext.get('stop_bits', 1),
-                })
-            else:
-                file_payload.update({
-                    'ip_address': old_ext.get('ip_address', ''),
-                    'port':       old_ext.get('port', 502),
-                })
-            _write_ext_device_file(new_device_id, file_payload)
 
             initialize_device_status(new_device_id, 'Online')
             conn.commit()
@@ -1672,7 +1539,10 @@ async def download_csv_template(request):
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Device Path CH2', 'Mode', 'Capacity Min', 'Capacity Max', 'Unit', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 
+            'Poll MS', 'Resolution Bits', 'Effective Bits', 'Signed', 'Gain', 'Vref',
+            'Raw Min', 'Raw Max', 'Capacity Min', 'Capacity Max', 'Unit',
+            'Deadband', 'Overload', 'Publish Step', 'Enabled'
         ])
         
         writer.writerow([
@@ -1680,7 +1550,8 @@ async def download_csv_template(request):
             '192.168.1.100', '502', '',
             '', '', '', '',
             '100', '100', '2', '300',
-            '', '', '', '', '', '', '1'
+            '', '', '', 
+            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '1'
         ])
         
         writer.writerow([
@@ -1688,7 +1559,8 @@ async def download_csv_template(request):
             '', '', '/dev/ttymxc5',
             '9600', '8', 'N', '1',
             '100', '100', '2', '300',
-            '', '', '', '', '', '', '1'
+            '', '', '', 
+            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '1'
         ])
         
         writer.writerow([
@@ -1697,7 +1569,8 @@ async def download_csv_template(request):
             '', '', '', '',
             '', '', '', '',
             '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '', 'single_ended',
-            '0', '1000', 'kg', '1'
+            '10', '24', '14', '0', '1.0', '5.0', '0', '16383', '0', '1000', 'kg',
+            '10', '50', '1.0', '1'
         ])
         
         writer.writerow([
@@ -1706,7 +1579,8 @@ async def download_csv_template(request):
             '', '', '', '',
             '', '', '', '',
             '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw', 'differential',
-            '0', '2000', 'kg', '1'
+            '10', '24', '14', '0', '1.0', '5.0', '0', '16383', '0', '2000', 'kg',
+            '10', '50', '1.0', '1'
         ])
         
         csv_content = output.getvalue()

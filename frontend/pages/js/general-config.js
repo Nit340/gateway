@@ -217,7 +217,12 @@
     var _ROUTE_MAP = { ethernet: 1, wifi: 4, lte: 3 };
 
     var _sendNetworkRoute = function (mode) {
-        var routeNum = _ROUTE_MAP[mode] !== undefined ? _ROUTE_MAP[mode] : 4;
+        var routeNum;
+        if (mode === 'ethernet') {
+            routeNum = (_selectedEth === 'eth1') ? 2 : 1;
+        } else {
+            routeNum = _ROUTE_MAP[mode] !== undefined ? _ROUTE_MAP[mode] : 4;
+        }
         fetch('/api/pipeline', {
             method: 'POST',
             credentials: 'same-origin',

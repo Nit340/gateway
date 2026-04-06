@@ -1573,9 +1573,8 @@ async def put_config_handler(request):
 
             # 3. Auto-Connect is OFF and mode/eth explicitly changed
             elif 'mode' in net_data or 'eth_selected' in net_data:
-                target_route = _get_route_value(cur_mode, cur_eth_selected)
-                should_sync  = True
-                logger.info("[PIPELINE-SYNC] ACTION: Mode changed, auto_connect=OFF -> network_route_select={}".format(target_route))
+                logger.info("[PIPELINE-SYNC] ACTION: Mode changed, auto_connect=OFF -> Waiting for explicit Connect click, not sending route.")
+                # We do NOT send the target route here. The frontend's Connect button handles it.
 
             # Execute the sync
             if should_sync and target_route is not None:
