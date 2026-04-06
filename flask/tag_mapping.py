@@ -1,7 +1,6 @@
+# tag_mapping.py - Tag/Datapoint mapping API
 import json
 import sqlite3
-import io
-import csv
 from aiohttp import web
 
 from database import DB_FILE
@@ -786,44 +785,3 @@ async def assign_tags_to_group(request):
     except Exception as e:
         logger.error("Error assigning tags to group: {}".format(str(e)))
         return web.json_response({'error': str(e)}, status=500)
-
-# ============================================================================
-# DOWNLOAD TAG TEMPLATE
-# ============================================================================
-
-async def download_tag_template(request):
-    """GET - Download CSV template for tag mapping import"""
-    try:
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        # Headers matching exportCSV in modbus-mapping.js
-        headers = [
-            'device_name', 'device_type', 'tag_name', 'slave_id', 
-            'register_address', 'register_type', 'data_type', 
-            'byte_order', 'word_order', 'scale_factor', 'offset', 
-            'unit', 'group', 'writable', 'retry_count', 
-            'timeout_ms', 'register_count', 'description', 'enabled'
-        ]
-        writer.writerow(headers)
-        
-        # Example Row
-        writer.writerow([
-            'Example Device', 'Modbus TCP', 'voltage_l1', '1',
-            '3920', 'holding', 'uint16', 'big', 'big', '0.1', '0.0',
-            'V', 'Electrical', 'false', '1', '100', '1', 'Primary voltage phase 1', 'true'
-        ])
-        
-        csv_content = output.getvalue()
-        output.close()
-        
-        return web.Response(
-            text=csv_content,
-            headers={
-                'Content-Type': 'text/csv',
-                'Content-Disposition': 'attachment; filename="tag_mapping_template.csv"'
-            }
-        )
-    except Exception as e:
-        logger.error("Error generating tag template: {}".format(e))
-        return web.json_response({'error': str(e)}, status=500)

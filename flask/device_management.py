@@ -1539,10 +1539,7 @@ async def download_csv_template(request):
             'IP Address', 'Port', 'Serial Port',
             'Baud Rate', 'Data Bits', 'Parity', 'Stop Bits',
             'Response Timeout (ms)', 'Byte Timeout (ms)', 'Max Retries', 'Polling Interval (ms)',
-            'Device Path', 'Device Path CH2', 'Mode', 
-            'Poll MS', 'Resolution Bits', 'Effective Bits', 'Signed', 'Gain', 'Vref',
-            'Raw Min', 'Raw Max', 'Capacity Min', 'Capacity Max', 'Unit',
-            'Deadband', 'Overload', 'Publish Step', 'Enabled'
+            'Device Path', 'Device Path CH2', 'Mode', 'Capacity Min', 'Capacity Max', 'Unit', 'Enabled'
         ])
         
         writer.writerow([
@@ -1550,8 +1547,7 @@ async def download_csv_template(request):
             '192.168.1.100', '502', '',
             '', '', '', '',
             '100', '100', '2', '300',
-            '', '', '', 
-            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '1'
+            '', '', '', '', '', '', '1'
         ])
         
         writer.writerow([
@@ -1559,8 +1555,7 @@ async def download_csv_template(request):
             '', '', '/dev/ttymxc5',
             '9600', '8', 'N', '1',
             '100', '100', '2', '300',
-            '', '', '', 
-            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '1'
+            '', '', '', '', '', '', '1'
         ])
         
         writer.writerow([
@@ -1569,8 +1564,7 @@ async def download_csv_template(request):
             '', '', '', '',
             '', '', '', '',
             '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '', 'single_ended',
-            '10', '24', '14', '0', '1.0', '5.0', '0', '16383', '0', '1000', 'kg',
-            '10', '50', '1.0', '1'
+            '0', '1000', 'kg', '1'
         ])
         
         writer.writerow([
@@ -1579,8 +1573,7 @@ async def download_csv_template(request):
             '', '', '', '',
             '', '', '', '',
             '/sys/bus/iio/devices/iio:device0/in_voltage0_raw', '/sys/bus/iio/devices/iio:device1/in_voltage0_raw', 'differential',
-            '10', '24', '14', '0', '1.0', '5.0', '0', '16383', '0', '2000', 'kg',
-            '10', '50', '1.0', '1'
+            '0', '2000', 'kg', '1'
         ])
         
         csv_content = output.getvalue()

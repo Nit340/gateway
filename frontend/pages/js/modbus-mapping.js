@@ -596,7 +596,6 @@ function _bindStaticListeners() {
     document.getElementById('editModbusModal')?.addEventListener('click', e => { if (e.target.id === 'editModbusModal') _closeEditModbus(); });
 
     // CSV
-    document.getElementById('downloadTemplateBtn')?.addEventListener('click', downloadTemplate);
     document.getElementById('importCSVBtn')?.addEventListener('click', importCSV);
     document.getElementById('exportCSVBtn')?.addEventListener('click', exportCSV);
 
@@ -1047,13 +1046,7 @@ async function exportCSV() {
             if (v === undefined && h === 'register_count') v = t.registerCount;
             if (v === undefined && h === 'group') v = t.group || t.group_name;
             if (v === undefined) v = '';
-            
-            // Handle commas and quotes for CSV
-            const s = String(v);
-            if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-                return `"${s.replace(/"/g, '""')}"`;
-            }
-            return s;
+            return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
         }).join(',');
     });
     const csv = [headers.join(','), ...rows].join('\n');
@@ -1063,10 +1056,6 @@ async function exportCSV() {
     a.download = `tags_export_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     _toast(`Exported ${_tags.length} tags`, 'success');
-}
-
-function downloadTemplate() {
-    window.location.href = '/api/datapoints/template/csv';
 }
 
 async function importCSV() {
@@ -1083,24 +1072,7 @@ async function importCSV() {
             return;
         }
 
-        const headers = (function(line) {
-            const res = [];
-            let c = "";
-            let q = false;
-            for (let j = 0; j < line.length; j++) {
-                const char = line[j];
-                if (char === '"') {
-                    if (q && line[j+1] === '"') {
-                        c += '"'; j++;
-                    } else q = !q;
-                } else if (char === ',' && !q) {
-                    res.push(c.trim().toLowerCase());
-                    c = "";
-                } else c += char;
-            }
-            res.push(c.trim().toLowerCase());
-            return res;
-        })(lines[0]);
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
         
         // --- 1. First Pass: Detect missing groups ---
         const existingGroupNames = _groups.map(g => {
@@ -1176,27 +1148,7 @@ async function importCSV() {
 
         for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
-            
-            // Robust CSV line parsing
-            const cols = (function(line) {
-                const res = [];
-                let c = "";
-                let q = false;
-                for (let j = 0; j < line.length; j++) {
-                    const char = line[j];
-                    if (char === '"') {
-                        if (q && line[j+1] === '"') {
-                            c += '"'; j++;
-                        } else q = !q;
-                    } else if (char === ',' && !q) {
-                        res.push(c.trim());
-                        c = "";
-                    } else c += char;
-                }
-                res.push(c.trim());
-                return res;
-            })(lines[i]);
-
+            const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
             const row = {};
             headers.forEach((h, j) => { row[h] = cols[j] || ''; });
 
