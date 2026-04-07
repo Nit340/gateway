@@ -625,7 +625,7 @@
     };
 
     // =========================================================================
-    // WIFI AUTO-CONNECT TOGGLE (FIXED - SCENARIO 2)
+    // WIFI AUTO-CONNECT TOGGLE (FIXED)
     // =========================================================================
     var _acEnabled = false;
     var _acTimer = null;
@@ -655,100 +655,72 @@
         }
     };
 
-    // FIXED: Get current active route with fresh cache data
-    var _getCurrentActiveRouteFresh = function () {
-        // Get states with staleness check
-        var e0State = (!isFieldStale('net.lan.eth0.state')) ? _cache.lan.eth0.state : null;
-        var e1State = (!isFieldStale('net.lan.eth1.state')) ? _cache.lan.eth1.state : null;
-        var wState = (!isFieldStale('net.wlan.state')) ? _cache.wlan.state : null;
-        var lState = (!isFieldStale('net.lte.state')) ? _cache.lte.state : null;
-        
-        var e0Up = isUp(e0State);
-        var e1Up = isUp(e1State);
-        var wUp = isUp(wState);
-        var lUp = isUp(lState);
-        
-        // Determine active connection (priority: eth0 > eth1 > wifi > lte)
-        if (e0Up) {
-            return { route: 1, mode: 'ethernet', eth: 'eth0' };
-        } else if (e1Up) {
-            return { route: 2, mode: 'ethernet', eth: 'eth1' };
-        } else if (wUp) {
-            return { route: 4, mode: 'wifi', eth: null };
-        } else if (lUp) {
-            return { route: 3, mode: 'lte', eth: null };
+    var _getCurrentActiveRoute = function () {
+        if (_selectedEth && isUp((_cache.lan[_selectedEth] || {}).state)) {
+            return (_selectedEth === 'eth1') ? 2 : 1;
         }
-        return { route: null, mode: null, eth: null };
+        if (isUp(_cache.lan.eth0.state)) return 1;
+        if (isUp(_cache.lan.eth1.state)) return 2;
+        if (isUp(_cache.lte.state))      return 3;
+        if (isUp(_cache.wlan.state))     return 4;
+        return null;
     };
 
-    // FIXED: Complete _stopAutoConnect function
-    // FIXED: When turning OFF auto, automatically send the current active route
-var _stopAutoConnect = function () {
-    // Get the current active route dynamically from cache
-    var active = _getCurrentActiveRouteFresh();
-    
-    // Disable auto-connect flag immediately
-    _acEnabled = false;
-    
-    if (_acTimer) { 
-        clearInterval(_acTimer); 
-        _acTimer = null; 
-    }
-    _setAcUi(false, false);
-    
-    // Persist auto_connect: false to backend
-    fetch('/api/general-configuration', {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ network: { auto_connect: false } })
-    }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist OFF:', e); });
-    
-    // CRITICAL: Automatically send the current active route to pipeline
-    // This ensures the current connection stays active without needing to click Connect
-    if (active.route !== null) {
-        // Send route to pipeline immediately
-        fetch('/api/pipeline', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ datapoint: 'net.route', value: active.route })
-        }).catch(function (e) { console.warn('[AUTO-OFF] failed to send current route:', e); });
+    var _stopAutoConnect = function () {
+        var currentRoute = _getCurrentActiveRoute();
         
-        // Mark the active interface as manually connected (so UI shows connected)
-        if (active.mode === 'ethernet' && active.eth) {
-            _manualConnectClicked['ethernet-' + active.eth] = true;
-            _setEthCardSelected(active.eth);
-            _selectedEth = active.eth;
-        } else if (active.mode === 'wifi') {
-            _manualConnectClicked['wifi'] = true;
-        } else if (active.mode === 'lte') {
-            _manualConnectClicked['lte'] = true;
+        if (currentRoute !== null) {
+            fetch('/api/pipeline', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ datapoint: 'net.route', value: currentRoute })
+            }).catch(function (e) { console.warn('[AUTO-OFF] failed to send current route:', e); });
         }
         
-        // Update UI to show connected state for the active interface
-        _updateTabConnectedState(active.mode, true);
+        _acEnabled = false;
+        if (_acTimer) { clearInterval(_acTimer); _acTimer = null; }
+        _setAcUi(false, false);
         
-        // For other interfaces, ensure they show "Connect"
-        var allModes = ['ethernet', 'wifi', 'lte'];
-        allModes.forEach(function (mode) {
-            if (mode !== active.mode) {
-                _updateTabConnectedState(mode, false);
+        _manualConnectClicked = {};
+        
+        if (currentRoute !== null) {
+            if (currentRoute === 1) {
+                _manualConnectClicked['ethernet-eth0'] = true;
+            } else if (currentRoute === 2) {
+                _manualConnectClicked['ethernet-eth1'] = true;
+            } else if (currentRoute === 3) {
+                _manualConnectClicked['lte'] = true;
+            } else if (currentRoute === 4) {
+                _manualConnectClicked['wifi'] = true;
             }
-        });
-        
-        // Update Ethernet card visual if active mode is Ethernet
-        if (active.mode === 'ethernet') {
-            var e0Up = isUp(_cache.lan.eth0.state);
-            var e1Up = isUp(_cache.lan.eth1.state);
             
-            if (active.eth === 'eth0' && e0Up) {
+            var activeMode = null;
+            if (currentRoute === 1 || currentRoute === 2) {
+                activeMode = 'ethernet';
+            } else if (currentRoute === 3) {
+                activeMode = 'lte';
+            } else if (currentRoute === 4) {
+                activeMode = 'wifi';
+            }
+            
+            if (activeMode) {
+                var tab = document.getElementById('net-tab-' + activeMode);
+                var btn = document.getElementById(activeMode + '-connect-btn');
+                var lbl = document.getElementById(activeMode + '-connect-label');
+                
+                if (tab) tab.classList.add('connected');
+                if (btn) btn.classList.add('is-connected');
+                if (lbl) lbl.textContent = 'Connected';
+            }
+            
+            if (currentRoute === 1) {
                 var card = document.getElementById('eth0-card');
                 if (card) {
                     card.style.borderColor = '#10b981';
                     card.style.background = '#f0fdf4';
                 }
-            } else if (active.eth === 'eth1' && e1Up) {
+            } else if (currentRoute === 2) {
                 var card = document.getElementById('eth1-card');
                 if (card) {
                     card.style.borderColor = '#10b981';
@@ -757,21 +729,40 @@ var _stopAutoConnect = function () {
             }
         }
         
-        showNotification('Auto-connect disabled. ' + active.mode.toUpperCase() + ' connection maintained.', 'info');
-    } else {
-        showNotification('Auto-connect disabled. No active connection found.', 'warning');
-    }
-    
-    // Sync the network mode radio to match the active interface
-    if (active.mode && active.mode !== getRadioValue('[name="network-mode"]')) {
-        var radio = document.getElementById('net-radio-' + active.mode);
-        if (radio) {
-            radio.checked = true;
-            setNetworkMode(active.mode);
-            _syncNetworkTabs(active.mode);
-        }
-    }
-};    var _toggleAutoConnect = function () {
+        ['ethernet', 'wifi', 'lte'].forEach(function (mode) {
+            var isActive = false;
+            if (currentRoute === 1 || currentRoute === 2) {
+                isActive = (mode === 'ethernet');
+            } else if (currentRoute === 3) {
+                isActive = (mode === 'lte');
+            } else if (currentRoute === 4) {
+                isActive = (mode === 'wifi');
+            }
+            
+            if (!isActive) {
+                var tab = document.getElementById('net-tab-' + mode);
+                var btn = document.getElementById(mode + '-connect-btn');
+                var lbl = document.getElementById(mode + '-connect-label');
+                
+                if (tab) tab.classList.remove('connected');
+                if (btn) btn.classList.remove('is-connected');
+                if (lbl) lbl.textContent = 'Connect';
+            }
+        });
+        
+        fetch('/api/general-configuration', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ network: { auto_connect: false } })
+        }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist OFF:', e); });
+        
+        showNotification('Auto-connect disabled. Current connection maintained.', 'info');
+    };
+
+    var _doOneConnect = function () {};
+
+    var _toggleAutoConnect = function () {
         if (_acEnabled) {
             _stopAutoConnect();
             return;
@@ -1233,8 +1224,8 @@ var _stopAutoConnect = function () {
                             setInputValue('[name="date"]', d.formatted_date || formatDate(d.current_date));
                         }
                         var raw24 = formatTime(d.current_time || '');
-                        var tfmt = getSelectValue('[name="time-format"]') || '24-hour';
-                        var displayTime = formatTimeDisplay(raw24, tfmt);
+                        var tfmt = d.time_format || getSelectValue('[name="time-format"]') || '24-hour';
+                        var displayTime = d.time_display || formatTimeDisplay(raw24, tfmt);
                         setInputValue('[name="time"]', displayTime);
                         updateTimeDisplayLabel(raw24);
                     }

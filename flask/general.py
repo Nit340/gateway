@@ -68,6 +68,52 @@ _last_broadcast_time = {}
 _MIN_BROADCAST_INTERVAL = 0.1  # 100ms minimum between updates for same datapoint
 
 # ============================================================================
+# HELPER: Get current active route from live state
+# ============================================================================
+
+def _get_current_active_route_from_state():
+    """
+    Determine the currently active network route based on live network_status_state.
+    Returns route value: 1=eth0, 2=eth1, 3=lte, 4=wifi, None if no active connection.
+    Priority: eth0 > eth1 > wifi > lte
+    """
+    # Check Ethernet interfaces
+    eth0_state = network_status_state.get('net.lan.eth0.state')
+    eth1_state = network_status_state.get('net.lan.eth1.state')
+    
+    # Convert to boolean (handle 1/0, True/False, "1"/"0")
+    def is_up(val):
+        if val is None:
+            return False
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, (int, float)):
+            return val == 1
+        if isinstance(val, str):
+            return val.lower() in ('1', 'true', 'up', 'connected')
+        return False
+    
+    eth0_up = is_up(eth0_state)
+    eth1_up = is_up(eth1_state)
+    
+    if eth0_up:
+        return 1
+    if eth1_up:
+        return 2
+    
+    # Check WiFi
+    wlan_state = network_status_state.get('net.wlan.state')
+    if is_up(wlan_state):
+        return 4
+    
+    # Check LTE
+    lte_state = network_status_state.get('net.lte.state')
+    if is_up(lte_state):
+        return 3
+    
+    return None
+
+# ============================================================================
 # OPTIMIZATION: Batched WebSocket broadcasts (70% less CPU)
 # ============================================================================
 _broadcast_queue = []
@@ -1105,6 +1151,39 @@ async def wifi_connect_handler(request):
 # PIPELINE SYNC HELPERS
 # ============================================================================
 
+# ============================================================================
+# PIPELINE POST ENDPOINT  — called by the frontend Connect button
+# Accepts: { "datapoint": "net.route", "value": <int> }
+# Pushes the value directly into pipeline_state and flushes it.
+# ============================================================================
+async def pipeline_post_handler(request):
+    """POST /api/pipeline — push a single datapoint value to the pipeline."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({'success': False, 'message': 'Invalid JSON'}, status=400)
+
+    datapoint = body.get('datapoint', '')
+    value = body.get('value')
+
+    if not datapoint or value is None:
+        return web.json_response({'success': False, 'message': 'Missing datapoint or value'}, status=400)
+
+    if datapoint == 'net.route':
+        try:
+            route_value = int(value)
+            with pipeline_state["lock"]:
+                pipeline_state["network_route_pending"] = route_value
+            _flush_all_pending()
+            logger.info("[PIPELINE-POST] Pushed net.route={} to pipeline (explicit Connect click)".format(route_value))
+            return web.json_response({'success': True, 'datapoint': datapoint, 'value': route_value})
+        except Exception as e:
+            logger.error("[PIPELINE-POST] Error pushing route: {}".format(e))
+            return web.json_response({'success': False, 'message': str(e)}, status=500)
+
+    return web.json_response({'success': False, 'message': 'Unsupported datapoint: ' + datapoint}, status=400)
+
+
 def _get_route_value(network_mode, eth_selected='eth0'):
     """Convert network mode to pipeline route value.
        Route mapping: auto=0, eth0=1, eth1=2, lte=3, wifi=4
@@ -1553,10 +1632,14 @@ async def put_config_handler(request):
                     should_sync  = True
                     logger.info("[PIPELINE-SYNC] ACTION: Auto-Connect toggled ON -> force network_route_select=0")
                 else:
-                    # Turned OFF -> send the currently selected mode
-                    target_route = _get_route_value(cur_mode, cur_eth_selected)
-                    should_sync  = True
-                    logger.info("[PIPELINE-SYNC] ACTION: Auto-Connect toggled OFF -> network_route_select={}".format(target_route))
+                    # Turned OFF -> Send the currently active route based on live state
+                    active_route = _get_current_active_route_from_state()
+                    if active_route is not None:
+                        target_route = active_route
+                        should_sync = True
+                        logger.info("[PIPELINE-SYNC] ACTION: Auto-Connect toggled OFF -> sending current active route={}".format(target_route))
+                    else:
+                        logger.info("[PIPELINE-SYNC] ACTION: Auto-Connect toggled OFF but no active connection found")
 
             # 2. Auto-Connect is ON and user changed a radio/mode field
             #    -> block non-zero route; re-enforce 0 to pipeline
@@ -1625,7 +1708,10 @@ async def put_config_handler(request):
             'message': 'Configuration saved successfully'
         })
 
-    return web.json_response({'success': True, 'message': 'Configuration saved successfully'})# ============================================================================
+    return web.json_response({'success': True, 'message': 'Configuration saved successfully'})
+
+
+# ============================================================================
 # BACKGROUND TASK MANAGEMENT
 # ============================================================================
 
@@ -1678,6 +1764,7 @@ def register_general_config_routes(app):
     
     # Time sync endpoint
     app.router.add_post('/api/sync-time', sync_time_handler)
+    app.router.add_post('/api/pipeline', pipeline_post_handler)
 
     # WiFi scan + connect endpoints
     app.router.add_get('/api/wifi/scan',    wifi_scan_handler)

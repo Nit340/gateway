@@ -357,6 +357,8 @@ pipeline_state = {
     "core_config_pending":          None,
     # pending network route selection
     "network_route_pending":        None,
+    # pending factory reset datapoint
+    "factory_reset_pending":        None,
     # load_raw whitelist toggle (controlled via UI button)
     "load_raw_enabled":             False,
     # crash / restart tracking
@@ -401,13 +403,19 @@ async def _broadcast_pipeline_msg(msg):
 
 # Add to pipeline.py after pipeline_network_route_select_handler
 # ============================================================================
-# FACTORY RESET HANDLER - UPDATED VERSION
+# FACTORY RESET HANDLER - SIMPLIFIED VERSION
+# ============================================================================
+# ONLY sends factory-reset=1 datapoint via pipeline.
+# Database restoration is handled separately during initialization.
 # ============================================================================
 
 async def pipeline_factory_reset_handler(request):
     """POST /api/pipeline/factory-reset
     Body: { "password": "user_password" }
+    
     Verifies admin password and sends factory-reset=1 datapoint via pipeline.
+    The datapoint tells the connected service to perform factory reset.
+    Database initialization is handled separately in database.py.
     """
     logger.info("[FACTORY-RESET] Factory reset request received")
     
@@ -418,47 +426,17 @@ async def pipeline_factory_reset_handler(request):
         if not password:
             return web.json_response({'success': False, 'error': 'Password required'}, status=400)
         
-        # Debug: Check what users exist in database
-        import sqlite3
-        from database import DB_FILE
-        
-        conn = None
-        try:
-            conn = sqlite3.connect(DB_FILE)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            # Check all admin users
-            cursor.execute("SELECT username, password FROM admin_users")
-            admin_users = cursor.fetchall()
-            logger.info("[FACTORY-RESET] Found {} admin users in DB".format(len(admin_users)))
-            for user_row in admin_users:
-                logger.info("[FACTORY-RESET] Admin user found: {}".format(user_row['username']))
-            
-            # Check webui users as well (in case admin uses webui login)
-            cursor.execute("SELECT username, password FROM webui_users")
-            webui_users = cursor.fetchall()
-            logger.info("[FACTORY-RESET] Found {} webui users".format(len(webui_users)))
-            for user_row in webui_users:
-                logger.info("[FACTORY-RESET] WebUI user found: {}".format(user_row['username']))
-                
-        except Exception as db_err:
-            logger.error("[FACTORY-RESET] DB debug error: {}".format(db_err))
-        finally:
-            if conn:
-                conn.close()
-        
         # Try multiple verification methods
+        verified_user = None
         
         # Method 1: Try verify_admin_user from auth
-        verified_user = None
         try:
             from auth import verify_admin_user
             verified_user = verify_admin_user('admin', password)
             if verified_user:
-                logger.info("[FACTORY-RESET] Method 1: verify_admin_user succeeded")
+                logger.info("[FACTORY-RESET] Password verified via admin user")
         except Exception as e:
-            logger.warning("[FACTORY-RESET] Method 1 error: {}".format(e))
+            logger.debug("[FACTORY-RESET] Method 1 error: {}".format(e))
         
         # Method 2: Try verify_webui_user from auth
         if not verified_user:
@@ -466,14 +444,17 @@ async def pipeline_factory_reset_handler(request):
                 from auth import verify_webui_user
                 verified_user = verify_webui_user('admin', password)
                 if verified_user:
-                    logger.info("[FACTORY-RESET] Method 2: verify_webui_user succeeded")
+                    logger.info("[FACTORY-RESET] Password verified via webui user")
             except Exception as e:
-                logger.warning("[FACTORY-RESET] Method 2 error: {}".format(e))
+                logger.debug("[FACTORY-RESET] Method 2 error: {}".format(e))
         
-        # Method 3: Direct database check (plaintext)
+        # Method 3: Direct database check
         if not verified_user:
             try:
-                conn = sqlite3.connect(DB_FILE)
+                import sqlite3
+                from database import DB_FILE
+                
+                conn = sqlite3.connect(DB_FILE, timeout=10.0)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 
@@ -486,7 +467,7 @@ async def pipeline_factory_reset_handler(request):
                 
                 if admin_row:
                     verified_user = {'username': 'admin', 'role': 'admin'}
-                    logger.info("[FACTORY-RESET] Method 3: Direct DB check succeeded (plaintext)")
+                    logger.info("[FACTORY-RESET] Password verified via direct DB check (admin)")
                 
                 # If not found, check webui_users
                 if not verified_user:
@@ -497,85 +478,86 @@ async def pipeline_factory_reset_handler(request):
                     webui_row = cursor.fetchone()
                     if webui_row:
                         verified_user = dict(webui_row)
-                        logger.info("[FACTORY-RESET] Method 3: Direct DB check succeeded for webui user")
+                        logger.info("[FACTORY-RESET] Password verified via direct DB check (webui)")
                         
                 conn.close()
-                
             except Exception as e:
-                logger.error("[FACTORY-RESET] Method 3 error: {}".format(e))
+                logger.debug("[FACTORY-RESET] Method 3 error: {}".format(e))
         
         # Method 4: Try with default password (for testing)
         if not verified_user:
             if password == 'admin123' or password == 'admin':
                 verified_user = {'username': 'admin', 'role': 'admin'}
-                logger.warning("[FACTORY-RESET] Method 4: Using default password - INSECURE!")
+                logger.warning("[FACTORY-RESET] Using default password - INSECURE!")
         
         if not verified_user:
             logger.warning("[FACTORY-RESET] Invalid password attempt")
             return web.json_response({'success': False, 'error': 'Invalid password'}, status=401)
         
-        logger.info("[FACTORY-RESET] Password verified for user: {}".format(verified_user.get('username')))
+        logger.info("[FACTORY-RESET] Access granted to user: {}".format(verified_user.get('username')))
         
-        # Restore python database from factory default if available
+        # Send factory-reset=1 datapoint via pipeline
         try:
-            import shutil, os
-            from database import DB_FILE
-            factory_db = os.path.join(os.path.dirname(DB_FILE), 'factory_default.db')
-            if os.path.exists(factory_db):
-                import sqlite3
-                conn = sqlite3.connect(DB_FILE)
-                conn.execute('ATTACH DATABASE ? AS factory', (factory_db,))
+            with pipeline_state["lock"]:
+                client = pipeline_state.get("client")
+            
+            if client is None:
+                logger.warning("[FACTORY-RESET] Pipeline client not available, queueing datapoint")
+                # Queue for later when pipeline connects
+                with pipeline_state["lock"]:
+                    pipeline_state["factory_reset_pending"] = 1
+                return web.json_response({
+                    'success': True,
+                    'message': 'Factory-reset command queued. Will send when pipeline connects.'
+                })
+            
+            # Try to send the datapoint
+            ok = False
+            if hasattr(client, 'publish_datapoint'):
+                ok = client.publish_datapoint('factory-reset', 1)
+            elif hasattr(client, 'datapoint_set'):
+                ok = client.datapoint_set('factory-reset', 1)
+            elif hasattr(client, 'datapoint_update'):
+                ok = client.datapoint_update(None, 'factory-reset', 1)
+            
+            if ok:
+                logger.info("[FACTORY-RESET] Datapoint factory-reset=1 sent successfully")
                 
-                cursor = conn.cursor()
-                # Get all tables from main database
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-                tables = [row[0] for row in cursor.fetchall()]
+                # Record the action
+                try:
+                    from database import record_pipeline_send_success
+                    record_pipeline_send_success("factory-reset", 1, None, "Factory reset triggered by {}".format(verified_user.get('username')))
+                except Exception as log_err:
+                    logger.debug("[FACTORY-RESET] Could not log send: {}".format(log_err))
                 
-                conn.execute('PRAGMA foreign_keys = OFF')
-                
-                for table in tables:
-                    try:
-                        # Remove all the existing data
-                        conn.execute('DELETE FROM main.{}'.format(table))
-                        # Replace it with factory reset data
-                        conn.execute('INSERT INTO main.{0} SELECT * FROM factory.{0}'.format(table))
-                    except Exception as e:
-                        logger.warning("[FACTORY-RESET] Could not migrate table {}: {}".format(table, e))
-                
-                conn.commit()
-                conn.execute('DETACH DATABASE factory')
-                conn.execute('PRAGMA foreign_keys = ON')
-                conn.close()
-                
-                logger.info("[FACTORY-RESET] Cleared all existing data and restored from {}".format(factory_db))
-                msg = 'Gateway database successfully restored to factory defaults.'
+                return web.json_response({
+                    'success': True,
+                    'message': 'Factory-reset=1 datapoint sent to pipeline'
+                })
             else:
-                logger.warning("[FACTORY-RESET] No factory_default.db found. No changes made.")
-                msg = 'Warning: No factory default database was found. Current database is retained.'
-
-            # Record the action
-            try:
-                from database import record_pipeline_send_success
-                record_pipeline_send_success("factory-reset", 1, None, "Local factory reset triggered by {}".format(verified_user.get('username')))
-            except Exception as log_err:
-                logger.warning("[FACTORY-RESET] Could not log send: {}".format(log_err))
-
-            return web.json_response({
-                'success': True, 
-                'message': msg
-            })
-                
+                logger.error("[FACTORY-RESET] Failed to send datapoint")
+                return web.json_response({
+                    'success': False,
+                    'error': 'Pipeline rejected the datapoint'
+                }, status=500)
+        
         except Exception as exc:
-            logger.error("[FACTORY-RESET] Error during factory reset: {}".format(exc))
+            logger.error("[FACTORY-RESET] Error sending datapoint: {}".format(exc))
             import traceback
             traceback.print_exc()
-            return web.json_response({'success': False, 'error': 'Failed to reset: {}'.format(str(exc))}, status=500)
+            return web.json_response({
+                'success': False,
+                'error': 'Failed to send factory-reset datapoint: {}'.format(str(exc))
+            }, status=500)
             
     except Exception as e:
         logger.error("[FACTORY-RESET] Handler error: {}".format(e))
         import traceback
         traceback.print_exc()
-        return web.json_response({'success': False, 'error': 'Internal server error: {}'.format(str(e))}, status=500)
+        return web.json_response({
+            'success': False,
+            'error': 'Internal server error: {}'.format(str(e))
+        }, status=500)
 
 def _schedule_broadcast(main_loop, msg):
     """Thread-safe helper: schedule a broadcast only if the pipeline is not
@@ -873,6 +855,42 @@ def _flush_pending_network_route(client):
             logger.error('[NET-ROUTE] Flushed pending route error: {}'.format(e))
 
 
+def _flush_pending_factory_reset(client):
+    """Try to send the factory-reset datapoint if it is pending.
+    
+    This is called when the pipeline connects to send any pending factory reset
+    commands that were queued while the pipeline was disconnected.
+    """
+    with pipeline_state["lock"]:
+        pending = pipeline_state.get("factory_reset_pending")
+
+    if pending is not None:
+        try:
+            ok = False
+            if hasattr(client, 'datapoint_set'):
+                ok = client.datapoint_set('factory-reset', pending)
+            elif hasattr(client, 'publish_datapoint'):
+                ok = client.publish_datapoint('factory-reset', pending)
+            else:
+                ok = client.datapoint_update(None, 'factory-reset', pending)
+
+            if ok:
+                logger.info('[FACTORY-RESET] DISPATCH SUCCESS: factory-reset={} sent to pipeline'.format(pending))
+                with pipeline_state["lock"]:
+                    pipeline_state["factory_reset_pending"] = None
+                
+                # Record the successful send
+                try:
+                    from database import record_pipeline_send_success
+                    record_pipeline_send_success("factory-reset", pending, None, "Flushed pending datapoint")
+                except Exception as log_err:
+                    logger.debug('[FACTORY-RESET] Could not log send: {}'.format(log_err))
+            else:
+                logger.error('[FACTORY-RESET] DISPATCH FAILURE: Pipeline rejected factory-reset={}'.format(pending))
+        except Exception as e:
+            logger.error('[FACTORY-RESET] Error flushing pending datapoint: {}'.format(e))
+
+
 def _flush_all_pending():
     """After storing any pending config, check all currently connected services
     and flush immediately if the target service is already up.
@@ -892,6 +910,9 @@ def _flush_all_pending():
     # the same SERVICE_ADDED gate used in the pipeline event handler.
     if "network_status" in services:
         _flush_pending_network_route(client)
+    
+    # Flush factory-reset datapoint if pending
+    _flush_pending_factory_reset(client)
 
 
 # ============================================================================

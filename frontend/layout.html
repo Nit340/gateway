@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Univa Gateway</title>
     <link href="assets/css/tailwind.css" rel="stylesheet">
     <script src="assets/js/fontawesome.js"></script>
     <link href="assets/css/fonts.css" rel="stylesheet">
     <script src="assets/js/plotly.min.js"></script>
     <link rel="icon" href="assets/images/favicon.png">
-
     
     <style>
+        /* Your existing styles from the working version */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
@@ -78,19 +78,20 @@
             border-bottom: 1px solid #F1F5F9;
         }
         
-      .nav-link {
-    display: flex;
-    align-items: center;
-    padding: 8px 20px;
-    color: #475569;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s;
-    border-left: 3px solid transparent;
-    cursor: pointer;
-    gap: 12px; /* Add this line - creates consistent space between icon and text */
-}
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            gap: 12px;
+        }
+        
         .nav-link:hover {
             background: #F8FAFC;
             color: #2563EB;
@@ -104,12 +105,13 @@
         }
         
         .nav-link i {
-    width: 20px;
-    margin-right: 0; /* Change from 12px to 0 since we're using gap */
-    font-size: 14px;
-    text-align: center;
-    flex-shrink: 0; /* Prevents icon from shrinking */
-}
+            width: 20px;
+            margin-right: 0;
+            font-size: 14px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
         .nav-link-count {
             margin-left: auto;
             background: #E2E8F0;
@@ -213,40 +215,6 @@
             }
         }
         
-        /* WiFi Signal Strength Styles */
-        .signal-strength {
-            display: flex;
-            align-items: flex-end;
-            gap: 3px;
-            height: 24px;
-        }
-        
-        .signal-bar {
-            width: 6px;
-            border-radius: 2px;
-            transition: background-color 0.3s;
-        }
-        
-        .signal-bar.excellent {
-            background-color: #10B981;
-        }
-        
-        .signal-bar.good {
-            background-color: #3B82F6;
-        }
-        
-        .signal-bar.fair {
-            background-color: #F59E0B;
-        }
-        
-        .signal-bar.poor {
-            background-color: #EF4444;
-        }
-        
-        .signal-bar.none {
-            background-color: #E2E8F0;
-        }
-        
         /* Loading Indicator */
         .loading-indicator {
             display: none;
@@ -278,7 +246,7 @@
             to { transform: rotate(360deg); }
         }
 
-        /* ── Read-Only / Viewer Mode ──────────────────────────────── */
+        /* Viewer Mode Styles */
         #viewerBanner {
             display: none;
             position: fixed;
@@ -331,7 +299,6 @@
         }
         #viewerBanner .vb-close:hover { background: #D97706; }
 
-        /* Viewer mode: disable all interactive controls in the page content area */
         body.viewer-mode #contentArea input,
         body.viewer-mode #contentArea select,
         body.viewer-mode #contentArea textarea,
@@ -349,111 +316,7 @@
             cursor: not-allowed !important;
             background: #F1F5F9 !important;
         }
-        body.viewer-mode #contentArea button:not(.viewer-allow),
-        body.viewer-mode #contentArea [type="submit"]:not(.viewer-allow),
-        body.viewer-mode #pageContent button:not(.viewer-allow),
-        body.viewer-mode #pageContent [type="submit"]:not(.viewer-allow) {
-            pointer-events: none !important;
-            opacity: 0.45 !important;
-            cursor: not-allowed !important;
-            filter: grayscale(0.4);
-        }
-        /* Keep sidebar navigation and logout always clickable */
-        body.viewer-mode .sidebar button,
-        body.viewer-mode .sidebar a,
-        body.viewer-mode #mobileMenuBtn { pointer-events: auto !important; opacity: 1 !important; filter: none !important; }
 
-        /* ── Server Connection Alert Overlay ─────────────────────────── */
-        #serverAlertOverlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.55);
-            backdrop-filter: blur(3px);
-            -webkit-backdrop-filter: blur(3px);
-            z-index: 99999;
-            align-items: center;
-            justify-content: center;
-        }
-        #serverAlertOverlay.show { display: flex; }
-
-        .sa-card {
-            background: white;
-            border-radius: 16px;
-            border: 1px solid #E2E8F0;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-            padding: 36px 32px;
-            max-width: 420px;
-            width: 92%;
-            text-align: center;
-            animation: saSlideIn 0.25s ease;
-        }
-        @keyframes saSlideIn {
-            from { opacity: 0; transform: translateY(-16px) scale(0.97); }
-            to   { opacity: 1; transform: translateY(0)     scale(1);    }
-        }
-
-        .sa-icon-wrap {
-            width: 68px; height: 68px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 28px;
-            margin: 0 auto 18px;
-        }
-        .sa-icon-crash   { background: #FEF2F2; }
-        .sa-icon-network { background: #FFF7ED; }
-        .sa-icon-timeout { background: #FFFBEB; }
-
-        .sa-badge {
-            display: inline-flex; align-items: center; gap: 5px;
-            font-size: 10px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.7px; padding: 3px 10px;
-            border-radius: 20px; margin-bottom: 12px;
-        }
-        .sa-badge-crash   { background: #FEF2F2; color: #DC2626; }
-        .sa-badge-network { background: #FFF7ED; color: #EA580C; }
-        .sa-badge-timeout { background: #FFFBEB; color: #CA8A04; }
-
-        .sa-title {
-            font-size: 18px; font-weight: 700;
-            color: #0F172A; margin-bottom: 8px;
-        }
-        .sa-desc {
-            font-size: 13px; color: #64748B;
-            line-height: 1.6; margin-bottom: 18px;
-        }
-        .sa-detail {
-            background: #F8FAFC;
-            border: 1px solid #E2E8F0;
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-size: 11px; color: #475569;
-            text-align: left; line-height: 1.8;
-            margin-bottom: 22px;
-        }
-        .sa-detail strong { color: #1E293B; }
-
-        .sa-btn-retry {
-            background: #2563EB; color: white;
-            border: none; border-radius: 8px;
-            padding: 10px 22px; font-size: 13px; font-weight: 600;
-            cursor: pointer; transition: background 0.2s;
-        }
-        .sa-btn-retry:hover { background: #1D4ED8; }
-        .sa-btn-login {
-            background: white; color: #475569;
-            border: 1px solid #E2E8F0; border-radius: 8px;
-            padding: 10px 22px; font-size: 13px; font-weight: 600;
-            cursor: pointer; transition: all 0.2s; margin-left: 8px;
-        }
-        .sa-btn-login:hover { background: #F8FAFC; border-color: #CBD5E1; }
-
-        #sa-countdown {
-            font-size: 11px; color: #94A3B8; margin-top: 14px;
-        }
-        #sa-countdown span { font-weight: 600; color: #64748B; }
-
-        /* ── Editor Handover Modal ─────────────────────────────────── */
         #handoverModal {
             display: none;
             position: fixed;
@@ -516,7 +379,7 @@
     </style>
 </head>
 <body>
-    <!-- Viewer / Read-Only Banner (shown when this is not the first session) -->
+    <!-- Viewer / Read-Only Banner -->
     <div id="viewerBanner">
         <div class="vb-card">
             <div class="vb-icon">👁</div>
@@ -528,7 +391,7 @@
         </div>
     </div>
 
-    <!-- Editor Handover Modal (shown when a viewer becomes editor) -->
+    <!-- Editor Handover Modal -->
     <div id="handoverModal">
         <div class="ho-card">
             <div class="ho-icon"><i class="fa-solid fa-pen-to-square"></i></div>
@@ -539,306 +402,7 @@
             </button>
         </div>
     </div>
-    <!-- ── Server Connection Alert Overlay ── -->
-    <div id="serverAlertOverlay">
-        <div class="sa-card">
-            <div class="sa-icon-wrap" id="saIcon">⚠</div>
-            <div class="sa-badge"    id="saBadge">Error</div>
-            <div class="sa-title"    id="saTitle">Connection Lost</div>
-            <div class="sa-desc"     id="saDesc">Unable to reach the gateway server.</div>
-            <div class="sa-detail"   id="saDetail"></div>
-            <div>
-                <button class="sa-btn-retry" onclick="window.__saRetry()">↻ Retry Now</button>
-                <button class="sa-btn-login" onclick="window.location.replace('/')">Login Page</button>
-            </div>
-            <div id="sa-countdown"></div>
-        </div>
-    </div>
 
-    <script>
-    /* ══════════════════════════════════════════════════════════════
-       Auth guard + connection-loss overlay for layout.html
-    ══════════════════════════════════════════════════════════════ */
-    (function () {
-
-        /* ── Error definitions ── */
-        var ERRS = {
-            NO_NETWORK: {
-                icon:'📡', iconClass:'sa-icon-network',
-                badge:'No Network', badgeClass:'sa-badge-network',
-                title:'No Network Connection',
-                desc:'Your device lost its network connection. Check your cable or Wi-Fi.',
-                detail: function(e){ return '<strong>Cause:</strong> Browser is offline (navigator.onLine = false)<br><strong>Detail:</strong> '+e; }
-            },
-            SERVER_CRASH: {
-                icon:'🔌', iconClass:'sa-icon-network',
-                badge:'Reconnecting', badgeClass:'sa-badge-network',
-                title:'Reconnecting to Gateway',
-                desc:'The network connection dropped or IP address changed. The gateway may also be restarting.',
-                detail: function(e){ return '<strong>Cause:</strong> Connection could not be established<br><strong>Likely:</strong> Network switched (e.g. Wi-Fi to LTE) · Gateway IP changed · Service restart<br><strong>Detail:</strong> '+e; }
-            },
-            SERVER_DISCONNECT: {
-                icon:'🔌', iconClass:'sa-icon-network',
-                badge:'Disconnected', badgeClass:'sa-badge-network',
-                title:'Connection Dropped',
-                desc:'The connection to the gateway was interrupted. It may be rebooting or switching networks.',
-                detail: function(e){ return '<strong>Cause:</strong> HTTP connection closed unexpectedly<br><strong>Likely:</strong> Network path interrupted · Server reboot<br><strong>Detail:</strong> '+e; }
-            },
-            TIMEOUT: {
-                icon:'⏱', iconClass:'sa-icon-timeout',
-                badge:'Timeout', badgeClass:'sa-badge-timeout',
-                title:'Request Timed Out',
-                desc:'The gateway did not respond within 8 seconds. It may be overloaded or starting up.',
-                detail: function(e){ return '<strong>Cause:</strong> No response within 8 s<br><strong>Likely:</strong> Server busy · Heavy load · Slow boot<br><strong>Detail:</strong> '+e; }
-            },
-            SERVER_ERROR: {
-                icon:'🛑', iconClass:'sa-icon-crash',
-                badge:'Server Error', badgeClass:'sa-badge-crash',
-                title:'Internal Server Error',
-                desc:'The gateway returned an unexpected server error. Please retry.',
-                detail: function(e){ return '<strong>Detail:</strong> '+e; }
-            }
-        };
-
-        /* ── Show overlay ── */
-        var _retryTimer = null, _retrySeconds = 10;
-
-        function showAlert(type, raw) {
-            var cfg = ERRS[type] || ERRS.SERVER_DISCONNECT;
-
-            var iconEl = document.getElementById('saIcon');
-            iconEl.textContent = cfg.icon;
-            iconEl.className   = 'sa-icon-wrap ' + cfg.iconClass;
-
-            var badge = document.getElementById('saBadge');
-            badge.textContent = cfg.badge;
-            badge.className   = 'sa-badge ' + cfg.badgeClass;
-
-            document.getElementById('saTitle').textContent  = cfg.title;
-            document.getElementById('saDesc').textContent   = cfg.desc;
-            document.getElementById('saDetail').innerHTML   = cfg.detail(raw || 'n/a');
-
-            document.getElementById('serverAlertOverlay').classList.add('show');
-            startCountdown();
-        }
-
-        function hideAlert() {
-            document.getElementById('serverAlertOverlay').classList.remove('show');
-            clearInterval(_retryTimer);
-            document.getElementById('sa-countdown').textContent = '';
-        }
-
-        function startCountdown() {
-            _retrySeconds = 10;
-            clearInterval(_retryTimer);
-            var el = document.getElementById('sa-countdown');
-            if (el) el.innerHTML = 'Retrying\u2026';
-            _retryTimer = setInterval(function () {
-                _retrySeconds--;
-                if (_retrySeconds <= 0) { clearInterval(_retryTimer); doRetry(); }
-            }, 1000);
-        }
-
-        function tick() {}
-
-        function classifyError(err) {
-            if (!navigator.onLine) return 'NO_NETWORK';
-            var m = err && err.message ? err.message.toLowerCase() : '';
-            if (m.indexOf('failed to fetch') !== -1 || m.indexOf('networkerror') !== -1 || m.indexOf('network request') !== -1) return 'SERVER_CRASH';
-            if (m.indexOf('load failed') !== -1 || m.indexOf('could not connect') !== -1) return 'SERVER_DISCONNECT';
-            return 'SERVER_DISCONNECT';
-        }
-
-        /* ── Global Fetch Interceptor ── */
-        // Only intercepts 5xx server errors on /api/ calls.
-        // 4xx errors (400, 404, 409 etc.) are normal application responses
-        // and must NOT trigger the overlay — they're handled by each page script.
-        var originalFetch = window.fetch;
-        window.fetch = function() {
-            var url = arguments[0];
-            return originalFetch.apply(this, arguments).then(function(res) {
-                if (res.status >= 500 && typeof url === 'string' && url.indexOf('/api/') !== -1) {
-                    // Skip auth endpoints — they report their own errors
-                    if (url.indexOf('/api/auth/') === -1) {
-                        if (typeof showAlert !== 'undefined') {
-                            showAlert('SERVER_ERROR', 'HTTP ' + res.status + ' ' + res.statusText);
-                        }
-                    }
-                }
-                return res;
-            }).catch(function(err) {
-                // Only show network error overlay if we're actually online.
-                // If we're offline the offline/online event handlers deal with it.
-                if (!navigator.onLine) { throw err; }
-                if (typeof url === 'string' && url.indexOf('/api/auth/status') === -1) {
-                    if (typeof showAlert !== 'undefined' && typeof classifyError !== 'undefined') {
-                        showAlert(classifyError(err), err ? err.message : 'Fetch Error');
-                    }
-                }
-                throw err;
-            });
-        };
-
-        /* ── Retry: re-check session without reloading the page ── */
-        function doRetry() {
-            hideAlert();
-            checkSession();
-        }
-        window.__saRetry = doRetry;
-
-        /* ── Session check (runs on load + every retry) ── */
-        function checkSession() {
-            var ctrl = new AbortController();
-            var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
-
-            fetch('/api/auth/status', { credentials: 'same-origin', signal: ctrl.signal, cache: 'no-store' })
-            .then(function (res) {
-                clearTimeout(tid);
-                if (res.ok) {
-                    // Session valid — hide any overlay, stay on page, apply role.
-                    // Previously this did window.location.reload() when wasAlerting,
-                    // which caused a disruptive page reload on every network switch.
-                    // We no longer reload — the session cookie survived and the
-                    // frontend keeps its current state.
-                    hideAlert();
-                    applyRole();
-                } else if (res.status === 401 || res.status === 403) {
-                    // Session expired — clear cookies and go to login
-                    clearCookies();
-                    window.location.replace('/?expired=1');
-                } else if (res.status >= 500) {
-                    showAlert('SERVER_ERROR', 'HTTP ' + res.status + ' ' + res.statusText);
-                } else {
-                    clearCookies();
-                    window.location.replace('/?expired=1');
-                }
-            })
-            .catch(function (err) {
-                clearTimeout(tid);
-                if (err && err.name === 'AbortError') { showAlert('TIMEOUT', 'Aborted after 8 s'); return; }
-                showAlert(classifyError(err), err ? err.message : 'Unknown error');
-            });
-        }
-
-        /* ── Apply viewer/editor role ── */
-        function applyRole() {
-            fetch('/api/auth/session-role', { credentials: 'same-origin' })
-            .then(function(r){ return r.ok ? r.json() : null; })
-            .then(function(data) {
-                if (!data) return;
-                
-                var oldRole = window.__sessionRole;
-                window.__sessionRole = data.role;
-
-                if (data.role === 'viewer') {
-                    document.body.classList.add('viewer-mode');
-                    // Only show banner if it wasn't already viewer (initial load)
-                    if (oldRole !== 'viewer') {
-                        document.getElementById('viewerBanner').classList.add('show');
-                    }
-                    
-                    // Prevent bypassing read-only via DevTools
-                    if (!window.__viewerObserver) {
-                        var target = document.getElementById('contentArea') || document.body;
-                        window.__viewerObserver = new MutationObserver(function(){
-                            if (window.__sessionRole === 'viewer' && !document.body.classList.contains('viewer-mode')) {
-                                document.body.classList.add('viewer-mode');
-                            }
-                        });
-                        window.__viewerObserver.observe(target, { childList: true, subtree: true });
-                    }
-                } else if (data.role === 'editor') {
-                    // Transition to editor
-                    if (window.__viewerObserver) {
-                        window.__viewerObserver.disconnect();
-                        window.__viewerObserver = null;
-                    }
-                    document.body.classList.remove('viewer-mode');
-                    document.getElementById('viewerBanner').classList.remove('show');
-                    
-                    // IF we transitioned from viewer to editor, show handover modal
-                    if (oldRole === 'viewer') {
-                        document.getElementById('handoverModal').classList.add('show');
-                    }
-                }
-            })
-            .catch(function(){});
-        }
-
-        function clearCookies() {
-            document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        }
-
-        /* ── Go offline while page is open ── */
-        window.addEventListener('offline', function () {
-            // Show the overlay but DON'T start auto-redirect.
-            // A network switch (WiFi→LTE) triggers offline briefly — we wait
-            // for the 'online' event to confirm whether the session survived.
-            showAlert('NO_NETWORK', 'navigator.onLine became false');
-        });
-
-        /* ── Come back online after a network switch ── */
-        window.addEventListener('online', function () {
-            // Give the OS 1.5 s to fully establish the new route, then silently
-            // re-verify the session.  If the cookie is still valid we just hide
-            // the overlay and carry on — NO page reload, NO login redirect.
-            setTimeout(function () {
-                var ctrl = new AbortController();
-                var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
-                fetch('/api/auth/status', { credentials: 'same-origin', signal: ctrl.signal, cache: 'no-store' })
-                .then(function(r) {
-                    clearTimeout(tid);
-                    if (r.ok) {
-                        // Session survived the network switch — just hide overlay
-                        hideAlert();
-                        applyRole();
-                    } else if (r.status === 401 || r.status === 403) {
-                        // Truly expired — go to login
-                        clearCookies();
-                        window.location.replace('/?expired=1');
-                    } else {
-                        showAlert('SERVER_ERROR', 'HTTP ' + r.status);
-                    }
-                })
-                .catch(function(err) {
-                    clearTimeout(tid);
-                    if (err && err.name === 'AbortError') { showAlert('TIMEOUT', 'Aborted after 8 s'); return; }
-                    // Still unreachable — keep overlay, let auto-retry handle it
-                    showAlert(classifyError(err), err ? err.message : 'Reconnect failed');
-                });
-            }, 1500);
-        });
-
-        /* ── Periodic heartbeat every 30 s to detect crashes mid-session ── */
-        // Reduced from 5 s to 30 s — 5 s was generating false SERVER_ERROR
-        // popups during normal page-load bursts and slow API responses.
-        // 30 s is frequent enough to detect a real crash within half a minute.
-        setInterval(function () {
-            if (document.getElementById('serverAlertOverlay').classList.contains('show')) return;
-            if (!navigator.onLine) return; // don't heartbeat while we know we're offline
-            fetch('/api/auth/status', { credentials: 'same-origin', cache: 'no-store' })
-            .then(function(r){
-                if (!r.ok) {
-                    if (r.status === 401 || r.status === 403) { clearCookies(); window.location.replace('/?expired=1'); }
-                    else showAlert('SERVER_ERROR', 'HTTP ' + r.status);
-                } else {
-                    // Periodic check for role changes (e.g. viewer becomes editor)
-                    applyRole();
-                }
-            })
-            .catch(function(err){
-                if (!navigator.onLine) return; // ignore — offline event will handle it
-                showAlert(classifyError(err), err ? err.message : 'Heartbeat failed');
-            });
-        }, 30000);
-
-        /* ── Initial check on page load ── */
-        checkSession();
-
-    })();
-    </script>
     <!-- Loading Indicator -->
     <div class="loading-indicator" id="loadingIndicator">
         <div class="spinner"></div>
@@ -851,132 +415,115 @@
     <div class="layout-container">
         <!-- Sidebar -->
         <div class="sidebar" id="sidebar">
-            <!-- Logo -->
             <div class="sidebar-logo">
                 <img src="assets/images/logo.png" alt="Innospace" style="height:36px; width:auto; object-fit:contain;">
             </div>
-          <!-- Navigation -->
-<nav class="sidebar-nav" id="sidebarNav">
-    <!-- Configuration Section -->
-    <div class="nav-section">
-        <div class="section-title">Configuration</div>
-        <a href="#" data-page="general-configuration" class="nav-link active">
-            <i class="fa-solid fa-sliders"></i>
-            <span>General Configuration</span>
-        </a>
-        <a href="#" data-page="device-management" class="nav-link">
-            <i class="fa-solid fa-microchip"></i>
-            <span>Device Management</span>
-        </a>
-    </div>
+            <nav class="sidebar-nav" id="sidebarNav">
+                <!-- Configuration Section -->
+                <div class="nav-section">
+                    <div class="section-title">Configuration</div>
+                    <a href="#" data-page="general-configuration" class="nav-link active">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>General Configuration</span>
+                    </a>
+                    <a href="#" data-page="device-management" class="nav-link">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Device Management</span>
+                    </a>
+                                  </div>
 
-    <!-- Protocols & Integrations Section -->
-    <div class="nav-section">
-        <div class="section-title">Protocols & Integrations</div>
-        <a href="#" data-page="field-integration" class="nav-link">
-            <i class="fa-solid fa-plug"></i>
-            <span>Field Integration</span>
-        </a>
-        <a href="#" data-page="mqtt-cloud" class="nav-link">
-            <i class="fa-solid fa-cloud"></i>
-            <span>Cloud Integration</span>
-        </a>
-    </div>
+                <!-- Protocols & Integrations Section -->
+                <div class="nav-section">
+                    <div class="section-title">Protocols & Integrations</div>
+                    <a href="#" data-page="field-integration" class="nav-link">
+                        <i class="fa-solid fa-plug"></i>
+                        <span>Field Integration</span>
+                    </a>
+                    <a href="#" data-page="mqtt-cloud" class="nav-link">
+                        <i class="fa-solid fa-cloud"></i>
+                        <span>Cloud Integration</span>
+                    </a>
+                </div>
 
-    <!-- OTA Firmware Management Section -->
-    <div class="nav-section">
-        <div class="section-title">OTA Firmware Management</div>
-        <a href="#" data-page="ota-gateway" class="nav-link">
-            <i class="fa-solid fa-server"></i>
-            <span>Gateway OTA & Recovery</span>
-        </a>
-    </div>
+                <!-- OTA Firmware Management Section -->
+                <div class="nav-section">
+                    <div class="section-title">OTA Firmware Management</div>
+                    <a href="#" data-page="ota-gateway" class="nav-link">
+                        <i class="fa-solid fa-server"></i>
+                        <span>Gateway OTA & Recovery</span>
+                    </a>
+                </div>
 
-    <!-- CraneIQ Suite Section -->
-    <div class="nav-section">
-        <div class="section-title">CraneIQ Suite</div>
-        <a href="#" data-page="craneiq" class="nav-link">
-            <i class="fa-solid fa-weight-hanging"></i>
-            <span>CraneIQ</span>
-            <span class="nav-link-count"></span>
-        </a>
-    </div>
+                <!-- CraneIQ Suite Section -->
+                <div class="nav-section">
+                    <div class="section-title">CraneIQ Suite</div>
+                    <a href="#" data-page="craneiq" class="nav-link">
+                        <i class="fa-solid fa-weight-hanging"></i>
+                        <span>CraneIQ</span>
+                        <span class="nav-link-count"></span>
+                    </a>
+                </div>
 
-    <!-- Data & Diagnostics Section -->
-    <div class="nav-section">
-        <div class="section-title">Data & Diagnostics</div>
-        <a href="#" data-page="data-retention" class="nav-link">
-            <i class="fa-solid fa-database"></i>
-            <span>Data Retention</span>
-        </a>
-        <a href="#" data-page="logging" class="nav-link">
-            <i class="fa-solid fa-file-lines"></i>
-            <span>Logging</span>
-        </a>
-        <a href="#" data-page="diagnostics" class="nav-link">
-            <i class="fa-solid fa-bug"></i>
-            <span>Diagnostics & Live Terminal</span>
-        </a>
-    </div>
+                <!-- Data & Diagnostics Section -->
+                <div class="nav-section">
+                    <div class="section-title">Data & Diagnostics</div>
+                    <a href="#" data-page="data-retention" class="nav-link">
+                        <i class="fa-solid fa-database"></i>
+                        <span>Data Retention</span>
+                    </a>
+                    <a href="#" data-page="logging" class="nav-link">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span>Logging</span>
+                    </a>
+                    <a href="#" data-page="diagnostics" class="nav-link">
+                        <i class="fa-solid fa-bug"></i>
+                        <span>Diagnostics & Live Terminal</span>
+                    </a>
+                </div>
 
-    <!-- Security & Access Section -->
-    <div class="nav-section">
-        <div class="section-title">Security & Access</div>
-        <a href="#" data-page="security" class="nav-link">
-            <i class="fa-solid fa-lock"></i>
-            <span>Security & Access Control</span>
-        </a>
-        <a href="#" data-page="license" class="nav-link">
-            <i class="fa-solid fa-key"></i>
-            <span>Licensing & Subscriptions</span>
-        </a>
-    </div>
+                <!-- Security & Access Section -->
+                <div class="nav-section">
+                    <div class="section-title">Security & Access</div>
+                    <a href="#" data-page="security" class="nav-link">
+                        <i class="fa-solid fa-lock"></i>
+                        <span>Security & Access Control</span>
+                    </a>
+                    <a href="#" data-page="license" class="nav-link">
+                        <i class="fa-solid fa-key"></i>
+                        <span>Licensing & Subscriptions</span>
+                    </a>
+                </div>
 
-    <!-- Automation Section -->
-    <div class="nav-section">
-        <div class="section-title">Automation</div>
-        <a href="#" data-page="automation" class="nav-link">
-            <i class="fa-solid fa-clock"></i>
-            <span>Scheduler / Automation Jobs</span>
-        </a>
-        <a href="#" data-page="alerts" class="nav-link">
-            <i class="fa-solid fa-bell"></i>
-            <span>Alerts & Event Classes</span>
-        </a>
-        <a href="#" data-page="rules" class="nav-link">
-            <i class="fa-solid fa-diagram-project"></i>
-            <span>Rule Engine</span>
-        </a>
-    </div>
+                <!-- Automation Section -->
+                <div class="nav-section">
+                    <div class="section-title">Automation</div>
+                    <a href="#" data-page="automation" class="nav-link">
+                        <i class="fa-solid fa-clock"></i>
+                        <span>Scheduler / Automation Jobs</span>
+                    </a>
+                    <a href="#" data-page="alerts" class="nav-link">
+                        <i class="fa-solid fa-bell"></i>
+                        <span>Alerts & Event Classes</span>
+                    </a>
+                    <a href="#" data-page="rules" class="nav-link">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Rule Engine</span>
+                    </a>
+                </div>
 
-    <!-- System Section -->
-    <div class="nav-section">
-        <div class="section-title">System</div>
-        <a href="#" data-page="backup" class="nav-link">
-            <i class="fa-solid fa-floppy-disk"></i>
-            <span>Backup & Restore</span>
-        </a>
-        <a href="#" data-page="notification" class="nav-link">
-            <i class="fa-solid fa-message"></i>
-            <span>Notification</span>
-        </a>
-    </div>
-</nav>
-            <script>
-                function toggleUnderDev() {
-                    const links = document.getElementById('underDevLinks');
-                    const chevron = document.getElementById('underDevChevron');
-                    const isHidden = links.style.display === 'none';
-                    links.style.display = isHidden ? 'block' : 'none';
-                    chevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
-                }
-                // Start collapsed
-                document.addEventListener('DOMContentLoaded', function() {
-                    const links = document.getElementById('underDevLinks');
-                    const chevron = document.getElementById('underDevChevron');
-                    if (links) { links.style.display = 'none'; chevron.style.transform = 'rotate(-90deg)'; }
-                });
-            </script>
+                <!-- System Section -->
+                <div class="nav-section">
+                    <div class="section-title">System</div>
+                    <a href="#" data-page="backup" class="nav-link">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Backup & Restore</span>
+                    </a>
+                    <a href="#" data-page="notification" class="nav-link">
+                        <i class="fa-solid fa-message"></i>
+                        <span>Notification</span>
+                    </a>
+                </div>
+            </nav>
             
             <!-- Footer / User Profile -->
             <div class="sidebar-footer">
@@ -988,13 +535,9 @@
                         <h4 id="sidebarUsername">User</h4>
                         <p id="sidebarUserRole">system user</p>
                     </div>
-                    <button
-                        onclick="handleLogout()"
-                        title="Logout"
-                        style="margin-left:auto; width:32px; height:32px; border-radius:8px; border:1.5px solid #E2E8F0; background:transparent; color:#94A3B8; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; transition:all 0.2s;"
+                    <button onclick="handleLogout()" title="Logout" style="margin-left:auto; width:32px; height:32px; border-radius:8px; border:1.5px solid #E2E8F0; background:transparent; color:#94A3B8; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; transition:all 0.2s;"
                         onmouseover="this.style.background='#FEF2F2';this.style.borderColor='#FCA5A5';this.style.color='#EF4444';"
-                        onmouseout="this.style.background='transparent';this.style.borderColor='#E2E8F0';this.style.color='#94A3B8';"
-                    >
+                        onmouseout="this.style.background='transparent';this.style.borderColor='#E2E8F0';this.style.color='#94A3B8';">
                         <i class="fa-solid fa-right-from-bracket"></i>
                     </button>
                 </div>
@@ -1006,20 +549,16 @@
             <!-- Header -->
             <header class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
                 <div class="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                    <!-- Left: Mobile Menu & Breadcrumb -->
                     <div class="flex items-center">
                         <button class="mobile-menu-btn" id="mobileMenuBtn">
                             <i class="fa-solid fa-bars"></i>
                         </button>
-                        
                         <div class="flex items-center text-sm text-slate-500 h-6">
                             <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
                             <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
                             <span class="text-slate-900 font-medium" id="pageTitle">General Configuration</span>
                         </div>
                     </div>
-
-                    <!-- Right: Controls -->
                     <div class="flex items-center space-x-4">
                         <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
                             <i class="fa-solid fa-server text-slate-400 text-sm"></i>
@@ -1035,9 +574,7 @@
             
             <!-- Dynamic Content Area -->
             <div class="content-wrapper" id="contentArea">
-                <!-- Content will be loaded here dynamically -->
                 <div id="pageContent">
-                    <!-- Default content before JavaScript loads -->
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                         <div class="mb-8">
                             <h1 class="text-2xl font-bold text-slate-800 mb-2">General Configuration</h1>
@@ -1056,15 +593,14 @@
         </div>
     </div>
     
-    
+    <!-- Scripts - Using correct paths from your structure -->
     <script src="pages/js/common.js"></script>
     <script src="pages/js/general-config.js"></script>
     <script src="pages/js/device-management.js"></script>
     <script src="pages/js/modbus-mapping.js"></script>
-    <script src="pages/js/mqtt-cloud.js"></script>  <!-- Add this line -->
- 
+    <script src="pages/js/mqtt-cloud.js"></script>
     <script src="pages/js/ota-gateway.js"></script>
-    <script src="pages/js/data-retention.js"></script>  <!-- Add this line -->
+    <script src="pages/js/data-retention.js"></script>
     <script src="pages/js/logging.js"></script>
     <script src="pages/js/security.js"></script>
     <script src="pages/js/diagnostics.js"></script>
@@ -1077,10 +613,36 @@
     <script src="pages/js/notification.js"></script>
     <script src="pages/js/alerts.js"></script>
     <script src="pages/js/rules.js"></script>
-    <script src="pages/js/router.js"></script> <!-- Router should be last -->
-    <!-- Initialize the router -->
+    <script src="pages/js/router.js"></script>
+    
     <script>
-        // Fetch gateway name from API and keep header label updated
+        // Get cookie helper
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+
+        // Display logged-in username in sidebar
+        const storedUser = getCookie('gw_user');
+        if (storedUser) {
+            const el = document.getElementById('sidebarUsername');
+            if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1);
+        }
+
+        // Logout handler
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } catch (e) {}
+            document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            window.location.replace('/');
+        }
+
+        window.handleLogout = handleLogout;
+
+        // Fetch gateway name
         (function () {
             function updateHeaderGatewayName() {
                 fetch('/api/general-configuration', { credentials: 'same-origin' })
@@ -1094,123 +656,63 @@
                     })
                     .catch(function () {});
             }
-            // Run on load, then re-check every 30 s (picks up saves without refresh)
             updateHeaderGatewayName();
             setInterval(updateHeaderGatewayName, 30000);
-            // Also re-fetch whenever general-config page saves (listen for custom event)
             window.addEventListener('gateway-config-saved', updateHeaderGatewayName);
         })();
-    </script>
-    <script>
+
         // Initialize router
-        const router = new Router();
-        window.router = router; // Make router available globally
+        if (typeof Router !== 'undefined') {
+            const router = new Router();
+            window.router = router;
+        }
+
+        // Mobile menu handling
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
         
-        // Handle responsive behavior
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('active');
+                mobileOverlay.classList.toggle('active');
+            });
+        }
+        
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('active');
+                mobileOverlay.classList.remove('active');
+            });
+        }
+        
         window.addEventListener('resize', () => {
             if (window.innerWidth > 1024) {
-                const sidebar = document.getElementById('sidebar');
-                const overlay = document.getElementById('mobileOverlay');
-                
-                if (sidebar) sidebar.classList.remove('active');
-                if (overlay) overlay.classList.remove('active');
+                sidebar.classList.remove('active');
+                mobileOverlay.classList.remove('active');
             }
         });
-        
-        // Debug helper
-    </script>
-    <script>
-        // Display logged-in username in sidebar
-        function getCookie(name) {
-            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-            return match ? match[2] : null;
-        }
-        const storedUser = getCookie('gw_user');
-        if (storedUser) {
-            const el = document.getElementById('sidebarUsername');
-            if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1);
-        }
 
-        // Logout handler
-        async function handleLogout() {
-            try {
-                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-            } catch (e) {}
-            // Clear auth cookies
-            document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            window.location.replace('/');
-        }
-
-        window.handleLogout = handleLogout;
-
-        // Keep-alive ping every 45 s — touches last_ping on the server so the
-        // session watchdog never evicts an active tab between heartbeats.
-        // This runs independently of the 30 s heartbeat in the overlay script.
-        setInterval(function keepAlive() {
-            if (!navigator.onLine) return;
-            // Use the raw originalFetch so we bypass the overlay interceptor
-            var f = (typeof originalFetch !== 'undefined') ? originalFetch : window.fetch;
-            f('/api/auth/status', { credentials: 'same-origin', cache: 'no-store' }).catch(function(){});
-        }, 45000);
-
-        // --- Expose user_role globally so page scripts can read it immediately ---
-        // Also handles per-user page visibility restrictions.
+        // Apply page visibility based on user role
         (async function applyPageVisibility() {
             try {
                 const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
                 if (!res.ok) return;
                 const data = await res.json();
-
-                // ── Expose role globally for page scripts (e.g. device-management.js) ──
                 window.__userRole = (data.role || data.user_role || 'user').toLowerCase();
-
-                // Update sidebar footer role label
+                
                 const roleLabel = document.getElementById('sidebarUserRole');
                 if (roleLabel) {
                     roleLabel.textContent = window.__userRole === 'admin' ? 'administrator' : 'system user';
                 }
-
-                // Update username (without role suffix)
-                const usernameEl = document.getElementById('sidebarUsername');
-                if (usernameEl) {
-                    const name = getCookie('gw_user') || 'User';
-                    usernameEl.textContent = name.charAt(0).toUpperCase() + name.slice(1);
-                }
-
+                
                 const hidden = data.hidden_pages || [];
-                if (!hidden.length) return;
-
                 hidden.forEach(pageKey => {
                     document.querySelectorAll('[data-page="' + pageKey + '"]').forEach(el => {
-                        const li = el.closest('li');
-                        (li || el).style.display = 'none';
+                        (el.closest('li') || el).style.display = 'none';
                     });
                 });
-
-                // Hide section titles (.nav-section) if ALL their nav-link children are hidden
-                document.querySelectorAll('.nav-section').forEach(section => {
-                    const links = section.querySelectorAll('a.nav-link, .nav-link');
-                    const allHidden = Array.from(links).every(l => l.style.display === 'none');
-                    if (allHidden) section.style.display = 'none';
-                });
-
-                // If active page is now hidden, navigate to first visible page
-                const activeLink = document.querySelector('.nav-link.active');
-                if (activeLink) {
-                    const activePage = activeLink.getAttribute('data-page');
-                    if (hidden.includes(activePage)) {
-                        const firstVisible = document.querySelector('.nav-link:not([style*="display: none"]):not([style*="display:none"])');
-                        if (firstVisible && window.router) {
-                            const targetPage = firstVisible.getAttribute('data-page');
-                            if (targetPage) window.router.navigate(targetPage);
-                        }
-                    }
-                }
-            } catch (e) {
-                // Silently ignore   page visibility is best-effort
-            }
+            } catch (e) {}
         })();
     </script>
 </body>

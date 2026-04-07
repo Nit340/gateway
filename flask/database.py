@@ -210,9 +210,80 @@ def ensure_db_initialized():
         _db_initialized = True
 
 
+def _insert_factory_data_on_new_db(conn):
+    """If database is newly created and factory_default.db exists, 
+    insert factory data into the new database.
+    
+    This is called DURING database initialization, so we can populate
+    the brand new DB with factory configuration before it's used.
+    """
+    try:
+        factory_db_path = os.path.join(os.path.dirname(DB_FILE), 'factory_default.db')
+        
+        if not os.path.exists(factory_db_path):
+            logger.debug("[DB] No factory_default.db found - using minimal defaults")
+            return
+        
+        logger.info("[DB] New database detected. Importing data from factory_default.db...")
+        
+        # Attach the factory database
+        conn.execute('ATTACH DATABASE ? AS factory', (factory_db_path,))
+        
+        cursor = conn.cursor()
+        
+        # Get all tables from the newly created main database
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        # Temporarily disable foreign key constraints during import
+        conn.execute('PRAGMA foreign_keys = OFF')
+        
+        # For each table, try to copy data from factory DB
+        successful_imports = 0
+        for table in tables:
+            try:
+                # Check if table exists in factory DB
+                cursor.execute(
+                    "SELECT name FROM factory.sqlite_master WHERE type='table' AND name = ?",
+                    (table,)
+                )
+                if cursor.fetchone() is None:
+                    logger.debug("[DB] Table '{}' not in factory DB, skipping".format(table))
+                    continue
+                
+                # Clear any default data and insert factory data
+                conn.execute('DELETE FROM main.{}'.format(table))
+                conn.execute('INSERT INTO main.{0} SELECT * FROM factory.{0}'.format(table))
+                logger.debug("[DB] Imported {} from factory DB".format(table))
+                successful_imports += 1
+            except Exception as table_err:
+                logger.warning("[DB] Could not import table '{}': {}".format(table, table_err))
+        
+        conn.commit()
+        conn.execute('DETACH DATABASE factory')
+        conn.execute('PRAGMA foreign_keys = ON')
+        
+        logger.info("[DB] Factory data import complete - {} tables imported".format(successful_imports))
+        
+    except Exception as e:
+        logger.warning("[DB] Error importing factory data: {}".format(e))
+        # This is not fatal - the database is still usable with defaults
+        try:
+            conn.execute('DETACH DATABASE factory')
+            conn.execute('PRAGMA foreign_keys = ON')
+        except:
+            pass
+
+
 def init_database():
     """Initialize SQLite database with full schema"""
     _log_debug("Initializing database schema")
+    
+    # Check if this is a newly created database (file didn't exist before)
+    is_new_db = not os.path.exists(DB_FILE)
+    
     # Use a temporary connection for initialization
     conn = sqlite3.connect(DB_FILE, timeout=30.0)
     conn.execute('PRAGMA journal_mode=WAL')
@@ -221,6 +292,11 @@ def init_database():
     
     create_tables(cursor)
     insert_default_data(cursor)
+    
+    # If database is newly created, insert factory data if available
+    if is_new_db:
+        _insert_factory_data_on_new_db(conn)
+    
     _migrate_existing_db(cursor)
     _create_indexes(cursor)
     
