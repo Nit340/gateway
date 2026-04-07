@@ -834,6 +834,20 @@ def _flush_pending_network_route(client):
         pending = 0
         with pipeline_state["lock"]:
             pipeline_state["network_route_pending"] = 0
+    elif pending is None:
+        # Auto-connect is OFF and we have nothing in memory (e.g. after a restart).
+        # Fallback to the last persisted manual route from the database.
+        try:
+            from database import get_general_configuration
+            _cfg = get_general_configuration()
+            _last_route = (_cfg.get('network') or {}).get('last_route_select', 0)
+            # Route 0 is 'Auto', but if auto_on is False, we only restore manual routes (1-4).
+            # If it was 0, it means it was last in Auto mode or uninitialized.
+            if _last_route > 0:
+                logger.info('[NET-ROUTE] auto_connect=OFF -> restoring last manual route={} from database'.format(_last_route))
+                pending = int(_last_route)
+        except Exception as _e:
+            logger.warning('[NET-ROUTE] Failed to restore manual route from DB: {}'.format(_e))
 
     if pending is not None:
         try:

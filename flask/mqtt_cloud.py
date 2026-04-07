@@ -320,8 +320,14 @@ def build_iot_gateway_config():
     wifi = gen.get('network', {}).get('wifi', {})
     hb   = gen.get('heartbeat', {})
 
+    cell = gen.get('network', {}).get('cellular', {})
+    
     wifi_ssid     = wifi.get('ssid',     '')
     wifi_password = wifi.get('password', '')
+    
+    cell_apn      = cell.get('apn', 'internet')
+    cell_user     = cell.get('username', '')
+    cell_pass     = cell.get('password', '')
     
     # Read heartbeat interval and offline threshold as separate values
     heartbeat_interval_sec = int(hb.get('interval', 30))
@@ -417,10 +423,13 @@ def build_iot_gateway_config():
 
     # -- 3. Assemble ---------------------------------------------------------
     return {
-        'version': 2,
+        'version': 3,
         'system': {
-            'wifi_ssid':     wifi_ssid,
-            'wifi_password': wifi_password,
+            'wifi_ssid':           wifi_ssid,
+            'wifi_password':       wifi_password,
+            'cellular_apn':        cell_apn,
+            'cellular_username':   cell_user,
+            'cellular_password':   cell_pass,
         },
         'heartbeat': {
             'interval_sec': heartbeat_interval_sec,

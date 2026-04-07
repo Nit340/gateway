@@ -850,6 +850,10 @@ def _migrate_existing_db(cursor):
     if 'load_raw_enabled' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN load_raw_enabled INTEGER DEFAULT 0")
 
+    # Add last_route_select to general_configuration (persists manual route selection)
+    if 'last_route_select' not in gc_cols:
+        cursor.execute("ALTER TABLE general_configuration ADD COLUMN last_route_select INTEGER DEFAULT 0")
+
     # Migration for modal table: remove modal_time column
     cursor.execute("PRAGMA table_info(modal)")
     modal_cols = {r[1] for r in cursor.fetchall()}
@@ -1221,7 +1225,8 @@ def get_general_configuration():
                        COALESCE(cell_apn, 'internet') AS cell_apn,
                        COALESCE(cell_username, '') AS cell_username,
                        COALESCE(cell_password, '') AS cell_password,
-                       COALESCE(auto_connect, 0) AS auto_connect
+                       COALESCE(auto_connect, 0) AS auto_connect,
+                       COALESCE(last_route_select, 0) AS last_route_select
                 FROM general_configuration WHERE id = 1
             ''')
             row = cursor.fetchone()
@@ -1251,6 +1256,7 @@ def get_general_configuration():
                         'dns1': row[23], 'dns2': row[24],
                     },
                     'cellular': {'apn': row[25], 'username': row[26], 'password': row[27]},
+                    'last_route_select': row[29],
                 },
             }
     
@@ -1294,6 +1300,7 @@ def update_general_configuration(config_data):
             if 'mode' in net: _add('network_mode', net['mode'])
             if 'eth_selected' in net: _add('eth_selected', net['eth_selected'])
             if 'auto_connect' in net: _add('auto_connect', 1 if net['auto_connect'] else 0)
+            if 'last_route_select' in net: _add('last_route_select', int(net['last_route_select']))
             
             wifi = net.get('wifi', {})
             if 'ssid' in wifi: _add('wifi_ssid', wifi['ssid'])

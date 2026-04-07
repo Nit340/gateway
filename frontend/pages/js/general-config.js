@@ -250,14 +250,25 @@
         } else {
             routeNum = _ROUTE_MAP[mode] !== undefined ? _ROUTE_MAP[mode] : 4;
         }
-        fetch('/api/pipeline', {
+
+        // 1. Persist the route to the database so it survives a restart
+        fetch('/api/general-configuration', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ network: { last_route_select: routeNum } })
+        }).catch(function (e) {
+            console.warn('[CONNECT] failed to persist route:', e);
+        });
+
+        // 2. Send the route to the pipeline
+        return fetch('/api/pipeline/network-route-select', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ datapoint: 'net.route', value: routeNum })
-        })
-            .then(function (r) { return r.json(); })
-            .catch(function (e) { console.warn('[CONNECT] failed to send network route:', e); });
+            body: JSON.stringify({ network_route_select: routeNum })
+        }).then(function (r) { return r.json(); })
+          .catch(function (e) { console.warn('[CONNECT] failed to send network route:', e); });
     };
 
     var _initConnectButtons = function () {
@@ -655,37 +666,25 @@
         }
     };
 
-    // FIXED: Get current active route with fresh cache data
+    // NO LONGER USED: Replacing with UI-based selection in _stopAutoConnect
     var _getCurrentActiveRouteFresh = function () {
-        // Get states with staleness check
-        var e0State = (!isFieldStale('net.lan.eth0.state')) ? _cache.lan.eth0.state : null;
-        var e1State = (!isFieldStale('net.lan.eth1.state')) ? _cache.lan.eth1.state : null;
-        var wState = (!isFieldStale('net.wlan.state')) ? _cache.wlan.state : null;
-        var lState = (!isFieldStale('net.lte.state')) ? _cache.lte.state : null;
-        
-        var e0Up = isUp(e0State);
-        var e1Up = isUp(e1State);
-        var wUp = isUp(wState);
-        var lUp = isUp(lState);
-        
-        // Determine active connection (priority: eth0 > eth1 > wifi > lte)
-        if (e0Up) {
-            return { route: 1, mode: 'ethernet', eth: 'eth0' };
-        } else if (e1Up) {
-            return { route: 2, mode: 'ethernet', eth: 'eth1' };
-        } else if (wUp) {
-            return { route: 4, mode: 'wifi', eth: null };
-        } else if (lUp) {
-            return { route: 3, mode: 'lte', eth: null };
-        }
         return { route: null, mode: null, eth: null };
     };
 
     // FIXED: Complete _stopAutoConnect function
-    // FIXED: When turning OFF auto, automatically send the current active route
-var _stopAutoConnect = function () {
-    // Get the current active route dynamically from cache
-    var active = _getCurrentActiveRouteFresh();
+    // When turning OFF auto, automatically send the current active route
+    var _stopAutoConnect = function () {
+    // Determine the route based on the CURRENT VIEWED TAB in the UI
+    var viewedMode = getRadioValue('[name="network-mode"]') || 'wifi';
+    var routeNum = 4;
+    var ethIface = null;
+
+    if (viewedMode === 'ethernet') {
+        ethIface = _selectedEth || 'eth0';
+        routeNum = (ethIface === 'eth1') ? 2 : 1;
+    } else {
+        routeNum = _ROUTE_MAP[viewedMode] !== undefined ? _ROUTE_MAP[viewedMode] : 4;
+    }
     
     // Disable auto-connect flag immediately
     _acEnabled = false;
@@ -701,77 +700,44 @@ var _stopAutoConnect = function () {
         method: 'PUT',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ network: { auto_connect: false } })
-    }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist OFF:', e); });
-    
-    // CRITICAL: Automatically send the current active route to pipeline
-    // This ensures the current connection stays active without needing to click Connect
-    if (active.route !== null) {
-        // Send route to pipeline immediately
-        fetch('/api/pipeline', {
+        body: JSON.stringify({ network: { auto_connect: false, last_route_select: routeNum } })
+    }).then(function () {
+        // Send the route corresponding to the CURRENTLY VIEWED tab
+        // Specialized endpoint supports 0=auto, 1=eth0, 2=eth1, 3=lte, 4=wifi
+        return fetch('/api/pipeline/network-route-select', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ datapoint: 'net.route', value: active.route })
-        }).catch(function (e) { console.warn('[AUTO-OFF] failed to send current route:', e); });
-        
-        // Mark the active interface as manually connected (so UI shows connected)
-        if (active.mode === 'ethernet' && active.eth) {
-            _manualConnectClicked['ethernet-' + active.eth] = true;
-            _setEthCardSelected(active.eth);
-            _selectedEth = active.eth;
-        } else if (active.mode === 'wifi') {
-            _manualConnectClicked['wifi'] = true;
-        } else if (active.mode === 'lte') {
-            _manualConnectClicked['lte'] = true;
-        }
-        
-        // Update UI to show connected state for the active interface
-        _updateTabConnectedState(active.mode, true);
-        
-        // For other interfaces, ensure they show "Connect"
-        var allModes = ['ethernet', 'wifi', 'lte'];
-        allModes.forEach(function (mode) {
-            if (mode !== active.mode) {
-                _updateTabConnectedState(mode, false);
-            }
+            body: JSON.stringify({ network_route_select: routeNum })
         });
-        
-        // Update Ethernet card visual if active mode is Ethernet
-        if (active.mode === 'ethernet') {
-            var e0Up = isUp(_cache.lan.eth0.state);
-            var e1Up = isUp(_cache.lan.eth1.state);
-            
-            if (active.eth === 'eth0' && e0Up) {
-                var card = document.getElementById('eth0-card');
-                if (card) {
-                    card.style.borderColor = '#10b981';
-                    card.style.background = '#f0fdf4';
-                }
-            } else if (active.eth === 'eth1' && e1Up) {
-                var card = document.getElementById('eth1-card');
-                if (card) {
-                    card.style.borderColor = '#10b981';
-                    card.style.background = '#f0fdf4';
-                }
-            }
-        }
-        
-        showNotification('Auto-connect disabled. ' + active.mode.toUpperCase() + ' connection maintained.', 'info');
+    }).catch(function (e) {
+        console.warn('[AUTO-OFF] failed to switch route:', e);
+    });
+    
+    // Mark the viewed interface as manually connected
+    if (viewedMode === 'ethernet' && ethIface) {
+        _manualConnectClicked['ethernet-' + ethIface] = true;
     } else {
-        showNotification('Auto-connect disabled. No active connection found.', 'warning');
+        _manualConnectClicked[viewedMode] = true;
     }
     
-    // Sync the network mode radio to match the active interface
-    if (active.mode && active.mode !== getRadioValue('[name="network-mode"]')) {
-        var radio = document.getElementById('net-radio-' + active.mode);
-        if (radio) {
-            radio.checked = true;
-            setNetworkMode(active.mode);
-            _syncNetworkTabs(active.mode);
+    // Update UI to show connected state for all interfaces based on current link status
+    ['ethernet', 'wifi', 'lte'].forEach(function (m) {
+        var isLinkUp = false;
+        if (m === 'ethernet') {
+            isLinkUp = isUp((_cache.lan.eth0 || {}).state) || isUp((_cache.lan.eth1 || {}).state);
+        } else if (m === 'wifi') {
+            isLinkUp = isUp((_cache.wlan || {}).state);
+        } else if (m === 'lte') {
+            isLinkUp = isUp((_cache.lte || {}).state);
         }
-    }
-};    var _toggleAutoConnect = function () {
+        _updateTabConnectedState(m, isLinkUp);
+    });
+
+    showNotification('Auto-connect disabled. ' + viewedMode.toUpperCase() + ' route selected.', 'info');
+};
+
+    var _toggleAutoConnect = function () {
         if (_acEnabled) {
             _stopAutoConnect();
             return;
@@ -800,7 +766,17 @@ var _stopAutoConnect = function () {
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ network: { auto_connect: true } })
-        }).catch(function (e) { console.warn('[AUTO-CONNECT] failed to persist ON:', e); });
+        }).then(function () {
+            // Explicitly tell the pipeline to use "Auto" (0) mode
+            return fetch('/api/pipeline/network-route-select', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ network_route_select: 0 })
+            });
+        }).catch(function (e) {
+            console.warn('[AUTO-CONNECT] failed to persist ON:', e);
+        });
         
         showNotification('Auto-connect enabled. Gateway will automatically use active connection.', 'success');
     };
