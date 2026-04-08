@@ -803,6 +803,10 @@ async def delete_device(request):
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        try:
+            cursor.execute('DELETE FROM loadcell_datapoints WHERE device_id = ?', (device_id,))
+        except Exception:
+            pass
         cursor.execute('DELETE FROM loadcell_device WHERE id = ?', (device_id,))
         try:
             cursor.execute('DELETE FROM external_datapoints WHERE device_id = ?', (device_id,))
@@ -813,6 +817,7 @@ async def delete_device(request):
         except Exception:
             pass
         
+        conn.commit()
         conn.close()
         
         remove_device_status(device_id)
@@ -1197,8 +1202,11 @@ async def export_devices_csv(request):
                     ip or '', port or '', serial_port or '',
                     baud or '', data_bits or '', parity or '', stop_bits or '',
                     resp_to or '', byte_to or '', max_ret or '', poll_iv or '',
-                    '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
-                    '1' if enabled else '0'
+                    '', '', '',        # Device Path, Device Path CH2, Mode
+                    '', '', '', '', '', '',  # Poll MS, Resolution Bits, Effective Bits, Signed, Gain, Vref
+                    '', '', '', '', '',      # Raw Min, Raw Max, Capacity Min, Capacity Max, Unit
+                    '', '', '',              # Deadband, Overload, Publish Step
+                    '1' if enabled else '0'  # Enabled — index 33, matches header
                 ])
         except Exception as e:
             logger.error("Error exporting external devices: {}".format(e))
@@ -1389,7 +1397,7 @@ async def import_devices_csv(request):
                         float(row.get('Capacity Max', row.get('Capacity', 1000)) or 1000),
                         row.get('Unit', 'kg') or 'kg',
                         tag_weight, tag_capacity,
-                        1 if row.get('Enabled', '1') == '1' else 0,
+                        1 if (row.get('Enabled') or '1') == '1' else 0,
                         float(row.get('Deadband', 0) or 0),
                         float(row.get('Overload', 0) or 0),
                         float(row.get('Publish Step', 1.0) or 1.0)
@@ -1406,9 +1414,11 @@ async def import_devices_csv(request):
                         VALUES (?, ?, ?)
                     ''', (device_id, tag_capacity, _import_unit))
                     
+                    enabled = (row.get('Enabled') or '1') == '1'
                     existing_loadcell_count += 1
                     if not (replace_existing and existing_lc):
                         imported_count += 1
+                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                     
                 else:  # External device
                     # Check if duplicate exists
@@ -1440,7 +1450,7 @@ async def import_devices_csv(request):
                     
                     device_type_val = row.get('Type', 'External').strip()
                     model_name = row.get('Model Name', '').strip()
-                    enabled = row.get('Enabled', '1').strip() == '1'
+                    enabled = (row.get('Enabled') or '1').strip() == '1'
                     
                     # Get timeout values with defaults
                     resp_timeout = int(row.get('Response Timeout (ms)', '100') or '100')
@@ -1488,8 +1498,7 @@ async def import_devices_csv(request):
                     
                     if not (replace_existing and existing_ext):
                         imported_count += 1
-                
-                initialize_device_status(device_id, 'Online' if enabled else 'Offline')
+                    initialize_device_status(device_id, 'Online' if enabled else 'Offline')
                 
             except Exception as e:
                 errors.append("Row {}: {}".format(row_num, str(e)))

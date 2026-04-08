@@ -842,9 +842,8 @@ def _migrate_existing_db(cursor):
     # Add auto_connect to general_configuration (persists Auto-connect toggle state)
     if 'auto_connect' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN auto_connect INTEGER DEFAULT 1")
-    
-    # Enforce auto_connect defaults to 1 (moved from update_db_auto_connect.py)
-    cursor.execute("UPDATE general_configuration SET auto_connect = 1 WHERE auto_connect IS NULL OR auto_connect = 0")
+        # Only set default=1 when the column is brand new (no prior value exists)
+        cursor.execute("UPDATE general_configuration SET auto_connect = 1 WHERE auto_connect IS NULL")
     
     # Add load_raw_enabled to general_configuration (persists the Raw toggle state)
     if 'load_raw_enabled' not in gc_cols:

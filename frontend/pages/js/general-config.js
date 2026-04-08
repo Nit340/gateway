@@ -212,27 +212,59 @@
                 });
             }
         } else {
+            // Auto OFF: tab always reflects live connection state (green = physically connected).
+            // The Connect button label additionally requires the user to have clicked Connect
+            // this session, so it doesn't say "Connected" on a link the user didn't choose.
             var clickKey = (mode === 'ethernet') ? ('ethernet-' + (_selectedEth || 'eth0')) : mode;
             var userClicked = !!_manualConnectClicked[clickKey];
-            var showGreen = userClicked && connected;
 
+            // Clear the clicked flag if the link went down
             if (userClicked && !connected) {
                 _manualConnectClicked[clickKey] = false;
-                showGreen = false;
+                userClicked = false;
             }
 
+            // Tab: green whenever the interface is physically up, regardless of who initiated it
             if (tab) {
-                if (showGreen) tab.classList.add('connected');
+                if (connected) tab.classList.add('connected');
                 else tab.classList.remove('connected');
             }
+
+            // Button: green + "Connected" label only after explicit Connect click
             if (btn) {
-                if (showGreen) {
+                if (userClicked && connected) {
                     btn.classList.add('is-connected');
                     if (lbl) lbl.textContent = 'Connected';
                 } else {
                     btn.classList.remove('is-connected');
                     if (lbl) lbl.textContent = 'Connect';
                 }
+            }
+
+            // Ethernet port cards: also colour by live link state when auto is OFF
+            if (mode === 'ethernet') {
+                var e0 = _cache.lan.eth0 || {};
+                var e1 = _cache.lan.eth1 || {};
+                var e0Up = isUp(e0.state);
+                var e1Up = isUp(e1.state);
+                ['eth0', 'eth1'].forEach(function (iface) {
+                    var card = document.getElementById(iface + '-card');
+                    if (!card) return;
+                    var portUp = (iface === 'eth0') ? e0Up : e1Up;
+                    var radio = document.getElementById(iface + '-radio');
+                    var icon  = document.getElementById(iface + '-radio-icon');
+                    if (portUp) {
+                        card.style.borderColor = '#10b981';
+                        card.style.background  = '#f0fdf4';
+                        if (radio) radio.className = 'w-5 h-5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center transition-colors';
+                        if (icon)  icon.classList.remove('opacity-0');
+                    } else {
+                        card.style.borderColor = '';
+                        card.style.background  = '';
+                        if (radio) radio.className = 'w-5 h-5 rounded-full border-2 border-slate-300 flex items-center justify-center transition-colors';
+                        if (icon)  icon.classList.add('opacity-0');
+                    }
+                });
             }
         }
     };
@@ -262,12 +294,12 @@
         });
 
         // 2. Send the route to the pipeline
-        return fetch('/api/pipeline/network-route-select', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ network_route_select: routeNum })
-        }).then(function (r) { return r.json(); })
+        return fetch('/api/pipeline', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ datapoint: 'net.route', value: routeNum })
+}).then(function (r) { return r.json(); })
           .catch(function (e) { console.warn('[CONNECT] failed to send network route:', e); });
     };
 
@@ -1412,7 +1444,7 @@
                     live_eth1_state: e1.state
                 },
                 cellular: {
-                    apn: getInputValue('[name="apn"]') || 'internet',
+                    apn: getInputValue('[name="cellular-apn"]'),
                     username: getInputValue('[name="cellular-username"]'),
                     password: getInputValue('[name="cellular-password"]'),
                     live_state: l.state,
@@ -1576,7 +1608,7 @@
             setInputValue('[name="gateway"]', e.gateway || '');
             setInputValue('[name="dns1"]', e.dns1 || '');
             setInputValue('[name="dns2"]', e.dns2 || '');
-            setInputValue('[name="apn"]', c.apn || 'internet');
+            setInputValue('[name="cellular-apn"]', c.apn || '');
             setInputValue('[name="cellular-username"]', c.username || '');
             setInputValue('[name="cellular-password"]', c.password || '');
             setNetworkMode(n.mode || 'wifi');
@@ -1589,6 +1621,15 @@
                 _acEnabled = true;
                 _manualConnectClicked = {};
                 _setAcUi(true, false);
+            } else {
+                // Auto OFF: pre-populate _manualConnectClicked from last_route_select
+                // so the Connect button also shows green for the already-connected interface.
+                var lrs = n.last_route_select || 0;
+                if (lrs === 1) { _manualConnectClicked['ethernet-eth0'] = true; }
+                else if (lrs === 2) { _manualConnectClicked['ethernet-eth1'] = true; }
+                else if (lrs === 3) { _manualConnectClicked['lte'] = true; }
+                else if (lrs === 4) { _manualConnectClicked['wifi'] = true; }
+                _setAcUi(false, false);
             }
         }
         if (cfg.heartbeat) {

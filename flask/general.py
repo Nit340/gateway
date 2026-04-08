@@ -789,9 +789,73 @@ def _get_wifi_iface():
     return 'wlan0'
 
 
+def _scan_wifi_wpa_cli(iface):
+    """
+    Fallback: use wpa_cli scan + scan_results.
+    Works even when the WiFi interface is not the active route (e.g. ethernet is primary).
+    """
+    import subprocess, re, time
+
+    try:
+        # Trigger scan
+        subprocess.run(
+            ['wpa_cli', '-i', iface, 'scan'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5
+        )
+        time.sleep(2)
+
+        # Read results
+        result = subprocess.run(
+            ['wpa_cli', '-i', iface, 'scan_results'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+        )
+        stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
+        if result.returncode != 0 or not stdout.strip():
+            return []
+
+        networks = []
+        seen = set()
+        # Output: bssid / frequency / signal level / flags / ssid
+        for line in stdout.strip().splitlines():
+            parts = line.split('\t')
+            if len(parts) < 5:
+                continue
+            ssid = parts[4].strip()
+            if not ssid or ssid in seen:
+                continue
+            seen.add(ssid)
+            try:
+                signal_dbm = int(parts[2].strip())
+            except (ValueError, TypeError):
+                signal_dbm = -80
+            flags = parts[3].strip()
+            security = 'Open'
+            if 'WPA2' in flags:
+                security = 'WPA2'
+            elif 'WPA' in flags:
+                security = 'WPA'
+            elif 'WEP' in flags:
+                security = 'WEP'
+            networks.append({
+                'ssid': ssid,
+                'signal_quality': signal_dbm,
+                'security': security,
+                'channel': 0,
+            })
+        return networks
+
+    except FileNotFoundError:
+        logger.info('[WIFI-SCAN] wpa_cli not found')
+        return []
+    except Exception as e:
+        logger.error('[WIFI-SCAN] wpa_cli scan error: {}'.format(e))
+        return []
+
+
 def _do_wifi_scan():
     """
     Trigger a real WiFi scan and return results.
+    Works even when ethernet is the active/primary interface.
     """
     import time
     logger.info('[WIFI-SCAN] Starting scan on Linux...')
@@ -799,7 +863,7 @@ def _do_wifi_scan():
     iface = _get_wifi_iface()
     logger.info('[WIFI-SCAN] Using interface: {}'.format(iface))
 
-    # -- Method 1: nmcli scan (preferred) --
+    # -- Method 1: nmcli (preferred, tolerates ethernet being active) --
     networks = _scan_wifi_nmcli(iface)
     if networks:
         networks.sort(key=lambda n: n.get('signal_quality', -100), reverse=True)
@@ -828,74 +892,77 @@ def _do_wifi_scan():
 def _scan_wifi_nmcli(iface):
     """
     Use nmcli to scan for WiFi networks.
+    Works even when ethernet is the active interface -- rescan errors are non-fatal.
     """
-    import subprocess, re
-    
+    import subprocess, time
+
     try:
-        # First trigger a rescan
-        rescan_cmd = ['nmcli', 'dev', 'wifi', 'rescan', 'ifname', iface]
-        subprocess.run(rescan_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
-        
-        # Give it a moment to scan
-        import time
+        # Trigger a rescan -- ignore errors (e.g. interface busy, ethernet primary)
+        try:
+            subprocess.run(
+                ['nmcli', 'dev', 'wifi', 'rescan', 'ifname', iface],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10
+            )
+        except Exception as rescan_err:
+            logger.info('[WIFI-SCAN] nmcli rescan non-fatal error: {}'.format(rescan_err))
+
         time.sleep(3)
-        
-        # Now list networks
-        list_cmd = ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list', 'ifname', iface]
-        result = subprocess.run(
-            list_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=15
-        )
-        
-        stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
-        
-        if result.returncode != 0 or not stdout.strip():
+
+        # Try listing with specific iface first, then without (ethernet-active fallback)
+        stdout = ''
+        for list_cmd in [
+            ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list', 'ifname', iface],
+            ['nmcli', '--escape', 'no', '-t', '-f', 'SSID,SIGNAL,SECURITY,CHAN', 'dev', 'wifi', 'list'],
+        ]:
+            result = subprocess.run(
+                list_cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15
+            )
+            stdout = result.stdout.decode('utf-8', errors='replace') if result.stdout else ''
+            if result.returncode == 0 and stdout.strip():
+                break
+
+        if not stdout.strip():
             return []
-        
+
         networks = []
         seen = set()
-        
+
         for line in stdout.strip().split('\n'):
             if not line.strip():
                 continue
-                
             parts = line.split(':')
             if len(parts) < 4:
                 continue
-                
             ssid = parts[0].strip()
             signal = parts[1].strip()
             security = parts[2].strip()
             channel = parts[3].strip()
-            
+
             if not ssid or ssid in seen:
                 continue
-                
             seen.add(ssid)
-            
-            # Convert signal percentage to dBm approximation
+
             try:
                 signal_pct = int(signal)
                 signal_dbm = int(signal_pct / 2) - 100
             except (ValueError, TypeError):
-                signal_dbm = -50 if 'signal' in signal else -70
-            
+                signal_dbm = -70
+
             try:
                 channel_num = int(channel)
             except (ValueError, TypeError):
                 channel_num = 0
-            
+
             networks.append({
                 'ssid': ssid,
                 'signal_quality': signal_dbm,
                 'security': security if security else 'Open',
                 'channel': channel_num,
             })
-        
+
         return networks
-        
+
     except FileNotFoundError:
         logger.info('[WIFI-SCAN] nmcli not found')
         return []
@@ -1204,7 +1271,9 @@ async def sync_network_mode_to_pipeline(app):
     
     Logic:
     - If auto_connect is ON: send 'auto' (value 0) - let pipeline auto-select
-    - If auto_connect is OFF: send the actual selected network mode
+    - If auto_connect is OFF: use last_route_select from DB (the route the user
+      explicitly chose last time). Only fall back to deriving from network_mode
+      if last_route_select is 0/None (i.e. was never explicitly set).
     """
     try:
         config = get_general_configuration()
@@ -1216,25 +1285,27 @@ async def sync_network_mode_to_pipeline(app):
         auto_connect = network.get('auto_connect', False)
         network_mode = network.get('mode', 'wifi')
         eth_selected = network.get('eth_selected', 'eth0')
+        last_route_select = network.get('last_route_select', 0)
         
-        # Load explicitly including raw DB value for diagnosis
         raw_db_auto = network.get('auto_connect')
-        logger.info("[PIPELINE-SYNC] Startup sync - DB state: auto_connect={} (raw={}), mode={}, eth={}".format(
-            auto_connect, raw_db_auto, network_mode, eth_selected))
+        logger.info("[PIPELINE-SYNC] Startup sync - DB state: auto_connect={} (raw={}), mode={}, eth={}, last_route_select={}".format(
+            auto_connect, raw_db_auto, network_mode, eth_selected, last_route_select))
         
-        # Determine what to send to pipeline - Auto Connect switch takes priority for 'auto' mode (0)
-        # Using a loud check to ensure 0 is sent accurately
         if auto_connect is True or auto_connect == 1 or auto_connect == 'true':
             route_value = 0  # auto
-            logger.info("[PIPELINE-SYNC] Startup check PASSED: Auto-connect is ACTIVE -> Forced Route: 0")
+            logger.info("[PIPELINE-SYNC] Startup: Auto-connect is ACTIVE -> Route: 0 (auto)")
+        elif last_route_select and int(last_route_select) > 0:
+            # Use the route the user last explicitly selected — no forcing needed
+            route_value = int(last_route_select)
+            logger.info("[PIPELINE-SYNC] Startup: Auto-connect OFF, using persisted last_route_select={}".format(route_value))
         else:
+            # last_route_select is 0 or unset — derive from network_mode as fallback
             route_value = _get_route_value(network_mode, eth_selected)
-            logger.info("[PIPELINE-SYNC] Startup check: Auto-connect is OFF -> Selected Route: {}".format(route_value))
+            logger.info("[PIPELINE-SYNC] Startup: Auto-connect OFF, no saved route, derived route={} from mode={}".format(route_value, network_mode))
             if route_value is None:
                 logger.warning("[PIPELINE-SYNC] Unknown network mode: {}".format(network_mode))
                 return
         
-        # Send to pipeline
         if route_value is not None:
             with pipeline_state["lock"]:
                 pipeline_state["network_route_pending"] = route_value

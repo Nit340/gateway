@@ -170,7 +170,7 @@ async def add_modbus_datapoint(request):
     """POST - Add Modbus datapoint tag to an external device"""
     try:
         data = await request.json()
-        logger.info("Received data for modbus tag creation:", data)
+        logger.info("Received data for modbus tag creation: {}".format(data))
 
         conn = sqlite3.connect(DB_FILE)
         conn.execute('PRAGMA foreign_keys = ON')
@@ -185,15 +185,17 @@ async def add_modbus_datapoint(request):
                 conn.close()
                 return web.json_response({'error': 'Device not found'}, status=404)
             conn.close()
+            logger.info("Rejected: device_id='{}' is a loadcell device".format(device_id))
             return web.json_response({'error': 'Loadcell tags are auto-created when device is added'}, status=400)
 
         cursor.execute('''
             SELECT id FROM external_datapoints
-            WHERE device_id = ? AND slave_id = ? AND name = ?
-        ''', (device_id, data.get('slave_id', 1), data.get('tag_name')))
+            WHERE device_id = ? AND name = ?
+        ''', (device_id, data.get('tag_name')))
         if cursor.fetchone():
             conn.close()
-            return web.json_response({'error': 'Tag name already exists for this device'}, status=400)
+            logger.info("Duplicate tag '{}' for device '{}' — skipping".format(data.get('tag_name'), device_id))
+            return web.json_response({'error': 'Tag name already exists for this device', 'skip': True}, status=400)
 
         # Handle group field - convert group name to group_id
         group_id = None

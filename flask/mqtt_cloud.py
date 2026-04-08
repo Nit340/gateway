@@ -325,7 +325,7 @@ def build_iot_gateway_config():
     wifi_ssid     = wifi.get('ssid',     '')
     wifi_password = wifi.get('password', '')
     
-    cell_apn      = cell.get('apn', 'internet')
+    cell_apn = cell.get('apn', '')
     cell_user     = cell.get('username', '')
     cell_pass     = cell.get('password', '')
     

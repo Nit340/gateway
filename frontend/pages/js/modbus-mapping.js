@@ -1185,8 +1185,21 @@ async function importCSV() {
                         enabled: row['enabled'] !== 'false'
                     })
                 });
-                if (resp.ok) imported++;
-                else errors++;
+                if (resp.ok) {
+                    imported++;
+                } else if (resp.status === 400) {
+                    try {
+                        const errData = await resp.json();
+                        if (errData.skip) {
+                            // tag already exists — skip silently, not an error
+                        } else {
+                            console.warn('Import row rejected:', errData.error);
+                            errors++;
+                        }
+                    } catch { errors++; }
+                } else {
+                    errors++;
+                }
             } catch {
                 errors++;
             }
