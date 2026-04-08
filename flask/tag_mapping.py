@@ -186,7 +186,7 @@ async def add_modbus_datapoint(request):
                 return web.json_response({'error': 'Device not found'}, status=404)
             conn.close()
             logger.info("Rejected: device_id='{}' is a loadcell device".format(device_id))
-            return web.json_response({'error': 'Loadcell tags are auto-created when device is added'}, status=400)
+            return web.json_response({'error': 'Loadcell tags are auto-created when device is added', 'skip': True}, status=400)
 
         cursor.execute('''
             SELECT id FROM external_datapoints

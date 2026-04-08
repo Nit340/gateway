@@ -1072,7 +1072,27 @@ async function importCSV() {
             return;
         }
 
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        // RFC-4180 compliant CSV row parser — handles quoted fields containing commas
+        function parseCSVRow(line) {
+            const result = [];
+            let cur = '', inQuotes = false;
+            for (let ci = 0; ci < line.length; ci++) {
+                const ch = line[ci];
+                if (inQuotes) {
+                    if (ch === '"' && line[ci + 1] === '"') { cur += '"'; ci++; }
+                    else if (ch === '"') { inQuotes = false; }
+                    else { cur += ch; }
+                } else {
+                    if (ch === '"') { inQuotes = true; }
+                    else if (ch === ',') { result.push(cur.trim()); cur = ''; }
+                    else { cur += ch; }
+                }
+            }
+            result.push(cur.trim());
+            return result;
+        }
+
+        const headers = parseCSVRow(lines[0]).map(h => h.toLowerCase());
         
         // --- 1. First Pass: Detect missing groups ---
         const existingGroupNames = _groups.map(g => {
@@ -1083,7 +1103,7 @@ async function importCSV() {
         
         for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
-            const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+            const cols = parseCSVRow(lines[i]);
             const row = {};
             headers.forEach((h, j) => { row[h] = cols[j] || ''; });
             const gName = (row['group'] || '').trim();
@@ -1148,9 +1168,13 @@ async function importCSV() {
 
         for (let i = 1; i < lines.length; i++) {
             if (!lines[i].trim()) continue;
-            const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+            const cols = parseCSVRow(lines[i]);
             const row = {};
             headers.forEach((h, j) => { row[h] = cols[j] || ''; });
+
+            // Skip loadcell rows — they are auto-managed by the backend
+            const csvDeviceType = (row['device_type'] || '').trim().toLowerCase();
+            if (csvDeviceType === 'loadcell') continue;
 
             const devName = row['device_name'] || row['device_id'] || '';
             const dev = (_devices || []).find(d => String(d.name).toLowerCase() === String(devName).toLowerCase() || String(d.id) === String(devName));
@@ -1158,6 +1182,9 @@ async function importCSV() {
                 errors++;
                 continue;
             }
+
+            // Belt-and-suspenders: skip if resolved device is loadcell
+            if (dev.protocol === 'loadcell') continue;
 
             const addr = parseInt(row['register_address'] || '0', 10);
             try {

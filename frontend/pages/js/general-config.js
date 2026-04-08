@@ -343,9 +343,14 @@
     var _autoHighlightedMode = null;
     var _autoHighlightedEth = null;
 
+    // BUGFIX: Prevent _autoHighlight from switching the visible panel before
+    // loadConfiguration has applied the saved mode (prevents snap-to-wifi on refresh).
+    var _configLoaded = false;
+
     var _autoHighlight = function () {
         var mode = getRadioValue('[name="network-mode"]') || 'wifi';
         if (mode !== 'auto') return;
+        if (!_configLoaded) return; // don't hijack the tab before config is applied
 
         var e0State = (!isFieldStale('net.lan.eth0.state')) ? _cache.lan.eth0.state : null;
         var e1State = (!isFieldStale('net.lan.eth1.state')) ? _cache.lan.eth1.state : null;
@@ -1560,6 +1565,7 @@
                 .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
                 .then(function (cfg) {
                     populateFormWithConfig(cfg);
+                    _configLoaded = true;
                     if (cfg._realtime) {
                         if (cfg._realtime.current_date) setInputValue('[name="date"]', formatDate(cfg._realtime.current_date));
                         if (cfg._realtime.current_time) {
@@ -1611,19 +1617,18 @@
             setInputValue('[name="cellular-apn"]', c.apn || '');
             setInputValue('[name="cellular-username"]', c.username || '');
             setInputValue('[name="cellular-password"]', c.password || '');
-            setNetworkMode(n.mode || 'wifi');
-            if (n.mode === 'ethernet') {
-                var savedEth = n.eth_selected || 'eth0';
-                _setEthCardSelected(savedEth);
-                _selectedEth = savedEth;
-            }
+
+            // BUGFIX: Set _acEnabled and _manualConnectClicked BEFORE setNetworkMode
+            // so that when the mode radio fires its change event, the tab connected
+            // state is already correct and is not wiped by the change handler.
             if (n.auto_connect) {
                 _acEnabled = true;
                 _manualConnectClicked = {};
                 _setAcUi(true, false);
             } else {
-                // Auto OFF: pre-populate _manualConnectClicked from last_route_select
-                // so the Connect button also shows green for the already-connected interface.
+                _acEnabled = false;
+                // Pre-populate _manualConnectClicked from last_route_select
+                // so the Connect button shows green for the already-connected interface.
                 var lrs = n.last_route_select || 0;
                 if (lrs === 1) { _manualConnectClicked['ethernet-eth0'] = true; }
                 else if (lrs === 2) { _manualConnectClicked['ethernet-eth1'] = true; }
@@ -1631,6 +1636,13 @@
                 else if (lrs === 4) { _manualConnectClicked['wifi'] = true; }
                 _setAcUi(false, false);
             }
+
+            if (n.mode === 'ethernet') {
+                var savedEth = n.eth_selected || 'eth0';
+                _selectedEth = savedEth;
+                _setEthCardSelected(savedEth);
+            }
+            setNetworkMode(n.mode || 'wifi');
         }
         if (cfg.heartbeat) {
             setInputValue('[name="heartbeat-interval"]', cfg.heartbeat.interval);
