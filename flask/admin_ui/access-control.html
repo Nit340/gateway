@@ -126,7 +126,25 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
         <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">to manage their access and sessions</div>
       </div>
 
-      <div id="userPagesPanel" style="display:none;max-width:650px;">
+        <!-- Global Session Settings -->
+        <div id="global-session-pane" style="display:none;max-width:650px;margin-bottom:20px;">
+           <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;">
+             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+               <span class="mat" style="color:var(--accent);">timer</span>
+               <div style="font-size:13px;font-weight:600;color:var(--text);">Global Session Expiration</div>
+             </div>
+             <p style="font-size:11.5px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
+               The default inactive time (seconds) before any WebUI user is automatically logged out.
+             </p>
+             <div style="display:flex;align-items:center;gap:8px;">
+               <input type="number" id="globalTimeoutInput" min="60" max="86400" value="3600" class="num-input" style="width:100px;text-align:left;"/>
+               <span style="font-size:11.5px;color:var(--text3);">seconds</span>
+               <button onclick="saveGlobalTimeout()" id="saveGlobalBtn" class="btn-sm btn-orange" style="margin-left:auto;">Apply Globally</button>
+             </div>
+           </div>
+        </div>
+
+        <div id="userPagesPanel" style="display:none;max-width:650px;">
         <!-- User header -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
           <div id="selectedAvatar" style="width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:14px;background:var(--accent);flex-shrink:0;"></div>
@@ -137,12 +155,17 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
         </div>
 
         <!-- Tabs -->
-        <div style="display:flex;gap:2px;background:var(--surface2);padding:4px;border-radius:9px;width:fit-content;margin-bottom:16px;border:1px solid var(--border);">
-          <button class="tab-btn active" id="tab-pages" onclick="switchTab('pages')">
-            <span style="display:flex;align-items:center;gap:5px;"><span class="mat" style="font-size:13px;">visibility</span> Page Access</span>
-          </button>
-          <button class="tab-btn" id="tab-sessions" onclick="switchTab('sessions')">
-            <span style="display:flex;align-items:center;gap:5px;"><span class="mat" style="font-size:13px;">devices</span> Sessions</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div style="display:flex;gap:2px;background:var(--surface2);padding:4px;border-radius:9px;width:fit-content;border:1px solid var(--border);">
+            <button class="tab-btn active" id="tab-pages" onclick="switchTab('pages')">
+              <span style="display:flex;align-items:center;gap:5px;"><span class="mat" style="font-size:13px;">visibility</span> Page Access</span>
+            </button>
+            <button class="tab-btn" id="tab-sessions" onclick="switchTab('sessions')">
+              <span style="display:flex;align-items:center;gap:5px;"><span class="mat" style="font-size:13px;">devices</span> Sessions</span>
+            </button>
+          </div>
+          <button onclick="showGlobalSettings()" class="btn-sm btn-outline" style="border-radius:9px;">
+            <span class="mat" style="font-size:14px;">settings_suggest</span> Global Settings
           </button>
         </div>
 
@@ -186,6 +209,25 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
             </div>
             <div style="margin-top:10px;">
               <span id="limitBadge" style="font-size:10.5px;font-weight:600;padding:3px 10px;border-radius:6px;background:var(--accent-glow);color:var(--accent);border:1px solid rgba(249,115,22,0.2);"></span>
+            </div>
+          </div>
+
+          <!-- Session debounce -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span class="mat" style="color:var(--accent);">slow_motion_video</span>
+              <div style="font-size:13px;font-weight:600;color:var(--text);">Session Inactivity Debounce</div>
+            </div>
+            <p style="font-size:11.5px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
+              Small grace period (seconds) before a session is counted as fully inactive. 
+              Helps avoid concurrent accidental limit strikes during page transition.
+            </p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="debounceInput" min="1" max="60" value="5" class="num-input"/>
+              <button onclick="saveDebounce()" id="saveDebounceBtn" class="btn-sm btn-orange">Save</button>
+              <span id="debounceSaved" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--green);">
+                <span class="mat" style="font-size:13px;">check_circle</span> Saved
+              </span>
             </div>
           </div>
 
@@ -242,11 +284,46 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
 
   function switchTab(tab) {
     currentTab = tab;
+    document.getElementById('global-session-pane').style.display = 'none';
+    document.getElementById('pane-pages').parentElement.style.display = 'block'; // Ensure panel is on
     ['pages','sessions'].forEach(t => {
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
       document.getElementById('pane-'+t).style.display = t===tab?'block':'none';
     });
-    if (tab === 'sessions' && selectedUserId) { loadUserSessions(); loadUserSessionLimit(selectedUserId); }
+    if (tab === 'sessions' && selectedUserId) { 
+      loadUserSessions(); 
+      loadUserSessionLimit(selectedUserId); 
+    }
+  }
+
+  function showGlobalSettings() {
+    document.getElementById('userPagesPanel').style.display = 'none';
+    document.getElementById('global-session-pane').style.display = 'block';
+    loadGlobalSettings();
+  }
+
+  async function loadGlobalSettings() {
+    try {
+      const d = await fetch('/api/admin/webui-sessions').then(r=>r.json());
+      if (d.global_timeout) {
+        document.getElementById('globalTimeoutInput').value = d.global_timeout;
+      }
+    } catch(e) {}
+  }
+
+  async function saveGlobalTimeout() {
+    const timeout = parseInt(document.getElementById('globalTimeoutInput').value)||3600;
+    const btn = document.getElementById('saveGlobalBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const d = await fetch('/api/admin/global-session-timeout', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_timeout: timeout})
+      }).then(r=>r.json());
+      if (d.success) toast('Global timeout updated');
+      else toast('Error: '+(d.error||''), false);
+    } catch(e) { toast('Network error', false); }
+    btn.disabled = false; btn.textContent = 'Apply Globally';
   }
 
   async function loadUsers() {
@@ -374,6 +451,10 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
   }
 
   async function loadUserSessionLimit(userId) {
+    const user = users.find(u => u.id === userId);
+    const debounce = user ? user.session_debounce_time : 5;
+    document.getElementById('debounceInput').value = debounce;
+
     const match = allSessions.find(s => s.user_id === userId);
     let maxS = match ? match.max_sessions : null;
     if (maxS === null) {
@@ -386,6 +467,28 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
     }
     const inp = document.getElementById('maxSessionsInput');
     if (inp) { inp.value = maxS; updateLimitBadge(maxS); }
+  }
+
+  async function saveDebounce() {
+    if (!selectedUserId) return;
+    const seconds = parseInt(document.getElementById('debounceInput').value)||5;
+    const btn = document.getElementById('saveDebounceBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const d = await fetch('/api/admin/users/webui/'+selectedUserId+'/session-debounce', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_debounce_time: seconds})
+      }).then(r=>r.json());
+      if (d.success) {
+        const el = document.getElementById('debounceSaved');
+        el.style.display = 'inline-flex';
+        setTimeout(()=>el.style.display='none', 2000);
+        // Update local user object
+        const u = users.find(x=>x.id===selectedUserId);
+        if (u) u.session_debounce_time = seconds;
+      } else toast('Error: '+(d.error||''), false);
+    } catch(e) { toast('Network error', false); }
+    btn.disabled = false; btn.textContent = 'Save';
   }
 
   function updateLimitBadge(n) {
