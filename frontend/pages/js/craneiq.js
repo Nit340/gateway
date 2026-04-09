@@ -519,12 +519,16 @@
         var btn = el('lc-raw-toggle-btn');
         if (!btn) return;
         if (isOn) {
-            btn.textContent = 'Raw: ON';
+            btn.textContent = 'ON';
             btn.className = 'px-4 py-2 text-sm font-semibold rounded-lg border border-green-400 bg-green-50 text-green-700 hover:bg-green-100 transition-colors';
         } else {
-            btn.textContent = 'Raw: OFF';
+            btn.textContent = 'OFF';
             btn.className = 'px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors';
+            // Clear displayed values immediately when turning off
+            var rv = el('lc-raw-value');    if (rv) rv.textContent = '--';
+            var wv = el('lc-weight-value'); if (wv) wv.textContent = '--';
         }
+        _syncLiveBarDisplay();
     }
 
 
@@ -565,8 +569,31 @@
         }
         if (dot) dot.className = isConnected ? 'w-2 h-2 rounded-full bg-green-500' : 'w-2 h-2 rounded-full bg-slate-300';
         if (txt) txt.textContent = isConnected ? 'Connected' : 'Disconnected';
-        if (bar) bar.style.display = isConnected ? 'flex' : 'none';
         if (calBtn) calBtn.style.display = isConnected ? 'inline-flex' : 'none';
+        if (isConnected) {
+            _syncLiveBarDisplay();
+        } else {
+            _syncLiveBarDisplay();  // will hide the bar since connected=false
+            var rv = el('lc-raw-value');    if (rv) rv.textContent = '--';
+            var wv = el('lc-weight-value'); if (wv) wv.textContent = '--';
+        }
+    }
+
+    // Update the dynamic datapoint labels in the live bar to reflect the current device.
+    // Both halves (raw + weight) are always visible when connected.
+    function _syncLiveBarDisplay() {
+        var bar = el('lc-live-bar');
+        if (!connected || !loadRawEnabled) {
+            if (bar) bar.style.display = 'none';
+            return;
+        }
+        if (bar) bar.style.display = 'grid';
+        if (selectedDevice) {
+            var rawLabel    = el('lc-live-raw-label');
+            var weightLabel = el('lc-live-weight-label');
+            if (rawLabel)    rawLabel.textContent    = 'raw';
+            if (weightLabel) weightLabel.textContent = 'weight';
+        }
     }
 
     function resetBtn() {
@@ -583,10 +610,12 @@
         var display = (value !== null && value !== undefined)
             ? (typeof value === 'number' ? value.toFixed(2) : value)
             : '--';
+        // Raw panel in live bar (shown only when raw toggle is ON)
         var rv = el('lc-raw-value');
         if (rv) rv.textContent = display;
+        // Keep calibration modal in sync (raw always visible inside modal)
         var mr = el('cal-modal-raw');
-        if (mr) mr.textContent = display;   // keep modal in sync
+        if (mr) mr.textContent = display;
     }
 
     // Reconnect state -- exponential back-off capped at 15 s
@@ -682,10 +711,12 @@
         var prefix = 'loadcells.' + selectedDevice.name + '.';
         if (!dp.startsWith(prefix)) return;
         var field = dp.slice(prefix.length);
-        if (field === 'weight_kg') {
+        if (field === 'weight') {
             var wv = el('lc-weight-value');
             if (wv) wv.textContent = (value !== null && value !== undefined)
                 ? parseFloat(value).toFixed(2) : '--';
+        } else if (field === 'raw') {
+            // raw updates are handled by updateRawDisplay via the WS message handler
         } else if (field === 'capacity') {
             var cv = el('lc-capacity-value');
             if (cv) cv.textContent = (value !== null && value !== undefined)
@@ -702,6 +733,11 @@
         var modal = el('lc-cal-modal');
         if (!modal) return;
         modal.style.display = 'flex';
+        // Update the dynamic label inside the modal: "loadcells.DEVICENAME.raw"
+        var rawLabel = el('cal-modal-raw-label');
+        if (rawLabel && selectedDevice) {
+            rawLabel.textContent = 'loadcells.' + selectedDevice.name + '.raw';
+        }
         // Pre-fill from saved device data
         if (selectedDevice) {
             if (selectedDevice.tare_offset !== null && selectedDevice.tare_offset !== undefined) {
@@ -718,7 +754,7 @@
                 if (wr) wr.textContent = parseFloat(selectedDevice.known_weight_raw).toFixed(2);
             }
         }
-        // Show current raw
+        // Show current raw value
         var mr = el('cal-modal-raw');
         if (mr) mr.textContent = currentRaw !== null ? parseFloat(currentRaw).toFixed(2) : '--';
     };
@@ -727,6 +763,8 @@
         var modal = el('lc-cal-modal');
         if (modal) modal.style.display = 'none';
         var s = el('cal-status'); if (s) s.textContent = '';
+        // Restore the live bar to weight display (raw toggle state governs, but typically OFF)
+        _syncLiveBarDisplay();
     };
 
     window.captureZero = function() {

@@ -131,15 +131,29 @@
                 </div>
             </div>
 
-            <!-- Live raw value bar (shown when connected) -->
-            <div id="lc-live-bar" style="display:none;" class="mb-6 flex items-center gap-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div class="text-center">
-                    <div class="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-1">load_raw</div>
-                    <div class="text-4xl font-bold text-slate-900 font-mono" id="lc-raw-value">--</div>
+            <!-- Live bar: always shown when connected — raw LEFT half, weight RIGHT half -->
+            <div id="lc-live-bar" style="display:none;" class="mb-6 grid grid-cols-2 gap-0 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                <!-- Left half: Raw -->
+                <div class="flex items-center gap-4 p-4 border-r border-slate-200">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-semibold tracking-widest text-orange-400 uppercase mb-1 truncate" id="lc-live-raw-label">loadcells.device.raw</div>
+                        <div class="text-4xl font-bold text-slate-900 font-mono" id="lc-raw-value">--</div>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
+                        <span style="width:8px;height:8px;background:#f97316;border-radius:50%;display:inline-block;animation:lcpulse 1.5s infinite;"></span>
+                        <span class="text-xs text-orange-500 font-medium">Raw</span>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2 ml-4">
-                    <span style="width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block;animation:lcpulse 1.5s infinite;"></span>
-                    <span class="text-sm text-green-600 font-medium">Live</span>
+                <!-- Right half: Weight -->
+                <div class="flex items-center gap-4 p-4">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-semibold tracking-widest text-green-500 uppercase mb-1 truncate" id="lc-live-weight-label">loadcells.device.weight</div>
+                        <div class="text-4xl font-bold text-slate-900 font-mono" id="lc-weight-value">--</div>
+                    </div>
+                    <div class="flex flex-col items-center gap-1 flex-shrink-0">
+                        <span style="width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block;animation:lcpulse 1.5s infinite;"></span>
+                        <span class="text-xs text-green-600 font-medium">Live</span>
+                    </div>
                 </div>
             </div>
 
@@ -293,7 +307,7 @@
 
                     <!-- live raw inside modal -->
                     <div class="mb-5 text-center p-4 bg-slate-50 rounded-xl border border-slate-200">
-                        <div class="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-1">load_raw (live)</div>
+                        <div class="text-xs font-semibold tracking-widest text-slate-400 uppercase mb-1" id="cal-modal-raw-label">loadcells.device.raw</div>
                         <div class="text-4xl font-bold text-slate-900 font-mono" id="cal-modal-raw">--</div>
                     </div>
 

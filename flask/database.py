@@ -362,7 +362,6 @@ def create_tables(cursor):
             cell_password       TEXT    DEFAULT '',
             auto_connect        INTEGER DEFAULT 1,
             load_raw_enabled    INTEGER DEFAULT 0,
-            session_timeout     INTEGER DEFAULT 3600,  -- Configurable global session timeout (s)
 
             created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -550,7 +549,6 @@ def create_tables(cursor):
             role       TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
             enabled    BOOLEAN DEFAULT 1,
             max_sessions INTEGER DEFAULT 2,
-            session_debounce_time INTEGER DEFAULT 5, -- Per-user activity debounce (s)
             last_login TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -828,9 +826,6 @@ def _migrate_existing_db(cursor):
     if 'max_sessions' not in webui_cols:
         cursor.execute('ALTER TABLE webui_users ADD COLUMN max_sessions INTEGER DEFAULT 2')
 
-    if 'session_debounce_time' not in webui_cols:
-        cursor.execute('ALTER TABLE webui_users ADD COLUMN session_debounce_time INTEGER DEFAULT 5')
-
     # Add lc_mode to loadcell_device
     cursor.execute("PRAGMA table_info(loadcell_device)")
     lc_dev_cols = {r[1] for r in cursor.fetchall()}
@@ -853,10 +848,6 @@ def _migrate_existing_db(cursor):
     # Add load_raw_enabled to general_configuration (persists the Raw toggle state)
     if 'load_raw_enabled' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN load_raw_enabled INTEGER DEFAULT 0")
-
-    # Add session_timeout to general_configuration
-    if 'session_timeout' not in gc_cols:
-        cursor.execute("ALTER TABLE general_configuration ADD COLUMN session_timeout INTEGER DEFAULT 3600")
 
     # Add last_route_select to general_configuration (persists manual route selection)
     if 'last_route_select' not in gc_cols:
@@ -1234,8 +1225,7 @@ def get_general_configuration():
                        COALESCE(cell_username, '') AS cell_username,
                        COALESCE(cell_password, '') AS cell_password,
                        COALESCE(auto_connect, 0) AS auto_connect,
-                       COALESCE(last_route_select, 0) AS last_route_select,
-                       COALESCE(session_timeout, 3600) AS session_timeout
+                       COALESCE(last_route_select, 0) AS last_route_select
                 FROM general_configuration WHERE id = 1
             ''')
             row = cursor.fetchone()
@@ -1258,18 +1248,15 @@ def get_general_configuration():
                     'mode':             row[15],
                     'eth_selected':     row[16],  # 'eth0' or 'eth1' -- persisted selection
                     'auto_connect':     bool(row[28]),  # Auto-connect toggle persisted state
-                    'wifi': {'ssid': row[17], 'password': ''}, # Never return wifi password as requested
+                    'wifi': {'ssid': row[17], 'password': row[18]},
                     'ethernet': {
                         'ip_assignment': row[19], 'static_ip': row[20],
                         'subnet_mask': row[21], 'gateway': row[22],
                         'dns1': row[23], 'dns2': row[24],
                     },
-                    'cellular': {'apn': row[25], 'username': row[26], 'password': ''}, # Never return cellular password
+                    'cellular': {'apn': row[25], 'username': row[26], 'password': row[27]},
                     'last_route_select': row[29],
                 },
-                'security': {
-                    'session_timeout': row[30]
-                }
             }
     
     try:
@@ -1316,7 +1303,7 @@ def update_general_configuration(config_data):
             
             wifi = net.get('wifi', {})
             if 'ssid' in wifi: _add('wifi_ssid', wifi['ssid'])
-            if 'password' in wifi and wifi['password']: _add('wifi_password', wifi['password']) # Only update if not empty
+            if 'password' in wifi: _add('wifi_password', wifi['password'])
             
             eth = net.get('ethernet', {})
             if 'ip_assignment' in eth: _add('eth_ip_assignment', eth['ip_assignment'])
@@ -1329,10 +1316,7 @@ def update_general_configuration(config_data):
             cell = net.get('cellular', {})
             if 'apn' in cell: _add('cell_apn', cell['apn'])
             if 'username' in cell: _add('cell_username', cell['username'])
-            if 'password' in cell and cell['password']: _add('cell_password', cell['password']) # Only update if not empty
-            
-            sec = config_data.get('security', {})
-            if 'session_timeout' in sec: _add('session_timeout', int(sec['session_timeout']))
+            if 'password' in cell: _add('cell_password', cell['password'])
             
             if sets:
                 cursor.execute('UPDATE general_configuration SET {}, updated_at = CURRENT_TIMESTAMP WHERE id = 1'.format(', '.join(sets)), values)
@@ -1534,42 +1518,14 @@ def set_webui_user_max_sessions(user_id, max_sessions):
         return False
 
 
-def set_webui_user_session_debounce(user_id, seconds):
-    """Set the activity debounce time (s) for a webui user."""
-    def _update():
-        with get_cursor() as cursor:
-            cursor.execute('UPDATE webui_users SET session_debounce_time=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
-                          (int(seconds), user_id))
-        return True
-    
-    try:
-        return execute_with_retry(_update)
-    except Exception:
-        return False
-
-
-def set_global_session_timeout(seconds):
-    """Set the system-wide session expiration timeout (s)."""
-    def _update():
-        with get_cursor() as cursor:
-            cursor.execute('UPDATE general_configuration SET session_timeout=?, updated_at=CURRENT_TIMESTAMP WHERE id=1',
-                          (int(seconds),))
-        return True
-    
-    try:
-        return execute_with_retry(_update)
-    except Exception:
-        return False
-
-
 def get_all_webui_users():
     """Get all webui users."""
     def _query():
         with get_cursor() as cursor:
-            cursor.execute('SELECT id, username, display_name, role, enabled, max_sessions, session_debounce_time, last_login, created_at FROM webui_users ORDER BY username')
+            cursor.execute('SELECT id, username, display_name, role, enabled, last_login, created_at FROM webui_users ORDER BY username')
             rows = cursor.fetchall()
             return [{'id': r[0], 'username': r[1], 'display_name': r[2], 'role': r[3], 'enabled': r[4],
-                    'max_sessions': r[5], 'session_debounce_time': r[6], 'last_login': r[7], 'created_at': r[8]} for r in rows]
+                    'last_login': r[5], 'created_at': r[6]} for r in rows]
     
     try:
         return execute_with_retry(_query)
@@ -1582,8 +1538,8 @@ def create_webui_user(username, password, display_name='', role='user'):
     """Create a new webui user."""
     def _insert():
         with get_cursor() as cursor:
-            cursor.execute('INSERT INTO webui_users (username, password, display_name, role, max_sessions, session_debounce_time) VALUES (?, ?, ?, ?, ?, ?)',
-                          (username, _hash_password(password), display_name, role, 2, 5))
+            cursor.execute('INSERT INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
+                          (username, _hash_password(password), display_name, role))
             return cursor.lastrowid
     
     try:
@@ -1603,8 +1559,6 @@ def update_webui_user(user_id, data):
             if 'display_name' in data: sets.append('display_name=?'); values.append(data['display_name'])
             if 'role' in data: sets.append('role=?'); values.append(data['role'])
             if 'enabled' in data: sets.append('enabled=?'); values.append(1 if data['enabled'] else 0)
-            if 'max_sessions' in data: sets.append('max_sessions=?'); values.append(int(data['max_sessions']))
-            if 'session_debounce_time' in data: sets.append('session_debounce_time=?'); values.append(int(data['session_debounce_time']))
             if sets:
                 values.append(user_id)
                 cursor.execute('UPDATE webui_users SET {}, updated_at=CURRENT_TIMESTAMP WHERE id=?'.format(', '.join(sets)), values)

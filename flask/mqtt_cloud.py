@@ -423,7 +423,7 @@ def build_iot_gateway_config():
 
     # -- 3. Assemble ---------------------------------------------------------
     return {
-        'version': 3,
+        'version': 2,
         'system': {
             'wifi_ssid':           wifi_ssid,
             'wifi_password':       wifi_password,

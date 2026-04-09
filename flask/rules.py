@@ -208,8 +208,8 @@ async def core_config_upload_handler(request):
         existing = cursor.fetchone()
         
         if existing:
-            # Update existing row with new config
-            new_version = existing['version'] + 1
+            # Core config schema version is always fixed at 2 -- no auto-increment
+            new_version = 2
             cursor.execute('''
                 UPDATE core_configs 
                 SET version = ?, 
@@ -219,14 +219,14 @@ async def core_config_upload_handler(request):
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (new_version, json.dumps(device_names), service_name, config_json, existing['id']))
-            logger.info("[CORE-CFG] Updated config v{} from JSON".format(new_version))
+            logger.info("[CORE-CFG] Updated config (version fixed at 2) from JSON")
         else:
-            # First-time insert
+            new_version = 2
             cursor.execute('''
                 INSERT INTO core_configs (version, device_names, service_name, config_json, updated_at) 
-                VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (2, ?, ?, ?, CURRENT_TIMESTAMP)
             ''', (json.dumps(device_names), service_name, config_json))
-            logger.info("[CORE-CFG] Inserted initial config from JSON")
+            logger.info("[CORE-CFG] Inserted initial config (version fixed at 2) from JSON")
         
         conn.commit()
         conn.close()
@@ -238,7 +238,6 @@ async def core_config_upload_handler(request):
             try:
                 from pipeline import pipeline_state, get_pipeline_service_name, get_pipeline_config_name
                 from pipeline import record_pipeline_send_success, record_pipeline_send_failure
-                from pipeline import get_next_pipeline_version as get_ver
                 from pipeline import Config
                 
                 core_svc = get_pipeline_service_name('core') or 'ilx_craneiq_core'
@@ -251,7 +250,7 @@ async def core_config_upload_handler(request):
                     services = set(pipeline_state.get('connected_services', set()))
                 
                 if connected and client and core_svc in services:
-                    new_version = get_ver('core')
+                    new_version = 2  # Core config schema version is always fixed at 2 -- no auto-increment
                     ok = client.publish_config(Config(
                         name=cfg_name,
                         value=config_json,
@@ -506,7 +505,7 @@ def _build_combined_core_config(rules):
     # -- Modbus groups: static from ilx_craneiq_core-config.json ----------
     # These are fixed hardware groups and do not change based on rules.
     modbus_groups = [
-        {"datapoint": "hoist_group", "name": "hoist_up",  "members": ["hoist_up", "hoist_down"]},
+        {"datapoint": "hoist_group", "name": "hoist_group", "members": ["hoist_up", "hoist_down"]},
         {"datapoint": "ct_group",    "name": "ct_group",   "members": ["ct_left", "ct_right"]},
         {"datapoint": "lt_group",    "name": "lt_group",   "members": ["lt_forward", "lt_backward"]},
     ]
@@ -590,7 +589,8 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
         existing = cur.fetchone()
         
         if existing:
-            new_version = existing['version'] + 1
+            # Core config schema version is always fixed at 2 -- no auto-increment
+            new_version = 2
             cur.execute('''
                 UPDATE core_configs 
                 SET version = ?, 
@@ -600,17 +600,17 @@ def _save_core_config_to_db(config_json, device_names=None, service_name='ilx_cr
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ''', (new_version, device_names_json, service_name, config_json, existing['id']))
-            logger.info('[CORE-CFG] Updated DB to v{}'.format(new_version))
+            logger.info('[CORE-CFG] Updated DB (version fixed at 2)')
             return new_version
         else:
             # First-time insert
             cur.execute('''
                 INSERT INTO core_configs (version, device_names, service_name, config_json, updated_at) 
-                VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (2, ?, ?, ?, CURRENT_TIMESTAMP)
             ''', (device_names_json, service_name, config_json))
             conn.commit()
-            logger.info('[CORE-CFG] Inserted initial config to DB')
-            return 1
+            logger.info('[CORE-CFG] Inserted initial config to DB (version fixed at 2)')
+            return 2
         
     except Exception as db_e:
         logger.warning('[CORE-CFG] DB persist warning: {}'.format(db_e))
@@ -628,7 +628,6 @@ async def _build_and_send_core_config(force_rebuild=False):
     from pipeline import pipeline_state, get_pipeline_service_name
     from pipeline import Config, get_pipeline_config_name
     from pipeline import record_pipeline_send_success, record_pipeline_send_failure
-    from pipeline import get_next_pipeline_version
 
     config_json = None
     db_version = None
@@ -713,7 +712,7 @@ async def _build_and_send_core_config(force_rebuild=False):
             'db_version':  db_version,
         }
 
-    new_version = get_next_pipeline_version('core')
+    new_version = 2  # Core config schema version is always fixed at 2 -- no auto-increment
     ok = False
     try:
         ok = client.publish_config(Config(

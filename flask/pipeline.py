@@ -253,7 +253,7 @@ def _clear_sent(config_type):
 # Network/status datapoints that are always allowed regardless of device
 _PERMANENT_WHITELIST = {"lan", "wlan", "lte", "network_status", "modbus_config"}
 
-# Suffixes appended to each whitelisted device name (excludes .raw, toggled separately)
+# Suffixes appended to each whitelisted device name (excludes .raw and .weight, toggled together)
 _DEVICE_DP_SUFFIXES = []
 
 
@@ -276,10 +276,9 @@ def add_whitelisted_device_name(name):
 def rebuild_whitelist(include_raw=False):
     """Rebuild _dp_whitelist from enabled devices in the DB.
 
-    Called once on startup and on every Raw toggle change, so the device
-    name is always fresh -- no restart needed after a device import/rename.
-    include_raw=True  -> also add <n>_raw for each enabled device
-    include_raw=False -> omit the raw datapoints
+    Called once on startup and on every ON/OFF toggle change.
+    include_raw=True  -> add both .raw and .weight for each enabled device
+    include_raw=False -> omit both .raw and .weight (nothing streams when OFF)
     """
     new_set = set(_PERMANENT_WHITELIST)
 
@@ -305,12 +304,14 @@ def rebuild_whitelist(include_raw=False):
     for device_name in names:
         for suffix in _DEVICE_DP_SUFFIXES:
             new_set.add("loadcells.{}{}".format(device_name, suffix))
-        raw_dp = "loadcells.{}.raw".format(device_name)
         if include_raw:
+            raw_dp    = "loadcells.{}.raw".format(device_name)
+            weight_dp = "loadcells.{}.weight".format(device_name)
             new_set.add(raw_dp)
-            logger.info("Raw ON  -> added '{}' to whitelist".format(raw_dp))
+            new_set.add(weight_dp)
+            logger.info("ON -> added '{}' and '{}' to whitelist".format(raw_dp, weight_dp))
         else:
-            logger.debug("Raw OFF -> '{}' not in whitelist".format(raw_dp))
+            logger.debug("OFF -> raw+weight not in whitelist for '{}'".format(device_name))
 
     if not names:
         logger.debug("No device names found -- only permanent entries active")
@@ -727,14 +728,39 @@ def _flush_pending_for_service(client, svc):
                     if hasattr(client, 'subscribe'):
                         try:
                             cfg = json.loads(pending)
+                            with pipeline_state["lock"]:
+                                raw_toggle_on = pipeline_state.get("load_raw_enabled", False)
+                            subscribed_flush = set()
                             for ipc_entry in cfg.get("ipc", []):
                                 for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
                                     for mapped_dp in (dp_entry.get("map") or {}).values():
+                                        if (mapped_dp.startswith("loadcells.") and
+                                                (mapped_dp.endswith(".raw") or mapped_dp.endswith(".weight")) and
+                                                not raw_toggle_on):
+                                            logger.info("Skipping subscribe (toggle OFF): '{}'".format(mapped_dp))
+                                            continue
                                         try:
                                             client.subscribe(mapped_dp)
+                                            subscribed_flush.add(mapped_dp)
                                             logger.info("Subscribed to '{}'".format(mapped_dp))
                                         except Exception as sub_e:
                                             logger.error("Subscribe error '{}': {}".format(mapped_dp, sub_e))
+                            # Subscribe to .raw and .weight only when toggle is ON
+                            if raw_toggle_on:
+                                for lc_entry in cfg.get("load_cells", []):
+                                    dev_name = lc_entry.get("name")
+                                    if dev_name:
+                                        for dp in [
+                                            "loadcells.{}.raw".format(dev_name),
+                                            "loadcells.{}.weight".format(dev_name),
+                                        ]:
+                                            if dp not in subscribed_flush:
+                                                try:
+                                                    client.subscribe(dp)
+                                                    subscribed_flush.add(dp)
+                                                    logger.info("Subscribed to '{}'".format(dp))
+                                                except Exception as sub_e:
+                                                    logger.error("Subscribe error '{}': {}".format(dp, sub_e))
                         except Exception as parse_e:
                             logger.error("Re-subscribe parse error: {}".format(parse_e))
                 else:
@@ -981,13 +1007,29 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                                         for dp_entry in (ipc_entry.get("parameters") or {}).get("datapoints", []):
                                             for mapped_dp in (dp_entry.get("map") or {}).values():
                                                 if (mapped_dp.startswith("loadcells.") and
-                                                        mapped_dp.endswith(".raw") and
+                                                        (mapped_dp.endswith(".raw") or mapped_dp.endswith(".weight")) and
                                                         not raw_toggle_on):
-                                                    logger.info("[PIPELINE] Skipping raw subscribe (toggle OFF): '{}'".format(mapped_dp))
+                                                    logger.info("[PIPELINE] Skipping subscribe (toggle OFF): '{}'".format(mapped_dp))
                                                     continue
                                                 client.subscribe(mapped_dp)
                                                 subscribed.add(mapped_dp)
                                                 logger.info("[PIPELINE] Subscribed to '{}'".format(mapped_dp))
+                                    # Explicitly subscribe to .raw and .weight only when toggle is ON
+                                    if raw_toggle_on:
+                                        for lc_entry in cfg.get("load_cells", []):
+                                            dev_name = lc_entry.get("name")
+                                            if dev_name:
+                                                for dp in [
+                                                    "loadcells.{}.raw".format(dev_name),
+                                                    "loadcells.{}.weight".format(dev_name),
+                                                ]:
+                                                    if dp not in subscribed:
+                                                        try:
+                                                            client.subscribe(dp)
+                                                            subscribed.add(dp)
+                                                            logger.info("[PIPELINE] Subscribed to '{}'".format(dp))
+                                                        except Exception as sub_e:
+                                                            logger.error("[PIPELINE] Subscribe error '{}': {}".format(dp, sub_e))
                                 except Exception as parse_e:
                                     logger.error("[PIPELINE] Re-subscribe parse error: {}".format(parse_e))
                             with pipeline_state["lock"]:
@@ -1344,7 +1386,9 @@ def _handle_received_loadcell_config(cfg):
         ("pipeline_server",  pipeline_server),
         ("pipeline_port",    pipeline_port),
         ("log_level",        log_level),
-        ("poll_ms",          poll_ms),
+        # poll_ms is intentionally excluded here -- it is a user-configured
+        # hardware parameter (source of truth = DB). We must never let an
+        # incoming CONFIG_RECEIVED echo overwrite the value the user saved.
         ("unit",             "kg"),   # always normalise unit to kg in DB
     ]:
         if val is not None:
@@ -1794,7 +1838,9 @@ async def pipeline_loadcell_import_handler(request):
             channels     = dev_params.get("channels") or []
             device_path  = channels[0].get("path", "") if channels else dev_params.get("path", "")
 
-            poll_ms         = dev_params.get("poll_ms",         10)
+            # poll_ms is user-defined -- use imported value only if explicitly present in the JSON.
+            # If absent, fall back to the existing DB value (for updates) or 10 (for new inserts).
+            poll_ms         = dev_params["poll_ms"] if "poll_ms" in dev_params else None
             resolution_bits = dev_params.get("resolution_bits", 24)
             effective_bits  = dev_params.get("effective_bits",  14)
             signed          = int(bool(dev_params.get("signed", False)))
@@ -1857,6 +1903,14 @@ async def pipeline_loadcell_import_handler(request):
             existing = cursor.fetchone()
 
             if existing:
+                # poll_ms is user-defined -- if not in the imported JSON, preserve the existing DB value
+                _poll_ms_to_save = poll_ms
+                if _poll_ms_to_save is None:
+                    cursor.execute("SELECT poll_ms FROM loadcell_device WHERE name = ?", (name,))
+                    _row = cursor.fetchone()
+                    _poll_ms_to_save = _row["poll_ms"] if _row and _row["poll_ms"] is not None else 10
+                    logger.info("[LC-IMPORT] poll_ms not in JSON -- keeping existing DB value: {}".format(_poll_ms_to_save))
+
                 cursor.execute('''
                     UPDATE loadcell_device SET
                         device_path      = ?,
@@ -1882,7 +1936,7 @@ async def pipeline_loadcell_import_handler(request):
                         updated_at       = CURRENT_TIMESTAMP
                     WHERE name = ?
                 ''', (
-                    device_path, poll_ms, resolution_bits, effective_bits,
+                    device_path, _poll_ms_to_save, resolution_bits, effective_bits,
                     signed, gain, vref, raw_min, raw_max,
                     capacity_min, capacity_max, unit,
                     tare_offset, known_weight, known_weight_raw,
@@ -1917,7 +1971,7 @@ async def pipeline_loadcell_import_handler(request):
                     )
                 ''', (
                     new_id, name,
-                    device_path, poll_ms, resolution_bits, effective_bits,
+                    device_path, poll_ms if poll_ms is not None else 10, resolution_bits, effective_bits,
                     signed, gain, vref, raw_min, raw_max,
                     capacity_min, capacity_max, unit,
                     tare_offset, known_weight, known_weight_raw,
@@ -2044,7 +2098,7 @@ def _build_multi_loadcell_config(device_rows, source="auto_send"):
             "device": {
                 "type": "sysfs_hx711",
                 "parameters": {
-                    "poll_ms":         r.get("poll_ms") or 10,
+                    "poll_ms":         r.get("poll_ms") if r.get("poll_ms") is not None else 10,
                     "channels":        [{"path": r.get("device_path") or ""}],
                     "resolution_bits": r.get("resolution_bits") or 24,
                     "effective_bits":  r.get("effective_bits") or 14,
@@ -2306,7 +2360,6 @@ async def pipeline_filters_post_handler(request):
                                 except: pass
 
                                 mapped_datapoints = [
-                                    "loadcells.{}.weight_kg".format(device_name),
                                     "loadcells.{}.unit".format(device_name),
                                     "loadcells.{}.known_weight_kg".format(device_name),
                                     "loadcells.{}.known_raw".format(device_name),
@@ -2314,12 +2367,12 @@ async def pipeline_filters_post_handler(request):
                                     "loadcells.{}.calibrated".format(device_name),
                                     "loadcells.{}.capacity".format(device_name),
                                 ]
-                                # Only subscribe to raw if the Raw toggle is currently ON
-                                raw_dp = "loadcells.{}.raw".format(device_name)
+                                # Only subscribe to .raw and .weight when toggle is ON
                                 if raw_toggle_on:
-                                    mapped_datapoints.append(raw_dp)
+                                    mapped_datapoints.append("loadcells.{}.raw".format(device_name))
+                                    mapped_datapoints.append("loadcells.{}.weight".format(device_name))
                                 else:
-                                    logger.info("[LC-CFG] Skipping raw subscribe (toggle OFF): '{}'".format(raw_dp))
+                                    logger.info("[LC-CFG] Skipping raw+weight subscribe (toggle OFF) for '{}'".format(device_name))
                                 if hasattr(client, 'subscribe'):
                                     for dp in mapped_datapoints:
                                         try:
@@ -2684,38 +2737,38 @@ async def pipeline_core_config_save_handler(request):
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         
-        # Ensure table exists
+        # Core config schema version is always fixed at 2 -- no auto-increment
+        new_version = 2
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS core_configs (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                version      INTEGER NOT NULL DEFAULT 1,
+                version      INTEGER NOT NULL DEFAULT 2,
                 device_names TEXT,
                 service_name TEXT,
                 config_json  TEXT NOT NULL,
                 created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
-        # Get the latest version
-        cursor.execute('SELECT COALESCE(MAX(version), 0) FROM core_configs')
-        latest_version = cursor.fetchone()[0]
-        
-        if latest_version == 0:
-            # No existing config - insert new
+
+        # Get the latest existing row (if any)
+        cursor.execute('SELECT COALESCE(MAX(id), 0) FROM core_configs')
+        latest_id = cursor.fetchone()[0]
+
+        if latest_id == 0:
+            # No existing config -- insert first row
             cursor.execute(
                 'INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)',
-                (1, json.dumps(device_names), service_name, config_json)
+                (new_version, json.dumps(device_names), service_name, config_json)
             )
-            new_version = 1
-            logger.info("[CORE-CFG] Created first config version 1")
+            logger.info("[CORE-CFG] Created first config (version fixed at 2)")
         else:
-            # Update the latest config - keep same version
+            # Overwrite the latest row, version stays 2
             cursor.execute(
-                'UPDATE core_configs SET device_names = ?, service_name = ?, config_json = ?, created_at = CURRENT_TIMESTAMP WHERE version = ?',
-                (json.dumps(device_names), service_name, config_json, latest_version)
+                'UPDATE core_configs SET version = ?, device_names = ?, service_name = ?, config_json = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?',
+                (new_version, json.dumps(device_names), service_name, config_json, latest_id)
             )
-            new_version = latest_version
-            logger.info("[CORE-CFG] Updated config v{}".format(new_version))
+            logger.info("[CORE-CFG] Updated config (version fixed at 2)")
         
         conn.commit()
         conn.close()
@@ -3127,7 +3180,7 @@ async def pipeline_core_config_upload_handler(request):
             break
 
     config_json = json.dumps(body, indent=2)
-    new_version  = get_next_pipeline_version("core")
+    new_version  = 2  # Core config schema version is always fixed at 2 -- no auto-increment
 
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -3135,20 +3188,30 @@ async def pipeline_core_config_upload_handler(request):
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS core_configs (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                version      INTEGER NOT NULL,
+                version      INTEGER NOT NULL DEFAULT 2,
                 device_names TEXT,
                 service_name TEXT,
                 config_json  TEXT NOT NULL,
                 created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        cursor.execute(
-            "INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)",
-            (new_version, json.dumps(device_names), service_name_in_cfg or "", config_json)
-        )
+        # Overwrite latest row if exists, else insert
+        cursor.execute('SELECT COALESCE(MAX(id), 0) FROM core_configs')
+        _latest_id = cursor.fetchone()[0]
+        if _latest_id == 0:
+            cursor.execute(
+                "INSERT INTO core_configs (version, device_names, service_name, config_json) VALUES (?, ?, ?, ?)",
+                (new_version, json.dumps(device_names), service_name_in_cfg or "", config_json)
+            )
+            logger.info("[CORE-CFG] Created first config (version fixed at 2). Devices: {}".format(device_names))
+        else:
+            cursor.execute(
+                "UPDATE core_configs SET version = ?, device_names = ?, service_name = ?, config_json = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (new_version, json.dumps(device_names), service_name_in_cfg or "", config_json, _latest_id)
+            )
+            logger.info("[CORE-CFG] Updated config (version fixed at 2). Devices: {}".format(device_names))
         conn.commit()
         conn.close()
-        logger.info("[CORE-CFG] Persisted v{} to DB. Devices: {}".format(new_version, device_names))
     except Exception as db_err:
         logging.error("[CORE-CFG] DB persist error: %s", db_err)
         return web.json_response({"success": False, "error": "DB error: {}".format(db_err)}, status=500)
@@ -3282,7 +3345,7 @@ async def pipeline_core_config_resend_handler(request):
             return web.json_response({"success": False, "error": "No core config in DB to resend"})
 
         config_json = row["config_json"]
-        new_version  = get_next_pipeline_version("core")
+        new_version  = 2  # Core config schema version is always fixed at 2 -- no auto-increment
         pipeline_sent    = False
         pipeline_message = "Not sent -- pipeline not connected"
         target_service   = None
@@ -3448,11 +3511,11 @@ async def pipeline_load_raw_toggle_handler(request):
     except Exception as _e:
         logger.error("[PIPELINE] DB write error for load_raw_enabled: {}".format(_e))
 
-    # Rebuild whitelist first -- adds/removes the exact raw datapoint strings
+    # Rebuild whitelist first -- adds/removes both .raw and .weight datapoints
     rebuild_whitelist(include_raw=enabled)
 
-    # When turning ON: subscribe to raw datapoints now (they were skipped at
-    # connect time because the toggle was OFF then).
+    # When turning ON: subscribe to both .raw and .weight for every device
+    # (they were skipped at connect time because the toggle was OFF then).
     if enabled:
         with pipeline_state["lock"]:
             client    = pipeline_state.get("client")
@@ -3465,33 +3528,37 @@ async def pipeline_load_raw_toggle_handler(request):
                 for lc_entry in cfg.get("load_cells", []):
                     device_name = lc_entry.get("name")
                     if device_name:
-                        raw_dp = "loadcells.{}.raw".format(device_name)
-                        with pipeline_state["lock"]:
-                            already = raw_dp in pipeline_state.get("subscribed_datapoints", set())
-                        if not already:
-                            try:
-                                client.subscribe(raw_dp)
-                                with pipeline_state["lock"]:
-                                    pipeline_state["subscribed_datapoints"].add(raw_dp)
-                                logger.info("[PIPELINE] Raw ON -- subscribed to '{}'".format(raw_dp))
-                            except Exception as sub_e:
-                                logger.error("[PIPELINE] Raw subscribe error '{}': {}".format(raw_dp, sub_e))
-                        else:
-                            logger.info("[PIPELINE] Raw ON -- already subscribed to '{}'".format(raw_dp))
+                        for dp in [
+                            "loadcells.{}.raw".format(device_name),
+                            "loadcells.{}.weight".format(device_name),
+                        ]:
+                            with pipeline_state["lock"]:
+                                already = dp in pipeline_state.get("subscribed_datapoints", set())
+                            if not already:
+                                try:
+                                    client.subscribe(dp)
+                                    with pipeline_state["lock"]:
+                                        pipeline_state["subscribed_datapoints"].add(dp)
+                                    logger.info("[PIPELINE] ON -- subscribed to '{}'".format(dp))
+                                except Exception as sub_e:
+                                    logger.error("[PIPELINE] ON subscribe error '{}': {}".format(dp, sub_e))
+                            else:
+                                logger.info("[PIPELINE] ON -- already subscribed to '{}'".format(dp))
             except Exception as e:
-                logger.error("[PIPELINE] Raw ON subscribe parse error: {}".format(e))
+                logger.error("[PIPELINE] ON subscribe parse error: {}".format(e))
     else:
-        # Turning OFF: remove raw datapoints from the subscribed_datapoints
-        # tracking set so they get re-skipped on the next reconnect.
+        # Turning OFF: remove both .raw and .weight from tracked subscriptions
+        # so they get re-skipped on the next reconnect.
         with pipeline_state["lock"]:
             subs = pipeline_state.get("subscribed_datapoints", set())
-            raw_dps = {dp for dp in subs if dp.startswith("loadcells.") and dp.endswith(".raw")}
-            subs.difference_update(raw_dps)
-            if raw_dps:
-                logger.info("[PIPELINE] Raw OFF -- removed from tracked subscriptions: {}".format(raw_dps))
+            drop = {dp for dp in subs if dp.startswith("loadcells.") and
+                    (dp.endswith(".raw") or dp.endswith(".weight"))}
+            subs.difference_update(drop)
+            if drop:
+                logger.info("[PIPELINE] OFF -- removed from tracked subscriptions: {}".format(drop))
 
     state = "ON" if enabled else "OFF"
-    logger.info("[PIPELINE] load_raw broadcast toggled: {}".format(state))
+    logger.info("[PIPELINE] toggle: {}".format(state))
     return web.json_response({"success": True, "load_raw_enabled": enabled})
 
 

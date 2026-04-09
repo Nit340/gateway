@@ -60,7 +60,6 @@ from database import (
     get_all_pipeline_send_logs, get_enabled_pipeline_targets,
     get_all_pages, get_user_page_restrictions, set_user_page_restriction, get_pages_for_user,
     get_webui_user_max_sessions, set_webui_user_max_sessions,
-    set_webui_user_session_debounce, set_global_session_timeout,
 )
 from general import register_general_config_routes
 from device_management import (
@@ -533,7 +532,6 @@ async def webui_session_status(request):
         'username': username,
         'role': user_role,
         'hidden_pages': hidden_pages,
-        'session_timeout': _sess.get('session_timeout', 3600)
     })
 
 async def webui_session_role(request):
@@ -560,16 +558,7 @@ async def webui_session_role(request):
     
     # Sort by logged_in_at
     all_active.sort(key=lambda x: x[1])
-    is_editor = (all_active and all_active[0][0] == token)
-    role = 'editor' if is_editor else 'viewer'
-    
-    # Get editor username
-    editor_username = None
-    if all_active:
-        editor_token = all_active[0][0]
-        if editor_token in WEBUI_SESSIONS:
-            e_info = WEBUI_SESSIONS[editor_token]
-            editor_username = e_info['username'] if isinstance(e_info, dict) else e_info
+    role = 'editor' if (all_active and all_active[0][0] == token) else 'viewer'
 
     # Fetch DB-level role ('admin' or 'user')
     try:
@@ -583,14 +572,7 @@ async def webui_session_role(request):
     except Exception:
         user_role = 'user'
 
-    return web.json_response({
-        'authenticated': True, 
-        'username': username, 
-        'role': role, 
-        'user_role': user_role,
-        'editor_token': all_active[0][0] if all_active else None,
-        'editor_username': editor_username
-    })
+    return web.json_response({'authenticated': True, 'username': username, 'role': role, 'user_role': user_role})
 
 
 async def api_modals_get(request):
@@ -693,15 +675,13 @@ async def start_background_tasks(app):
     import time
 
     async def _webui_session_watchdog():
-        # Load session timeout from database
-        try:
-            from database import get_general_configuration as _ggc
-            _cfg = _ggc()
-            SESSION_IDLE_TIMEOUT = _cfg.get('security', {}).get('session_timeout', 3600)
-            logger.debug("[WATCHDOG] Using session timeout: {}s".format(SESSION_IDLE_TIMEOUT))
-        except Exception as e:
-            logger.warning("[WATCHDOG] Could not load session timeout from DB, using default 3600s: {}".format(e))
-            SESSION_IDLE_TIMEOUT = 3600
+        # SESSION_IDLE_TIMEOUT: seconds a session can be idle before eviction.
+        # Previously 300 s (5 min) — too short for users who leave a tab open
+        # without constant interaction, or who switch networks (WiFi→LTE) and
+        # take a moment to reconnect.
+        # 3600 s (1 hour) safely cleans up truly abandoned sessions without
+        # ever evicting an active or reconnecting user.
+        SESSION_IDLE_TIMEOUT = 3600
 
         while True:
             await asyncio.sleep(60)   # check every 60 s is plenty
@@ -907,22 +887,11 @@ async def api_webui_sessions_get(request):
         conn.close()
     except Exception:
         user_rows = {}
-    # Get global timeout
-    from database import get_general_configuration
-    gc = get_general_configuration()
-    global_timeout = gc.get('session_timeout', 3600)
-
     result = []
     for s in sessions:
         u = user_rows.get(s['username'], {})
-        result.append(dict(s, **{
-            'user_id': u.get('id'), 
-            'display_name': u.get('display_name', s['username']), 
-            'role': u.get('role', 'user'), 
-            'max_sessions': u.get('max_sessions', 1),
-            'global_timeout': global_timeout
-        }))
-    return web.json_response({'sessions': result, 'global_timeout': global_timeout})
+        result.append(dict(s, **{'user_id': u.get('id'), 'display_name': u.get('display_name', s['username']), 'role': u.get('role', 'user'), 'max_sessions': u.get('max_sessions', 1)}))
+    return web.json_response({'sessions': result})
 
 
 async def api_webui_session_kill(request):
@@ -958,37 +927,6 @@ async def api_webui_user_max_sessions_put(request):
     ok = set_webui_user_max_sessions(int(user_id), max_s)
     if ok:
         return web.json_response({'success': True, 'max_sessions': max_s})
-    return web.json_response({'success': False, 'error': 'Failed to update'}, status=500)
-
-
-async def api_webui_user_session_debounce_put(request):
-    """PUT /api/admin/users/webui/{id}/session-debounce -- update debounce time for a webui user."""
-    _require_admin(request)
-    user_id = request.match_info['id']
-    try:
-        body = await request.json()
-        seconds = max(1, int(body.get('session_debounce_time', 5)))
-    except (TypeError, ValueError, Exception):
-        seconds = 5
-    
-    ok = set_webui_user_session_debounce(int(user_id), seconds)
-    if ok:
-        return web.json_response({'success': True, 'session_debounce_time': seconds})
-    return web.json_response({'success': False, 'error': 'Failed to update'}, status=500)
-
-
-async def api_global_session_timeout_put(request):
-    """PUT /api/admin/global-session-timeout -- update system-wide session timeout."""
-    _require_admin(request)
-    try:
-        body = await request.json()
-        timeout = max(60, int(body.get('session_timeout', 3600)))
-    except (TypeError, ValueError, Exception):
-        timeout = 3600
-    
-    ok = set_global_session_timeout(timeout)
-    if ok:
-        return web.json_response({'success': True, 'session_timeout': timeout})
     return web.json_response({'success': False, 'error': 'Failed to update'}, status=500)
 
 
@@ -1345,8 +1283,6 @@ def create_app():
     app.router.add_put('/api/admin/users/webui/{id}', api_webui_user_put)
     app.router.add_delete('/api/admin/users/webui/{id}', api_webui_user_delete)
     app.router.add_put('/api/admin/users/webui/{id}/max-sessions', api_webui_user_max_sessions_put)
-    app.router.add_put('/api/admin/users/webui/{id}/session-debounce', api_webui_user_session_debounce_put)
-    app.router.add_put('/api/admin/global-session-timeout', api_global_session_timeout_put)
     app.router.add_get('/api/admin/webui-sessions', api_webui_sessions_get)
     app.router.add_delete('/api/admin/webui-sessions/{token}', api_webui_session_kill)
 
