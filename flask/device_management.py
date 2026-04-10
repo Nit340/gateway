@@ -697,7 +697,14 @@ async def update_device(request):
             device_type_val = data.get('device_type_init', data.get('device_type', ''))
             model_name = data.get('model_name', '')
             config = data.get('config', {})
-
+            
+            # Get the OLD slave_id before update
+            cursor.execute('SELECT slave_id FROM external_device WHERE id = ?', (device_id,))
+            old_slave_id_row = cursor.fetchone()
+            old_slave_id = old_slave_id_row[0] if old_slave_id_row else None
+            new_slave_id = config.get('slave_id', 1)
+            
+            # Update the device
             cursor.execute('''
                 UPDATE external_device SET
                     name=?, protocol=?,
@@ -711,31 +718,47 @@ async def update_device(request):
             ''', (
                 new_name, new_protocol,
                 device_type_val, model_name,
-                config.get('slave_id', 1),
+                new_slave_id,
                 config.get('response_timeout_ms', 100),
                 config.get('byte_timeout_ms', 100),
                 config.get('max_retries', 2),
                 config.get('polling_interval_ms', 300),
-                # RTU fields — only for ext-rtu
                 config.get('serial_port') if new_protocol == 'ext-rtu' else None,
                 config.get('baud_rate')   if new_protocol == 'ext-rtu' else None,
                 config.get('data_bits')   if new_protocol == 'ext-rtu' else None,
                 config.get('parity')      if new_protocol == 'ext-rtu' else None,
                 config.get('stop_bits')   if new_protocol == 'ext-rtu' else None,
-                # TCP fields — only for ext-tcp
                 config.get('ip_address')  if new_protocol == 'ext-tcp' else None,
                 config.get('port')        if new_protocol == 'ext-tcp' else None,
                 device_id
             ))
-
+            
+            # CRITICAL: If slave_id changed, update all tags to use the new slave_id
+            if old_slave_id is not None and old_slave_id != new_slave_id:
+                conn.commit()  # Commit device update first
+                conn.close()
+                
+                # Import the sync function from database
+                from database import sync_device_slave_id_to_tags
+                affected = sync_device_slave_id_to_tags(device_id, new_slave_id)
+                
+                logger.info("[DeviceMgmt] Updated {} tags from slave_id {} to {}".format(affected, old_slave_id, new_slave_id))
+                
+                return web.json_response({
+                    'success': True,
+                    'message': 'Device updated successfully. {} tags synced to slave_id {}'.format(affected, new_slave_id)
+                })
+            
+            conn.commit()
+            conn.close()
+            
         else:
-            # Update Loadcell device
+            # Update Loadcell device (unchanged)
             config = data.get('config', {})
             
             update_fields = ['name = ?']
             values = [data.get('name')]
             
-            # Hardware parameters
             for field in ('device_path', 'device_path_ch2', 'lc_mode',
                           'poll_ms',
                           'capacity_min', 'capacity_max', 'unit',
@@ -745,12 +768,10 @@ async def update_device(request):
                     update_fields.append('{} = ?'.format(field))
                     values.append(config[field])
             
-            # signed is a boolean
             if 'signed' in config:
                 update_fields.append('signed = ?')
                 values.append(1 if config['signed'] else 0)
             
-            # Calibration fields
             for field in ('tare_offset', 'known_weight', 'known_weight_raw'):
                 if field in config:
                     update_fields.append('{} = ?'.format(field))
@@ -766,20 +787,17 @@ async def update_device(request):
             
             cursor.execute(query, values)
 
-            # If the unit changed, keep loadcell_datapoints in sync so
-            # tag_mapping always returns the correct unit for weight & capacity.
             if 'unit' in config:
                 cursor.execute(
                     'UPDATE loadcell_datapoints SET unit = ? WHERE device_id = ?',
                     (config['unit'], device_id)
                 )
-        
-        conn.commit()
-        conn.close()
+            
+            conn.commit()
+            conn.close()
 
-        # Send updated core config to pipeline immediately on every loadcell save
-        if not is_external:
-            await _trigger_loadcell_pipeline(device_id, 'update')
+            if not is_external:
+                await _trigger_loadcell_pipeline(device_id, 'update')
 
         return web.json_response({
             'success': True,
@@ -789,7 +807,6 @@ async def update_device(request):
     except Exception as e:
         logger.error("Error updating device: {}".format(e))
         return web.json_response({'error': str(e)}, status=500)
-
 # ============================================================================
 # DELETE DEVICE
 # ============================================================================

@@ -246,160 +246,454 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Viewer Mode Styles */
-        #viewerBanner {
+        /* ── Viewer Mode: invisible blocker only, no visual fade ───── */
+        #viewerOverlay {
             display: none;
             position: fixed;
             inset: 0;
-            z-index: 9999;
-            background: rgba(0,0,0,0.45);
-            align-items: center;
-            justify-content: center;
+            z-index: 8000;
+            pointer-events: none;
         }
-        #viewerBanner.show { display: flex; }
-        #viewerBanner .vb-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-            padding: 36px 32px 28px;
-            max-width: 400px;
-            width: 92%;
-            text-align: center;
-            animation: vbSlideIn 0.25s ease;
+        #viewerOverlay.show { display: block; }
+
+        /* Transparent blocker over main content only (sidebar unaffected) */
+        #viewerFrost {
+            position: fixed;
+            top: 0; bottom: 0;
+            left: 240px; right: 0;
+            background: transparent;
+            z-index: 8001;
+            pointer-events: all;
+            cursor: default;
         }
+        @media (max-width: 1024px) {
+            #viewerFrost { left: 0; }
+        }
+
+        /* ── Viewer info banner (top-right corner badge, not fullscreen) */
+        #viewerBanner {
+            display: none;
+            position: fixed;
+            top: 72px; right: 20px;
+            z-index: 9100;
+            animation: vbSlideIn 0.3s cubic-bezier(0.34,1.4,0.64,1);
+        }
+        #viewerBanner.show { display: block; }
         @keyframes vbSlideIn {
-            from { opacity: 0; transform: translateY(-14px) scale(0.97); }
-            to   { opacity: 1; transform: translateY(0)     scale(1);    }
+            from { opacity: 0; transform: translateX(20px) scale(0.95); }
+            to   { opacity: 1; transform: translateX(0)    scale(1);    }
         }
-        #viewerBanner .vb-icon {
-            width: 60px; height: 60px;
-            border-radius: 50%;
-            background: #FFFBEB;
+        .vb-card {
+            background: white;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            padding: 20px 22px 18px;
+            width: 300px;
+        }
+        .vb-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 12px;
+        }
+        .vb-icon-wrap {
+            width: 38px; height: 38px; border-radius: 10px;
+            background: #FEF3C7;
             display: flex; align-items: center; justify-content: center;
-            margin: 0 auto 18px;
-            font-size: 24px;
+            font-size: 17px; flex-shrink: 0;
         }
-        #viewerBanner .vb-title {
-            font-size: 17px; font-weight: 700;
-            color: #1E293B; margin-bottom: 8px;
+        .vb-title {
+            font-size: 14px; font-weight: 700; color: #1E293B;
         }
-        #viewerBanner .vb-desc {
-            font-size: 13px; color: #64748B;
-            line-height: 1.6; margin-bottom: 24px;
+        .vb-subtitle { font-size: 11px; color: #F59E0B; font-weight: 600; }
+        .vb-editor-row {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            display: flex; align-items: center; gap: 10px;
         }
-        #viewerBanner .vb-close {
-            display: inline-flex; align-items: center; justify-content: center;
-            gap: 6px;
-            padding: 9px 24px;
-            background: #F59E0B; color: white;
-            border: none; border-radius: 8px;
-            font-size: 13px; font-weight: 600;
-            cursor: pointer; transition: background 0.2s;
-            font-family: 'Inter', sans-serif;
+        .vb-editor-avatar {
+            width: 30px; height: 30px; border-radius: 7px;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 12px; font-weight: 700; flex-shrink: 0;
         }
-        #viewerBanner .vb-close:hover { background: #D97706; }
+        .vb-editor-name { font-size: 13px; font-weight: 600; color: #1E293B; }
+        .vb-editor-label { font-size: 11px; color: #64748B; }
+        .vb-queue-row {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: #64748B; margin-bottom: 14px;
+        }
+        .vb-queue-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #F59E0B; flex-shrink: 0;
+            animation: vbPulse 2s ease-in-out infinite;
+        }
+        @keyframes vbPulse {
+            0%,100% { opacity: 1; transform: scale(1); }
+            50%      { opacity: 0.5; transform: scale(0.8); }
+        }
+        .vb-close {
+            width: 100%;
+            padding: 8px 0;
+            background: transparent; border: 1.5px solid #E2E8F0;
+            border-radius: 8px; color: #64748B;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; font-family: 'Inter', sans-serif;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .vb-close:hover { background: #F8FAFC; border-color: #CBD5E1; color: #1E293B; }
 
-        body.viewer-mode #contentArea input,
-        body.viewer-mode #contentArea select,
-        body.viewer-mode #contentArea textarea,
-        body.viewer-mode #contentArea button,
-        body.viewer-mode #contentArea label,
-        body.viewer-mode #contentArea a,
-        body.viewer-mode #pageContent input,
-        body.viewer-mode #pageContent select,
-        body.viewer-mode #pageContent textarea,
-        body.viewer-mode #pageContent button,
-        body.viewer-mode #pageContent label,
-        body.viewer-mode #pageContent a {
-            pointer-events: none !important;
-            opacity: 0.6 !important;
-            cursor: not-allowed !important;
-            background: #F1F5F9 !important;
+        /* ── Viewer mode pill in header ──────────────────────────── */
+        #viewerModePill {
+            display: none;
+            align-items: center; gap: 6px;
+            padding: 5px 12px;
+            background: #FEF3C7; border: 1px solid #FDE68A;
+            border-radius: 20px; font-size: 12px; font-weight: 600;
+            color: #92400E; cursor: pointer;
+            transition: all 0.2s;
         }
+        #viewerModePill.show { display: flex; }
+        #viewerModePill:hover { background: #FDE68A; }
 
+        /* ── Handover Modal (shown to next viewer when editor logs out) */
         #handoverModal {
             display: none;
             position: fixed;
             inset: 0;
             z-index: 10000;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             align-items: center;
             justify-content: center;
         }
         #handoverModal.show { display: flex; }
         .ho-card {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            padding: 40px;
-            max-width: 440px;
+            border-radius: 24px;
+            box-shadow: 0 32px 64px rgba(0,0,0,0.22);
+            padding: 44px 40px 36px;
+            max-width: 420px;
             width: 90%;
             text-align: center;
-            animation: hoPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: hoPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         @keyframes hoPopIn {
-            from { opacity: 0; transform: scale(0.9) translateY(20px); }
-            to { opacity: 1; transform: scale(1) translateY(0); }
+            from { opacity: 0; transform: scale(0.88) translateY(24px); }
+            to   { opacity: 1; transform: scale(1)    translateY(0);    }
         }
         .ho-icon {
-            width: 72px; height: 72px;
-            background: #ECFDF5;
-            color: #10B981;
+            width: 76px; height: 76px;
+            background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+            color: #059669;
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 32px;
-            margin: 0 auto 20px;
+            font-size: 34px;
+            margin: 0 auto 22px;
+            box-shadow: 0 0 0 8px rgba(16,185,129,0.1);
         }
         .ho-title {
-            font-size: 20px; font-weight: 800;
-            color: #111827; margin-bottom: 12px;
+            font-size: 22px; font-weight: 800;
+            color: #111827; margin-bottom: 10px;
         }
         .ho-desc {
             font-size: 14px; color: #4B5563;
-            line-height: 1.6; margin-bottom: 32px;
+            line-height: 1.7; margin-bottom: 10px;
+        }
+        .ho-prev-user {
+            display: inline-flex; align-items: center; gap: 7px;
+            background: #F3F4F6; border-radius: 8px;
+            padding: 7px 14px; margin-bottom: 28px;
+            font-size: 13px; color: #374151; font-weight: 500;
+        }
+        .ho-prev-avatar {
+            width: 24px; height: 24px; border-radius: 5px;
+            background: linear-gradient(135deg, #6B7280, #4B5563);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 10px; font-weight: 700;
         }
         .ho-btn {
-            background: #2563EB;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 12px 32px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            color: white; border: none; border-radius: 12px;
+            padding: 14px 36px; font-size: 15px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+            display: inline-flex; align-items: center; gap: 8px;
+            font-family: 'Inter', sans-serif;
         }
         .ho-btn:hover {
-            background: #1D4ED8;
-            transform: translateY(-1px);
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.45);
+        }
+        .ho-countdown {
+            font-size: 12px; color: #9CA3AF; margin-top: 16px;
+        }
+
+        /* ── Network Connection Overlay ───────────────────────────── */
+        #networkOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            align-items: center;
+            justify-content: center;
+            animation: netFadeIn 0.25s ease;
+        }
+        #networkOverlay.show { display: flex; }
+        @keyframes netFadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        .net-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 32px 64px rgba(0,0,0,0.28);
+            padding: 44px 40px 36px;
+            max-width: 380px;
+            width: 92%;
+            text-align: center;
+            animation: netSlideUp 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+        }
+        @keyframes netSlideUp {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0)     scale(1);   }
+        }
+
+        /* Animated radio-wave icon */
+        .net-icon-wrap {
+            position: relative;
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 24px;
+        }
+        .net-icon-bg {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: #FEF3C7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+        .net-icon-bg i {
+            font-size: 28px;
+            color: #D97706;
+        }
+        /* Pulse rings */
+        .net-ring {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2px solid #F59E0B;
+            opacity: 0;
+            animation: netRing 2s ease-out infinite;
+        }
+        .net-ring:nth-child(1) { width: 72px;  height: 72px;  animation-delay: 0s;    }
+        .net-ring:nth-child(2) { width: 100px; height: 100px; animation-delay: 0.5s;  }
+        .net-ring:nth-child(3) { width: 128px; height: 128px; animation-delay: 1s;    }
+        @keyframes netRing {
+            0%   { opacity: 0.6; transform: translate(-50%,-50%) scale(0.85); }
+            100% { opacity: 0;   transform: translate(-50%,-50%) scale(1.15); }
+        }
+
+        /* Connected state – turns green */
+        #networkOverlay.connected .net-icon-bg  { background: #D1FAE5; }
+        #networkOverlay.connected .net-icon-bg i { color: #059669; }
+        #networkOverlay.connected .net-ring      { border-color: #10B981; animation: none; opacity: 0; }
+
+        .net-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1E293B;
+            margin-bottom: 8px;
+        }
+        .net-desc {
+            font-size: 13px;
+            color: #64748B;
+            line-height: 1.65;
+            margin-bottom: 28px;
+        }
+
+        /* Dot-dot-dot spinner for status line */
+        .net-dots span {
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: #94A3B8;
+            margin: 0 2px;
+            animation: netDot 1.4s ease-in-out infinite;
+        }
+        .net-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .net-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes netDot {
+            0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+            40%            { transform: scale(1);   opacity: 1;   }
+        }
+
+        /* Progress bar */
+        .net-progress-track {
+            height: 4px;
+            background: #E2E8F0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .net-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #F59E0B, #FBBF24);
+            border-radius: 4px;
+            transition: width 0.4s ease, background 0.4s ease;
+        }
+        #networkOverlay.connected .net-progress-bar {
+            width: 100% !important;
+            background: linear-gradient(90deg, #10B981, #34D399);
+        }
+
+        /* Attempt counter */
+        .net-attempt {
+            font-size: 11px;
+            color: #94A3B8;
+            margin-top: 8px;
+            letter-spacing: 0.3px;
+        }
+
+        /* ── Top status bar (shown instead of overlay after 1st reconnect) */
+        #netStatusBar {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 99998;
+            background: #F59E0B;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            padding: 8px 16px;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            letter-spacing: 0.2px;
+            animation: barSlideDown 0.25s ease;
+        }
+        #netStatusBar.show { display: flex; }
+        #netStatusBar.restored {
+            background: #10B981;
+            animation: barRestored 2s ease forwards;
+        }
+        @keyframes barSlideDown {
+            from { transform: translateY(-100%); }
+            to   { transform: translateY(0);     }
+        }
+        @keyframes barRestored {
+            0%   { opacity: 1; }
+            70%  { opacity: 1; }
+            100% { opacity: 0; }
         }
     </style>
 </head>
 <body>
-    <!-- Viewer / Read-Only Banner -->
+    <!-- ── Network Disconnected / Reconnecting Overlay ───────────── -->
+    <div id="networkOverlay">
+        <div class="net-card">
+            <!-- Animated icon -->
+            <div class="net-icon-wrap">
+                <div class="net-ring"></div>
+                <div class="net-ring"></div>
+                <div class="net-ring"></div>
+                <div class="net-icon-bg">
+                    <i class="fa-solid fa-wifi" id="netIcon"></i>
+                </div>
+            </div>
+
+            <div class="net-title" id="netTitle">Reconnecting…</div>
+            <div class="net-desc" id="netDesc">
+                Connection to the gateway was lost.<br>
+                Your session is safe — reconnecting now.
+            </div>
+
+            <!-- Progress bar -->
+            <div class="net-progress-track">
+                <div class="net-progress-bar" id="netProgressBar"></div>
+            </div>
+
+            <!-- Animated dots status -->
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px;">
+                <div class="net-dots">
+                    <span></span><span></span><span></span>
+                </div>
+                <span id="netStatus" style="font-size:12px; color:#64748B; font-weight:500;">Waiting for gateway</span>
+            </div>
+
+            <div class="net-attempt" id="netAttempt"></div>
+        </div>
+    </div>
+
+    <!-- ── Thin status bar (shown briefly after connection restored) -->
+    <div id="netStatusBar">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>Connection restored — you're back online.</span>
+    </div>
+
+    <!-- ── Viewer Frost Overlay (blocks clicks in content area) ──── -->
+    <div id="viewerOverlay">
+        <div id="viewerFrost"></div>
+    </div>
+
+    <!-- ── Viewer Info Banner (corner card, dismissible) ─────────── -->
     <div id="viewerBanner">
         <div class="vb-card">
-            <div class="vb-icon">👁</div>
-            <div class="vb-title">View-Only Mode</div>
-            <div class="vb-desc">There is a user editing already.<br>Wait for the user to log out to edit.<br>You can view only.</div>
+            <div class="vb-header">
+                <div class="vb-icon-wrap">👁</div>
+                <div>
+                    <div class="vb-title">View-Only Mode</div>
+                    <div class="vb-subtitle">WAITING IN QUEUE</div>
+                </div>
+            </div>
+            <div class="vb-editor-row">
+                <div class="vb-editor-avatar" id="vbEditorAvatar">?</div>
+                <div>
+                    <div class="vb-editor-name" id="vbEditorName">—</div>
+                    <div class="vb-editor-label">Currently editing</div>
+                </div>
+            </div>
+            <div class="vb-queue-row">
+                <div class="vb-queue-dot"></div>
+                <span id="vbQueueText">You will get access when they log out.</span>
+            </div>
             <button class="vb-close" onclick="document.getElementById('viewerBanner').classList.remove('show')">
-                <i class="fa-solid fa-check"></i> Got it
+                <i class="fa-solid fa-eye"></i> Got it — I'll watch
             </button>
         </div>
     </div>
 
-    <!-- Editor Handover Modal -->
+    <!-- ── Viewer mode pill in header ────────────────────────────── -->
+    <!-- injected into header by JS -->
+
+    <!-- ── Handover Modal (shown to next viewer when editor logs out) -->
     <div id="handoverModal">
         <div class="ho-card">
             <div class="ho-icon"><i class="fa-solid fa-pen-to-square"></i></div>
-            <div class="ho-title">Editor Role Assigned</div>
-            <div class="ho-desc">The user who was editing has finished and logged out.<br>Click the button below to start your editing work.</div>
+            <div class="ho-title">Your Turn to Edit!</div>
+            <div class="ho-desc">The previous editor has logged out.<br>You are now the active editor.</div>
+            <div class="ho-prev-user" id="hoPrevUser" style="display:none;">
+                <div class="ho-prev-avatar" id="hoPrevAvatar">?</div>
+                <span id="hoPrevName">—</span>
+                <span style="color:#9CA3AF;">has left</span>
+            </div>
             <button class="ho-btn" onclick="window.location.reload()">
                 <i class="fa-solid fa-rotate"></i> Start Editing
             </button>
+            <div class="ho-countdown" id="hoCountdown">Auto-refreshing in <span id="hoCountSec">10</span>s…</div>
         </div>
     </div>
 
@@ -430,7 +724,7 @@
                         <i class="fa-solid fa-microchip"></i>
                         <span>Device Management</span>
                     </a>
-                                  </div>
+                </div>
 
                 <!-- Protocols & Integrations Section -->
                 <div class="nav-section">
@@ -565,6 +859,11 @@
                             <span id="header-gateway-name" class="text-sm font-medium text-slate-700">Loading...</span>
                         </div>
                         <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                        <!-- Viewer mode pill -->
+                        <div id="viewerModePill" onclick="document.getElementById('viewerBanner').classList.toggle('show')" title="View-Only Mode — click for details">
+                            <i class="fa-solid fa-eye" style="font-size:11px;"></i>
+                            <span>View Only</span>
+                        </div>
                         <button class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
                             <i class="fa-solid fa-circle-question mr-2"></i> Help
                         </button>
@@ -616,7 +915,7 @@
     <script src="pages/js/router.js"></script>
     
     <script>
-        // Get cookie helper
+        // ── Cookie helper ────────────────────────────────────────────
         function getCookie(name) {
             const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
             return match ? match[2] : null;
@@ -629,7 +928,7 @@
             if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1);
         }
 
-        // Logout handler
+        // ── Logout handler ───────────────────────────────────────────
         async function handleLogout() {
             try {
                 await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
@@ -639,10 +938,9 @@
             document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
             window.location.replace('/');
         }
-
         window.handleLogout = handleLogout;
 
-        // Fetch gateway name
+        // ── Gateway name in header ───────────────────────────────────
         (function () {
             function updateHeaderGatewayName() {
                 fetch('/api/general-configuration', { credentials: 'same-origin' })
@@ -661,13 +959,149 @@
             window.addEventListener('gateway-config-saved', updateHeaderGatewayName);
         })();
 
-        // Initialize router
+        // ════════════════════════════════════════════════════════════
+        //  EDITOR LOCK  –  Single-editor, viewer queue
+        //
+        //  Logic:
+        //  • Poll /api/auth/editor-lock every 3 s
+        //  • If is_editor=true  → normal editing mode
+        //  • If is_editor=false → viewer mode: frost overlay + corner banner
+        //  • When editor logs out (is_editor becomes true for this session)
+        //    → show handover modal with 10-s auto-reload countdown
+        //  • Sidebar navigation always works; only the main content area is blocked
+        // ════════════════════════════════════════════════════════════
+        (function () {
+            const POLL_MS = 3000;
+
+            const frost        = document.getElementById('viewerOverlay');
+            const banner       = document.getElementById('viewerBanner');
+            const pill         = document.getElementById('viewerModePill');
+            const handover     = document.getElementById('handoverModal');
+            const vbEditorName = document.getElementById('vbEditorName');
+            const vbEditorAv   = document.getElementById('vbEditorAvatar');
+            const vbQueueText  = document.getElementById('vbQueueText');
+            const hoPrevUser   = document.getElementById('hoPrevUser');
+            const hoPrevName   = document.getElementById('hoPrevName');
+            const hoPrevAv     = document.getElementById('hoPrevAvatar');
+            const hoCountSec   = document.getElementById('hoCountSec');
+
+            let wasViewer      = null;    // null=unknown, true=viewer, false=editor
+            let lastEditorUser = '';
+            let countdownTimer = null;
+            let pollTimer      = null;
+            let handoverShown  = false;
+
+            function initials(name) {
+                return (name || '?').charAt(0).toUpperCase();
+            }
+
+            function enterViewerMode(editorUsername, queuePos, viewerCount) {
+                // Show frost + pill
+                frost.classList.add('show');
+                pill.classList.add('show');
+
+                // Update banner editor info
+                vbEditorName.textContent = editorUsername || 'Unknown';
+                vbEditorAv.textContent   = initials(editorUsername);
+
+                // Queue message
+                if (viewerCount <= 1) {
+                    vbQueueText.textContent = 'You will get edit access when they log out.';
+                } else {
+                    vbQueueText.textContent = 'You are #' + (queuePos + 1) + ' in queue (' + viewerCount + ' waiting).';
+                }
+
+                // Show banner on first entry only (don't re-show if dismissed)
+                if (wasViewer === null || wasViewer === false) {
+                    banner.classList.add('show');
+                }
+
+                lastEditorUser = editorUsername;
+                wasViewer = true;
+            }
+
+            function enterEditorMode() {
+                // Remove frost + pill
+                frost.classList.remove('show');
+                pill.classList.remove('show');
+                banner.classList.remove('show');
+                wasViewer = false;
+            }
+
+            function showHandoverModal(prevEditor) {
+                if (handoverShown) return;
+                handoverShown = true;
+
+                // Fill in who left
+                if (prevEditor) {
+                    hoPrevName.textContent = prevEditor;
+                    hoPrevAv.textContent   = initials(prevEditor);
+                    hoPrevUser.style.display = 'inline-flex';
+                }
+
+                handover.classList.add('show');
+
+                // Countdown + auto reload
+                let secs = 10;
+                hoCountSec.textContent = secs;
+                clearInterval(countdownTimer);
+                countdownTimer = setInterval(() => {
+                    secs--;
+                    hoCountSec.textContent = secs;
+                    if (secs <= 0) {
+                        clearInterval(countdownTimer);
+                        window.location.reload();
+                    }
+                }, 1000);
+            }
+
+            async function pollLock() {
+                try {
+                    const res = await fetch('/api/auth/editor-lock', {
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(4000)
+                    });
+
+                    if (res.status === 401) return; // handled by network monitor
+
+                    const data = await res.json();
+
+                    if (!data.authenticated) return;
+
+                    if (data.is_editor) {
+                        // We are now the editor
+                        if (wasViewer === true && !handoverShown) {
+                            // Just got promoted — show handover modal
+                            showHandoverModal(lastEditorUser);
+                        } else if (wasViewer === null) {
+                            // First check, already editor
+                            enterEditorMode();
+                        }
+                        // If handover shown don't change state until reload
+                    } else {
+                        // We are a viewer
+                        enterViewerMode(data.editor_username, data.viewer_position, data.viewer_count);
+                    }
+
+                } catch (e) {
+                    // Network error handled by separate monitor — ignore here
+                }
+
+                if (!handoverShown) {
+                    pollTimer = setTimeout(pollLock, POLL_MS);
+                }
+            }
+
+            // Kick off immediately
+            pollLock();
+        })();
         if (typeof Router !== 'undefined') {
             const router = new Router();
             window.router = router;
         }
 
-        // Mobile menu handling
+        // ── Mobile menu ──────────────────────────────────────────────
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
         const sidebar = document.getElementById('sidebar');
         const mobileOverlay = document.getElementById('mobileOverlay');
@@ -678,14 +1112,12 @@
                 mobileOverlay.classList.toggle('active');
             });
         }
-        
         if (mobileOverlay) {
             mobileOverlay.addEventListener('click', () => {
                 sidebar.classList.remove('active');
                 mobileOverlay.classList.remove('active');
             });
         }
-        
         window.addEventListener('resize', () => {
             if (window.innerWidth > 1024) {
                 sidebar.classList.remove('active');
@@ -693,19 +1125,17 @@
             }
         });
 
-        // Apply page visibility based on user role
+        // ── Page visibility by role ──────────────────────────────────
         (async function applyPageVisibility() {
             try {
                 const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
                 if (!res.ok) return;
                 const data = await res.json();
                 window.__userRole = (data.role || data.user_role || 'user').toLowerCase();
-                
                 const roleLabel = document.getElementById('sidebarUserRole');
                 if (roleLabel) {
                     roleLabel.textContent = window.__userRole === 'admin' ? 'administrator' : 'system user';
                 }
-                
                 const hidden = data.hidden_pages || [];
                 hidden.forEach(pageKey => {
                     document.querySelectorAll('[data-page="' + pageKey + '"]').forEach(el => {
@@ -713,6 +1143,224 @@
                     });
                 });
             } catch (e) {}
+        })();
+
+        // ════════════════════════════════════════════════════════════
+        //  NETWORK MONITOR
+        //  – Polls /api/auth/status every 4 s (lightweight endpoint)
+        //  – On failure: shows the reconnecting overlay immediately
+        //  – Uses exponential back-off: 2s → 4s → 8s → max 30s
+        //  – Session cookie survives across network changes (mDNS),
+        //    so we never log the user out; we just wait and retry.
+        //  – On 401: the session itself expired → redirect to login
+        // ════════════════════════════════════════════════════════════
+        (function () {
+            const overlay    = document.getElementById('networkOverlay');
+            const statusBar  = document.getElementById('netStatusBar');
+            const netTitle   = document.getElementById('netTitle');
+            const netDesc    = document.getElementById('netDesc');
+            const netStatus  = document.getElementById('netStatus');
+            const netAttempt = document.getElementById('netAttempt');
+            const netBar     = document.getElementById('netProgressBar');
+            const netIcon    = document.getElementById('netIcon');
+
+            // Timing config
+            const POLL_INTERVAL_MS   = 4000;   // how often to check when connected
+            const BASE_RETRY_MS      = 2000;   // first retry wait
+            const MAX_RETRY_MS       = 30000;  // max retry wait
+            const RESTORE_SHOW_MS    = 2200;   // how long to show "restored" bar
+
+            let isConnected   = true;
+            let attempt       = 0;
+            let retryTimer    = null;
+            let pollTimer     = null;
+            let hasDisconnected = false;  // did we ever show the overlay?
+
+            // ── Helpers ──────────────────────────────────────────────
+            function retryDelay(n) {
+                return Math.min(BASE_RETRY_MS * Math.pow(1.6, n), MAX_RETRY_MS);
+            }
+
+            function setProgress(pct) {
+                netBar.style.width = pct + '%';
+            }
+
+            function updateOverlay(phase) {
+                // phase: 'connecting' | 'waiting' | 'connected'
+                if (phase === 'connecting') {
+                    netTitle.textContent   = 'Reconnecting…';
+                    netDesc.innerHTML      = 'Connection to the gateway was lost.<br>Your session is safe — reconnecting now.';
+                    netStatus.textContent  = 'Contacting gateway';
+                    netIcon.className      = 'fa-solid fa-wifi';
+                    overlay.classList.remove('connected');
+                    setProgress(Math.min(20 + attempt * 12, 80));
+                } else if (phase === 'waiting') {
+                    const secs = Math.round(retryDelay(attempt) / 1000);
+                    netStatus.textContent  = 'Retrying in ' + secs + 's…';
+                    netAttempt.textContent = 'Attempt ' + attempt + ' — network change detected';
+                } else if (phase === 'connected') {
+                    netTitle.textContent   = 'Connection Restored';
+                    netDesc.innerHTML      = 'Gateway is back online.<br>Resuming your session…';
+                    netStatus.textContent  = 'Connected';
+                    netIcon.className      = 'fa-solid fa-circle-check';
+                    netAttempt.textContent = '';
+                    overlay.classList.add('connected');
+                    setProgress(100);
+                }
+            }
+
+            function showOverlay() {
+                overlay.classList.add('show');
+                statusBar.classList.remove('show', 'restored');
+            }
+
+            function hideOverlay() {
+                overlay.classList.remove('show');
+                overlay.classList.remove('connected');
+                setProgress(0);
+            }
+
+            function showRestoredBar() {
+                statusBar.classList.remove('restored');
+                statusBar.classList.add('show');
+                // Trigger reflow so animation restarts cleanly
+                void statusBar.offsetWidth;
+                statusBar.classList.add('restored');
+                setTimeout(() => {
+                    statusBar.classList.remove('show', 'restored');
+                }, RESTORE_SHOW_MS);
+            }
+
+            // ── Core check ───────────────────────────────────────────
+            async function checkConnection() {
+                try {
+                    const res = await fetch('/api/auth/status', {
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(5000)
+                    });
+
+                    if (res.status === 401) {
+                        // Parse the reason so we can show the right message
+                        let reason = 'session_expired';
+                        try { const j = await res.json(); reason = j.reason || reason; } catch(e) {}
+
+                        // Show a clear message before redirecting
+                        if (overlay) {
+                            netTitle.textContent  = reason === 'idle_timeout' ? 'Session Timed Out' : 'Session Expired';
+                            netDesc.innerHTML     = reason === 'idle_timeout'
+                                ? 'You were logged out due to inactivity.<br>Redirecting to login…'
+                                : 'Your session has expired.<br>Redirecting to login…';
+                            netStatus.textContent = 'Logging out…';
+                            netIcon.className     = 'fa-solid fa-clock';
+                            overlay.classList.remove('connected');
+                            overlay.classList.add('show');
+                            setProgress(100);
+                        }
+                        setTimeout(() => {
+                            window.location.replace('/?expired=1&reason=' + reason);
+                        }, 1800);
+                        return;
+                    }
+
+                    // Any 2xx/3xx means server is reachable
+                    onConnected();
+
+                } catch (err) {
+                    onDisconnected();
+                }
+            }
+
+            function onConnected() {
+                if (!isConnected) {
+                    // We just came back online
+                    isConnected = true;
+                    attempt = 0;
+                    updateOverlay('connected');
+
+                    // Show "connected" state briefly, then hide overlay
+                    setTimeout(() => {
+                        hideOverlay();
+                        if (hasDisconnected) {
+                            showRestoredBar();
+                        }
+                    }, 1200);
+                }
+                // Schedule next routine poll
+                schedulePoll();
+            }
+
+            function onDisconnected() {
+                attempt++;
+                hasDisconnected = true;
+
+                if (isConnected) {
+                    // First failure — show overlay immediately
+                    isConnected = false;
+                    showOverlay();
+                }
+
+                updateOverlay('connecting');
+
+                // Show "waiting N seconds" after a brief pause
+                const delay = retryDelay(attempt);
+                let elapsed = 0;
+                const tickMs = 400;
+                const ticker = setInterval(() => {
+                    elapsed += tickMs;
+                    const remaining = Math.max(0, Math.round((delay - elapsed) / 1000));
+                    netStatus.textContent = remaining > 0
+                        ? 'Retrying in ' + remaining + 's\u2026'
+                        : 'Contacting gateway\u2026';
+                    netAttempt.textContent = 'Attempt ' + attempt;
+                    setProgress(Math.min(20 + attempt * 10, 75));
+
+                    if (elapsed >= delay) {
+                        clearInterval(ticker);
+                    }
+                }, tickMs);
+
+                retryTimer = setTimeout(() => {
+                    clearInterval(ticker);
+                    updateOverlay('connecting');
+                    checkConnection();
+                }, delay);
+            }
+
+            function schedulePoll() {
+                clearTimeout(retryTimer);
+                clearTimeout(pollTimer);
+                pollTimer = setTimeout(checkConnection, POLL_INTERVAL_MS);
+            }
+
+            // ── browser online / offline events (instant response) ───
+            window.addEventListener('offline', () => {
+                clearTimeout(pollTimer);
+                clearTimeout(retryTimer);
+                if (isConnected) {
+                    isConnected = false;
+                    hasDisconnected = true;
+                    attempt = 0;
+                    showOverlay();
+                    updateOverlay('connecting');
+                    // Still try to reach server even if browser says offline
+                    // (useful for mDNS / local network where browser event is unreliable)
+                    retryTimer = setTimeout(checkConnection, BASE_RETRY_MS);
+                }
+            });
+
+            window.addEventListener('online', () => {
+                // Browser thinks we're back — probe immediately
+                clearTimeout(retryTimer);
+                clearTimeout(pollTimer);
+                netStatus.textContent = 'Network detected, checking gateway…';
+                attempt = Math.max(attempt - 1, 0);
+                retryTimer = setTimeout(checkConnection, 600);
+            });
+
+            // ── Start polling ────────────────────────────────────────
+            schedulePoll();
+
         })();
     </script>
 </body>

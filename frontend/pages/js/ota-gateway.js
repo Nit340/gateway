@@ -941,10 +941,9 @@ function initializeSafetyToggle() {
 
 // Show factory reset password dialog
 function showFactoryResetDialog() {
-    // Create modal overlay
     const modal = document.createElement('div');
     modal.id = 'factory-reset-modal';
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50';
     modal.innerHTML = `
         <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
             <div class="flex justify-between items-center mb-4">
@@ -956,188 +955,171 @@ function showFactoryResetDialog() {
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
-            <div class="mb-4">
-                <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                    <p class="text-sm text-red-700">
-                        <i class="fa-solid fa-circle-exclamation mr-1"></i>
-                        <strong>Warning:</strong> This will trigger a factory reset on the gateway device.
-                        All configuration and data may be wiped. This action cannot be undone.
-                    </p>
-                </div>
-                <label class="block text-sm font-medium text-slate-700 mb-2">
-                    Enter Admin Password
-                </label>
-                <input type="password" id="factory-reset-password" 
-                    class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    placeholder="Enter your admin password">
+
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+                <i class="fa-solid fa-circle-exclamation mr-1"></i>
+                <strong>You will be logged out</strong> after the reset command is sent.
+                Save any unsaved changes before proceeding.
             </div>
+
+            <label class="block text-sm font-medium text-slate-700 mb-2">
+                Enter Admin Password to confirm
+            </label>
+            <input type="password" id="factory-reset-password"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-5"
+                placeholder="Admin password">
+
             <div class="flex space-x-3">
-                <button id="confirm-factory-reset-btn" 
+                <button id="confirm-factory-reset-btn"
                     class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition-colors">
                     Confirm Factory Reset
                 </button>
-                <button id="cancel-factory-reset-btn" 
+                <button id="cancel-factory-reset-btn"
                     class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg transition-colors">
                     Cancel
                 </button>
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
-    // Focus the password input
+
     const passwordInput = document.getElementById('factory-reset-password');
-    if (passwordInput) {
-        setTimeout(() => passwordInput.focus(), 100);
-    }
-    
-    // Close modal function
+    setTimeout(() => { if (passwordInput) passwordInput.focus(); }, 100);
+
     const closeModal = () => {
-        if (modal && modal.parentNode) {
-            modal.parentNode.removeChild(modal);
-        }
+        if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
     };
-    
-    // Handle confirm button click
+
+    // ── Confirm handler ──────────────────────────────────────────────────────
     const confirmBtn = document.getElementById('confirm-factory-reset-btn');
     if (confirmBtn) {
         confirmBtn.addEventListener('click', async () => {
-            const password = passwordInput ? passwordInput.value : '';
-            
+            const password = passwordInput ? passwordInput.value.trim() : '';
+
             if (!password) {
-                showNotification('Please enter your admin password', 'warning');
+                // Shake the input instead of alert
+                if (passwordInput) {
+                    passwordInput.classList.add('border-red-500', 'ring-2', 'ring-red-300');
+                    setTimeout(() => passwordInput.classList.remove('border-red-500', 'ring-2', 'ring-red-300'), 1500);
+                    passwordInput.placeholder = 'Password is required';
+                }
                 return;
             }
-            
-            // Disable buttons during request
+
+            // Disable both buttons while the request is in-flight
             confirmBtn.disabled = true;
             confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
             const cancelBtn = document.getElementById('cancel-factory-reset-btn');
             if (cancelBtn) cancelBtn.disabled = true;
-            
+
             try {
-                // Send factory reset command to backend
                 const response = await fetch('/api/pipeline/factory-reset', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ password: password })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok && result.success) {
-                    // Success - show success message and close modal
+                    // ── Success path ─────────────────────────────────────────
                     closeModal();
-                    showNotification('Factory reset command sent successfully! The device will reset shortly.', 'success');
-                    addLogEntry('Factory reset command sent via pipeline');
-                    
-                    // Update UI to show factory reset is in progress
+
+                    // Show status only in the Live Update Monitor log — no pop-up alerts
+                    addLogEntry('Factory reset command sent (factory-reset=1)');
+                    addLogEntry('Logging out in 3 seconds...');
+
+                    // Update Live Update Monitor to reflect what is happening
                     const statusText = document.getElementById('status-text');
-                    if (statusText) statusText.textContent = 'Factory Reset in Progress...';
-                    
+                    if (statusText) statusText.textContent = 'Factory reset sent — logging out...';
+
                     const currentOperation = document.getElementById('current-operation');
-                    if (currentOperation) currentOperation.textContent = 'Factory Resetting';
-                    
+                    if (currentOperation) currentOperation.textContent = 'Factory Reset';
+
                     const updateBadge = document.getElementById('update-badge');
                     if (updateBadge) {
-                        updateBadge.classList.remove('hidden');
+                        updateBadge.classList.remove('hidden', 'bg-blue-500');
                         updateBadge.classList.add('bg-red-500');
                         updateBadge.textContent = 'Factory Reset';
                     }
-                    
-                    // Simulate reset countdown (take 1 minute to simulate DB restore)
-                    let countdown = 60;
-                    const countdownInterval = setInterval(() => {
-                        const statusTextEl = document.getElementById('status-text');
-                        if (statusTextEl) {
-                            statusTextEl.textContent = `Restoring DB Configuration: ${countdown}s remaining...`;
-                        }
-                        
-                        // Update progress bar
-                        const progressFill = document.getElementById('progress-fill');
-                        const statusPercent = document.getElementById('status-percent');
-                        if (progressFill && statusPercent) {
-                            const percent = Math.round(((60 - countdown) / 60) * 100);
-                            progressFill.style.width = `${percent}%`;
-                            progressFill.className = 'h-full bg-red-500 transition-all duration-1000';
-                            statusPercent.textContent = `${percent}%`;
-                            statusPercent.className = 'text-red-500 font-bold';
-                        }
-                        
-                        // Add occasional log entries
-                        if (countdown % 15 === 0 && countdown > 0) {
-                            addLogEntry(`Restoring tables... ${countdown}s left`);
-                        }
 
-                        countdown--;
-                        
-                        if (countdown < 0) {
-                            clearInterval(countdownInterval);
-                            // Simulate reboot after factory reset
-                            if (statusTextEl) statusTextEl.textContent = 'Database Restored. Rebooting...';
-                            simulateReboot('factory-reset');
-                        }
-                    }, 1000);
-                    
-                } else {
-                    // Error - show error message
-                    const errorMsg = result.error || 'Invalid password or command failed';
-                    showNotification(`Factory reset failed: ${errorMsg}`, 'error');
-                    addLogEntry(`Factory reset failed: ${errorMsg}`);
-                    
-                    // Re-enable buttons
-                    if (confirmBtn) {
-                        confirmBtn.disabled = false;
-                        confirmBtn.innerHTML = 'Confirm Factory Reset';
+                    const progressFill = document.getElementById('progress-fill');
+                    const statusPercent = document.getElementById('status-percent');
+                    if (progressFill) {
+                        progressFill.style.width = '100%';
+                        progressFill.className = 'h-full bg-red-500 transition-all duration-1000';
                     }
-                    if (cancelBtn) cancelBtn.disabled = false;
-                }
-                
-            } catch (error) {
-                console.error('Factory reset error:', error);
-                showNotification('Failed to send factory reset command. Check network connection.', 'error');
-                addLogEntry(`Factory reset error: ${error.message}`);
-                
-                // Re-enable buttons
-                if (confirmBtn) {
+                    if (statusPercent) {
+                        statusPercent.textContent = '100%';
+                        statusPercent.className = 'text-red-400 font-bold';
+                    }
+
+                    // Log out after a short delay so the user can see the monitor update
+                    setTimeout(async () => {
+                        addLogEntry('Session terminated — factory reset in progress on device.');
+                        try {
+                            await fetch('/api/auth/logout', { method: 'POST' });
+                        } catch (_) { /* ignore */ }
+                        // Redirect to login page
+                        window.location.href = 'http://' + window.location.hostname + ':5500/login.html';
+                    }, 3000);
+
+                } else {
+                    // ── Failure path ─────────────────────────────────────────
+                    const errorMsg = result.error || 'Invalid password or command failed';
+                    addLogEntry(`Factory reset failed: ${errorMsg}`);
+
+                    // Show error inline in the modal (no external alert)
+                    let errDiv = document.getElementById('factory-reset-error');
+                    if (!errDiv) {
+                        errDiv = document.createElement('p');
+                        errDiv.id = 'factory-reset-error';
+                        errDiv.className = 'text-sm text-red-600 mt-3 text-center';
+                        confirmBtn.parentElement.insertAdjacentElement('beforebegin', errDiv);
+                    }
+                    errDiv.textContent = errorMsg;
+
                     confirmBtn.disabled = false;
                     confirmBtn.innerHTML = 'Confirm Factory Reset';
+                    if (cancelBtn) cancelBtn.disabled = false;
+                    if (passwordInput) { passwordInput.value = ''; passwordInput.focus(); }
                 }
+
+            } catch (error) {
+                console.error('Factory reset error:', error);
+                addLogEntry(`Factory reset error: ${error.message}`);
+
+                let errDiv = document.getElementById('factory-reset-error');
+                if (!errDiv) {
+                    errDiv = document.createElement('p');
+                    errDiv.id = 'factory-reset-error';
+                    errDiv.className = 'text-sm text-red-600 mt-3 text-center';
+                    confirmBtn.parentElement.insertAdjacentElement('beforebegin', errDiv);
+                }
+                errDiv.textContent = 'Network error — check connection and try again.';
+
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = 'Confirm Factory Reset';
                 if (cancelBtn) cancelBtn.disabled = false;
             }
         });
     }
-    
-    // Handle cancel button click
+
+    // Cancel / close
     const cancelBtn = document.getElementById('cancel-factory-reset-btn');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', closeModal);
-    }
-    
-    // Handle close button click
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
     const closeBtn = document.getElementById('close-modal-btn');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeModal);
-    }
-    
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
-    });
-    
-    // Handle Enter key in password input
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
     if (passwordInput) {
         passwordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                const confirmBtn = document.getElementById('confirm-factory-reset-btn');
-                if (confirmBtn) {
-                    confirmBtn.click();
-                }
+                const btn = document.getElementById('confirm-factory-reset-btn');
+                if (btn) btn.click();
             }
         });
     }

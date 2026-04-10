@@ -166,29 +166,6 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
 
         <!-- Sessions tab -->
         <div id="pane-sessions" style="display:none;">
-          <!-- Session limit -->
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:12px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span class="mat" style="color:var(--accent);">devices</span>
-              <div style="font-size:13px;font-weight:600;color:var(--text);">Concurrent Session Limit</div>
-            </div>
-            <p style="font-size:11.5px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
-              How many browser windows / devices this user can be logged in at the same time.
-            </p>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <button onclick="changeLimit(-1)" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border2);color:var(--text2);background:var(--surface2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
-              <input type="number" id="maxSessionsInput" min="1" max="20" value="1" class="num-input" oninput="validateLimitInput()"/>
-              <button onclick="changeLimit(1)" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border2);color:var(--text2);background:var(--surface2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
-              <button onclick="saveSessionLimit()" id="saveLimitBtn" class="btn-sm btn-orange">Save</button>
-              <span id="limitSaved" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--green);">
-                <span class="mat" style="font-size:13px;">check_circle</span> Saved
-              </span>
-            </div>
-            <div style="margin-top:10px;">
-              <span id="limitBadge" style="font-size:10.5px;font-weight:600;padding:3px 10px;border-radius:6px;background:var(--accent-glow);color:var(--accent);border:1px solid rgba(249,115,22,0.2);"></span>
-            </div>
-          </div>
-
           <!-- Active sessions -->
           <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px;">
             <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
@@ -246,7 +223,7 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
       document.getElementById('tab-'+t).classList.toggle('active', t===tab);
       document.getElementById('pane-'+t).style.display = t===tab?'block':'none';
     });
-    if (tab === 'sessions' && selectedUserId) { loadUserSessions(); loadUserSessionLimit(selectedUserId); }
+    if (tab === 'sessions' && selectedUserId) { loadUserSessions(); }
   }
 
   async function loadUsers() {
@@ -304,7 +281,7 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
     } catch(e) {
       document.getElementById('pageToggles').innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-size:11px;">Error: '+e.message+'</div>';
     }
-    if (currentTab === 'sessions') { loadUserSessions(); loadUserSessionLimit(userId); }
+    if (currentTab === 'sessions') { loadUserSessions(); }
   }
 
   function renderPageToggles() {
@@ -371,62 +348,6 @@ header{height:52px;background:var(--surface);border-bottom:1px solid var(--borde
       }
     }
     toast(visible?'All pages allowed':'All pages blocked');
-  }
-
-  async function loadUserSessionLimit(userId) {
-    const match = allSessions.find(s => s.user_id === userId);
-    let maxS = match ? match.max_sessions : null;
-    if (maxS === null) {
-      try {
-        const d = await fetch('/api/admin/webui-sessions').then(r=>r.json());
-        allSessions = d.sessions || [];
-        const m2 = allSessions.find(s=>s.user_id===userId);
-        maxS = m2 ? m2.max_sessions : 1;
-      } catch(e) { maxS = 1; }
-    }
-    const inp = document.getElementById('maxSessionsInput');
-    if (inp) { inp.value = maxS; updateLimitBadge(maxS); }
-  }
-
-  function updateLimitBadge(n) {
-    const b = document.getElementById('limitBadge');
-    if (b) b.textContent = n == 1 ? 'Single session only' : 'Up to '+n+' concurrent sessions';
-  }
-
-  function changeLimit(delta) {
-    const inp = document.getElementById('maxSessionsInput');
-    let v = parseInt(inp.value)||1;
-    v = Math.max(1, Math.min(20, v+delta));
-    inp.value = v; updateLimitBadge(v);
-  }
-
-  function validateLimitInput() {
-    const inp = document.getElementById('maxSessionsInput');
-    let v = parseInt(inp.value)||1;
-    v = Math.max(1, Math.min(20, v));
-    inp.value = v; updateLimitBadge(v);
-  }
-
-  async function saveSessionLimit() {
-    if (!selectedUserId) return;
-    const maxS = parseInt(document.getElementById('maxSessionsInput').value)||1;
-    const btn = document.getElementById('saveLimitBtn');
-    btn.disabled = true; btn.textContent = 'Saving…';
-    try {
-      const d = await fetch('/api/admin/users/webui/'+selectedUserId+'/max-sessions', {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({max_sessions: maxS})
-      }).then(r=>r.json());
-      if (d.success) {
-        const lsEl = document.getElementById('limitSaved');
-        lsEl.style.display = 'inline-flex';
-        clearTimeout(lsEl._t);
-        lsEl._t = setTimeout(()=>{lsEl.style.display='none';}, 2200);
-        updateLimitBadge(maxS);
-        await loadSessions();
-      } else { toast('Save failed: '+(d.error||''), false); }
-    } catch(e) { toast('Network error: '+e.message, false); }
-    btn.disabled = false; btn.textContent = 'Save';
   }
 
   async function loadSessions() {

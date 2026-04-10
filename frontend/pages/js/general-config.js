@@ -717,7 +717,11 @@
     var ethIface = null;
 
     if (viewedMode === 'ethernet') {
-        ethIface = _selectedEth || 'eth0';
+        // If _selectedEth is null (auto-highlight chose eth1 but user never manually clicked),
+        // fall back to whichever port is actually live in the cache.
+        ethIface = _selectedEth
+            || (isUp((_cache.lan.eth1 || {}).state) && !isUp((_cache.lan.eth0 || {}).state)
+                ? 'eth1' : 'eth0');
         routeNum = (ethIface === 'eth1') ? 2 : 1;
     } else {
         routeNum = _ROUTE_MAP[viewedMode] !== undefined ? _ROUTE_MAP[viewedMode] : 4;

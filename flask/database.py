@@ -91,7 +91,25 @@ def get_db_connection():
             _global_connections.add(safe_conn)
     
     return _thread_local.connection
-
+def sync_device_slave_id_to_tags(device_id, new_slave_id):
+    """Update all tags for a device to use the device's slave_id"""
+    def _update():
+        with get_cursor() as cursor:
+            # Update all external datapoints for this device to use the device's slave_id
+            cursor.execute('''
+                UPDATE external_datapoints 
+                SET slave_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE device_id = ?
+            ''', (new_slave_id, device_id))
+            affected = cursor.rowcount
+            logger.info("[DB] Synced slave_id {} to {} tags for device {}".format(new_slave_id, affected, device_id))
+            return affected
+    
+    try:
+        return execute_with_retry(_update)
+    except Exception as e:
+        logger.error("[DB] Error syncing device slave_id to tags: {}".format(e))
+        return 0
 
 def ensure_connection_alive():
     """Check if the current thread's connection is alive, recreate if dead."""
@@ -214,8 +232,8 @@ def _insert_factory_data_on_new_db(conn):
     """If database is newly created and factory_default.db exists, 
     insert factory data into the new database.
     
-    This is called DURING database initialization, so we can populate
-    the brand new DB with factory configuration before it's used.
+    Called AFTER the initial schema + defaults have been committed, so we
+    start with a clean connection state (no open transaction).
     """
     try:
         factory_db_path = os.path.join(os.path.dirname(DB_FILE), 'factory_default.db')
@@ -231,32 +249,63 @@ def _insert_factory_data_on_new_db(conn):
         
         cursor = conn.cursor()
         
-        # Get all tables from the newly created main database
+        # Get all tables from the factory DB (source of truth for what to import)
+        cursor.execute(
+            "SELECT name FROM factory.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        factory_tables = [row[0] for row in cursor.fetchall()]
+
+        # Also get all tables from the newly created main database
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
-        tables = [row[0] for row in cursor.fetchall()]
-        
+        main_tables = set(row[0] for row in cursor.fetchall())
+
+        # Always ensure general_configuration is included if present in factory DB
+        tables_to_import = factory_tables
+        if 'general_configuration' not in [t for t in factory_tables]:
+            logger.warning("[DB] 'general_configuration' not found in factory_default.db - will use schema defaults")
+
         # Temporarily disable foreign key constraints during import
         conn.execute('PRAGMA foreign_keys = OFF')
-        
-        # For each table, try to copy data from factory DB
+
+        # Open a single explicit transaction for the entire import
+        conn.execute('BEGIN')
+
+        # For each table in factory DB, copy data into the main database
         successful_imports = 0
-        for table in tables:
+        for table in tables_to_import:
             try:
-                # Check if table exists in factory DB
-                cursor.execute(
-                    "SELECT name FROM factory.sqlite_master WHERE type='table' AND name = ?",
-                    (table,)
-                )
-                if cursor.fetchone() is None:
-                    logger.debug("[DB] Table '{}' not in factory DB, skipping".format(table))
+                # Skip if table doesn't exist in the main (new) DB schema
+                if table not in main_tables:
+                    logger.debug("[DB] Table '{}' exists in factory DB but not in main schema, skipping".format(table))
                     continue
-                
-                # Clear any default data and insert factory data
+
+                # Get columns present in the factory DB table
+                cursor.execute('PRAGMA factory.table_info({})'.format(table))
+                factory_cols = {r[1] for r in cursor.fetchall()}
+
+                # Get columns present in the main DB table
+                cursor.execute('PRAGMA main.table_info({})'.format(table))
+                main_cols = {r[1] for r in cursor.fetchall()}
+
+                # Only copy columns that exist in BOTH schemas.
+                # This handles the case where the factory DB was created from an older
+                # schema (missing newer columns like eth_selected, auto_connect, etc.).
+                # Missing columns will simply use their DEFAULT values from the main schema.
+                shared_cols = [c for c in main_cols if c in factory_cols]
+                if not shared_cols:
+                    logger.warning("[DB] Table '{}' has no common columns, skipping".format(table))
+                    continue
+
+                cols_sql = ', '.join(shared_cols)
+
+                # Clear any default data and insert factory data using only shared columns
                 conn.execute('DELETE FROM main.{}'.format(table))
-                conn.execute('INSERT INTO main.{0} SELECT * FROM factory.{0}'.format(table))
-                logger.debug("[DB] Imported {} from factory DB".format(table))
+                conn.execute(
+                    'INSERT INTO main.{0} ({1}) SELECT {1} FROM factory.{0}'.format(table, cols_sql)
+                )
+                logger.debug("[DB] Imported {} from factory DB ({} columns)".format(table, len(shared_cols)))
                 successful_imports += 1
             except Exception as table_err:
                 logger.warning("[DB] Could not import table '{}': {}".format(table, table_err))
@@ -269,11 +318,18 @@ def _insert_factory_data_on_new_db(conn):
         
     except Exception as e:
         logger.warning("[DB] Error importing factory data: {}".format(e))
-        # This is not fatal - the database is still usable with defaults
+        # Roll back any partial changes so the DB stays in a usable state
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         try:
             conn.execute('DETACH DATABASE factory')
+        except Exception:
+            pass
+        try:
             conn.execute('PRAGMA foreign_keys = ON')
-        except:
+        except Exception:
             pass
 
 
@@ -292,8 +348,14 @@ def init_database():
     
     create_tables(cursor)
     insert_default_data(cursor)
-    
-    # If database is newly created, insert factory data if available
+
+    # Commit schema + default data BEFORE factory import.
+    # This closes the implicit transaction so _insert_factory_data_on_new_db
+    # can open its own clean transaction with ATTACH DATABASE.
+    conn.commit()
+
+    # If database is newly created AND factory_default.db exists,
+    # overwrite the just-committed default data with factory data.
     if is_new_db:
         _insert_factory_data_on_new_db(conn)
     
@@ -542,16 +604,18 @@ def create_tables(cursor):
     # -----------------------------------------------------------------------
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS webui_users (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            username   TEXT    NOT NULL UNIQUE,
-            password   TEXT    NOT NULL,
-            display_name TEXT  DEFAULT '',
-            role       TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
-            enabled    BOOLEAN DEFAULT 1,
-            max_sessions INTEGER DEFAULT 2,
-            last_login TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            username                 TEXT    NOT NULL UNIQUE,
+            password                 TEXT    NOT NULL,
+            display_name             TEXT    DEFAULT '',
+            role                     TEXT    NOT NULL DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+            enabled                  BOOLEAN DEFAULT 1,
+            max_sessions             INTEGER DEFAULT 2,
+            session_timeout_minutes  INTEGER DEFAULT 0,
+            session_debounce_seconds INTEGER DEFAULT 0,
+            last_login               TIMESTAMP,
+            created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
@@ -602,6 +666,23 @@ def create_tables(cursor):
     # -----------------------------------------------------------------------
     # Metadata table (Gateway-specific tags)
     # -----------------------------------------------------------------------
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_global_settings (
+            id                      INTEGER PRIMARY KEY DEFAULT 1 CHECK(id = 1),
+            idle_timeout_minutes    INTEGER NOT NULL DEFAULT 0,
+            updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Migration: add max_session_hours to existing databases
+    cursor.execute("PRAGMA table_info(session_global_settings)")
+    if 'max_session_hours' not in {r[1] for r in cursor.fetchall()}:
+        cursor.execute('ALTER TABLE session_global_settings ADD COLUMN max_session_hours INTEGER NOT NULL DEFAULT 0')
+    # Seed a single row if not present
+    cursor.execute('''
+        INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_hours)
+        VALUES (1, 0, 0)
+    ''')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS metadata (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -852,6 +933,34 @@ def _migrate_existing_db(cursor):
     # Add last_route_select to general_configuration (persists manual route selection)
     if 'last_route_select' not in gc_cols:
         cursor.execute("ALTER TABLE general_configuration ADD COLUMN last_route_select INTEGER DEFAULT 0")
+
+    # Migration: create session_global_settings if it doesn't exist yet
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_global_settings (
+            id                      INTEGER PRIMARY KEY DEFAULT 1 CHECK(id = 1),
+            idle_timeout_minutes    INTEGER NOT NULL DEFAULT 0,
+            updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Migration: add max_session_hours to existing databases (must run before INSERT)
+    cursor.execute("PRAGMA table_info(session_global_settings)")
+    if 'max_session_hours' not in {r[1] for r in cursor.fetchall()}:
+        cursor.execute('ALTER TABLE session_global_settings ADD COLUMN max_session_hours INTEGER NOT NULL DEFAULT 0')
+    cursor.execute('INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_hours) VALUES (1, 0, 0)')
+
+    # Migration: add session_timeout_minutes and session_debounce_seconds to webui_users
+    cursor.execute("PRAGMA table_info(webui_users)")
+    webui_cols = {r[1] for r in cursor.fetchall()}
+    for _col, _defn in [
+        ('session_timeout_minutes',  'INTEGER DEFAULT 0'),
+        ('session_debounce_seconds', 'INTEGER DEFAULT 0'),
+    ]:
+        if _col not in webui_cols:
+            try:
+                cursor.execute('ALTER TABLE webui_users ADD COLUMN {} {}'.format(_col, _defn))
+                logger.info('[DB] Migration: added {} to webui_users'.format(_col))
+            except Exception as _e:
+                logger.warning('[DB] Could not add {}: {}'.format(_col, _e))
 
     # Migration for modal table: remove modal_time column
     cursor.execute("PRAGMA table_info(modal)")
@@ -1490,6 +1599,44 @@ def delete_admin_user(user_id):
         return False
 
 
+def get_session_global_settings():
+    """Return the single global session settings row."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT idle_timeout_minutes, max_session_hours FROM session_global_settings WHERE id=1')
+        row = cursor.fetchone()
+        conn.close()
+        return {
+            'idle_timeout_minutes': row[0] if row else 0,
+            'max_session_hours':    row[1] if row else 0,
+        }
+    except Exception:
+        return {'idle_timeout_minutes': 0, 'max_session_hours': 0}
+
+
+def set_session_global_settings(idle_timeout_minutes, max_session_hours=0):
+    """Update the global session settings. 0 = disabled for both."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        idle = max(0, int(idle_timeout_minutes))
+        maxh = max(0, int(max_session_hours))
+        cursor.execute(
+            'INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_hours) VALUES (1, ?, ?)',
+            (idle, maxh)
+        )
+        cursor.execute(
+            'UPDATE session_global_settings SET idle_timeout_minutes=?, max_session_hours=?, updated_at=CURRENT_TIMESTAMP WHERE id=1',
+            (idle, maxh)
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
 def get_webui_user_max_sessions(user_id):
     """Return the max_sessions limit for a webui user."""
     def _query():
@@ -1522,10 +1669,15 @@ def get_all_webui_users():
     """Get all webui users."""
     def _query():
         with get_cursor() as cursor:
-            cursor.execute('SELECT id, username, display_name, role, enabled, last_login, created_at FROM webui_users ORDER BY username')
+            cursor.execute('''SELECT id, username, display_name, role, enabled, last_login, created_at,
+                                     COALESCE(max_sessions, 2) as max_sessions,
+                                     COALESCE(session_timeout_minutes, 0) as session_timeout_minutes,
+                                     COALESCE(session_debounce_seconds, 0) as session_debounce_seconds
+                              FROM webui_users ORDER BY username''')
             rows = cursor.fetchall()
             return [{'id': r[0], 'username': r[1], 'display_name': r[2], 'role': r[3], 'enabled': r[4],
-                    'last_login': r[5], 'created_at': r[6]} for r in rows]
+                    'last_login': r[5], 'created_at': r[6], 'max_sessions': r[7],
+                    'session_timeout_minutes': r[8], 'session_debounce_seconds': r[9]} for r in rows]
     
     try:
         return execute_with_retry(_query)
@@ -1534,12 +1686,18 @@ def get_all_webui_users():
         return []
 
 
-def create_webui_user(username, password, display_name='', role='user'):
+def create_webui_user(username, password, display_name='', role='user',
+                       max_sessions=2, session_timeout_minutes=0, session_debounce_seconds=0):
     """Create a new webui user."""
     def _insert():
         with get_cursor() as cursor:
-            cursor.execute('INSERT INTO webui_users (username, password, display_name, role) VALUES (?, ?, ?, ?)',
-                          (username, _hash_password(password), display_name, role))
+            cursor.execute(
+                '''INSERT INTO webui_users
+                   (username, password, display_name, role, max_sessions,
+                    session_timeout_minutes, session_debounce_seconds)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (username, _hash_password(password), display_name, role,
+                 int(max_sessions), int(session_timeout_minutes), int(session_debounce_seconds)))
             return cursor.lastrowid
     
     try:
@@ -1559,6 +1717,9 @@ def update_webui_user(user_id, data):
             if 'display_name' in data: sets.append('display_name=?'); values.append(data['display_name'])
             if 'role' in data: sets.append('role=?'); values.append(data['role'])
             if 'enabled' in data: sets.append('enabled=?'); values.append(1 if data['enabled'] else 0)
+            if 'max_sessions' in data: sets.append('max_sessions=?'); values.append(int(data['max_sessions']))
+            if 'session_timeout_minutes' in data: sets.append('session_timeout_minutes=?'); values.append(int(data['session_timeout_minutes']))
+            if 'session_debounce_seconds' in data: sets.append('session_debounce_seconds=?'); values.append(int(data['session_debounce_seconds']))
             if sets:
                 values.append(user_id)
                 cursor.execute('UPDATE webui_users SET {}, updated_at=CURRENT_TIMESTAMP WHERE id=?'.format(', '.join(sets)), values)

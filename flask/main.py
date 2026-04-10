@@ -60,6 +60,7 @@ from database import (
     get_all_pipeline_send_logs, get_enabled_pipeline_targets,
     get_all_pages, get_user_page_restrictions, set_user_page_restriction, get_pages_for_user,
     get_webui_user_max_sessions, set_webui_user_max_sessions,
+    get_session_global_settings, set_session_global_settings,
 )
 from general import register_general_config_routes
 from device_management import (
@@ -183,6 +184,10 @@ async def admin_users_page(request):
 async def admin_access_control_page(request):
     _require_admin(request)
     return _html('access-control.html')
+
+async def admin_factory_viewer_page(request):
+    _require_admin(request)
+    return _html('factory.html')
 
 async def api_webui_pages_get(request):
     """GET /api/admin/webui-pages?user_id=N -- get all pages + restriction status for a user"""
@@ -392,7 +397,13 @@ async def api_webui_users_post(request):
         role = body.get('role', 'user')
         if role not in ('admin', 'user'):
             return web.json_response({'success': False, 'error': "role must be 'admin' or 'user'"}, status=400)
-        uid = create_webui_user(body['username'], body['password'], body.get('display_name', ''), role)
+        uid = create_webui_user(
+            body['username'], body['password'],
+            body.get('display_name', ''), role,
+            max_sessions=int(body.get('max_sessions', 2)),
+            session_timeout_minutes=int(body.get('session_timeout_minutes', 0)),
+            session_debounce_seconds=int(body.get('session_debounce_seconds', 0)),
+        )
         if uid:
             return web.json_response({'success': True, 'id': uid})
         return web.json_response({'success': False, 'error': 'Could not create user (duplicate?)'}, status=400)
@@ -426,50 +437,81 @@ async def webui_login_api(request):
     if not user:
         return web.json_response({'success': False, 'error': 'Invalid username or password.'}, status=401)
 
-    # Enforce per-user session limit stored in database
     import datetime as _dt
     import time
-    max_sessions = get_webui_user_max_sessions(user['id'])
-    active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
-    if len(active_tokens) >= max_sessions:
-        # Instead of rejecting, we kick out the user's oldest session. This perfectly handles scenarios
-        # where the user's device changes IP (Wi-Fi to LTE) and initiates a new connection with the
-        # same credentials without explicitly logging out.
-        oldest_token = None
-        oldest_time = None
-        for t in active_tokens:
-            login_time = WEBUI_SESSIONS[t].get('logged_in_at', '')
-            if not oldest_time or login_time < oldest_time:
-                oldest_token = t
-                oldest_time = login_time
-        
-        if oldest_token:
-            WEBUI_SESSIONS.pop(oldest_token, None)
-            try:
-                WEBUI_USER_TOKENS[user['username']].remove(oldest_token)
-            except ValueError:
-                pass
 
-    # Enforce global session limit (max 2 sessions total across all users)
-    if len(WEBUI_SESSIONS) >= 2:
-        return web.json_response({'success': False, 'error': 'Global session limit reached (max 2). Please wait for another user to log out.'}, status=403)
+    # Read per-user session settings + global idle timeout
+    try:
+        from database import get_db_connection as _gdc
+        _conn = _gdc()
+        _cur  = _conn.cursor()
+        _cur.execute(
+            'SELECT COALESCE(max_sessions,2), COALESCE(session_debounce_seconds,0) FROM webui_users WHERE id=?',
+            (user['id'],)
+        )
+        _row = _cur.fetchone()
+        max_sessions             = int(_row[0]) if _row else 2
+        session_debounce_seconds = int(_row[1]) if _row else 0
+        _conn.close()
+    except Exception:
+        max_sessions             = get_webui_user_max_sessions(user['id'])
+        session_debounce_seconds = 0
+    # Global idle timeout (single source of truth for all users)
+    try:
+        session_timeout_minutes = get_session_global_settings().get('idle_timeout_minutes', 0)
+    except Exception:
+        session_timeout_minutes = 0
+
+    # Debounce: only applies when the user is already AT their session limit.
+    # If they still have room for another session, debounce should not block them.
+    # This prevents the 2nd login being rejected when max_sessions=2 and 1 session exists.
+    if session_debounce_seconds > 0:
+        active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
+        if len(active_tokens) >= max_sessions:
+            for t in active_tokens:
+                sess = WEBUI_SESSIONS[t]
+                last_ping = sess.get('last_ping', 0) if isinstance(sess, dict) else 0
+                if (time.time() - last_ping) < session_debounce_seconds:
+                    return web.json_response({
+                        'success': False,
+                        'error': 'Please wait {}s before logging in again.'.format(session_debounce_seconds)
+                    }, status=429)
+
+    # Enforce per-user session limit: reject if already at max.
+    # Both sessions coexist - the oldest login is editor, newer ones are viewers.
+    # Editor/viewer role is resolved by api_editor_lock using logged_in_at order.
+    # Global session limit removed - each user is governed only by their own max_sessions.
+    # Ghost-token cleanup: remove any tokens in WEBUI_USER_TOKENS that are no longer
+    # in WEBUI_SESSIONS (can happen after timeout eviction) before counting slots.
+    all_tracked = WEBUI_USER_TOKENS.get(user['username'], [])
+    active_tokens = [t for t in all_tracked if t in WEBUI_SESSIONS]
+    if len(active_tokens) != len(all_tracked):
+        WEBUI_USER_TOKENS[user['username']] = active_tokens  # prune ghosts
+    if len(active_tokens) >= max_sessions:
+        return web.json_response({
+            'success': False,
+            'error': 'Session limit reached (max {} for this user). Please log out from another device first.'.format(max_sessions)
+        }, status=403)
 
     token = binascii.hexlify(os.urandom(32)).decode()
-    WEBUI_SESSIONS[token] = {'username': user['username'], 'logged_in_at': _dt.datetime.now(_dt.timezone.utc).isoformat(), 'token': token, 'last_ping': time.time()}
+    now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    WEBUI_SESSIONS[token] = {
+        'username':                user['username'],
+        'logged_in_at':            now_iso,
+        'token':                   token,
+        'last_ping':               time.time(),
+        'session_timeout_minutes': session_timeout_minutes,
+    }
     if user['username'] not in WEBUI_USER_TOKENS:
         WEBUI_USER_TOKENS[user['username']] = []
     WEBUI_USER_TOKENS[user['username']].append(token)
 
+    # cookie max_age: honour session_timeout if set, else default 24 h
+    cookie_max_age = session_timeout_minutes * 60 if session_timeout_minutes > 0 else 86400
+
     resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name'], 'role': user['role']})
-    # samesite='Lax'  – cookie is sent on same-origin requests and top-level
-    #                    navigations regardless of which network interface is used.
-    # max_age=86400   – survives browser restart / tab close for 24 h so a
-    #                    network switch doesn't require a new login.
-    # No 'secure' flag – allows plain HTTP on the local LAN (mDNS / raw IP).
-    resp.set_cookie('gw_webui_session', token, httponly=False, path='/', max_age=86400)
-    resp.set_cookie('gw_user', user['username'], httponly=False, path='/', max_age=86400)
-    # aiohttp on Python 3.5 does not support the samesite kwarg in set_cookie(),
-    # so we append SameSite=Lax directly to the Set-Cookie headers instead.
+    resp.set_cookie('gw_webui_session', token, httponly=False, path='/', max_age=cookie_max_age)
+    resp.set_cookie('gw_user', user['username'], httponly=False, path='/', max_age=cookie_max_age)
     try:
         raw_cookies = resp.headers.getall('Set-Cookie', [])
         if raw_cookies:
@@ -477,7 +519,7 @@ async def webui_login_api(request):
             for cookie in raw_cookies:
                 resp.headers.add('Set-Cookie', cookie + '; SameSite=Lax')
     except Exception:
-        pass  # SameSite not critical; cookies still set correctly without it
+        pass
     return resp
 
 async def webui_logout_api(request):
@@ -501,18 +543,68 @@ async def webui_logout_api(request):
 
 async def webui_session_status(request):
     """GET /api/auth/status -- returns 200 if session valid, 401 if not.
-    Also returns hidden_pages list so layout.html can restrict the sidebar per user."""
+    Also returns hidden_pages list so layout.html can restrict the sidebar per user.
+    Enforces session_timeout_minutes: expires sessions that have lived past their limit."""
     import time
     token = request.cookies.get('gw_webui_session')
     if not token or token not in WEBUI_SESSIONS:
         return web.json_response({'authenticated': False}, status=401)
     _sess = WEBUI_SESSIONS[token]
     if isinstance(_sess, dict):
-        _sess['last_ping'] = time.time()
+        # Server-side timeout enforcement - measured from last activity (last_ping),
+        # NOT from logged_in_at. This means an active user is never kicked out;
+        # only truly idle sessions (no API calls, no WebSocket) expire.
+        # Always read from global settings (single source of truth).
+        try:
+            timeout_mins = get_session_global_settings().get('idle_timeout_minutes', 0)
+        except Exception:
+            timeout_mins = _sess.get('session_timeout_minutes', 0)
+        # ── Helper: expire a session and clean up token maps ──────────
+        def _expire_session(tok, sess_data, reason):
+            WEBUI_SESSIONS.pop(tok, None)
+            uname = sess_data.get('username', '')
+            if uname and uname in WEBUI_USER_TOKENS:
+                try: WEBUI_USER_TOKENS[uname].remove(tok)
+                except ValueError: pass
+                if not WEBUI_USER_TOKENS[uname]:
+                    del WEBUI_USER_TOKENS[uname]
+            logger.info("[SESSION EXPIRED] user={} reason={}".format(uname, reason))
+            return web.json_response({'authenticated': False, 'reason': reason}, status=401)
+
+        # ── 1. Idle timeout (no activity for N minutes) ───────────────
+        if timeout_mins and timeout_mins > 0:
+            last_ping = _sess.get('last_ping', 0)
+            idle_secs = time.time() - last_ping if last_ping else 0
+            idle_mins = idle_secs / 60
+            if idle_mins >= timeout_mins:
+                return _expire_session(token, _sess, 'idle_timeout')
+
+        # ── 2. Absolute session max-age (even active users get logged out) ─
+        # Read from global settings key 'max_session_hours'; 0 = disabled.
+        try:
+            max_session_hours = get_session_global_settings().get('max_session_hours', 0)
+        except Exception:
+            max_session_hours = 0
+        if max_session_hours and max_session_hours > 0:
+            import datetime as _dt
+            logged_in_at_str = _sess.get('logged_in_at', '')
+            if logged_in_at_str:
+                try:
+                    login_time = _dt.datetime.fromisoformat(logged_in_at_str)
+                    age_secs = (
+                        _dt.datetime.now(_dt.timezone.utc) - login_time
+                    ).total_seconds()
+                    if age_secs >= max_session_hours * 3600:
+                        return _expire_session(token, _sess, 'session_expired')
+                except Exception:
+                    pass
+        # Do NOT update last_ping here - /api/auth/status is a passive poll
+        # (called every 4s by layout.html). Updating it here would prevent
+        # idle timeout from ever firing. Only real user actions count as activity.
         username = _sess['username']
     else:
         username = _sess
-        WEBUI_SESSIONS[token] = {'username': username, 'last_ping': time.time()}
+        WEBUI_SESSIONS[token] = {'username': username, 'last_ping': 0}
     # Look up user_id to fetch per-user page restrictions
     try:
         from database import get_db_connection as _gdc
@@ -573,6 +665,57 @@ async def webui_session_role(request):
         user_role = 'user'
 
     return web.json_response({'authenticated': True, 'username': username, 'role': role, 'user_role': user_role})
+
+
+async def api_editor_lock(request):
+    """GET /api/auth/editor-lock
+    Returns:
+      - editor_username : username of the current editor (oldest session)
+      - my_username     : username of the calling session
+      - is_editor       : True if the caller is the editor
+      - viewer_position : 0-based queue position for viewers (0 = next in line)
+      - viewer_count    : total number of viewers waiting
+    Viewers poll this every 3 s to know when the editor logs out so they can
+    show the handover modal and reload as the new editor.
+    """
+    token = request.cookies.get('gw_webui_session')
+    if not token or token not in WEBUI_SESSIONS:
+        return web.json_response({'authenticated': False}, status=401)
+
+    info = WEBUI_SESSIONS[token]
+    my_username = info['username'] if isinstance(info, dict) else info
+
+    all_active = []
+    for t, s in WEBUI_SESSIONS.items():
+        ts = s.get('logged_in_at', '9999-12-31') if isinstance(s, dict) else '9999-12-31'
+        all_active.append((t, ts))
+    all_active.sort(key=lambda x: x[1])
+
+    if not all_active:
+        return web.json_response({'authenticated': True, 'is_editor': True, 'editor_username': my_username,
+                                   'my_username': my_username, 'viewer_position': 0, 'viewer_count': 0})
+
+    editor_token = all_active[0][0]
+    editor_info  = WEBUI_SESSIONS.get(editor_token, {})
+    editor_username = editor_info.get('username', '') if isinstance(editor_info, dict) else editor_info
+
+    is_editor = (editor_token == token)
+
+    viewer_tokens = [t for t, _ in all_active[1:]]
+    viewer_count  = len(viewer_tokens)
+    try:
+        viewer_position = viewer_tokens.index(token)
+    except ValueError:
+        viewer_position = 0
+
+    return web.json_response({
+        'authenticated': True,
+        'is_editor': is_editor,
+        'editor_username': editor_username,
+        'my_username': my_username,
+        'viewer_position': viewer_position,
+        'viewer_count': viewer_count,
+    })
 
 
 async def api_modals_get(request):
@@ -1161,7 +1304,11 @@ def create_app():
             # only /api/auth/status calls updated last_ping, meaning any page
             # that made API calls but not the status endpoint could still time
             # out in the watchdog while the user was actively working.
-            if request.path.startswith('/api/'):
+            # Update last_ping for real user API activity.
+            # Exclude passive polling endpoints - these run every few seconds
+            # automatically and would prevent idle timeout from ever firing.
+            _PASSIVE_PATHS = ('/api/auth/status', '/api/auth/editor-lock', '/api/auth/session-role')
+            if request.path.startswith('/api/') and request.path not in _PASSIVE_PATHS:
                 try:
                     _tok = request.cookies.get('gw_webui_session')
                     if _tok and _tok in WEBUI_SESSIONS:
@@ -1199,6 +1346,7 @@ def create_app():
     app.router.add_get('/admin/database', admin_database_page)
     app.router.add_get('/admin/users', admin_users_page)
     app.router.add_get('/admin/access-control', admin_access_control_page)
+    app.router.add_get('/admin/factory', admin_factory_viewer_page)
     app.router.add_get('/api/admin/webui-pages', api_webui_pages_get)
     app.router.add_put('/api/admin/webui-pages', api_webui_page_restriction_put)
 
@@ -1299,10 +1447,11 @@ def create_app():
     app.router.add_post('/api/auth/logout', webui_logout_api)
     app.router.add_get('/api/auth/status', webui_session_status)
     app.router.add_get('/api/auth/session-role', webui_session_role)
+    app.router.add_get('/api/auth/editor-lock', api_editor_lock)
     
     # Patch register_auth_routes: temporarily wrap add_route/add_get/add_post
     # so duplicate registrations from auth.py are silently skipped
-    _owned = {'/api/auth/login', '/api/auth/logout', '/api/auth/status', '/api/auth/session-role'}
+    _owned = {'/api/auth/login', '/api/auth/logout', '/api/auth/status', '/api/auth/session-role', '/api/auth/editor-lock'}
     _orig_add_route = app.router.add_route
     _orig_add_get   = app.router.add_get
     _orig_add_post  = app.router.add_post
@@ -1355,6 +1504,27 @@ def create_app():
     app.router.add_get('/api/devices/{device_id}/datapoints', get_device_datapoints)
 
     register_pipeline_routes(app)
+
+    # Global session settings endpoints
+    async def api_session_global_get(request):
+        """GET /api/admin/session-global -- get global idle timeout and max session hours"""
+        _require_admin(request)
+        return web.json_response(get_session_global_settings())
+
+    async def api_session_global_put(request):
+        """PUT /api/admin/session-global -- update global idle timeout and max session hours"""
+        _require_admin(request)
+        try:
+            body = await request.json()
+            idle = max(0, int(body.get('idle_timeout_minutes', 0)))
+            maxh = max(0, int(body.get('max_session_hours', 0)))
+            ok = set_session_global_settings(idle, maxh)
+            return web.json_response({'success': ok, 'idle_timeout_minutes': idle, 'max_session_hours': maxh})
+        except Exception as e:
+            return web.json_response({'success': False, 'error': str(e)}, status=500)
+
+    app.router.add_get('/api/admin/session-global', api_session_global_get)
+    app.router.add_put('/api/admin/session-global', api_session_global_put)
 
     # Core Config JSON Upload endpoints
     app.router.add_post('/api/pipeline/core-config/upload', api_core_config_upload)
