@@ -673,13 +673,15 @@ def create_tables(cursor):
             updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # Migration: add max_session_hours to existing databases
+    # Migration: add max_session_minutes (in minutes)
     cursor.execute("PRAGMA table_info(session_global_settings)")
-    if 'max_session_hours' not in {r[1] for r in cursor.fetchall()}:
+    _sg_cols = {r[1] for r in cursor.fetchall()}
+    if 'max_session_hours' not in _sg_cols:
         cursor.execute('ALTER TABLE session_global_settings ADD COLUMN max_session_hours INTEGER NOT NULL DEFAULT 0')
-    # Seed a single row if not present
+    if 'max_session_minutes' not in _sg_cols:
+        cursor.execute('ALTER TABLE session_global_settings ADD COLUMN max_session_minutes INTEGER NOT NULL DEFAULT 0')
     cursor.execute('''
-        INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_hours)
+        INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_minutes)
         VALUES (1, 0, 0)
     ''')
 
@@ -942,11 +944,14 @@ def _migrate_existing_db(cursor):
             updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # Migration: add max_session_hours to existing databases (must run before INSERT)
+    # Migration: add max_session_minutes (in minutes)
     cursor.execute("PRAGMA table_info(session_global_settings)")
-    if 'max_session_hours' not in {r[1] for r in cursor.fetchall()}:
+    _sg_cols2 = {r[1] for r in cursor.fetchall()}
+    if 'max_session_hours' not in _sg_cols2:
         cursor.execute('ALTER TABLE session_global_settings ADD COLUMN max_session_hours INTEGER NOT NULL DEFAULT 0')
-    cursor.execute('INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_hours) VALUES (1, 0, 0)')
+    if 'max_session_minutes' not in _sg_cols2:
+        cursor.execute('ALTER TABLE session_global_settings ADD COLUMN max_session_minutes INTEGER NOT NULL DEFAULT 0')
+    cursor.execute('INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_minutes) VALUES (1, 0, 0)')
 
     # Migration: add session_timeout_minutes and session_debounce_seconds to webui_users
     cursor.execute("PRAGMA table_info(webui_users)")
@@ -1604,31 +1609,31 @@ def get_session_global_settings():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT idle_timeout_minutes, max_session_hours FROM session_global_settings WHERE id=1')
+        cursor.execute('SELECT idle_timeout_minutes, max_session_minutes FROM session_global_settings WHERE id=1')
         row = cursor.fetchone()
         conn.close()
         return {
             'idle_timeout_minutes': row[0] if row else 0,
-            'max_session_hours':    row[1] if row else 0,
+            'max_session_minutes':  row[1] if row else 0,
         }
     except Exception:
-        return {'idle_timeout_minutes': 0, 'max_session_hours': 0}
+        return {'idle_timeout_minutes': 0, 'max_session_minutes': 0}
 
 
-def set_session_global_settings(idle_timeout_minutes, max_session_hours=0):
-    """Update the global session settings. 0 = disabled for both."""
+def set_session_global_settings(idle_timeout_minutes, max_session_minutes=0):
+    """Update global session settings. Both values in MINUTES. 0 = disabled."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         idle = max(0, int(idle_timeout_minutes))
-        maxh = max(0, int(max_session_hours))
+        maxm = max(0, int(max_session_minutes))
         cursor.execute(
-            'INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_hours) VALUES (1, ?, ?)',
-            (idle, maxh)
+            'INSERT OR IGNORE INTO session_global_settings (id, idle_timeout_minutes, max_session_minutes) VALUES (1, ?, ?)',
+            (idle, maxm)
         )
         cursor.execute(
-            'UPDATE session_global_settings SET idle_timeout_minutes=?, max_session_hours=?, updated_at=CURRENT_TIMESTAMP WHERE id=1',
-            (idle, maxh)
+            'UPDATE session_global_settings SET idle_timeout_minutes=?, max_session_minutes=?, updated_at=CURRENT_TIMESTAMP WHERE id=1',
+            (idle, maxm)
         )
         conn.commit()
         conn.close()

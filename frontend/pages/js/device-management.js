@@ -1195,6 +1195,13 @@
                         return;
                     }
                 }
+                // Check for duplicate name on add
+                const nameTaken = devices.some(d => d.name.trim().toLowerCase() === deviceName.toLowerCase());
+                if (nameTaken) {
+                    showNotification('A device named "' + deviceName + '" already exists. Please use a unique name.', 'error');
+                    isSaving = false;
+                    return;
+                }
             }
 
             let requestData = {
@@ -1506,6 +1513,14 @@
             const deviceName = document.getElementById('editDeviceNameInput')?.value.trim();
             if (!deviceName) { showNotification('Please enter a device name', 'error'); isSaving = false; return; }
             if (!selectedDeviceId) { showNotification('No device selected for edit', 'error'); isSaving = false; return; }
+
+            // Check for duplicate name on edit (exclude self)
+            const nameTaken = devices.some(d => d.id !== selectedDeviceId && d.name.trim().toLowerCase() === deviceName.toLowerCase());
+            if (nameTaken) {
+                showNotification('A device named "' + deviceName + '" already exists. Please use a unique name.', 'error');
+                isSaving = false;
+                return;
+            }
 
             const cfg = {};
             const g = id => document.getElementById(id);
