@@ -440,7 +440,7 @@ async def webui_login_api(request):
     import datetime as _dt
     import time
 
-    # Read per-user session settings
+    # Read per-user session settings + global idle timeout
     try:
         from database import get_db_connection as _gdc
         _conn = _gdc()
@@ -456,17 +456,15 @@ async def webui_login_api(request):
     except Exception:
         max_sessions             = get_webui_user_max_sessions(user['id'])
         session_debounce_seconds = 0
-    
-    # Global settings
+    # Global idle timeout (single source of truth for all users)
     try:
-        _gs = get_session_global_settings()
-        session_timeout_minutes = _gs.get('idle_timeout_minutes', 0)
-        max_session_minutes     = _gs.get('max_session_minutes', 0)
+        session_timeout_minutes = get_session_global_settings().get('idle_timeout_minutes', 0)
     except Exception:
         session_timeout_minutes = 0
-        max_session_minutes     = 0
 
-    # Debounce check
+    # Debounce: only applies when the user is already AT their session limit.
+    # If they still have room for another session, debounce should not block them.
+    # This prevents the 2nd login being rejected when max_sessions=2 and 1 session exists.
     if session_debounce_seconds > 0:
         active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
         if len(active_tokens) >= max_sessions:
@@ -479,18 +477,24 @@ async def webui_login_api(request):
                         'error': 'Please wait {}s before logging in again.'.format(session_debounce_seconds)
                     }, status=429)
 
-    # Enforce session limit
-    active_tokens = [t for t in WEBUI_USER_TOKENS.get(user['username'], []) if t in WEBUI_SESSIONS]
+    # Enforce per-user session limit: reject if already at max.
+    # Both sessions coexist - the oldest login is editor, newer ones are viewers.
+    # Editor/viewer role is resolved by api_editor_lock using logged_in_at order.
+    # Global session limit removed - each user is governed only by their own max_sessions.
+    # Ghost-token cleanup: remove any tokens in WEBUI_USER_TOKENS that are no longer
+    # in WEBUI_SESSIONS (can happen after timeout eviction) before counting slots.
+    all_tracked = WEBUI_USER_TOKENS.get(user['username'], [])
+    active_tokens = [t for t in all_tracked if t in WEBUI_SESSIONS]
+    if len(active_tokens) != len(all_tracked):
+        WEBUI_USER_TOKENS[user['username']] = active_tokens  # prune ghosts
     if len(active_tokens) >= max_sessions:
         return web.json_response({
             'success': False,
             'error': 'Session limit reached (max {} for this user). Please log out from another device first.'.format(max_sessions)
         }, status=403)
 
-    # Create new session
     token = binascii.hexlify(os.urandom(32)).decode()
     now_iso = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    
     WEBUI_SESSIONS[token] = {
         'username':                user['username'],
         'logged_in_at':            now_iso,
@@ -498,59 +502,39 @@ async def webui_login_api(request):
         'last_ping':               time.time(),
         'session_timeout_minutes': session_timeout_minutes,
     }
-    
-    # Add to user tokens
     if user['username'] not in WEBUI_USER_TOKENS:
         WEBUI_USER_TOKENS[user['username']] = []
     WEBUI_USER_TOKENS[user['username']].append(token)
 
-    logger.info("[LOGIN] New session: user={}, token={}..., total_sessions={}".format(
-        user['username'], token[:8], len(WEBUI_SESSIONS)))
+    # cookie max_age: honour session_timeout if set, else default 24 h
+    cookie_max_age = session_timeout_minutes * 60 if session_timeout_minutes > 0 else 86400
 
-    # Set cookies
-    if session_timeout_minutes > 0:
-        cookie_max_age = session_timeout_minutes * 60
-    elif max_session_minutes > 0:
-        cookie_max_age = max_session_minutes * 60
-    else:
-        cookie_max_age = 86400
-
-    resp = web.json_response({'success': True, 'username': user['username'], 
-                              'display_name': user['display_name'], 'role': user['role']})
+    resp = web.json_response({'success': True, 'username': user['username'], 'display_name': user['display_name'], 'role': user['role']})
     resp.set_cookie('gw_webui_session', token, httponly=False, path='/', max_age=cookie_max_age)
     resp.set_cookie('gw_user', user['username'], httponly=False, path='/', max_age=cookie_max_age)
-    
+    try:
+        raw_cookies = resp.headers.getall('Set-Cookie', [])
+        if raw_cookies:
+            del resp.headers['Set-Cookie']
+            for cookie in raw_cookies:
+                resp.headers.add('Set-Cookie', cookie + '; SameSite=Lax')
+    except Exception:
+        pass
     return resp
 
 async def webui_logout_api(request):
-    """POST /api/auth/logout -- completely removes session from server"""
+    """POST /api/auth/logout -- clears webui session so the user can log in again."""
     token = request.cookies.get('gw_webui_session')
-    
     if token:
-        # Get username before removing
-        info = WEBUI_SESSIONS.get(token)
-        username = None
-        if isinstance(info, dict):
-            username = info.get('username')
-        elif isinstance(info, str):
-            username = info
-        
-        # Remove from main sessions dict
-        if token in WEBUI_SESSIONS:
-            del WEBUI_SESSIONS[token]
-        
-        # Remove from user tokens mapping COMPLETELY
+        info = WEBUI_SESSIONS.pop(token, None)
+        username = info['username'] if isinstance(info, dict) else info
         if username and username in WEBUI_USER_TOKENS:
-            token_list = WEBUI_USER_TOKENS[username]
-            if token in token_list:
-                token_list.remove(token)
-            if not token_list:  # If no more tokens, delete the user entry
+            try:
+                WEBUI_USER_TOKENS[username].remove(token)
+            except ValueError:
+                pass
+            if not WEBUI_USER_TOKENS[username]:
                 del WEBUI_USER_TOKENS[username]
-        
-        logger.info("[LOGOUT] Cleared session: user={}, token={}...".format(
-            username or 'unknown', token[:8] if token else 'none'))
-    
-    # Clear client cookies
     resp = web.json_response({'success': True})
     resp.del_cookie('gw_webui_session', path='/')
     resp.del_cookie('gw_auth', path='/')
@@ -560,105 +544,81 @@ async def webui_logout_api(request):
 async def webui_session_status(request):
     """GET /api/auth/status -- returns 200 if session valid, 401 if not.
     Also returns hidden_pages list so layout.html can restrict the sidebar per user.
-    """
+    Enforces session_timeout_minutes: expires sessions that have lived past their limit."""
     import time
     token = request.cookies.get('gw_webui_session')
     if not token or token not in WEBUI_SESSIONS:
         return web.json_response({'authenticated': False}, status=401)
-    
     _sess = WEBUI_SESSIONS[token]
-    if not isinstance(_sess, dict):
-        # Legacy format - treat as invalid
-        return web.json_response({'authenticated': False}, status=401)
-    
-    # Read current settings
-    try:
-        timeout_mins = get_session_global_settings().get('idle_timeout_minutes', 0)
-        max_session_mins = get_session_global_settings().get('max_session_minutes', 0)
-    except Exception:
-        timeout_mins = 0
-        max_session_mins = 0
-    
-    # Check idle timeout
-    if timeout_mins > 0:
-        last_ping = _sess.get('last_ping', 0)
-        idle_secs = time.time() - last_ping if last_ping else 0
-        logger.debug("[SESSION] idle check: user={}, token={}..., "
-                     "idle={:.1f}s, limit={}s, last_ping={}".format(
-                         _sess.get('username'), token[:8],
-                         idle_secs, timeout_mins * 60, last_ping))
-        if not last_ping:
-            logger.warning("[SESSION] user={} token={}... has no last_ping; "
-                           "idle check skipped this poll".format(
-                               _sess.get('username'), token[:8]))
-        elif idle_secs >= timeout_mins * 60:
-            # Session expired due to idle timeout - clean it up server-side
-            username = _sess.get('username', 'unknown')
-            WEBUI_SESSIONS.pop(token, None)
-            if username and username in WEBUI_USER_TOKENS:
+    if isinstance(_sess, dict):
+        # Server-side timeout enforcement - measured from last activity (last_ping),
+        # NOT from logged_in_at. This means an active user is never kicked out;
+        # only truly idle sessions (no API calls, no WebSocket) expire.
+        # Always read from global settings (single source of truth).
+        try:
+            timeout_mins = get_session_global_settings().get('idle_timeout_minutes', 0)
+        except Exception:
+            timeout_mins = _sess.get('session_timeout_minutes', 0)
+        # ── Helper: expire a session and clean up token maps ──────────
+        def _expire_session(tok, sess_data, reason):
+            WEBUI_SESSIONS.pop(tok, None)
+            uname = sess_data.get('username', '')
+            if uname and uname in WEBUI_USER_TOKENS:
+                try: WEBUI_USER_TOKENS[uname].remove(tok)
+                except ValueError: pass
+                if not WEBUI_USER_TOKENS[uname]:
+                    del WEBUI_USER_TOKENS[uname]
+            logger.info("[SESSION EXPIRED] user={} reason={}".format(uname, reason))
+            return web.json_response({'authenticated': False, 'reason': reason}, status=401)
+
+        # ── 1. Idle timeout (no activity for N minutes) ───────────────
+        if timeout_mins and timeout_mins > 0:
+            last_ping = _sess.get('last_ping', 0)
+            idle_secs = time.time() - last_ping if last_ping else 0
+            idle_mins = idle_secs / 60
+            if idle_mins >= timeout_mins:
+                return _expire_session(token, _sess, 'idle_timeout')
+
+        # ── 2. Absolute session max-age (even active users get logged out) ─
+        # Read from global settings key 'max_session_hours'; 0 = disabled.
+        try:
+            max_session_hours = get_session_global_settings().get('max_session_hours', 0)
+        except Exception:
+            max_session_hours = 0
+        if max_session_hours and max_session_hours > 0:
+            import datetime as _dt
+            logged_in_at_str = _sess.get('logged_in_at', '')
+            if logged_in_at_str:
                 try:
-                    WEBUI_USER_TOKENS[username].remove(token)
-                except ValueError:
+                    login_time = _dt.datetime.fromisoformat(logged_in_at_str)
+                    age_secs = (
+                        _dt.datetime.now(_dt.timezone.utc) - login_time
+                    ).total_seconds()
+                    if age_secs >= max_session_hours * 3600:
+                        return _expire_session(token, _sess, 'session_expired')
+                except Exception:
                     pass
-                if not WEBUI_USER_TOKENS[username]:
-                    del WEBUI_USER_TOKENS[username]
-            logger.info("[SESSION] EXPIRED idle timeout (status check): "
-                        "user={}, token={}..., idle={:.1f}s".format(
-                            username, token[:8], idle_secs))
-            return web.json_response({'authenticated': False, 'reason': 'idle_timeout'}, status=401)
-    
-    # Check max session timeout
-    # NOTE: datetime.fromisoformat() is Python 3.7+; use _parse_iso_datetime() for 3.5 support.
-    if max_session_mins > 0:
-        import datetime as _dt
-        login_str = _sess.get('logged_in_at', '')
-        if login_str:
-            login_time = _parse_iso_datetime(login_str)
-            if login_time is not None:
-                age_secs = (_dt.datetime.now(_dt.timezone.utc) - login_time).total_seconds()
-                logger.debug("[SESSION] max-age check: user={}, token={}..., "
-                             "age={:.1f}s, limit={}s".format(
-                                 _sess.get('username'), token[:8],
-                                 age_secs, max_session_mins * 60))
-                if age_secs >= max_session_mins * 60:
-                    username = _sess.get('username', 'unknown')
-                    WEBUI_SESSIONS.pop(token, None)
-                    if username and username in WEBUI_USER_TOKENS:
-                        try:
-                            WEBUI_USER_TOKENS[username].remove(token)
-                        except ValueError:
-                            pass
-                        if not WEBUI_USER_TOKENS[username]:
-                            del WEBUI_USER_TOKENS[username]
-                    logger.info("[SESSION] Max session expired (status check): "
-                                "user={}, token={}..., age={:.1f} mins".format(
-                                    username, token[:8], age_secs / 60))
-                    return web.json_response({'authenticated': False, 'reason': 'session_expired'}, status=401)
-            else:
-                logger.warning("[SESSION] Could not parse logged_in_at={!r} for "
-                               "token={}...; skipping max-age check".format(
-                                   login_str, token[:8]))
-    
-    # Do NOT update last_ping here - this is a passive poll
-    # Only active API calls should update last_ping
-    
-    username = _sess['username']
-    
+        # Do NOT update last_ping here - /api/auth/status is a passive poll
+        # (called every 4s by layout.html). Updating it here would prevent
+        # idle timeout from ever firing. Only real user actions count as activity.
+        username = _sess['username']
+    else:
+        username = _sess
+        WEBUI_SESSIONS[token] = {'username': username, 'last_ping': 0}
     # Look up user_id to fetch per-user page restrictions
     try:
         from database import get_db_connection as _gdc
         conn = _gdc()
-        cur = conn.cursor()
+        cur  = conn.cursor()
         cur.execute('SELECT id, role FROM webui_users WHERE username=?', (username,))
         row = cur.fetchone()
         conn.close()
-        user_id = row[0] if row else None
+        user_id   = row[0] if row else None
         user_role = row[1] if row else 'user'
         hidden_pages = get_user_page_restrictions(user_id) if user_id else []
     except Exception:
         hidden_pages = []
         user_role = 'user'
-    
     return web.json_response({
         'authenticated': True,
         'username': username,
@@ -853,191 +813,67 @@ async def api_db_path_put(request):
     except Exception as e:
         return web.json_response({'success': False, 'error': str(e)}, status=500)
 
-# ---------------------------------------------------------------------------
-# Helper: parse ISO-8601 datetime string without datetime.fromisoformat()
-# fromisoformat() was only added in Python 3.7; we need 3.5 compatibility.
-# ---------------------------------------------------------------------------
-def _parse_iso_datetime(iso_str):
-    """Parse an ISO-8601 UTC string like '2024-01-15T12:34:56.789+00:00'
-    without relying on datetime.fromisoformat() (Python 3.7+).
-    Returns a timezone-aware datetime in UTC, or None on failure.
-    """
-    import datetime as _dt
-    try:
-        # Strip timezone suffix (+00:00 / Z / +HH:MM) before parsing
-        s = iso_str.strip()
-        if s.endswith('Z'):
-            s = s[:-1]
-        elif '+' in s[10:]:           # keep the date part's dashes untouched
-            s = s[:s.rfind('+')]
-        elif s[19:].startswith('-'):   # negative offset e.g. -05:00
-            s = s[:19]
-        # s is now 'YYYY-MM-DDTHH:MM:SS' or 'YYYY-MM-DDTHH:MM:SS.ffffff'
-        if 'T' not in s:
-            return None
-        date_part, time_part = s.split('T', 1)
-        y, mo, d = date_part.split('-')
-        time_part = time_part.split('.')[0]  # drop microseconds
-        h, mi, sec = time_part.split(':')
-        return _dt.datetime(int(y), int(mo), int(d),
-                            int(h), int(mi), int(sec),
-                            tzinfo=_dt.timezone.utc)
-    except Exception as exc:
-        logger.debug("[SESSION] _parse_iso_datetime failed for {!r}: {}".format(iso_str, exc))
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Background watchdog — defined at MODULE LEVEL so it exists before
-# start_background_tasks() calls asyncio.ensure_future(_webui_session_watchdog()).
-# Bug: previously the function was defined *inside* start_background_tasks
-# AFTER the ensure_future call, causing a NameError and silently preventing
-# any server-side session cleanup.
-# ---------------------------------------------------------------------------
-async def _webui_session_watchdog():
-    """Runs every 15 s. Removes expired WEBUI_SESSIONS entries server-side.
-
-    Without this, idle-timeout and max-session-minutes only clear the
-    client cookie (via /api/auth/status 401 response); the server-side
-    token lingers in WEBUI_SESSIONS forever — consuming session slots and
-    bypassing the per-user session cap.
-    """
-    import datetime as _wdt
-    import time as _time
-
-    logger.info("[WATCHDOG] Server-side session watchdog started (interval=15s)")
-
-    cycle = 0
-    while True:
-        await asyncio.sleep(15)
-        cycle += 1
-
-        now = _time.time()
-
-        # Read current global settings
-        try:
-            _gs = get_session_global_settings()
-            _idle_mins = int(_gs.get('idle_timeout_minutes', 0))
-            _max_mins  = int(_gs.get('max_session_minutes', 0))
-        except Exception as exc:
-            logger.warning("[WATCHDOG] cycle={} — failed to read global settings: {}".format(cycle, exc))
-            _idle_mins = 0
-            _max_mins  = 0
-
-        # Nothing to do if both limits are disabled
-        if _idle_mins == 0 and _max_mins == 0:
-            logger.debug("[WATCHDOG] cycle={} — both timeouts are 0, skipping sweep "
-                         "(sessions_live={})".format(cycle, len(WEBUI_SESSIONS)))
-            continue
-
-        logger.debug("[WATCHDOG] cycle={} — sweep start: sessions_live={}, "
-                     "idle_timeout={}min, max_session={}min".format(
-                         cycle, len(WEBUI_SESSIONS), _idle_mins, _max_mins))
-
-        expired_tokens = []
-
-        for token, info in list(WEBUI_SESSIONS.items()):
-            # Guard: invalid session format
-            if not isinstance(info, dict):
-                logger.warning("[WATCHDOG] cycle={} — token {}... has invalid format {!r}, "
-                               "expiring".format(cycle, token[:8], type(info).__name__))
-                expired_tokens.append((token, None, 'invalid_format'))
-                continue
-
-            username = info.get('username', 'unknown')
-            should_expire = False
-            reason = None
-
-            # ── Check idle timeout ────────────────────────────────────
-            if _idle_mins > 0:
-                last_ping = info.get('last_ping', 0)
-                if not last_ping:
-                    # last_ping missing / zero — treat the login time as the
-                    # baseline so a freshly created session isn't immediately
-                    # nuked (last_ping is set on login in webui_login_api).
-                    logger.warning("[WATCHDOG] cycle={} — user={} token={}... has no "
-                                   "last_ping; skipping idle check this cycle".format(
-                                       cycle, username, token[:8]))
-                else:
-                    idle_secs = now - last_ping
-                    logger.debug("[WATCHDOG] cycle={} — user={} token={}... "
-                                 "idle={:.1f}s (limit={}s)".format(
-                                     cycle, username, token[:8],
-                                     idle_secs, _idle_mins * 60))
-                    if idle_secs >= _idle_mins * 60:
-                        should_expire = True
-                        reason = 'idle_timeout'
-                        logger.info("[WATCHDOG] cycle={} — EXPIRE user={} token={}... "
-                                    "reason=idle_timeout idle={:.1f}s".format(
-                                        cycle, username, token[:8], idle_secs))
-
-            # ── Check max session age ─────────────────────────────────
-            if not should_expire and _max_mins > 0:
-                login_str = info.get('logged_in_at', '')
-                if not login_str:
-                    logger.warning("[WATCHDOG] cycle={} — user={} token={}... has no "
-                                   "logged_in_at; skipping max-age check".format(
-                                       cycle, username, token[:8]))
-                else:
-                    login_time = _parse_iso_datetime(login_str)
-                    if login_time is None:
-                        logger.warning("[WATCHDOG] cycle={} — user={} token={}... "
-                                       "unparseable logged_in_at={!r}".format(
-                                           cycle, username, token[:8], login_str))
-                    else:
-                        age_secs = (_wdt.datetime.now(_wdt.timezone.utc) - login_time).total_seconds()
-                        logger.debug("[WATCHDOG] cycle={} — user={} token={}... "
-                                     "age={:.1f}s (limit={}s)".format(
-                                         cycle, username, token[:8],
-                                         age_secs, _max_mins * 60))
-                        if age_secs >= _max_mins * 60:
-                            should_expire = True
-                            reason = 'max_session_expired'
-                            logger.info("[WATCHDOG] cycle={} — EXPIRE user={} token={}... "
-                                        "reason=max_session_expired age={:.1f}s".format(
-                                            cycle, username, token[:8], age_secs))
-
-            if should_expire:
-                expired_tokens.append((token, username, reason))
-
-        # ── Remove expired sessions server-side ───────────────────────
-        for token, username, reason in expired_tokens:
-            removed_main   = False
-            removed_tokens = False
-
-            if token in WEBUI_SESSIONS:
-                del WEBUI_SESSIONS[token]
-                removed_main = True
-
-            if username and username in WEBUI_USER_TOKENS:
-                token_list = WEBUI_USER_TOKENS[username]
-                if token in token_list:
-                    token_list.remove(token)
-                    removed_tokens = True
-                if not token_list:
-                    del WEBUI_USER_TOKENS[username]
-
-            logger.info("[WATCHDOG] REMOVED server session: user={}, token={}..., "
-                        "reason={}, removed_from_sessions={}, removed_from_tokens={}".format(
-                            username or 'unknown', token[:8], reason,
-                            removed_main, removed_tokens))
-
-        if expired_tokens:
-            logger.info("[WATCHDOG] cycle={} — cleaned {} expired sessions, "
-                        "sessions_remaining={}".format(
-                            cycle, len(expired_tokens), len(WEBUI_SESSIONS)))
-        else:
-            logger.debug("[WATCHDOG] cycle={} — sweep done, 0 expired, "
-                         "sessions_live={}".format(cycle, len(WEBUI_SESSIONS)))
-
-
 async def start_background_tasks(app):
     logger.info("[MAIN] Starting background tasks...")
-    # _webui_session_watchdog is defined at module level above — it MUST be
-    # defined before this ensure_future call or Python raises NameError and
-    # the watchdog silently never starts (server-side sessions never cleaned).
+    import time
+
+    async def _webui_session_watchdog():
+        # SESSION_IDLE_TIMEOUT: seconds a session can be idle before eviction.
+        # Previously 300 s (5 min) — too short for users who leave a tab open
+        # without constant interaction, or who switch networks (WiFi→LTE) and
+        # take a moment to reconnect.
+        # 3600 s (1 hour) safely cleans up truly abandoned sessions without
+        # ever evicting an active or reconnecting user.
+        SESSION_IDLE_TIMEOUT = 3600
+
+        while True:
+            await asyncio.sleep(60)   # check every 60 s is plenty
+            now = time.time()
+
+            # Refresh last_ping for every token that has an open WebSocket so
+            # users watching live data are never considered idle.
+            try:
+                import general as _gen
+                _live_ws_tokens = set()
+                for _ws in list(_gen.connected_websockets):
+                    try:
+                        _tok = _ws._req.cookies.get('gw_webui_session')
+                        if _tok:
+                            _live_ws_tokens.add(_tok)
+                    except Exception:
+                        pass
+                for _ws in list(_gen.network_status_websockets):
+                    try:
+                        _tok = _ws._req.cookies.get('gw_webui_session')
+                        if _tok:
+                            _live_ws_tokens.add(_tok)
+                    except Exception:
+                        pass
+                for _tok in _live_ws_tokens:
+                    if _tok in WEBUI_SESSIONS and isinstance(WEBUI_SESSIONS[_tok], dict):
+                        WEBUI_SESSIONS[_tok]['last_ping'] = now
+            except Exception:
+                pass  # never crash the watchdog
+
+            to_remove = []
+            for token, info in list(WEBUI_SESSIONS.items()):
+                if isinstance(info, dict) and 'last_ping' in info:
+                    if now - info['last_ping'] > SESSION_IDLE_TIMEOUT:
+                        to_remove.append(token)
+            for token in to_remove:
+                info = WEBUI_SESSIONS.pop(token, None)
+                if info:
+                    uname = info.get('username') if isinstance(info, dict) else info
+                    if uname and uname in WEBUI_USER_TOKENS:
+                        try:
+                            WEBUI_USER_TOKENS[uname].remove(token)
+                        except ValueError:
+                            pass
+                        if not WEBUI_USER_TOKENS[uname]:
+                            del WEBUI_USER_TOKENS[uname]
+                logger.info("[MAIN] Session watchdog removed inactive token for user {}".format(uname))
+
     app["webui_session_watchdog"] = asyncio.ensure_future(_webui_session_watchdog())
-    logger.info("[MAIN] Session watchdog scheduled")
 
     if PIPELINE_AVAILABLE:
         logger.info("[MAIN] Starting pipeline background thread...")
@@ -1177,61 +1013,9 @@ async def cleanup_background_tasks(app):
 
 
 async def api_webui_sessions_get(request):
-    """GET /api/admin/webui-sessions -- list active webui sessions, evicting expired ones first."""
+    """GET /api/admin/webui-sessions -- list all active webui sessions."""
     _require_admin(request)
     import datetime as _dt
-    import time as _time
-
-    # ── Evict expired sessions before listing ─────────────────────────────
-    try:
-        _gs        = get_session_global_settings()
-        _idle_mins = int(_gs.get('idle_timeout_minutes', 0))
-        _max_mins  = int(_gs.get('max_session_minutes', 0))
-    except Exception:
-        _idle_mins = 0
-        _max_mins  = 0
-
-    _now = _time.time()
-    _to_evict = []
-    for _tok, _info in list(WEBUI_SESSIONS.items()):
-        if not isinstance(_info, dict):
-            continue
-        # idle check
-        if _idle_mins > 0:
-            _last = _info.get('last_ping', 0)
-            if _last and (_now - _last) >= _idle_mins * 60:
-                _to_evict.append(_tok)
-                continue
-        # max session minutes check
-        # NOTE: _parse_iso_datetime() used instead of fromisoformat() for Python 3.5 support
-        if _max_mins > 0:
-            _login_str = _info.get('logged_in_at', '')
-            if _login_str:
-                _login_t = _parse_iso_datetime(_login_str)
-                if _login_t is None:
-                    logger.warning("[SESSIONS-LIST] Could not parse logged_in_at={!r} for "
-                                   "token={}..., skipping max-age eviction".format(
-                                       _login_str, _tok[:8]))
-                else:
-                    _age = (_dt.datetime.now(_dt.timezone.utc) - _login_t).total_seconds()
-                    logger.debug("[SESSIONS-LIST] max-age check token={}..., "
-                                 "age={:.1f}s limit={}s".format(_tok[:8], _age, _max_mins * 60))
-                    if _age >= _max_mins * 60:
-                        _to_evict.append(_tok)
-                        continue
-
-    for _tok in _to_evict:
-        _info = WEBUI_SESSIONS.pop(_tok, None)
-        if _info:
-            _uname = _info.get('username', '') if isinstance(_info, dict) else _info
-            if _uname and _uname in WEBUI_USER_TOKENS:
-                try: WEBUI_USER_TOKENS[_uname].remove(_tok)
-                except ValueError: pass
-                if not WEBUI_USER_TOKENS[_uname]:
-                    del WEBUI_USER_TOKENS[_uname]
-            logger.info("[SESSION] Evicted expired session user={} on sessions list".format(_uname))
-
-    # ── Build response from remaining live sessions ───────────────────────
     sessions = []
     for token, info in list(WEBUI_SESSIONS.items()):
         username = info['username'] if isinstance(info, dict) else info
@@ -1510,22 +1294,7 @@ def create_app():
             raise web.HTTPUnauthorized(reason='Session expired or invalid')
         return session.get('username') if isinstance(session, dict) else session
     _dm_mod._require_webui_session = _require_webui_session_main
-    async def debug_check_sessions(request):
-        """DEBUG: Check what sessions exist on server"""
-        _require_admin(request)
-        result = {
-            'total_sessions': len(WEBUI_SESSIONS),
-            'sessions': {},
-            'user_tokens': {}
-        }
-        for token, info in WEBUI_SESSIONS.items():
-            username = info.get('username') if isinstance(info, dict) else str(info)
-            result['sessions'][token[:8]] = username
-        for username, tokens in WEBUI_USER_TOKENS.items():
-            result['user_tokens'][username] = [t[:8] for t in tokens]
-        return web.json_response(result)
 
-    
     async def security_headers_middleware_factory(app, handler):
         import time as _time
         async def security_headers_middleware(request):
@@ -1748,9 +1517,9 @@ def create_app():
         try:
             body = await request.json()
             idle = max(0, int(body.get('idle_timeout_minutes', 0)))
-            maxm = max(0, int(body.get('max_session_minutes', 0)))
-            ok = set_session_global_settings(idle, maxm)
-            return web.json_response({'success': ok, 'idle_timeout_minutes': idle, 'max_session_minutes': maxm})
+            maxh = max(0, int(body.get('max_session_hours', 0)))
+            ok = set_session_global_settings(idle, maxh)
+            return web.json_response({'success': ok, 'idle_timeout_minutes': idle, 'max_session_hours': maxh})
         except Exception as e:
             return web.json_response({'success': False, 'error': str(e)}, status=500)
 
@@ -1800,7 +1569,7 @@ def create_app():
     app.router.add_get('/api/admin/modals', api_modals_get)
     app.router.add_get('/api/modals',       api_modals_get_public)
     app.router.add_post('/api/admin/modal', api_modal_post)
-    app.router.add_get('/api/debug/sessions', debug_check_sessions)
+
     # ---------------------------------------------------------------------------
     # Static assets served from admin_ui/public/
     # Structure: public/css/*.css  public/fonts/**/*.woff2

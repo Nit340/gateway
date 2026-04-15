@@ -1057,19 +1057,11 @@
 
             async function pollLock() {
                 try {
-                    // AbortSignal.timeout() needs a fallback for older environments
-                    const _lkCtrl = new AbortController();
-                    const _lkTimer = setTimeout(function() { _lkCtrl.abort(); }, 4000);
-                    let res;
-                    try {
-                        res = await fetch('/api/auth/editor-lock', {
-                            credentials: 'same-origin',
-                            cache: 'no-store',
-                            signal: _lkCtrl.signal
-                        });
-                    } finally {
-                        clearTimeout(_lkTimer);
-                    }
+                    const res = await fetch('/api/auth/editor-lock', {
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(4000)
+                    });
 
                     if (res.status === 401) return; // handled by network monitor
 
@@ -1242,20 +1234,11 @@
             // ── Core check ───────────────────────────────────────────
             async function checkConnection() {
                 try {
-                    // AbortSignal.timeout() is not available in all environments;
-                    // use AbortController manually for compatibility.
-                    const _ctrl = new AbortController();
-                    const _ctrlTimer = setTimeout(function() { _ctrl.abort(); }, 5000);
-                    let res;
-                    try {
-                        res = await fetch('/api/auth/status', {
-                            credentials: 'same-origin',
-                            cache: 'no-store',
-                            signal: _ctrl.signal
-                        });
-                    } finally {
-                        clearTimeout(_ctrlTimer);
-                    }
+                    const res = await fetch('/api/auth/status', {
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(5000)
+                    });
 
                     if (res.status === 401) {
                         // Parse the reason so we can show the right message
@@ -1274,14 +1257,6 @@
                             overlay.classList.add('show');
                             setProgress(100);
                         }
-                        // Clear server session + cookies before redirecting
-                        try {
-                            await fetch('/api/auth/logout', {
-                                method: 'POST',
-                                credentials: 'same-origin',
-                                cache: 'no-store'
-                            });
-                        } catch(e) {}
                         setTimeout(() => {
                             window.location.replace('/?expired=1&reason=' + reason);
                         }, 1800);

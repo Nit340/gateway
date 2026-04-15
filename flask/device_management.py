@@ -509,23 +509,6 @@ async def add_device(request):
                     'error': 'Maximum 2 Loadcell devices allowed. Delete an existing one first.'
                 }, status=400)
 
-        # Reject duplicate device names across both tables
-        new_name = data.get('name', '').strip()
-        if not new_name:
-            conn.close()
-            return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
-        cursor.execute('SELECT id FROM loadcell_device WHERE LOWER(name) = LOWER(?)', (new_name,))
-        if cursor.fetchone():
-            conn.close()
-            return web.json_response({'success': False, 'error': 'A device named "{}" already exists.'.format(new_name)}, status=400)
-        try:
-            cursor.execute('SELECT id FROM external_device WHERE LOWER(name) = LOWER(?)', (new_name,))
-            if cursor.fetchone():
-                conn.close()
-                return web.json_response({'success': False, 'error': 'A device named "{}" already exists.'.format(new_name)}, status=400)
-        except Exception:
-            pass
-
         # Generate device ID with unique prefix
         if device_type == 'loadcell':
             cursor.execute('SELECT id FROM loadcell_device WHERE id LIKE "LC%" ORDER BY id')
@@ -710,19 +693,6 @@ async def update_device(request):
                 conn.close()
                 return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
 
-            # Reject duplicate name (exclude self)
-            cursor.execute('SELECT id FROM loadcell_device WHERE LOWER(name) = LOWER(?)', (new_name,))
-            if cursor.fetchone():
-                conn.close()
-                return web.json_response({'success': False, 'error': 'A device named "{}" already exists.'.format(new_name)}, status=400)
-            try:
-                cursor.execute('SELECT id FROM external_device WHERE LOWER(name) = LOWER(?) AND id != ?', (new_name, device_id))
-                if cursor.fetchone():
-                    conn.close()
-                    return web.json_response({'success': False, 'error': 'A device named "{}" already exists.'.format(new_name)}, status=400)
-            except Exception:
-                pass
-
             new_protocol = data.get('protocol', 'ext-rtu')
             device_type_val = data.get('device_type_init', data.get('device_type', ''))
             model_name = data.get('model_name', '')
@@ -785,24 +755,6 @@ async def update_device(request):
         else:
             # Update Loadcell device (unchanged)
             config = data.get('config', {})
-
-            new_name = data.get('name', '').strip()
-            if not new_name:
-                conn.close()
-                return web.json_response({'success': False, 'error': 'Device name cannot be empty'}, status=400)
-
-            # Reject duplicate name (exclude self)
-            cursor.execute('SELECT id FROM loadcell_device WHERE LOWER(name) = LOWER(?) AND id != ?', (new_name, device_id))
-            if cursor.fetchone():
-                conn.close()
-                return web.json_response({'success': False, 'error': 'A device named "{}" already exists.'.format(new_name)}, status=400)
-            try:
-                cursor.execute('SELECT id FROM external_device WHERE LOWER(name) = LOWER(?)', (new_name,))
-                if cursor.fetchone():
-                    conn.close()
-                    return web.json_response({'success': False, 'error': 'A device named "{}" already exists.'.format(new_name)}, status=400)
-            except Exception:
-                pass
             
             update_fields = ['name = ?']
             values = [data.get('name')]

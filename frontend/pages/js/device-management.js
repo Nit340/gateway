@@ -1186,6 +1186,13 @@
                 return;
             }
             
+            const duplicateName = devices.find(d => d.name.trim().toLowerCase() === deviceName.toLowerCase());
+            if (duplicateName) {
+                showNotification(`A device named "${deviceName}" already exists. Please use a different name.`, 'error');
+                isSaving = false;
+                return;
+            }
+
             if (!selectedDeviceId) {
                 if (deviceType === 'loadcell') {
                     const existing = devices.filter(d => d.protocol === 'loadcell').length;
@@ -1194,13 +1201,6 @@
                         isSaving = false;
                         return;
                     }
-                }
-                // Check for duplicate name on add
-                const nameTaken = devices.some(d => d.name.trim().toLowerCase() === deviceName.toLowerCase());
-                if (nameTaken) {
-                    showNotification('A device named "' + deviceName + '" already exists. Please use a unique name.', 'error');
-                    isSaving = false;
-                    return;
                 }
             }
 
@@ -1404,7 +1404,7 @@
                 ${sel('editLcMode','Mode', mode, [{v:'single_ended',l:'Single Point'},{v:'differential',l:'Differential'}])}
                 ${singleChannel}
                 ${diffInfo}
-                ${inp('editPollMs','Poll Interval (ms)', cfg.poll_ms||10,'number','min="1" max="1000"')}
+                ${inp('editPollMs','Poll Interval (ms)', cfg.poll_ms||10,'text','pattern="[0-9]*" inputmode="numeric" onkeypress="return event.charCode >= 48 && event.charCode <= 57"')}
 
                 <!-- ADC Hardware Parameters (Protected) -->
                 <div>
@@ -1514,10 +1514,9 @@
             if (!deviceName) { showNotification('Please enter a device name', 'error'); isSaving = false; return; }
             if (!selectedDeviceId) { showNotification('No device selected for edit', 'error'); isSaving = false; return; }
 
-            // Check for duplicate name on edit (exclude self)
-            const nameTaken = devices.some(d => d.id !== selectedDeviceId && d.name.trim().toLowerCase() === deviceName.toLowerCase());
-            if (nameTaken) {
-                showNotification('A device named "' + deviceName + '" already exists. Please use a unique name.', 'error');
+            const duplicateEditName = devices.find(d => d.name.trim().toLowerCase() === deviceName.toLowerCase() && String(d.id) !== String(selectedDeviceId));
+            if (duplicateEditName) {
+                showNotification(`A device named "${deviceName}" already exists. Please use a different name.`, 'error');
                 isSaving = false;
                 return;
             }
@@ -1549,7 +1548,7 @@
                     cfg.device_path = defaultCh1;
                 }
             }
-            if (g('editPollMs')) cfg.poll_ms = parseInt(g('editPollMs').value) || 10;
+            if (g('editPollMs')) { let _rawPollMs = g('editPollMs').value.trim(); cfg.poll_ms = _rawPollMs !== '' ? parseInt(_rawPollMs, 10) : 10; }
             if (g('editCapacityMin')) cfg.capacity_min = parseFloat(g('editCapacityMin').value) || 0;
             if (g('editCapacityMax')) cfg.capacity_max = parseFloat(g('editCapacityMax').value) || 1000;
             if (g('editDeadband')) cfg.deadband = parseFloat(g('editDeadband').value) || 0;
