@@ -369,9 +369,41 @@ async def _safe_send(ws, payload):
 def _parse_datapoint_to_path(datapoint_name):
     """
     Parse a datapoint name like "net.lte.signal_pct" or "net.lan.eth0.ip"
+    or the new format "network_status/WiFi_IP_Address"
     into a structured path for updating the cache.
     Returns a dict with keys: interface, device, field
     """
+    # New format mapping (network_status/...)
+    _NEW_FORMAT_MAPPING = {
+        'network_status/ETH0_MAC_Address': {'type': 'lan', 'device': 'eth0', 'field': 'mac'},
+        'network_status/ETH1_MAC_Address': {'type': 'lan', 'device': 'eth1', 'field': 'mac'},
+        'network_status/ETH0_IP_Address': {'type': 'lan', 'device': 'eth0', 'field': 'ip'},
+        'network_status/ETH1_IP_Address': {'type': 'lan', 'device': 'eth1', 'field': 'ip'},
+        'network_status/ETH0_Connection_State': {'type': 'lan', 'device': 'eth0', 'field': 'state'},
+        'network_status/ETH1_Connection_State': {'type': 'lan', 'device': 'eth1', 'field': 'state'},
+        'network_status/WiFi_Connection_State': {'type': 'wlan', 'device': None, 'field': 'state'},
+        'network_status/WiFi_Signal_Strength': {'type': 'wlan', 'device': None, 'field': 'signal'},
+        'network_status/WiFi_Frequency_MHz': {'type': 'wlan', 'device': None, 'field': 'frequency'},
+        'network_status/WiFi_MAC_Address': {'type': 'wlan', 'device': None, 'field': 'mac'},
+        'network_status/Connected_Network_Name_SSID': {'type': 'wlan', 'device': None, 'field': 'ssid'},
+        'network_status/Access_Point_MAC_Address_BSSID': {'type': 'wlan', 'device': None, 'field': 'bssid'},
+        'network_status/WiFi_IP_Address': {'type': 'wlan', 'device': None, 'field': 'ip'},
+        'network_status/Cellular_Connection_State': {'type': 'lte', 'device': None, 'field': 'state'},
+        'network_status/Signal_Strength_Percentage': {'type': 'lte', 'device': None, 'field': 'signal_pct'},
+        'network_status/Transmit_Power_Level': {'type': 'lte', 'device': None, 'field': 'power'},
+        'network_status/Device_IMEI': {'type': 'lte', 'device': None, 'field': 'imei'},
+        'network_status/SIM_Card_IMSI': {'type': 'lte', 'device': None, 'field': 'imsi'},
+        'network_status/SIM_Card_ICCID': {'type': 'lte', 'device': None, 'field': 'iccid'},
+        'network_status/Cellular_IP_Address': {'type': 'lte', 'device': None, 'field': 'ip'},
+        'network_status/Operator_Name': {'type': 'lte', 'device': None, 'field': 'operator_name'},
+        'network_status/Operator_ID': {'type': 'lte', 'device': None, 'field': 'operator_id'},
+        'network_status/Network_Technology_2G_3G_4G_5G': {'type': 'lte', 'device': None, 'field': 'tech'},
+    }
+
+    if datapoint_name in _NEW_FORMAT_MAPPING:
+        return _NEW_FORMAT_MAPPING[datapoint_name]
+
+    # Legacy format parsing (net.*)
     parts = datapoint_name.split('.')
     if len(parts) < 3 or parts[0] != 'net':
         return None
@@ -456,10 +488,23 @@ def update_network_status_field(datapoint_name, value):
     _update_cache_from_datapoint(datapoint_name, value)
     
     # Update WiFi signal strength if this is the signal datapoint
-    if datapoint_name == "net.wlan.signal_pct":
+    if datapoint_name in ["net.wlan.signal_pct", "network_status/WiFi_Signal_Strength"]:
         try:
-            pct = float(value)
-            strength = min(4, int(pct) // 25)
+            # If it's dBm (like -65), convert to a rough 0-4 scale or handle as pct if possible
+            # Existing logic expects 0-100 to convert to 0-4.
+            # WiFi_Signal_Strength might be dBm or percentage.
+            # If it's dBm (negative), we should probably treat it differently.
+            val_f = float(value)
+            if val_f < 0:
+                # dBm to 0-4 scale approximation
+                if val_f >= -55: strength = 4
+                elif val_f >= -65: strength = 3
+                elif val_f >= -75: strength = 2
+                elif val_f >= -85: strength = 1
+                else: strength = 0
+            else:
+                # percentage (0-100)
+                strength = min(4, int(val_f) // 25)
             update_wifi_signal_strength(strength)
         except (ValueError, TypeError):
             pass
@@ -467,8 +512,12 @@ def update_network_status_field(datapoint_name, value):
     # Rate limit broadcasts for the same datapoint
     # Static hardware fields (MAC, IMEI, ICCID, IMSI, BSSID) are exempt —
     # they only change on interface connect/disconnect so must always be sent.
-    _STATIC_FIELDS = {'mac', 'imei', 'iccid', 'imsi', 'bssid'}
-    _field_name = datapoint_name.split('.')[-1]
+    _STATIC_FIELDS = {
+        'mac', 'imei', 'iccid', 'imsi', 'bssid',
+        'ETH0_MAC_Address', 'ETH1_MAC_Address', 'WiFi_MAC_Address',
+        'Device_IMEI', 'SIM_Card_IMSI', 'SIM_Card_ICCID', 'Access_Point_MAC_Address_BSSID'
+    }
+    _field_name = datapoint_name.split('.')[-1] if '.' in datapoint_name else datapoint_name.split('/')[-1]
     now = datetime.datetime.now().timestamp()
     last_time = _last_broadcast_time.get(datapoint_name, 0)
     if _field_name not in _STATIC_FIELDS and now - last_time < _MIN_BROADCAST_INTERVAL:

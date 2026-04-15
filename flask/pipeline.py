@@ -251,7 +251,21 @@ def _clear_sent(config_type):
 
 
 # Network/status datapoints that are always allowed regardless of device
-_PERMANENT_WHITELIST = {"lan", "wlan", "lte", "network_status", "modbus_config"}
+_PERMANENT_WHITELIST = {
+    "lan", "wlan", "lte", "network_status", "modbus_config",
+    "network_status/ETH0_MAC_Address", "network_status/ETH1_MAC_Address",
+    "network_status/ETH0_IP_Address", "network_status/ETH1_IP_Address",
+    "network_status/ETH0_Connection_State", "network_status/ETH1_Connection_State",
+    "network_status/WiFi_Connection_State", "network_status/WiFi_Signal_Strength",
+    "network_status/WiFi_Frequency_MHz", "network_status/WiFi_MAC_Address",
+    "network_status/Connected_Network_Name_SSID", "network_status/Access_Point_MAC_Address_BSSID",
+    "network_status/WiFi_IP_Address", "network_status/Cellular_Connection_State",
+    "network_status/Signal_Strength_Percentage", "network_status/Transmit_Power_Level",
+    "network_status/Device_IMEI", "network_status/SIM_Card_IMSI",
+    "network_status/SIM_Card_ICCID", "network_status/Cellular_IP_Address",
+    "network_status/Operator_Name", "network_status/Operator_ID",
+    "network_status/Network_Technology_2G_3G_4G_5G"
+}
 
 # Suffixes appended to each whitelisted device name (excludes .raw and .weight, toggled together)
 _DEVICE_DP_SUFFIXES = []
@@ -1126,7 +1140,7 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                         _NET_SERVICES = {"network_status"}
                         if event.service_name in _NET_SERVICES or dp in (
                             "lan", "wlan", "lte", "network_status"
-                        ):
+                        ) or dp.startswith("network_status/"):
                             try:
                                 from general import update_network_status_field
 

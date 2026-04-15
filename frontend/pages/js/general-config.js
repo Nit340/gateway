@@ -47,7 +47,8 @@
         var ts = _fieldTimestamps[datapoint];
         if (!ts) return true;
         var timeout = _FIELD_TIMEOUT;
-        if (datapoint.includes('.mac') || datapoint.includes('.imei') || datapoint.includes('.iccid') || datapoint.includes('.imsi')) {
+        if (datapoint.includes('.mac') || datapoint.includes('.imei') || datapoint.includes('.iccid') || datapoint.includes('.imsi') ||
+            datapoint.includes('_MAC_Address') || datapoint.includes('Device_IMEI') || datapoint.includes('SIM_Card_ICCID') || datapoint.includes('SIM_Card_IMSI')) {
             timeout = 3600000;
         }
         return (Date.now() - ts) > timeout;
@@ -56,7 +57,9 @@
     var markAllFieldsStale = function () {
         var newTimestamps = {};
         for (var dp in _fieldTimestamps) {
-            if (dp.includes('.mac') || dp.includes('.imei') || dp.includes('.iccid') || dp.includes('.imsi') || dp.includes('serial_number')) {
+            if (dp.includes('.mac') || dp.includes('.imei') || dp.includes('.iccid') || dp.includes('.imsi') || 
+                dp.includes('_MAC_Address') || dp.includes('Device_IMEI') || dp.includes('SIM_Card_ICCID') || dp.includes('SIM_Card_IMSI') ||
+                dp.includes('serial_number')) {
                 newTimestamps[dp] = _fieldTimestamps[dp];
             }
         }
@@ -101,9 +104,9 @@
                 var e0 = _cache.lan.eth0 || {};
                 var e1 = _cache.lan.eth1 || {};
                 var macValue = '--';
-                if (_selectedEth === 'eth0' && e0.mac && !isFieldStale('net.lan.eth0.mac')) {
+                if (_selectedEth === 'eth0' && e0.mac && !isFieldStale('network_status/ETH0_MAC_Address')) {
                     macValue = e0.mac.toUpperCase();
-                } else if (_selectedEth === 'eth1' && e1.mac && !isFieldStale('net.lan.eth1.mac')) {
+                } else if (_selectedEth === 'eth1' && e1.mac && !isFieldStale('network_status/ETH1_MAC_Address')) {
                     macValue = e1.mac.toUpperCase();
                 } else if (!_selectedEth && isUp(e0.state)) {
                     macValue = e0.mac ? e0.mac.toUpperCase() : '--';
@@ -118,7 +121,7 @@
             if (wifiRow) {
                 wifiRow.style.display = '';
                 var w = _cache.wlan;
-                var wifiMac = (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac.toUpperCase() : '--';
+                var wifiMac = (w.mac && !isFieldStale('network_status/WiFi_MAC_Address')) ? w.mac.toUpperCase() : '--';
                 if (el('global-mac-wifi')) {
                     el('global-mac-wifi').textContent = wifiMac;
                 }
@@ -127,7 +130,7 @@
             if (lteRow) {
                 lteRow.style.display = '';
                 var l = _cache.lte;
-                var lteMac = (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--';
+                var lteMac = (!isFieldStale('network_status/Device_IMEI') && l.imei) ? l.imei : '--';
                 if (el('global-mac-lte')) {
                     el('global-mac-lte').textContent = lteMac;
                 }
@@ -352,10 +355,10 @@
         if (mode !== 'auto') return;
         if (!_configLoaded) return; // don't hijack the tab before config is applied
 
-        var e0State = (!isFieldStale('net.lan.eth0.state')) ? _cache.lan.eth0.state : null;
-        var e1State = (!isFieldStale('net.lan.eth1.state')) ? _cache.lan.eth1.state : null;
-        var wState = (!isFieldStale('net.wlan.state')) ? _cache.wlan.state : null;
-        var lState = (!isFieldStale('net.lte.state')) ? _cache.lte.state : null;
+        var e0State = (!isFieldStale('network_status/ETH0_Connection_State')) ? _cache.lan.eth0.state : null;
+        var e1State = (!isFieldStale('network_status/ETH1_Connection_State')) ? _cache.lan.eth1.state : null;
+        var wState = (!isFieldStale('network_status/WiFi_Connection_State')) ? _cache.wlan.state : null;
+        var lState = (!isFieldStale('network_status/Cellular_Connection_State')) ? _cache.lte.state : null;
 
         var e0Up = isUp(e0State);
         var e1Up = isUp(e1State);
@@ -418,18 +421,18 @@
         var e0 = _cache.lan.eth0 || {};
         var e1 = _cache.lan.eth1 || {};
 
-        txt('eth0-ip', (e0.ip && !isFieldStale('net.lan.eth0.ip')) ? e0.ip : '--');
-        txt('eth0-mac', (e0.mac && !isFieldStale('net.lan.eth0.mac')) ? e0.mac : '--');
-
+        txt('eth0-ip', (e0.ip && !isFieldStale('network_status/ETH0_IP_Address')) ? e0.ip : '--');
+        txt('eth0-mac', (e0.mac && !isFieldStale('network_status/ETH0_MAC_Address')) ? e0.mac : '--');
+        
         var eth0State = e0.state;
-        if (isFieldStale('net.lan.eth0.state')) eth0State = null;
+        if (isFieldStale('network_status/ETH0_Connection_State')) eth0State = null;
         stateBadge('eth0-state-badge', isUp(eth0State));
 
-        txt('eth1-ip', (e1.ip && !isFieldStale('net.lan.eth1.ip')) ? e1.ip : '--');
-        txt('eth1-mac', (e1.mac && !isFieldStale('net.lan.eth1.mac')) ? e1.mac : '--');
-
+        txt('eth1-ip', (e1.ip && !isFieldStale('network_status/ETH1_IP_Address')) ? e1.ip : '--');
+        txt('eth1-mac', (e1.mac && !isFieldStale('network_status/ETH1_MAC_Address')) ? e1.mac : '--');
+        
         var eth1State = e1.state;
-        if (isFieldStale('net.lan.eth1.state')) eth1State = null;
+        if (isFieldStale('network_status/ETH1_Connection_State')) eth1State = null;
         stateBadge('eth1-state-badge', isUp(eth1State));
 
         updateGlobalMacDisplay();
@@ -471,7 +474,7 @@
         var w = _cache.wlan;
 
         var state = w.state;
-        if (isFieldStale('net.wlan.state')) state = null;
+        if (isFieldStale('network_status/WiFi_Connection_State')) state = null;
         var wifiUp = isUp(state);
         stateBadge('wifi-state-badge', wifiUp);
 
@@ -483,13 +486,13 @@
 
         var liveSsid = el('wifi-live-ssid');
         if (liveSsid) {
-            var ssidVal = (w.ssid && !isFieldStale('net.wlan.ssid')) ? w.ssid : '';
+            var ssidVal = (w.ssid && !isFieldStale('network_status/Connected_Network_Name_SSID')) ? w.ssid : '';
             liveSsid.textContent = ssidVal ? 'SSID : ' + ssidVal : '';
             liveSsid.style.color = wifiUp ? '#15803d' : '';
         }
 
         var wifiSignal = (w.signal_quality !== undefined && w.signal_quality !== null) ? w.signal_quality : w.signal;
-        var signalStale = isFieldStale('net.wlan.signal') && isFieldStale('net.wlan.signal_quality');
+        var signalStale = isFieldStale('network_status/WiFi_Signal_Strength') || isFieldStale('net.wlan.signal_quality');
         if (wifiSignal !== undefined && wifiSignal !== null && !signalStale) {
             updateWifiBars(wifiSignal);
             var e = el('wifi-signal-dbm');
@@ -499,14 +502,14 @@
             if (e) e.textContent = '--';
         }
 
-        txt('wifi-ip', (w.ip && !isFieldStale('net.wlan.ip')) ? w.ip : '--');
-        txt('wifi-mac', (w.mac && !isFieldStale('net.wlan.mac')) ? w.mac : '--');
-        txt('wifi-bssid', (w.bssid && !isFieldStale('net.wlan.bssid')) ? w.bssid : '--');
+        txt('wifi-ip', (w.ip && !isFieldStale('network_status/WiFi_IP_Address')) ? w.ip : '--');
+        txt('wifi-mac', (w.mac && !isFieldStale('network_status/WiFi_MAC_Address')) ? w.mac : '--');
+        txt('wifi-bssid', (w.bssid && !isFieldStale('network_status/Access_Point_MAC_Address_BSSID')) ? w.bssid : '--');
 
-        var freq = (w.frequency && !isFieldStale('net.wlan.frequency')) ? w.frequency + ' MHz' : '--';
+        var freq = (w.frequency && !isFieldStale('network_status/WiFi_Frequency_MHz')) ? w.frequency + ' MHz' : '--';
         txt('wifi-freq', freq);
 
-        if (w.ssid && !isFieldStale('net.wlan.ssid')) {
+        if (w.ssid && !isFieldStale('network_status/Connected_Network_Name_SSID')) {
             var hid = el('wifi-ssid-value');
             var lbl = el('wifi-ssid-label');
             if (hid && (!hid.value || hid.value === 'Univa-Guest')) {
@@ -942,7 +945,7 @@
     var renderLte = function () {
         var l = _cache.lte;
 
-        if (l.power !== undefined && !isFieldStale('net.lte.power')) {
+        if (l.power !== undefined && !isFieldStale('network_status/Transmit_Power_Level')) {
             if (!isUp(l.power)) {
                 show('lte-power-off-alert');
                 hide('lte-live-panel');
@@ -959,11 +962,11 @@
         show('lte-live-panel');
 
         var state = l.state;
-        if (isFieldStale('net.lte.state')) state = null;
+        if (isFieldStale('network_status/Cellular_Connection_State')) state = null;
         var lteUp = isUp(state);
         stateBadge('lte-state-badge', lteUp);
 
-        var pct = (!isFieldStale('net.lte.signal_pct') && l.signal_pct !== undefined)
+        var pct = (!isFieldStale('network_status/Signal_Strength_Percentage') && l.signal_pct !== undefined)
             ? parseInt(l.signal_pct) || 0
             : 0;
         var fill = el('lte-signal-fill');
@@ -973,13 +976,13 @@
         var pctEl = el('lte-signal-pct');
         if (pctEl) pctEl.textContent = pct + '%';
 
-        txt('lte-ip', (!isFieldStale('net.lte.ip') && l.ip) ? l.ip : '--');
-        txt('lte-operator-name', (!isFieldStale('net.lte.operator_name') && l.operator_name) ? l.operator_name : '--');
-        txt('lte-operator-id', (!isFieldStale('net.lte.operator_id') && l.operator_id) ? l.operator_id : '--');
-        txt('lte-tech', (!isFieldStale('net.lte.tech') && l.tech) ? l.tech : '--');
-        txt('lte-imei', (!isFieldStale('net.lte.imei') && l.imei) ? l.imei : '--');
-        txt('lte-iccid', (!isFieldStale('net.lte.iccid') && l.iccid) ? l.iccid : '--');
-        txt('lte-imsi', (!isFieldStale('net.lte.imsi') && l.imsi) ? l.imsi : '--');
+        txt('lte-ip', (!isFieldStale('network_status/Cellular_IP_Address') && l.ip) ? l.ip : '--');
+        txt('lte-operator-name', (!isFieldStale('network_status/Operator_Name') && l.operator_name) ? l.operator_name : '--');
+        txt('lte-operator-id', (!isFieldStale('network_status/Operator_ID') && l.operator_id) ? l.operator_id : '--');
+        txt('lte-tech', (!isFieldStale('network_status/Network_Technology_2G_3G_4G_5G') && l.tech) ? l.tech : '--');
+        txt('lte-imei', (!isFieldStale('network_status/Device_IMEI') && l.imei) ? l.imei : '--');
+        txt('lte-iccid', (!isFieldStale('network_status/SIM_Card_ICCID') && l.iccid) ? l.iccid : '--');
+        txt('lte-imsi', (!isFieldStale('network_status/SIM_Card_IMSI') && l.imsi) ? l.imsi : '--');
 
         updateGlobalMacDisplay();
         _autoHighlight();
@@ -1058,6 +1061,9 @@
                 }
             }
             return true;
+        } else if (datapoint.startsWith('network_status/')) {
+            // Usually handled by 'path' above, but keep as fallback if ever needed
+            return true;
         }
 
         return false;
@@ -1081,11 +1087,12 @@
 
         if (data.type === 'network_status_delta' && data.datapoint) {
             updateCacheFromDelta(data.datapoint, data.value, data.path);
-            if (data.datapoint.includes('.lte.')) {
+            var dp = data.datapoint;
+            if (dp.includes('.lte.') || dp.includes('/Cellular_') || dp.includes('/Signal_Strength_') || dp.includes('/Transmit_Power_') || dp.includes('/Device_IMEI') || dp.includes('/SIM_Card_') || dp.includes('/Operator_') || dp.includes('/Network_Technology_')) {
                 renderLte();
-            } else if (data.datapoint.includes('.wlan.')) {
+            } else if (dp.includes('.wlan.') || dp.includes('/WiFi_') || dp.includes('/Connected_Network_') || dp.includes('/Access_Point_')) {
                 renderWifi();
-            } else if (data.datapoint.includes('.lan.')) {
+            } else if (dp.includes('.lan.') || dp.includes('/ETH0_') || dp.includes('/ETH1_')) {
                 renderEthernet();
             }
             return;
