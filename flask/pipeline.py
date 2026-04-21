@@ -1100,29 +1100,39 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
 
                 # -- Datapoint received -----------------------------------
                 elif etype == EventType.RECEIVE_DONE:
-                    dp = event.datapoint_name
+                    # dp_name is the name received from the pipeline (e.g. "ETH0_MAC_Address")
+                    # but our whitelist and UI mapping expect "network_status/ETH0_MAC_Address"
+                    dp_name = event.datapoint_name
+                    service = event.service_name
+                    
+                    # Canonical name for whitelisting and internal state
+                    dp = dp_name
+                    if service == "network_status" and not dp.startswith("network_status/") and dp != "network_status":
+                        dp = "network_status/{}".format(dp_name)
+
                     with _dp_whitelist_lock:
                         _dp_allowed = dp in _dp_whitelist
                     if _dp_allowed:
-                        logger.debug("[RECEIVE_DONE: '{}' from '{}'".format(dp, event.service_name))
+                        logger.debug("[RECEIVE_DONE: '{}' from '{}' (dp={})".format(dp_name, service, dp))
                     if not _dp_allowed:
                         return  # not whitelisted -- skip read, store and broadcast
                     try:
-                        dtype = client.get_datapoint_type(dp)
+                        # Use ORIGINAL name to read from the internal client storage
+                        dtype = client.get_datapoint_type(dp_name)
                         if dtype == DataType.STRING:
-                            val = client.get_datapoint_string(dp)
+                            val = client.get_datapoint_string(dp_name)
                         elif dtype == DataType.INT:
-                            val = client.get_datapoint_integer(dp)
+                            val = client.get_datapoint_integer(dp_name)
                         elif dtype == DataType.LONG:
-                            val = client.get_datapoint_long(dp)
+                            val = client.get_datapoint_long(dp_name)
                         elif dtype == DataType.FLOAT:
-                            val = client.get_datapoint_float(dp)
+                            val = client.get_datapoint_float(dp_name)
                         elif dtype == DataType.DOUBLE:
-                            val = client.get_datapoint_double(dp)
+                            val = client.get_datapoint_double(dp_name)
                         elif dtype == DataType.BOOL:
-                            val = client.get_datapoint_boolean(dp)
+                            val = client.get_datapoint_boolean(dp_name)
                         else:
-                            val = client.get_datapoint_string(dp)
+                            val = client.get_datapoint_string(dp_name)
 
                         with pipeline_state["lock"]:
                             pipeline_state[dp] = val
@@ -1144,44 +1154,9 @@ def _run_pipeline_thread(host="127.0.0.1", port=7000):
                             try:
                                 from general import update_network_status_field
 
-                                if dp == "network_status":
-                                    update_network_status_field("network_status", val)
-                                    main_loop = pipeline_state.get("main_loop")
-                                    _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": val}))
-                                else:
-                                    if isinstance(val, str):
-                                        try:
-                                            parsed = json.loads(val)
-                                            logger.debug("[Parsed {}: {}".format(dp, parsed))
-                                        except json.JSONDecodeError as e:
-                                            # Value is not valid JSON (e.g. lte sends unquoted keys).
-                                            # Store raw string and broadcast as-is; skip dict traversal.
-                                            logger.warning("[JSON parse error for {}: {}".format(dp, e))
-                                            update_network_status_field(dp, val)
-                                            main_loop = pipeline_state.get("main_loop")
-                                            _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": val}))
-                                            parsed = None  # sentinel -- skip dict-walk below
-                                    else:
-                                        parsed = val
-
-                                    if parsed is None:
-                                        pass  # already handled in except block above
-                                    elif not isinstance(parsed, dict):
-                                        update_network_status_field(dp, parsed)
-                                        main_loop = pipeline_state.get("main_loop")
-                                        _schedule_broadcast(main_loop, json.dumps({"datapoint": dp, "value": parsed}))
-                                    else:
-                                        for section, section_data in parsed.items():
-                                            if isinstance(section_data, dict):
-                                                for subsection, subsection_data in section_data.items():
-                                                    if isinstance(subsection_data, dict):
-                                                        for field_name, field_value in subsection_data.items():
-                                                            update_network_status_field(field_name, field_value)
-                                                            logger.debug("Updated {} = {}".format(field_name, field_value))
-                                                    else:
-                                                        update_network_status_field(subsection, subsection_data)
-                                            else:
-                                                update_network_status_field(section, section_data)
+                                # Every network update is now an individual flat datapoint.
+                                # No more dictionary parsing or grouping fallbacks.
+                                update_network_status_field(dp, val)
 
                             except Exception as _ne:
                                 logger.error("[network_status parse error: {} for dp={}, val={} (type: {})".format(

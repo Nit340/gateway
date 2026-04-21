@@ -902,6 +902,16 @@
                 _selectedEth = iface;
                 updateGlobalMacDisplay();
 
+                fetch('/api/general-configuration', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ network: { eth_selected: iface } })
+                }).catch(function (e) {
+                    console.warn('[NET-ETH] failed to persist eth_selected:', e);
+                });
+
+
                 if (_acEnabled) {
                     var e0Up = isUp((_cache.lan.eth0 || {}).state);
                     var e1Up = isUp((_cache.lan.eth1 || {}).state);
@@ -1103,6 +1113,14 @@
             mergeInto(_cache.lan, data.data.lan || {});
             mergeInto(_cache.wlan, data.data.wlan || {});
             mergeInto(_cache.lte, data.data.lte || {});
+
+            // Initialize timestamps for all canonical network_status/ fields present in the snapshot.
+            // This prevents data from disappearing after a refresh due to the stale check.
+            Object.keys(data.data).forEach(function (k) {
+                if (k.startsWith('network_status/')) {
+                    updateFieldTimestamp(k);
+                }
+            });
 
             if (data.data.lan) {
                 updateTimestampsFromObject(data.data.lan, 'net.lan');
@@ -1370,6 +1388,7 @@
         if (hint) hint.textContent = tz === 'Asia/Kolkata' ? 'IST (UTC+05:30)' : 'GMT (UTC+00:00)';
     };
 
+    // Command line to run project: npm run dev
     var startLiveInputs = function () {
         _tickInputs();
         if (_clockTimer) clearInterval(_clockTimer);

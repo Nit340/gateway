@@ -444,13 +444,12 @@ function _renderMappingsTable(conn) {
         const allIndividualTags = [];
         individuals.forEach((mapping, mIdx) => {
             const points = _flattenDatapoints(mapping.datapoints || {});
-            const alias  = mapping.alias || '';   // alias lives at top level for individuals
-            points.forEach(({name, dtype}) => {
+            points.forEach(({name, dtype, alias: innerAlias}) => {
                 allIndividualTags.push({
                     mappingIdx: mIdx,
                     name,
                     dtype,
-                    alias,
+                    alias: innerAlias || mapping.alias || '',
                     channel: mapping.channel || ''
                 });
             });

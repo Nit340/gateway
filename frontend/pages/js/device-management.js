@@ -270,7 +270,15 @@
 
 
     }
-
+function formatParity(parityCode) {
+    if (!parityCode) return 'None';
+    const parityMap = {
+        'N': 'None',
+        'E': 'Even', 
+        'O': 'Odd'
+    };
+    return parityMap[parityCode.toUpperCase()] || parityCode;
+}
     // ==================== ROLE BASED ACCESS ====================
     async function fetchUserRole() {
         try {
@@ -884,10 +892,9 @@
                                     <div class="text-sm text-slate-700">${config.data_bits || 8}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs text-slate-500 mb-0.5">Parity</div>
-                                    <div class="text-sm text-slate-700">${config.parity || 'N'}</div>
-                                </div>
-                                <div>
+    <div class="text-xs text-slate-500 mb-0.5">Parity</div>
+    <div class="text-sm text-slate-700">${formatParity(config.parity)}</div>
+</div>                                <div>
                                     <div class="text-xs text-slate-500 mb-0.5">Stop Bits</div>
                                     <div class="text-sm text-slate-700">${config.stop_bits || 1}</div>
                                 </div>
@@ -1343,7 +1350,7 @@
                     ${sel('editDataBits','Data Bits', cfg.data_bits||8, [8,7,6,5].map(v=>({v,l:v})))}
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    ${sel('editParity','Parity', cfg.parity||'N', [{v:'N',l:'N'},{v:'E',l:'E'},{v:'O',l:'O'}])}
+                    ${sel('editParity','Parity', cfg.parity||'N', [{v:'N',l:'None'},{v:'E',l:'Even'},{v:'O',l:'Odd'}])}
                     ${sel('editStopBits','Stop Bits', cfg.stop_bits||1, [{v:1,l:'1'},{v:2,l:'2'}])}
                 </div>
                 <div class="grid grid-cols-3 gap-3">

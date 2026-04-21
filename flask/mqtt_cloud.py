@@ -289,6 +289,29 @@ def _get_default_channel_for_connection(conn_config):
     return publish[0].get('name', 'default_publish')
 
 
+def _get_default_publish_channel_for_connection(conn_config):
+    """Return the name of the default (or first) publish channel for a connection.
+
+    Used to resolve the heartbeat/offline channel from the UE (upstream/publish)
+    direction instead of the subscribe direction.
+
+    Lookup order:
+      1. publish channel explicitly marked  default=True
+      2. first publish channel in the list
+      3. hard-coded fallback 'default_publish'
+    """
+    channels = conn_config.get('channels', {})
+    publish  = channels.get('publish', [])
+    if not publish:
+        return 'default_publish'
+    # Prefer channel explicitly marked default=True
+    for ch in publish:
+        if ch.get('default'):
+            return ch.get('name', 'default_publish')
+    # Fall back to first channel
+    return publish[0].get('name', 'default_publish')
+
+
 def _get_default_subscribe_channel_for_connection(conn_config):
     """Return the name of the default (or first) subscribe channel for a connection."""
     channels  = conn_config.get('channels', {})
@@ -309,8 +332,8 @@ def build_iot_gateway_config():
     Returns a dict ready to be json.dumps()-ed.
 
     - wifi credentials come from general_configuration (network.wifi.ssid / .password)
-    - heartbeat.channel is taken from the first subscribe channel of the local MQTT
-      broker connection so it always matches whatever is configured in the MQTT form
+    - heartbeat.channel is taken from the default PUBLISH channel of the local MQTT
+      broker connection so it always matches the UE publish direction.
     """
     from database import get_general_configuration, get_db_connection
     import time as _time
@@ -325,13 +348,13 @@ def build_iot_gateway_config():
     wifi_ssid     = wifi.get('ssid',     '')
     wifi_password = wifi.get('password', '')
     
-    cell_apn = cell.get('apn', '')
-    cell_user     = cell.get('username', '')
-    cell_pass     = cell.get('password', '')
+    cell_apn  = cell.get('apn', '')
+    cell_user = cell.get('username', '')
+    cell_pass = cell.get('password', '')
     
     # Read heartbeat interval and offline threshold as separate values
     heartbeat_interval_sec = int(hb.get('interval', 30))
-    offline_threshold_sec = int(hb.get('offline_threshold', 120))
+    offline_threshold_sec  = int(hb.get('offline_threshold', 120))
 
     # -- 2. Load all enabled MQTT connections ---------------------------------
     db  = get_db_connection()
@@ -343,19 +366,17 @@ def build_iot_gateway_config():
 
     if not rows:
         logger.info("[IOT-CFG] No enabled MQTT connections found - building empty config")
-        # Proceed to assemble a minimal empty config instead of returning None
-        # so the iot_gateway service is correctly "cleared" rather than skipped.
         rows = []
 
-    servers          = {}
-    all_mappings     = []
+    servers           = {}
+    all_mappings      = []
     heartbeat_channel = None   # Initialize as None
 
     for row in rows:
         cid, name, enabled, cfg_raw = row
         cfg = _cfg(cfg_raw)
 
-        # Canonical server key: local broker ? 'mqtt', cloud/CMS ? 'mqtt_cloud'
+        # Canonical server key: local broker → 'mqtt', cloud/CMS → 'mqtt_cloud'
         server_key = name.lower().replace(' ', '_').replace('-', '_')
         if 'cloud' in server_key or 'cms' in server_key:
             server_key = 'mqtt_cloud'
@@ -384,14 +405,15 @@ def build_iot_gateway_config():
 
         servers[server_key] = server_entry
 
-        # heartbeat.channel = the 'name' of the default subscribe channel
-        # Use the first available if no default marked, but prioritize the 'mqtt' server
-        if raw_sub:
-            def_ch = _get_default_subscribe_channel_for_connection(cfg)
+        # heartbeat.channel = the 'name' of the default PUBLISH channel (UE direction).
+        # Use _get_default_publish_channel_for_connection so it follows the publish
+        # side, not the subscribe side.  Prioritise the 'mqtt' (local broker) server.
+        if raw_pub:
+            def_ch = _get_default_publish_channel_for_connection(cfg)
             if server_key == 'mqtt' or heartbeat_channel is None:
                 heartbeat_channel = def_ch
 
-        # Collect mappings   groups pass through as-is;
+        # Collect mappings – groups pass through as-is;
         # individual tags each become their own mapping entry.
         default_ch   = _get_default_channel_for_connection(cfg)
         raw_mappings = cfg.get('mappings', [])
@@ -400,7 +422,6 @@ def build_iot_gateway_config():
             channel = m.get('channel') or default_ch
             if m.get('alias'):
                 # Group: preserve alias, type, channel, and datapoints as-is
-                # datapoints entries may be plain strings or {name, alias} objects
                 entry = {
                     'alias':      m['alias'],
                     'channel':    channel,
@@ -408,7 +429,7 @@ def build_iot_gateway_config():
                 }
                 all_mappings.append(entry)
             else:
-                # Individual: one mapping entry per tag, preserving {name, alias} or plain string
+                # Individual: one mapping entry per tag
                 for dtype, tag_entries in (m.get('datapoints') or {}).items():
                     for tag_entry in tag_entries:
                         all_mappings.append({
@@ -418,7 +439,6 @@ def build_iot_gateway_config():
 
     if not all_mappings:
         logger.info("[IOT-CFG] No mappings found for enabled MQTT connections - building empty config")
-        # Proceed to assemble minimal config to ensure service sync
         all_mappings = []
 
     # -- 3. Assemble ---------------------------------------------------------

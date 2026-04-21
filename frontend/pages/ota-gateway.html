@@ -8,7 +8,7 @@
     </div>
 
     <!-- Section 1: System Info & Status -->
-    <section id="system-info-section" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section id="system-info-section" class="opacity-50 pointer-events-none select-none grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- System Info Card -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 lg:col-span-2">
             <div class="flex justify-between items-start mb-4">
@@ -107,7 +107,7 @@
     </section>
 
     <!-- Section 2: Available Updates -->
-    <section id="available-updates-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <section id="available-updates-section" class="opacity-50 pointer-events-none select-none bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <div class="flex justify-between items-center mb-6">
             <h2 class="text-lg font-semibold text-slate-800 flex items-center">
                 <i class="fa-solid fa-cloud-download-alt text-blue-600 mr-2"></i> Available Updates
@@ -210,7 +210,7 @@
     </section>
 
     <!-- Section 3: Upload & Config -->
-    <section id="ota-upload-section" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section id="ota-upload-section" class="opacity-50 pointer-events-none select-none grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Upload Panel -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
@@ -351,7 +351,8 @@
             </h2>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
+                <!-- Rollback to Partition A -->
+                <div class="opacity-50 pointer-events-none select-none p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
                     <div class="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center mb-3">
                         <i class="fa-solid fa-rotate-left text-slate-600"></i>
                     </div>
@@ -359,8 +360,8 @@
                     <p class="text-xs text-slate-500 mt-1 mb-3">Revert to the last known good active partition immediately.</p>
                     <button id="rollback-btn" class="w-full py-1.5 text-xs font-medium bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-50">Execute Rollback</button>
                 </div>
-                
-                <div class="p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
+                <!-- Restore Previous OS -->
+                <div class="opacity-50 pointer-events-none select-none p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
                     <div class="h-10 w-10 bg-amber-50 rounded-full flex items-center justify-center mb-3">
                         <i class="fa-solid fa-clock-rotate-left text-amber-600"></i>
                     </div>
@@ -379,7 +380,8 @@
                 </div>
             </div>
 
-            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+            <!-- Upload Recovery Image -->
+            <div class="opacity-50 pointer-events-none select-none bg-slate-50 rounded-lg p-4 border border-slate-200">
                 <div class="flex justify-between items-center mb-2">
                     <h4 class="text-sm font-semibold text-slate-800">Upload Recovery Image</h4>
                     <span id="current-recovery" class="text-xs text-slate-500">Current: recovery_v1.2.img</span>
@@ -392,7 +394,7 @@
         </div>
 
         <!-- Safety Constraints -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div class="opacity-50 pointer-events-none select-none bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
                 <i class="fa-solid fa-lock text-slate-600 mr-2"></i> Safety Constraints
             </h2>
@@ -440,7 +442,7 @@
     </section>
 
     <!-- Section 5: Real-time Monitor -->
-    <section id="ota-monitor-section" class="bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6 text-white overflow-hidden relative">
+    <section id="ota-monitor-section" class="opacity-50 pointer-events-none select-none bg-slate-900 rounded-xl shadow-lg border border-slate-800 p-6 text-white overflow-hidden relative">
         <div class="absolute top-0 right-0 p-4 opacity-10">
             <i class="fa-solid fa-terminal text-9xl"></i>
         </div>
