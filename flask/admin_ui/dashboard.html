@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Admin</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{
+  --bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;
+  --border:#2e2b28;--border2:#3a3632;
+  --accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--accent-glow2:rgba(249,115,22,0.08);
+  --text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;
+  --green:#4ade80;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+
+/* SIDEBAR */
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.sidebar-link{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.sidebar-link:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.sidebar-link.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.sidebar-link.active .mat{color:var(--accent);}
+.sidebar-link:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+
+/* TOPBAR */
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+
+/* STAT CARDS */
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+.stat-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+.stat-val{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:var(--text);line-height:1;}
+
+/* QUICK CARDS */
+.quick-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;text-decoration:none;display:block;transition:all .15s;}
+.quick-card:hover{border-color:rgba(249,115,22,0.35);background:rgba(249,115,22,0.04);}
+.quick-card:hover .qc-title{color:var(--accent);}
+.qc-icon{width:44px;height:44px;background:var(--accent-glow);border:1px solid rgba(249,115,22,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;}
+.qc-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;transition:color .15s;}
+.qc-desc{font-size:11.5px;color:var(--text3);line-height:1.5;}
+
+/* DB PATH */
+.dbpath-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+.dbpath-val{font-family:'Inter',monospace;font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-top:8px;}
+
+/* Online indicator */
+.online-dot{position:relative;display:inline-flex;width:8px;height:8px;}
+.online-dot span:first-child{position:absolute;inset:0;border-radius:50%;background:var(--green);opacity:0.5;animation:ping 1.2s ease-in-out infinite;}
+.online-dot span:last-child{position:relative;width:8px;height:8px;border-radius:50%;background:var(--green);display:block;}
+@keyframes ping{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(2);opacity:0;}}
+
+::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <span class="mat text-white" style="font-size:20px;color:white;">precision_manufacturing</span>
+    </div>
+    <div>
+      <div class="logo-name">Univa</div>
+      <div class="logo-sub">Admin Panel</div>
+    </div>
+  </div>
+
+  <nav>
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="sidebar-link active" id="nav-dashboard">
+      <span class="mat">dashboard</span> Dashboard
+    </a>
+    <a href="/admin/pipeline" class="sidebar-link" id="nav-pipeline">
+      <span class="mat">device_hub</span> Pipeline
+    </a>
+    <a href="/admin/database" class="sidebar-link" id="nav-database">
+      <span class="mat">table_chart</span> Database
+    </a>
+    <a href="/admin/logs" class="sidebar-link" id="nav-logs">
+      <span class="mat">terminal</span> Logs
+    </a>
+
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="sidebar-link"><span class="mat">settings_overscan</span>Modal Config</a>
+
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="sidebar-link" id="nav-users">
+      <span class="mat">manage_accounts</span> Users
+    </a>
+    <a href="/admin/access-control" class="sidebar-link" id="nav-access-control">
+      <span class="mat">shield_lock</span> Access Control
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <button onclick="logout()" class="sidebar-link" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);">
+      <span class="mat">logout</span> Logout
+    </button>
+  </div>
+</aside>
+
+<!-- Main -->
+<div style="flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;">
+  <header>
+    <h1 class="topbar-title">Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--text3);">
+      <span class="online-dot"><span></span><span></span></span>
+      Server Online
+    </div>
+  </header>
+
+  <main style="flex:1;padding:22px;overflow:auto;">
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+      <div class="stat-card">
+        <div class="stat-label">Modbus Devices</div>
+        <div class="stat-val" id="stat-modbus">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Loadcell Devices</div>
+        <div class="stat-val" id="stat-loadcell">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Datapoints</div>
+        <div class="stat-val" id="stat-datapoints">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Admin Users</div>
+        <div class="stat-val" id="stat-users">–</div>
+      </div>
+    </div>
+
+    <!-- Quick nav -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+      <a href="/admin/pipeline" class="quick-card">
+        <div class="qc-icon">
+          <span class="mat" style="font-size:22px;color:var(--accent);">device_hub</span>
+        </div>
+        <div class="qc-title">Pipeline Controller</div>
+        <div class="qc-desc">Manage service targets, send modbus &amp; loadcell configs to pipeline services.</div>
+      </a>
+      <a href="/admin/database" class="quick-card">
+        <div class="qc-icon">
+          <span class="mat" style="font-size:22px;color:var(--accent);">table_chart</span>
+        </div>
+        <div class="qc-title">Database Manager</div>
+        <div class="qc-desc">Browse, insert, edit and delete records in all database tables.</div>
+      </a>
+      <a href="/admin/users" class="quick-card">
+        <div class="qc-icon">
+          <span class="mat" style="font-size:22px;color:var(--accent);">manage_accounts</span>
+        </div>
+        <div class="qc-title">User Management</div>
+        <div class="qc-desc">Manage admin panel users and WebUI operator accounts.</div>
+      </a>
+    </div>
+
+    <!-- DB path -->
+    <div class="dbpath-card">
+      <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Database Location</div>
+      <div id="dbPath" class="dbpath-val">Loading…</div>
+      <p style="font-size:11px;color:var(--text3);margin-top:8px;">Change via <code style="background:var(--surface3);padding:1px 6px;border-radius:4px;font-size:11px;color:var(--text2);">GATEWAY_DB_FILE</code> environment variable on server startup.</p>
+    </div>
+
+    <!-- Live Configuration Previews -->
+    <div style="margin-bottom:24px; animation: fadeIn 0.6s ease-out;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:32px;height:32px;background:var(--accent-glow);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <span class="mat" style="color:var(--accent);font-size:20px;">data_object</span>
+          </div>
+          <div>
+            <h2 style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--text);margin:0;letter-spacing:-0.01em;">Live Service Configurations</h2>
+            <p style="font-size:10px;color:var(--text3);margin:0;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;">Real-time sync from active rules & database</p>
+          </div>
+        </div>
+        <button onclick="loadConfigPreviews()" class="btn-outline-orange" style="padding:6px 14px;font-size:11px;border-radius:10px;">
+          <span class="mat" style="font-size:16px;">sync</span> Sync State
+        </button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:16px;">
+        <!-- Core Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(249,115,22,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(249,115,22,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--accent);font-size:16px;">terminal</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Core Pipeline</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-core" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--accent);opacity:0.6;"></div>
+          </div>
+        </div>
+
+        <!-- Modbus Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(96,165,250,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(96,165,250,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--blue);font-size:16px;">settings_ethernet</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Modbus Mapping</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-modbus" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--blue);opacity:0.6;"></div>
+          </div>
+        </div>
+
+        <!-- Loadcell Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(74,222,128,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(74,222,128,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--green);font-size:16px;">scale</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">Loadcell Calibration</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-loadcell" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--green);opacity:0.6;"></div>
+          </div>
+        </div>
+
+        <!-- IoT Card -->
+        <div class="stat-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;height:320px;border-color:rgba(251,191,36,0.15);transition:transform 0.2s;cursor:default;">
+          <div style="padding:12px 16px;background:linear-gradient(90deg, var(--surface2) 0%, var(--surface) 100%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <div style="width:24px;height:24px;background:rgba(251,191,36,0.1);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+              <span class="mat" style="color:var(--yellow);font-size:16px;">cloud_sync</span>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.08em;flex:1;">IoT Cloud Sync</span>
+            <span class="ver-badge ver-ok" style="font-size:9px;">Active</span>
+          </div>
+          <div style="position:relative;flex:1;background:var(--bg);overflow:hidden;">
+            <pre id="preview-iot" style="height:100%;margin:0;padding:16px;font-size:11px;overflow:auto;color:var(--text2);font-family:'JetBrains Mono','Fira Code',monospace;line-height:1.6;scrollbar-width:thin;">{}</pre>
+            <div style="position:absolute;top:0;right:0;bottom:0;width:4px;background:var(--yellow);opacity:0.6;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+  </main>
+</div>
+
+<script>
+  const path = window.location.pathname;
+  document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('active'));
+  if (path === '/admin' || path === '/admin/') document.getElementById('nav-dashboard').classList.add('active');
+  else if (path.includes('/admin/pipeline')) document.getElementById('nav-pipeline').classList.add('active');
+  else if (path.includes('/admin/database')) document.getElementById('nav-database').classList.add('active');
+  else if (path.includes('/admin/users'))    document.getElementById('nav-users').classList.add('active');
+  else if (path.includes('/admin/logs'))     document.getElementById('nav-logs').classList.add('active');
+  else if (path.includes('/admin/access-control')) document.getElementById('nav-access-control').classList.add('active');
+
+  async function logout() {
+    await fetch('/admin/logout');
+    window.location.href = '/admin/login';
+  }
+
+  async function loadConfigPreviews() {
+    try {
+      const res = await fetch('/api/admin/config-previews');
+      const data = await res.json();
+      document.getElementById('preview-core').textContent     = JSON.stringify(data.core || {}, null, 2);
+      document.getElementById('preview-modbus').textContent   = JSON.stringify(data.modbus || {}, null, 2);
+      document.getElementById('preview-loadcell').textContent = JSON.stringify(data.loadcell || {}, null, 2);
+      document.getElementById('preview-iot').textContent      = JSON.stringify(data.iot_gateway || {}, null, 2);
+    } catch(e) {
+      console.error("Failed to load previews", e);
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const [u, m, l, d] = await Promise.all([
+        fetch('/api/admin/users/admin').then(r=>r.json()),
+        fetch('/api/vfd/devices').then(r=>r.json()).catch(()=>({total:0})),
+        fetch('/api/loadcell/devices').then(r=>r.json()).catch(()=>({total:0})),
+        fetch('/api/vfd/datapoints').then(r=>r.json()).catch(()=>({total:0})),
+      ]);
+      document.getElementById('stat-users').textContent = (u.users||[]).length;
+      document.getElementById('stat-modbus').textContent = m.total || 0;
+      document.getElementById('stat-loadcell').textContent = l.total || 0;
+      document.getElementById('stat-datapoints').textContent = d.total || 0;
+
+    } catch(e) {}
+    document.getElementById('dbPath').textContent = 'Configured on server (see GATEWAY_DB_FILE env var)';
+    loadConfigPreviews();
+  }
+  loadStats();
+</script>
+</body>
+</html>

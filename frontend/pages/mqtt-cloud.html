@@ -1,0 +1,363 @@
+<!-- mqtt-cloud.html -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Cloud Connection Manager</h1>
+            <p class="text-slate-500 text-sm mt-1">Manage MQTT brokers, HTTP endpoints, and FTP servers</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button id="addConnectionBtn" class="compact-button bg-primary hover:bg-primaryHover text-white flex items-center">
+                <i class="fa-solid fa-plus mr-2 text-sm"></i>Add Connection
+            </button>
+            <button id="exportBtn" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" title="Export connections backup">
+                <i class="fa-solid fa-download mr-2 text-sm"></i>Export
+            </button>
+            <button id="importBtn" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center" title="Import connections backup">
+                <i class="fa-solid fa-upload mr-2 text-sm"></i>Import
+            </button>
+            <button id="refreshBtn" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50 flex items-center">
+                <i class="fa-solid fa-arrows-rotate mr-2 text-sm"></i>Refresh
+            </button>
+            <input type="file" id="importFileInput" accept=".json,.csv" style="display: none;" />
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- LEFT: list -->
+        <section class="lg:col-span-1">
+            <div class="bg-white rounded-xl shadow-sm border border-border">
+                <div class="p-4 border-b border-border">
+                    <h2 class="text-sm font-semibold text-slate-800 flex items-center">
+                        <i class="fa-solid fa-list mr-2 text-primary text-xs"></i>
+                        Connections (<span id="connectionCount">0</span>)
+                    </h2>
+                </div>
+                <div class="p-3 space-y-2" id="connectionsList">
+                    <div id="connectionsEmpty" class="text-center py-10 text-slate-400">
+                        <i class="fa-solid fa-cloud text-3xl mb-3 block"></i>
+                        <p class="text-sm">No connections yet</p>
+                        <p class="text-xs mt-1">Click "Add Connection" to begin</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT: panel -->
+        <section class="lg:col-span-3 space-y-4">
+            <!-- Status bar + stats -->
+            <div class="bg-white rounded-xl shadow-sm border border-border p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-900" id="panelName">No Connection Selected</h3>
+                        <p class="text-xs text-slate-500" id="panelDesc">Select a connection to view details</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button id="deleteBtn" class="compact-button border border-red-200 text-red-600 hover:bg-red-50 text-xs" style="display:none;">
+                            <i class="fa-solid fa-trash mr-1"></i>Delete
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-medium text-slate-600">Enabled</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="enabledToggle" disabled>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-3">
+                    <div class="bg-slate-50 p-2 rounded text-center">
+                        <div class="text-xs text-slate-500">Messages</div>
+                        <div class="text-sm font-bold text-slate-900" id="statMessages">0</div>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded text-center">
+                        <div class="text-xs text-slate-500">Errors</div>
+                        <div class="text-sm font-bold text-red-600" id="statErrors">0</div>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded text-center">
+                        <div class="text-xs text-slate-500">Last Sent</div>
+                        <div class="text-sm font-bold text-slate-900 text-xs" id="statLastSent">Never</div>
+                    </div>
+                    <div class="bg-slate-50 p-2 rounded text-center">
+                        <div class="text-xs text-slate-500">Latency</div>
+                        <div class="text-sm font-bold text-slate-900" id="statLatency">0 ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form injection target -->
+            <div class="bg-white rounded-xl shadow-sm border border-border" id="formPanel">
+                <div id="formPlaceholder" class="p-12 text-center text-slate-400">
+                    <i class="fa-solid fa-plug text-3xl mb-3 block"></i>
+                    <p class="text-sm">Select a connection to configure</p>
+                    <p class="text-xs mt-1">or click "Add Connection" to create one</p>
+                </div>
+                <div id="formContent" class="hidden p-4"></div>
+            </div>
+
+
+        </section>
+    </div>
+</div>
+
+<footer class="mt-8 pb-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between p-6 bg-white rounded-xl shadow-sm border border-border">
+            <p class="text-sm text-slate-500"><i class="fa-solid fa-circle-info mr-1"></i> Save each tab individually, or use <strong>Save All</strong>.</p>
+            <button id="footerSaveBtn" class="bg-primary hover:bg-primaryHover text-white font-medium text-sm px-6 py-2 rounded-lg flex items-center shadow-lg shadow-blue-500/30">
+                <i class="fa-solid fa-floppy-disk mr-2"></i>Save All
+            </button>
+        </div>
+    </div>
+</footer>
+
+<!-- ADD CONNECTION MODAL -->
+<div id="addConnectionModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:10px;width:92%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div class="p-5">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-base font-semibold text-slate-800"><i class="fa-solid fa-plus-circle mr-2 text-blue-600"></i>Add Connection</h2>
+        <button id="closeAddModal" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <!-- Step 1 -->
+      <div id="stepType">
+        <p class="text-xs text-slate-500 mb-4">Choose protocol:</p>
+        <div class="grid grid-cols-2 gap-3 mb-4" id="typeGrid"></div>
+        <div id="typePreview" class="hidden mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="text-xs text-blue-600 mb-0.5">Selected</div>
+          <div class="font-semibold text-blue-900" id="typePreviewName"> </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-4 border-t border-slate-200">
+          <button id="cancelType" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button id="proceedBtn" disabled style="opacity:.4;cursor:not-allowed;" class="compact-button bg-blue-600 text-white">
+            Next <i class="fa-solid fa-arrow-right ml-1"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Step 2 -->
+      <div id="stepForm" style="display:none;">
+        <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="text-xs text-blue-600 mb-0.5">Protocol</div>
+          <div class="font-semibold text-blue-900" id="formCtxName"> </div>
+        </div>
+        <form id="createForm" novalidate class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Connection Name <span class="text-red-500">*</span></label>
+            <input id="addName" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g., Production Broker" required>
+          </div>
+          <!-- MQTT fields -->
+          <div id="addMqttFields">
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-slate-700 mb-1">Broker Host <span class="text-red-500">*</span></label>
+                <input id="addHost" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="broker.example.com">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                <input id="addPort" type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" value="1883">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                <input id="addUsername" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="optional">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                <input id="addPassword" type="password" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="optional">
+              </div>
+            </div>
+          </div>
+          <!-- HTTP fields -->
+          <div id="addHttpFields" class="hidden">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Endpoint URL <span class="text-red-500">*</span></label>
+              <input id="addUrl" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="https://api.example.com/data">
+            </div>
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Method</label>
+                <select id="addMethod" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                  <option value="POST">POST</option><option value="PUT">PUT</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Auth Token</label>
+                <input id="addToken" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="optional">
+              </div>
+            </div>
+          </div>
+          <!-- FTP fields -->
+          <div id="addFtpFields" class="hidden">
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-2">
+                <label class="block text-xs font-medium text-slate-700 mb-1">FTP Host <span class="text-red-500">*</span></label>
+                <input id="addFtpHost" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="ftp.example.com">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Port</label>
+                <input id="addFtpPort" type="number" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" value="21">
+              </div>
+            </div>
+            <div class="mt-3">
+              <label class="block text-xs font-medium text-slate-700 mb-1">Protocol</label>
+              <select id="addFtpProtocol" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+                <option value="ftp">FTP</option><option value="sftp">SFTP</option><option value="ftps">FTPS</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+                <input id="addFtpUser" type="text" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="optional">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                <input id="addFtpPass" type="password" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" placeholder="optional">
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-between pt-4 border-t border-slate-200">
+            <button type="button" id="backBtn" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-arrow-left mr-1"></i>Back</button>
+            <div class="flex gap-2">
+              <button type="button" id="cancelForm" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
+              <button type="submit" class="compact-button bg-blue-600 hover:bg-blue-700 text-white"><i class="fa-solid fa-check mr-1"></i>Create</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD TAGS MODAL -->
+<div id="addTagsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:10px;width:95%;max-width:1000px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div class="p-5 border-b border-slate-200">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-semibold text-slate-800"><i class="fa-solid fa-tags mr-2 text-blue-600"></i>Add Tags to Publish</h2>
+        <button id="closeTagsModal" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="relative mt-3">
+        <input id="tagSearch" type="text" placeholder="Search tags by name, device, or source..." class="w-full pl-8 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+        <i class="fa-solid fa-search absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+      </div>
+    </div>
+    <div class="flex border-b border-slate-200 bg-slate-50 px-5">
+      <button id="tags-tab-system" onclick="window._switchTagsTab('system')" class="px-4 py-2.5 text-xs font-semibold border-b-2 border-blue-600 text-blue-600 transition-all">Available Tags</button>
+      <button id="tags-tab-metadata" onclick="window._switchTagsTab('metadata')" class="px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all">Metadata</button>
+    </div>
+    <div class="overflow-y-auto flex-1">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 sticky top-0">
+          <tr>
+            <th class="p-3 w-10"><input type="checkbox" id="selectAllTags"></th>
+            <th class="p-3 text-left font-medium text-slate-600">Tag Name</th>
+            <th class="p-3 text-left font-medium text-slate-600">Device</th>
+            <th class="p-3 text-left font-medium text-slate-600">Unit</th>
+            <th class="p-3 text-left font-medium text-slate-600">Data Type <span class="text-xs font-normal text-blue-500">(editable)</span></th>
+            <th class="p-3 text-left font-medium text-slate-600">Source</th>
+          </tr>
+        </thead>
+        <tbody id="tagsModalBody">
+          <tr><td colspan="6" class="p6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading tags...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="p-4 border-t border-slate-200 flex justify-between items-center">
+      <span class="text-sm text-slate-500"><span id="tagsSelectedCount">0</span> tags selected</span>
+      <div class="flex gap-2">
+        <button id="tagsCancel" class="compact-button border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
+        <button id="tagsConfirm" class="compact-button bg-blue-600 hover:bg-blue-700 text-white"><i class="fa-solid fa-check mr-1"></i>Add Selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div id="exportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:10px;width:90%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div class="p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-800"><i class="fa-solid fa-download mr-2 text-blue-600"></i>Export Connections</h2>
+        <button id="closeExportModal" class="text-slate-400 hover:text-slate-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">Select format to download the cloud configuration backup:</p>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <button id="exportJsonBtn" class="flex flex-col items-center justify-center p-4 border border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all">
+          <i class="fa-solid fa-file-code text-2xl text-blue-600 mb-2"></i>
+          <span class="text-xs font-semibold text-slate-700">JSON Format</span>
+          <span class="text-[10px] text-slate-400 mt-1">Recommended</span>
+        </button>
+        <button id="exportCsvBtn" class="flex flex-col items-center justify-center p-4 border border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all">
+          <i class="fa-solid fa-file-csv text-2xl text-green-600 mb-2"></i>
+          <span class="text-xs font-semibold text-slate-700">CSV Format</span>
+          <span class="text-[10px] text-slate-400 mt-1">Spreadsheet compatible</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FULL PAGE LOADER (MATCHING GENERAL CONFIG) -->
+<div id="mqtt-page-loader" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center min-w-[300px]">
+        <div class="mb-4">
+            <i class="fa-solid fa-cloud-arrow-up fa-bounce text-4xl text-primary"></i>
+        </div>
+        <div class="text-lg font-semibold text-slate-800" id="mqtt-loader-main">Saving Cloud Configuration</div>
+        <div class="text-sm text-slate-500 mt-1 text-center" id="mqtt-loader-sub">Synchronizing settings with the cloud...</div>
+    </div>
+</div>
+
+<!-- TEST RESULTS MODAL REMOVED -->
+
+<style>
+.compact-button{padding:6px 12px;font-size:13px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;font-weight:500;border:none;transition:all .15s}
+.toggle-switch{position:relative;display:inline-block;width:36px;height:20px}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:#CBD5E1;transition:.3s;border-radius:34px}
+.toggle-slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:3px;background:white;transition:.3s;border-radius:50%}
+input:checked+.toggle-slider{background:#10B981}
+input:checked+.toggle-slider:before{transform:translateX(16px)}
+.conn-item{padding:10px 12px;background:white;border:1px solid #E2E8F0;border-left:4px solid #E2E8F0;border-radius:8px;cursor:pointer;transition:all .15s}
+.conn-item:hover{border-left-color:#93C5FD;background:#F8FAFF}
+.conn-item.active{border-left-color:#2563EB;background:#EFF6FF;border-color:#BFDBFE}
+.conn-item.mqtt{border-left-color:#3B82F6}
+.conn-item.http{border-left-color:#F59E0B}
+.conn-item.ftp{border-left-color:#10B981}
+.type-card{border:2px solid #E2E8F0;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;background:white}
+.type-card:hover{border-color:#2563EB;box-shadow:0 4px 12px rgba(37,99,235,.1);transform:translateY(-2px)}
+.type-card.active{border-color:#2563EB;background:#EFF6FF}
+.cc-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weight:600;text-transform:uppercase;white-space:nowrap;display:inline-block}
+.cc-badge.mqtt{background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE}
+.cc-badge.http{background:#FEF3C7;color:#D97706;border:1px solid #FDE68A}
+.cc-badge.ftp{background:#ECFDF5;color:#059669;border:1px solid #A7F3D0}
+.cc-badge.virtual{background:#F5F3FF;color:#7C3AED;border:1px solid #DDD6FE}
+.cc-status{display:inline-flex;align-items:center;font-size:12px;font-weight:500}
+.cc-status::before{content:'';width:6px;height:6px;border-radius:50%;margin-right:5px}
+.cc-status.online::before{background:#10B981;animation:cc-pulse 2s infinite}
+.cc-status.offline::before{background:#EF4444}
+.cc-status.online{color:#059669}
+.cc-status.offline{color:#EF4444}
+@keyframes cc-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* shared form styles for injected forms */
+.form-section{background:#F8FAFC;border-radius:8px;padding:16px;margin-bottom:12px}
+.form-section-title{font-size:13px;font-weight:600;color:#1E293B;margin-bottom:12px}
+.help-text{font-size:11px;color:#64748B;margin-top:2px;line-height:1.4}
+.compact-input{padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #E2E8F0;width:100%;transition:all .2s}
+.compact-input:focus{outline:none;border-color:#2563EB;box-shadow:0 0 0 2px rgba(37,99,235,.1)}
+.compact-select{padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #E2E8F0;width:100%;background:white;transition:all .2s}
+.compact-select:focus{outline:none;border-color:#2563EB;box-shadow:0 0 0 2px rgba(37,99,235,.1)}
+.radio-group{display:flex;flex-direction:column;gap:8px}
+.radio-option{display:flex;align-items:center;gap:8px}
+.form-input-group{display:flex;gap:8px;align-items:center}
+.key-value-list{border:1px solid #E2E8F0;border-radius:6px;overflow:hidden}
+.key-value-item{display:flex;gap:8px;padding:8px;border-bottom:1px solid #E2E8F0;align-items:center}
+.key-value-item:last-child{border-bottom:none}
+.file-upload{display:flex;align-items:center;gap:8px}
+.file-name{font-size:11px;color:#64748B}
+.tab-button{padding:8px 16px;font-size:12px;font-weight:500;color:#64748B;border-bottom:2px solid transparent;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;transition:all .2s}
+.tab-button:hover{color:#2563EB;border-bottom-color:#E2E8F0}
+.tab-button.active{color:#2563EB;border-bottom-color:#2563EB;font-weight:600}
+.mqtt-tab-content,.http-tab-content{display:none}
+.mqtt-tab-content.active,.http-tab-content.active{display:block}
+</style>

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Users</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{--bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;--border:#2e2b28;--border2:#3a3632;--accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;--green:#4ade80;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.sidebar-link{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.sidebar-link:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.sidebar-link.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.sidebar-link.active .mat{color:var(--accent);}
+.sidebar-link:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+input.field,select.field{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;padding:9px 12px;outline:none;width:100%;transition:border-color .15s;}
+input.field:focus,select.field:focus{border-color:var(--accent);}
+input.field::placeholder{color:var(--text3);}
+select.field option{background:var(--surface2);}
+.btn-primary{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--text2);border:1px solid var(--border2);border-radius:8px;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:50;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;width:480px;box-shadow:0 32px 80px rgba(0,0,0,0.6);}
+/* Table */
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;padding:10px 18px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--border2);}
+.data-table td{font-size:12.5px;color:var(--text2);padding:11px 18px;border-bottom:1px solid var(--border);}
+.data-table tr:hover td{background:var(--surface2);color:var(--text);}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:600;}
+.badge-admin{background:rgba(251,191,36,0.12);color:var(--yellow);border:1px solid rgba(251,191,36,0.2);}
+.badge-operator,.badge-user{background:rgba(96,165,250,0.12);color:var(--blue);border:1px solid rgba(96,165,250,0.2);}
+.badge-on{background:rgba(74,222,128,0.12);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+.badge-off{background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.2);}
+::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+</style>
+</head>
+<body>
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon"><span class="mat" style="font-size:20px;color:white;">precision_manufacturing</span></div>
+    <div><div class="logo-name">Univa</div><div class="logo-sub">Admin Panel</div></div>
+  </div>
+  <nav>
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
+    <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
+    <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <a href="/admin/logs" class="sidebar-link"><span class="mat">terminal</span>Logs</a>
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="sidebar-link"><span class="mat">settings_overscan</span>Modal Config</a>
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="sidebar-link active"><span class="mat">manage_accounts</span> Users</a>
+    <a href="/admin/access-control" class="sidebar-link"><span class="mat">shield_lock</span> Access Control</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button onclick="logout()" class="sidebar-link" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);"><span class="mat">logout</span> Logout</button>
+  </div>
+</aside>
+
+<div style="flex:1;display:flex;flex-direction:column;">
+  <header>
+    <h1 class="topbar-title">User Management</h1>
+  </header>
+
+  <main style="flex:1;padding:22px;overflow:auto;display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Admin Users -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">Admin Panel Users</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Can log in to this admin console (/admin/login)</div>
+        </div>
+        <button onclick="openModal('admin')" class="btn-primary">
+          <span class="mat" style="font-size:15px;">add</span> Add User
+        </button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th><th style="text-align:right;">Actions</th></tr>
+          </thead>
+          <tbody id="adminRows"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- WebUI Users -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">WebUI Operator Accounts</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Crane operators who log into the operator web interface</div>
+        </div>
+        <button onclick="openModal('webui')" class="btn-primary">
+          <span class="mat" style="font-size:15px;">add</span> Add Operator
+        </button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr><th>Username</th><th>Role</th><th>Status</th><th>Sessions</th><th>Last Login</th><th style="text-align:right;">Actions</th></tr>
+          </thead>
+          <tbody id="webuiRows"><tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Global Session Settings -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">Global Session Settings</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Applies to all WebUI operator accounts — single source of truth</div>
+        </div>
+        <button onclick="saveGlobalSettings()" class="btn-primary" id="saveGlobalBtn">
+          <span class="mat" style="font-size:15px;">save</span> Save
+        </button>
+      </div>
+      <div style="padding:20px 22px;">
+        <div style="display:grid;grid-template-columns:320px 1fr;gap:28px;align-items:start;">
+
+          <!-- Idle Timeout setting -->
+          <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:18px 20px;">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px;">
+              <span class="mat" style="color:var(--accent);font-size:22px;">timer</span>
+              <div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--text);">Idle Timeout</div>
+                <div style="font-size:10.5px;color:var(--text3);">Auto-logout after inactivity</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input id="g-idle_timeout_minutes" type="number" min="0" max="10080" class="field"
+                     style="width:90px;text-align:center;font-size:16px;font-weight:600;" placeholder="0"/>
+              <div>
+                <div style="font-size:12px;color:var(--text2);font-weight:500;">minutes</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:2px;">0 = never timeout</div>
+              </div>
+            </div>
+            <div id="idlePreview" style="margin-top:10px;font-size:11px;color:var(--text3);"></div>
+          </div>
+
+          <!-- Info panel -->
+          <div style="padding:4px 0;">
+            <div style="font-size:11.5px;color:var(--text2);font-weight:600;margin-bottom:10px;">How idle timeout works</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;">
+                <span class="mat" style="font-size:16px;color:var(--green);flex-shrink:0;margin-top:1px;">check_circle</span>
+                <span style="font-size:11px;color:var(--text3);">Timer resets on every API call and page interaction — active users are <strong style="color:var(--text2);">never</strong> kicked out.</span>
+              </div>
+              <div style="display:flex;gap:9px;align-items:flex-start;">
+                <span class="mat" style="font-size:16px;color:var(--yellow);flex-shrink:0;margin-top:1px;">browser_updated</span>
+                <span style="font-size:11px;color:var(--text3);">If a browser tab is closed or left idle past the timeout, the session expires and the user is redirected to login.</span>
+              </div>
+              <div style="display:flex;gap:9px;align-items:flex-start;">
+                <span class="mat" style="font-size:16px;color:var(--blue);flex-shrink:0;margin-top:1px;">groups</span>
+                <span style="font-size:11px;color:var(--text3);">This setting applies equally to all operator accounts. Per-user max sessions and debounce still apply individually.</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h2 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);" id="modalTitle">Add User</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--text3);cursor:pointer;"><span class="mat">close</span></button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:13px;" id="modalBody"></div>
+    <div style="display:flex;gap:10px;margin-top:22px;">
+      <button onclick="submitModal()" class="btn-primary" style="flex:1;justify-content:center;">Save</button>
+      <button onclick="closeModal()" class="btn-ghost" style="flex:1;justify-content:center;">Cancel</button>
+    </div>
+    <div id="modalErr" style="display:none;margin-top:10px;font-size:11.5px;color:var(--red);font-weight:600;"></div>
+  </div>
+</div>
+
+<div id="toast" style="display:none;position:fixed;bottom:22px;right:22px;padding:11px 16px;border-radius:9px;font-size:12px;font-weight:600;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.4);color:white;"></div>
+
+<script>
+  let modalType = 'admin';
+  let editId = null;
+
+  async function logout() { await fetch('/admin/logout'); window.location.href='/admin/login'; }
+
+  function toast(msg, ok=true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = ok ? '#16a34a' : '#dc2626';
+    t.style.display = 'block';
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>t.style.display='none', 3000);
+  }
+
+  function fmtDate(d) {
+    if(!d) return '<span style="color:var(--text3);">Never</span>';
+    return '<span style="color:var(--text3);">'+new Date(d).toLocaleString()+'</span>';
+  }
+
+  async function loadAdminUsers() {
+    const r = await fetch('/api/admin/users/admin');
+    const d = await r.json();
+    const rows = d.users || [];
+    document.getElementById('adminRows').innerHTML = rows.length ? rows.map(u => `
+      <tr>
+        <td style="font-weight:600;color:var(--text);">${u.username}</td>
+        <td><span class="badge badge-${u.role}">${u.role}</span></td>
+        <td><span class="badge ${u.enabled?'badge-on':'badge-off'}">${u.enabled?'Active':'Disabled'}</span></td>
+        <td style="font-size:11.5px;">${fmtDate(u.last_login)}</td>
+        <td style="text-align:right;">
+          <button onclick='openEditModal("admin",${JSON.stringify(u)})' style="color:var(--blue);background:none;border:none;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:10px;">Edit</button>
+          <button onclick='delUser("admin",${u.id})' style="color:var(--red);background:none;border:none;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;">Delete</button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px;">No admin users found</td></tr>';
+  }
+
+  async function loadWebuiUsers() {
+    const r = await fetch('/api/admin/users/webui');
+    const d = await r.json();
+    const rows = d.users || [];
+    document.getElementById('webuiRows').innerHTML = rows.length ? rows.map(u => `
+      <tr>
+        <td style="font-weight:600;color:var(--text);">${u.username}${u.display_name&&u.display_name!==u.username?`<span style="font-size:10px;color:var(--text3);display:block;font-weight:400;">${u.display_name}</span>`:''}
+        </td>
+        <td><span class="badge badge-${u.role||'user'}">${u.role||'user'}</span></td>
+        <td><span class="badge ${u.enabled?'badge-on':'badge-off'}">${u.enabled?'Active':'Disabled'}</span></td>
+        <td style="font-size:11px;color:var(--text3);">
+          <span title="Max sessions" style="display:inline-flex;align-items:center;gap:3px;"><span style="color:var(--blue);">⊞</span>${u.max_sessions||2}</span>
+          ${u.session_debounce_seconds>0?`<span style="margin-left:6px;" title="Debounce">⏳ ${u.session_debounce_seconds}s</span>`:''}
+        </td>
+        <td style="font-size:11.5px;">${fmtDate(u.last_login)}</td>
+        <td style="text-align:right;">
+          <button onclick='openEditModal("webui",${JSON.stringify(u)})' style="color:var(--blue);background:none;border:none;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:10px;">Edit</button>
+          <button onclick='delUser("webui",${u.id})' style="color:var(--red);background:none;border:none;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;">Delete</button>
+        </td>
+      </tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px;">No operator accounts found</td></tr>';
+  }
+
+  function openModal(type) {
+    modalType = type; editId = null;
+    document.getElementById('modalTitle').textContent = type === 'admin' ? 'Add Admin User' : 'Add Operator Account';
+    renderModalBody(type, null);
+    document.getElementById('modalErr').style.display = 'none';
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function openEditModal(type, user) {
+    modalType = type; editId = user.id;
+    document.getElementById('modalTitle').textContent = 'Edit '+(type==='admin'?'Admin User':'Operator')+': '+user.username;
+    renderModalBody(type, user);
+    document.getElementById('modalErr').style.display = 'none';
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function renderModalBody(type, user) {
+    const v = user || {};
+    const lbl = (t, hint) => `<label style="display:block;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">${t}${hint?`<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);margin-left:5px;">${hint}</span>`:''}</label>`;
+    let html = `<div>${lbl('Username')}<input class="field" id="f-username" type="text" value="${v.username||''}" placeholder="username"/></div>
+      <div>${lbl('Password', user?'(leave blank to keep)':'')}<input class="field" id="f-password" type="password" placeholder="••••••••"/></div>`;
+    if (type === 'admin') {
+      html += `<div>${lbl('Role')}<select class="field" id="f-role"><option value="admin" ${v.role==='admin'?'selected':''}>Admin</option><option value="operator" ${v.role==='operator'?'selected':''}>Operator</option></select></div>`;
+    } else {
+      html += `<div>${lbl('Display Name', '(optional)')}<input class="field" id="f-display_name" type="text" value="${v.display_name||''}" placeholder="Full name"/></div>`;
+      html += `<div>${lbl('Role')}<select class="field" id="f-role"><option value="user" ${(!v.role||v.role==='user')?'selected':''}>User</option><option value="admin" ${v.role==='admin'?'selected':''}>Admin</option></select></div>`;
+
+      // ── Session Settings group ──────────────────────────────────
+      html += `<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:14px 14px 12px;">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Session Settings</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            ${lbl('Max Sessions', '')}
+            <input class="field" id="f-max_sessions" type="number" min="1" max="20" value="${v.max_sessions!=null?v.max_sessions:2}" style="text-align:center;"/>
+            <div style="font-size:9.5px;color:var(--text3);margin-top:4px;">Concurrent windows</div>
+          </div>
+          <div>
+            ${lbl('Debounce', '(secs)')}
+            <input class="field" id="f-session_debounce_seconds" type="number" min="0" max="3600" value="${v.session_debounce_seconds!=null?v.session_debounce_seconds:0}" style="text-align:center;"/>
+            <div style="font-size:9.5px;color:var(--text3);margin-top:4px;">0 = disabled</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:8px 10px;background:var(--surface3);border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;gap:7px;">
+          <span class="mat" style="font-size:15px;color:var(--text3);">info</span>
+          <span style="font-size:10.5px;color:var(--text3);">Idle timeout is a <strong style="color:var(--text2);">global setting</strong> — configure it in the <em>Global Session Settings</em> panel below.</span>
+        </div>
+      </div>`;
+    }
+    if (user) {
+      html += `<div>${lbl('Status')}<select class="field" id="f-enabled"><option value="1" ${v.enabled?'selected':''}>Active</option><option value="0" ${!v.enabled?'selected':''}>Disabled</option></select></div>`;
+    }
+    document.getElementById('modalBody').innerHTML = html;
+  }
+
+  function closeModal() { document.getElementById('modal').classList.remove('open'); editId = null; }
+
+  async function submitModal() {
+    const errEl = document.getElementById('modalErr');
+    errEl.style.display = 'none';
+    const username = document.getElementById('f-username')?.value.trim();
+    const password = document.getElementById('f-password')?.value;
+    if (!username) { errEl.textContent='Username is required.'; errEl.style.display='block'; return; }
+    if (!editId && !password) { errEl.textContent='Password is required for new users.'; errEl.style.display='block'; return; }
+    const data = { username };
+    if (password) data.password = password;
+    data.role = document.getElementById('f-role')?.value;
+    if (editId) { const e = document.getElementById('f-enabled'); if(e) data.enabled = e.value==='1'; }
+    // WebUI-only session settings
+    if (modalType === 'webui') {
+      const dn = document.getElementById('f-display_name');
+      if (dn) data.display_name = dn.value.trim();
+      const ms  = document.getElementById('f-max_sessions');
+      const deb = document.getElementById('f-session_debounce_seconds');
+      if (ms)  data.max_sessions             = Math.max(1, parseInt(ms.value)||1);
+      if (deb) data.session_debounce_seconds = Math.max(0, parseInt(deb.value)||0);
+    }
+    const base = '/api/admin/users/' + modalType;
+    const url  = editId ? base+'/'+editId : base;
+    const meth = editId ? 'PUT' : 'POST';
+    try {
+      const r = await fetch(url, {method:meth, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      const d = await r.json();
+      if (d.success||d.id) { closeModal(); toast(editId?'User updated!':'User created!'); loadAdminUsers(); loadWebuiUsers(); }
+      else { errEl.textContent = d.error||'Operation failed.'; errEl.style.display='block'; }
+    } catch(e) { errEl.textContent = e.message; errEl.style.display='block'; }
+  }
+
+  async function delUser(type, id) {
+    if (!confirm('Delete this user?')) return;
+    const r = await fetch('/api/admin/users/'+type+'/'+id, {method:'DELETE'});
+    const d = await r.json();
+    if (d.success) { toast('User deleted.'); loadAdminUsers(); loadWebuiUsers(); }
+    else toast('Delete failed: '+(d.error||''), false);
+  }
+
+  loadAdminUsers();
+  loadWebuiUsers();
+  loadGlobalSettings();
+
+  // ── Global session settings ──────────────────────────────────────────────
+  async function loadGlobalSettings() {
+    try {
+      const r = await fetch('/api/admin/session-global');
+      const d = await r.json();
+      const val = d.idle_timeout_minutes ?? 0;
+      document.getElementById('g-idle_timeout_minutes').value = val;
+      updateIdlePreview(val);
+    } catch(e) {
+      console.error('Failed to load global settings', e);
+    }
+  }
+
+  function updateIdlePreview(mins) {
+    const el = document.getElementById('idlePreview');
+    if (!el) return;
+    const m = parseInt(mins) || 0;
+    if (m === 0) {
+      el.innerHTML = '<span style="color:var(--green);">● Sessions never expire from inactivity</span>';
+    } else if (m < 60) {
+      el.innerHTML = '<span style="color:var(--yellow);">● Sessions expire after <strong>' + m + ' min</strong> idle</span>';
+    } else {
+      const h = Math.floor(m/60), rem = m%60;
+      const label = h + 'h' + (rem ? ' ' + rem + 'm' : '');
+      el.innerHTML = '<span style="color:var(--yellow);">● Sessions expire after <strong>' + label + '</strong> idle</span>';
+    }
+  }
+
+  document.getElementById('g-idle_timeout_minutes')?.addEventListener('input', function() {
+    updateIdlePreview(this.value);
+  });
+
+  async function saveGlobalSettings() {
+    const btn = document.getElementById('saveGlobalBtn');
+    const idle = Math.max(0, parseInt(document.getElementById('g-idle_timeout_minutes').value) || 0);
+    btn.disabled = true;
+    btn.innerHTML = '<span class="mat" style="font-size:15px;animation:spin .8s linear infinite;">progress_activity</span> Saving…';
+    try {
+      const r = await fetch('/api/admin/session-global', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ idle_timeout_minutes: idle })
+      });
+      const d = await r.json();
+      if (d.success) {
+        toast('Global settings saved!');
+        updateIdlePreview(idle);
+      } else {
+        toast('Save failed: ' + (d.error || ''), false);
+      }
+    } catch(e) {
+      toast('Save failed: ' + e.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="mat" style="font-size:15px;">save</span> Save';
+    }
+  }
+</script>
+</body>
+</html>

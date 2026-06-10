@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Factory DB Viewer</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+<link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{
+  --bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;
+  --border:#2e2b28;--border2:#3a3632;
+  --accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);
+  --text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;
+  --green:#4ade80;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+
+/* Sidebar */
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.sidebar-link{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.sidebar-link:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.sidebar-link.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.sidebar-link.active .mat{color:var(--accent);}
+.sidebar-link:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+
+/* Topbar */
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+
+/* Layout */
+.page{flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;}
+.content{flex:1;display:flex;overflow:hidden;}
+
+/* Table list sidebar */
+.table-list{width:210px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:10px 8px;}
+.table-list-title{font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;padding:4px 10px;margin-bottom:6px;}
+.table-item{display:flex;align-items:center;justify-content:space-between;padding:8px 11px;border-radius:8px;font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;border:1px solid transparent;transition:all .15s;gap:6px;}
+.table-item:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.table-item.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.table-item .row-count{font-size:9.5px;background:var(--surface3);color:var(--text3);padding:1px 6px;border-radius:5px;flex-shrink:0;}
+.table-item.active .row-count{background:rgba(249,115,22,0.18);color:var(--accent);}
+
+/* Data panel */
+.data-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.data-toolbar{padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.data-toolbar-title{font-size:13px;font-weight:700;color:var(--text);font-family:'Syne',sans-serif;}
+.data-toolbar-sub{font-size:10.5px;color:var(--text3);}
+.search-box{margin-left:auto;position:relative;}
+.search-box input{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:12px;font-family:'Inter',sans-serif;padding:7px 12px 7px 32px;outline:none;width:200px;transition:border-color .15s;}
+.search-box input:focus{border-color:var(--accent);}
+.search-box input::placeholder{color:var(--text3);}
+.search-box .mat{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--text3);pointer-events:none;}
+
+/* Table */
+.table-wrap{flex:1;overflow:auto;}
+.data-table{width:100%;border-collapse:collapse;font-size:12px;}
+.data-table th{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;padding:10px 14px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:2;white-space:nowrap;}
+.data-table th .sort-icon{font-size:12px;vertical-align:middle;opacity:0.4;cursor:pointer;margin-left:3px;}
+.data-table th.sorted .sort-icon{opacity:1;color:var(--accent);}
+.data-table td{color:var(--text2);padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:top;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.data-table td.null-val{color:var(--text3);font-style:italic;}
+.data-table td.num-val{color:var(--blue);font-family:'Courier New',monospace;}
+.data-table td.bool-val-1{color:var(--green);}
+.data-table td.bool-val-0{color:var(--red);}
+.data-table tr:hover td{background:var(--surface2);color:var(--text);}
+.data-table tr:hover td.null-val{color:var(--text3);}
+
+/* Cell expand */
+.cell-expand{cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;}
+
+/* Empty / loading states */
+.state-box{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;padding:48px;color:var(--text3);}
+.state-box .mat{font-size:40px;}
+.state-box p{font-size:12.5px;text-align:center;max-width:260px;line-height:1.6;}
+
+/* Footer bar */
+.data-footer{padding:7px 18px;border-top:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:14px;flex-shrink:0;font-size:11px;color:var(--text3);}
+.data-footer span b{color:var(--text2);}
+
+/* Expand modal */
+.expand-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:50;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.expand-bg.open{display:flex;}
+.expand-modal{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:24px;width:560px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,0.6);}
+.expand-modal pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-size:11.5px;color:var(--text2);font-family:'Courier New',monospace;white-space:pre-wrap;word-break:break-all;flex:1;margin-top:12px;}
+
+/* Readonly badge */
+.readonly-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(74,222,128,0.1);color:var(--green);border:1px solid rgba(74,222,128,0.2);letter-spacing:0.05em;}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon"><span class="mat" style="font-size:20px;color:white;">precision_manufacturing</span></div>
+    <div><div class="logo-name">Univa</div><div class="logo-sub">Admin Panel</div></div>
+  </div>
+  <nav>
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
+    <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
+    <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <a href="/admin/logs" class="sidebar-link"><span class="mat">terminal</span> Logs</a>
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="sidebar-link"><span class="mat">settings_overscan</span> Modal Config</a>
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
+    <a href="/admin/access-control" class="sidebar-link"><span class="mat">shield_lock</span> Access Control</a>
+    <div class="nav-section">System</div>
+    <a href="/admin/factory" class="sidebar-link active"><span class="mat">inventory_2</span> Factory Viewer</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button onclick="logout()" class="sidebar-link" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);"><span class="mat">logout</span> Logout</button>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="page">
+  <header>
+    <span class="mat" style="color:var(--accent);">inventory_2</span>
+    <h1 class="topbar-title">Factory DB Viewer</h1>
+    <span class="readonly-badge"><span class="mat" style="font-size:13px;">lock</span> READ ONLY</span>
+    <div style="font-size:11px;color:var(--text3);margin-left:8px;" id="dbPathLabel"></div>
+  </header>
+
+  <div class="content">
+
+    <!-- Table list -->
+    <div class="table-list">
+      <div class="table-list-title">Tables</div>
+      <div id="tableList">
+        <div style="padding:20px 10px;text-align:center;color:var(--text3);font-size:11.5px;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Data panel -->
+    <div class="data-panel" id="dataPanel">
+      <div class="state-box" id="emptyState">
+        <span class="mat">table_rows</span>
+        <p>Select a table from the left to view its contents.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Cell expand modal -->
+<div class="expand-bg" id="expandBg" onclick="if(event.target===this)closeExpand()">
+  <div class="expand-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);font-family:'Syne',sans-serif;" id="expandTitle">Cell Value</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:2px;" id="expandSub"></div>
+      </div>
+      <button onclick="closeExpand()" style="background:none;border:none;color:var(--text3);cursor:pointer;"><span class="mat">close</span></button>
+    </div>
+    <pre id="expandContent"></pre>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+var allTables    = [];   // [{name, rows}]
+var currentTable = null;
+var tableData    = {};   // cache: name -> {columns, rows}
+var sortCol      = null;
+var sortAsc      = true;
+var filterText   = '';
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+function logout() { fetch('/admin/logout').then(function(){ window.location.href='/admin/login'; }); }
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  // Show DB path
+  try {
+    var pr = await fetch('/api/admin/db-path');
+    var pd = await pr.json();
+    document.getElementById('dbPathLabel').textContent = pd.current || '';
+  } catch(e) {}
+
+  await loadTables();
+}
+
+// ── Load table list ────────────────────────────────────────────────────────
+async function loadTables() {
+  var listEl = document.getElementById('tableList');
+  listEl.innerHTML = '<div style="padding:20px 10px;text-align:center;color:var(--text3);font-size:11.5px;">Loading…</div>';
+
+  try {
+    var r = await fetch('/api/admin/db/tables');
+    var d = await r.json();
+    allTables = (d.tables || []).map(function(name) { return {name: name, rowCount: null}; });
+
+    renderTableList();
+
+    // Load row counts in background
+    allTables.forEach(function(t, i) {
+      fetch('/api/admin/db/table/' + encodeURIComponent(t.name))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          allTables[i].rowCount = (d.rows || []).length;
+          tableData[t.name] = {columns: d.columns || [], rows: d.rows || []};
+          renderTableList();
+        })
+        .catch(function() {});
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div style="padding:20px 10px;text-align:center;color:var(--red);font-size:11.5px;">Failed to load tables</div>';
+  }
+}
+
+// ── Render table list ──────────────────────────────────────────────────────
+function renderTableList() {
+  var listEl = document.getElementById('tableList');
+  if (!allTables.length) {
+    listEl.innerHTML = '<div style="padding:16px 10px;text-align:center;color:var(--text3);font-size:11.5px;">No tables found</div>';
+    return;
+  }
+  listEl.innerHTML = allTables.map(function(t) {
+    var active = currentTable === t.name ? ' active' : '';
+    var countBadge = t.rowCount !== null
+      ? '<span class="row-count">' + t.rowCount + '</span>'
+      : '<span class="row-count" style="opacity:.4;">…</span>';
+    return '<div class="table-item' + active + '" onclick="selectTable(\'' + esc(t.name) + '\')">'
+      + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(t.name) + '</span>'
+      + countBadge
+      + '</div>';
+  }).join('');
+}
+
+// ── Select table ───────────────────────────────────────────────────────────
+async function selectTable(name) {
+  currentTable = name;
+  sortCol = null; sortAsc = true; filterText = '';
+  renderTableList();
+  renderLoading(name);
+
+  if (tableData[name]) {
+    renderTable(name, tableData[name].columns, tableData[name].rows);
+    return;
+  }
+  try {
+    var r = await fetch('/api/admin/db/table/' + encodeURIComponent(name));
+    var d = await r.json();
+    tableData[name] = {columns: d.columns || [], rows: d.rows || []};
+    // Update row count in list
+    var idx = allTables.findIndex(function(t){ return t.name === name; });
+    if (idx >= 0) allTables[idx].rowCount = (d.rows || []).length;
+    renderTableList();
+    renderTable(name, d.columns || [], d.rows || []);
+  } catch(e) {
+    renderError(name, e.message);
+  }
+}
+
+// ── Render states ──────────────────────────────────────────────────────────
+function renderLoading(name) {
+  document.getElementById('dataPanel').innerHTML =
+    '<div class="state-box"><span class="mat" style="animation:spin 1s linear infinite;color:var(--accent);">progress_activity</span>'
+    + '<p>Loading <strong>' + escHtml(name) + '</strong>…</p></div>';
+}
+
+function renderError(name, msg) {
+  document.getElementById('dataPanel').innerHTML =
+    '<div class="state-box"><span class="mat" style="color:var(--red);">error</span>'
+    + '<p>Failed to load <strong>' + escHtml(name) + '</strong>.<br>' + escHtml(msg || '') + '</p></div>';
+}
+
+// ── Render table ───────────────────────────────────────────────────────────
+function renderTable(name, columns, rows) {
+  var panel = document.getElementById('dataPanel');
+
+  // Build toolbar
+  var toolbar = '<div class="data-toolbar">'
+    + '<span class="mat" style="color:var(--accent);">table_rows</span>'
+    + '<div><div class="data-toolbar-title">' + escHtml(name) + '</div>'
+    + '<div class="data-toolbar-sub">' + columns.length + ' columns</div></div>'
+    + '<div class="search-box"><span class="mat">search</span>'
+    + '<input type="text" id="searchInput" placeholder="Filter rows…" oninput="applyFilter(this.value)" value="' + escHtml(filterText) + '"/></div>'
+    + '</div>';
+
+  // Build table
+  var tableHtml = '<div class="table-wrap" id="tableWrap"><table class="data-table"><thead><tr>';
+  columns.forEach(function(col, ci) {
+    var sorted = sortCol === ci ? ' sorted' : '';
+    var icon = (sortCol === ci) ? (sortAsc ? 'arrow_upward' : 'arrow_downward') : 'unfold_more';
+    tableHtml += '<th class="' + sorted + '">'
+      + escHtml(col)
+      + '<span class="mat sort-icon" onclick="sortBy(' + ci + ')">' + icon + '</span>'
+      + '</th>';
+  });
+  tableHtml += '</tr></thead><tbody id="tableBody"></tbody></table></div>';
+
+  // Footer
+  var footer = '<div class="data-footer" id="dataFooter"></div>';
+
+  panel.innerHTML = toolbar + tableHtml + footer;
+
+  applyFilter(filterText);
+
+  // Re-attach search focus
+  var inp = document.getElementById('searchInput');
+  if (inp) inp.focus();
+}
+
+// ── Filter + render rows ───────────────────────────────────────────────────
+function applyFilter(text) {
+  filterText = (text || '').toLowerCase();
+  var name = currentTable;
+  if (!name || !tableData[name]) return;
+
+  var columns = tableData[name].columns;
+  var rows    = tableData[name].rows;
+
+  // Filter
+  var filtered = filterText
+    ? rows.filter(function(row) {
+        return columns.some(function(col) {
+          var v = row[col];
+          return v !== null && v !== undefined && String(v).toLowerCase().indexOf(filterText) >= 0;
+        });
+      })
+    : rows.slice();
+
+  // Sort
+  if (sortCol !== null && sortCol < columns.length) {
+    var colName = columns[sortCol];
+    filtered.sort(function(a, b) {
+      var av = a[colName], bv = b[colName];
+      if (av === null || av === undefined) return sortAsc ? 1 : -1;
+      if (bv === null || bv === undefined) return sortAsc ? -1 : 1;
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+      return sortAsc
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av));
+    });
+  }
+
+  // Render rows
+  var tbody = document.getElementById('tableBody');
+  if (!tbody) return;
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="' + columns.length + '" style="text-align:center;padding:28px;color:var(--text3);">'
+      + (filterText ? 'No rows match your filter.' : 'This table is empty.') + '</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(function(row) {
+      return '<tr>' + columns.map(function(col) {
+        var raw = row[col];
+        return renderCell(col, raw);
+      }).join('') + '</tr>';
+    }).join('');
+  }
+
+  // Footer
+  var footer = document.getElementById('dataFooter');
+  if (footer) {
+    footer.innerHTML = '<b>' + filtered.length + '</b> of <b>' + rows.length + '</b> rows'
+      + (filterText ? ' (filtered)' : '')
+      + '<span style="margin-left:auto;color:var(--text3);">Click a cell to expand its full value</span>';
+  }
+}
+
+// ── Render a single cell ───────────────────────────────────────────────────
+function renderCell(col, raw) {
+  if (raw === null || raw === undefined) {
+    return '<td class="null-val">NULL</td>';
+  }
+  var str = String(raw);
+  var cls = '';
+
+  // Detect type
+  if (typeof raw === 'number' || (!isNaN(raw) && str.trim() !== '')) {
+    cls = 'num-val';
+    // Boolean-like integers
+    if ((raw === 0 || raw === 1) && (col.indexOf('enabled') >= 0 || col.indexOf('active') >= 0 || col.indexOf('visible') >= 0 || col.indexOf('hidden') >= 0)) {
+      cls = raw === 1 ? 'bool-val-1' : 'bool-val-0';
+      str = raw === 1 ? '✓ true' : '✗ false';
+      return '<td class="' + cls + '">' + str + '</td>';
+    }
+  }
+
+  // Try pretty-print JSON
+  var displayStr = str;
+  var isJson = false;
+  if ((str.charAt(0) === '{' || str.charAt(0) === '[') && str.length > 2) {
+    try { JSON.parse(str); isJson = true; } catch(e) {}
+  }
+
+  // Truncate long values
+  var isTruncated = str.length > 80;
+  var cellContent = isTruncated ? escHtml(str.substring(0, 80)) + '<span style="color:var(--text3);">…</span>' : escHtml(str);
+
+  if (isTruncated || isJson) {
+    return '<td class="' + cls + '"><span class="cell-expand" title="Click to expand" onclick="expandCell(' + JSON.stringify(col) + ',' + JSON.stringify(str) + ',' + (isJson?'true':'false') + ')">' + cellContent + '</span></td>';
+  }
+  return '<td class="' + cls + '">' + cellContent + '</td>';
+}
+
+// ── Sort ───────────────────────────────────────────────────────────────────
+function sortBy(colIdx) {
+  if (sortCol === colIdx) {
+    sortAsc = !sortAsc;
+  } else {
+    sortCol = colIdx;
+    sortAsc = true;
+  }
+  // Re-render headers
+  var name = currentTable;
+  if (name && tableData[name]) {
+    renderTable(name, tableData[name].columns, tableData[name].rows);
+  }
+}
+
+// ── Cell expand modal ──────────────────────────────────────────────────────
+function expandCell(col, value, isJson) {
+  document.getElementById('expandTitle').textContent = col;
+  document.getElementById('expandSub').textContent = isJson ? 'JSON value' : (value.length + ' characters');
+  var display = value;
+  if (isJson) {
+    try { display = JSON.stringify(JSON.parse(value), null, 2); } catch(e) {}
+  }
+  document.getElementById('expandContent').textContent = display;
+  document.getElementById('expandBg').classList.add('open');
+}
+function closeExpand() { document.getElementById('expandBg').classList.remove('open'); }
+
+// Keyboard close
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeExpand();
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function esc(s) { return String(s).replace(/'/g,"\\'"); }
+
+// Spin animation for loading icon
+var style = document.createElement('style');
+style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+document.head.appendChild(style);
+
+init();
+</script>
+</body>
+</html>

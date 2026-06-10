@@ -1,0 +1,610 @@
+<!-- Content only - no HTML, HEAD, BODY tags -->
+<!-- Add Device Panel -->
+<div class="add-device-panel" id="addDevicePanel">
+    <div class="p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-slate-800">Add New Device</h2>
+            <button class="text-slate-400 hover:text-slate-600" id="closeAddDevicePanel">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <!-- Device Type Selection -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-slate-700 mb-3">Device Type</label>
+            <div class="flex flex-col gap-2">
+                <label id="lc-radio-wrapper" class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                    <input type="radio" name="device-type" value="loadcell" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                    <div class="ml-3 flex-grow">
+                        <div class="flex items-center justify-between">
+                            <div class="font-medium text-sm text-slate-900">On-Board Loadcell</div>
+                            <div id="lc-limit-badge" class="hidden text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">Limit Reached</div>
+                        </div>
+                        <div class="text-xs text-slate-500 mt-0.5">Built-in Hardware</div>
+                        <div id="lc-limit-info" class="hidden mt-1.5 text-[11px] text-amber-600 flex items-start gap-1">
+                            <i class="fa-solid fa-circle-info mt-0.5"></i>
+                            <span id="lc-limit-text">Maximum 2 loadcells allowed.</span>
+                        </div>
+                    </div>
+                </label>
+                <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                    <input type="radio" name="device-type" value="external" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                    <div class="ml-3">
+                        <div class="font-medium text-sm text-slate-900">External Interface Device</div>
+                        <div class="text-xs text-slate-500 mt-0.5">External third-party hardware</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        
+        <!-- Common Device Information -->
+        <div class="mb-6">
+            <h3 class="text-sm font-semibold text-slate-900 mb-3">Common Device Information</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Device Name <span class="text-red-500">*</span></label>
+                    <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter device name" id="deviceNameInput">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Protocol Specific Configuration -->
+        <div id="protocolConfigs">
+            <!-- Loadcell Configuration -->
+            <div id="loadcell-config" class="protocol-config active">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">Loadcell Settings</h3>
+                <div class="space-y-5">
+                    <div id="lc-availability-msg" class="hidden p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span id="lc-msg-text"></span>
+                    </div>
+                    <div id="lc-differential-blocked" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Load cell is configured in Differential Mode. No additional load cells can be created.</span>
+                    </div>
+
+                    <!-- Mode Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Mode <span class="text-red-500">*</span></label>
+                        <div class="grid grid-cols-2 gap-3" id="lcModeSelector">
+                            <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                                <input type="radio" name="lc-mode" value="single_ended" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                                <div class="ml-3">
+                                    <div class="font-medium text-sm text-slate-900">Single Point</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                                <input type="radio" name="lc-mode" value="differential" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                                <div class="ml-3">
+                                    <div class="font-medium text-sm text-slate-900">Differential</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Single Point: one channel dropdown -->
+                    <div id="lcSingleEndedChannels">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel <span class="text-red-500">*</span></label>
+                        <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="devicePath">
+                            <option value="/sys/bus/iio/devices/iio:device0/in_voltage0_raw">Channel 1</option>
+                            <option value="/sys/bus/iio/devices/iio:device1/in_voltage0_raw">Channel 2</option>
+                        </select>
+                        
+                    </div>
+
+                    <!-- Differential: fixed Channel 1 (no dropdown) -->
+                    <div id="lcDifferentialInfo" style="display:none;">
+                        <div class="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <i class="fa-solid fa-circle-info text-blue-500 text-sm"></i>
+                            <p class="text-xs text-blue-700">Differential mode uses <strong>Channel 1</strong> as the fixed input channel.</p>
+                        </div>
+                    </div>
+
+                    <!-- Poll Interval -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Poll Interval (ms)</label>
+                        <input type="number" min="1" max="1000" value="10"
+                            class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcPollMs">
+                    </div>
+
+                    <!-- ADC Hardware Parameters (Protected) -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ADC Hardware Parameters</p>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 font-medium" title="Sensitive ADC hardware configuration. Users are not permitted to change these values.">
+                                <i class="fa-solid fa-lock text-xs"></i> Protected
+                            </span>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                            <p class="text-xs text-amber-700 flex items-start gap-1.5">
+                                <i class="fa-solid fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
+                                <span>These are sensitive ADC hardware configuration values. Users are <strong>not permitted</strong> to modify them. Contact your Administrator if changes are required.</span>
+                            </p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Resolution Bits</label>
+                                <input type="number" value="24" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcResolutionBits"
+                                    title="Sensitive ADC configuration — not user-editable">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Effective Bits</label>
+                                <input type="number" value="14" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcEffectiveBits"
+                                    title="Sensitive ADC configuration — not user-editable">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Signed / Unsigned</label>
+                                <select disabled
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcSigned"
+                                    title="Sensitive ADC configuration — not user-editable">
+                                    <option value="false" selected>Unsigned</option>
+                                    <option value="true">Signed</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Gain</label>
+                                <input type="number" value="1" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcGain"
+                                    title="Sensitive ADC configuration — not user-editable">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Vref (V)</label>
+                                <input type="number" value="5" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcVref"
+                                    title="Sensitive ADC configuration — not user-editable">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Raw Value Range (Protected) -->
+                    <div>
+                        <div class="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Raw Value Range</p>
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 font-medium" title="Sensitive ADC hardware configuration. Users are not permitted to change these values.">
+                                <i class="fa-solid fa-lock text-xs"></i> Protected
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Raw Min</label>
+                                <input type="number" value="0" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcRawMin"
+                                    title="Sensitive ADC configuration — not user-editable">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">Raw Max</label>
+                                <input type="number" value="16383" readonly
+                                    class="w-full rounded-lg border-slate-200 border px-3 py-2 text-sm bg-slate-100 text-slate-500 cursor-not-allowed" id="lcRawMax"
+                                    title="Sensitive ADC configuration — not user-editable">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Capacity Specification -->
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 border-b border-slate-100 pb-2">Capacity Specification</p>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Min</label>
+                                <input type="number" step="0.1" value="0"
+                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcCapacityMin">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Max</label>
+                                <input type="number" step="0.1" value="1000"
+                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcCapacityMax">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Unit</label>
+                                <select id="lcUnit"
+                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white">
+                                    <option value="kg" selected>kg</option>
+<option value="ton">ton</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Deadband</label>
+                                <input type="number" step="0.1" value="0"
+                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcDeadband">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Overload</label>
+                                <input type="number" step="0.1" value="0"
+                                    class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="lcOverload">
+                            </div>
+                        </div>
+                        <p class="mt-2 text-xs text-slate-400 col-span-3">
+                            <i class="fa-solid fa-circle-info mr-1"></i>
+                            <em>load_name</em> and <em>capacity_name</em> are auto-generated — no manual entry needed.
+                            Capacity, Deadband, and Overload values are applied throughout the system.
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+            
+            <!-- External Device Configuration -->
+            <div id="external-config" class="protocol-config">
+                <h3 class="text-sm font-semibold text-slate-900 mb-3">External Device Settings</h3>
+
+                <!-- Device Type & Model Name -->
+                <div class="space-y-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Device Type <span class="text-red-500">*</span></label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. VFD, Sensor, Meter" id="extDeviceTypeInit">
+                        <p class="text-xs text-slate-400 mt-1">Type of external device (e.g. VFD, Sensor, Meter)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Model Name <span class="text-red-500">*</span></label>
+                        <input type="text" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="e.g. ABB ACS880, Siemens SINAMICS" id="extModelName">
+                        <p class="text-xs text-slate-400 mt-1">Manufacturer model name of the external device</p>
+                    </div>
+                </div>
+
+                <!-- External Protocol Selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Protocol</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                            <input type="radio" name="ext-protocol" value="ext-rtu" class="h-4 w-4 text-primary focus:ring-primary border-slate-300" checked>
+                            <div class="ml-3">
+                                <div class="font-medium text-sm text-slate-900">Modbus RTU</div>
+                                <div class="text-xs text-slate-500 mt-0.5">Serial communication</div>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-3 border border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 device-type-option">
+                            <input type="radio" name="ext-protocol" value="ext-tcp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300">
+                            <div class="ml-3">
+                                <div class="font-medium text-sm text-slate-900">Modbus TCP</div>
+                                <div class="text-xs text-slate-500 mt-0.5">Ethernet communication</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- External RTU Settings -->
+                <div id="ext-rtu-config" class="ext-protocol-config">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
+                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extRtuSlaveId">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Serial Port</label>
+                            <select class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white" id="extSerialPort">
+                                <option value="/dev/ttymxc5">Port 1</option>
+                                <option value="/dev/ttymxc2">Port 2</option>
+                            </select>
+                            <p class="text-xs text-slate-400 mt-1">This will be displayed in the Address/ID column. Serial settings are managed centrally in <strong>Port Configuration</strong>.</p>
+                        </div>
+                        <div class="hidden">
+                            <!-- Hidden inputs for legacy JS compatibility, will be removed later if possible -->
+                            <input type="hidden" id="extBaudRate" value="9600">
+                            <input type="hidden" id="extDataBits" value="8">
+                            <input type="hidden" id="extParity" value="N">
+                            <input type="hidden" id="extStopBits" value="1">
+                            <input type="hidden" id="extRtuResponseTimeout" value="100">
+                            <input type="hidden" id="extRtuByteTimeout" value="100">
+                            <input type="hidden" id="extRtuMaxRetries" value="2">
+                            <input type="hidden" id="extRtuPollingInterval" value="300">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- External TCP Settings -->
+                <div id="ext-tcp-config" class="ext-protocol-config" style="display:none;">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Slave ID</label>
+                            <input type="number" min="1" max="247" value="1" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpSlaveId">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                                <input type="text" value="192.168.1.100" class="w-full font-mono rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpIp">
+                                <p class="text-xs text-slate-400 mt-1">Part of the Address/ID display</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                                <input type="number" min="1" max="65535" value="502" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpPort">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Response Timeout (ms)</label>
+                                <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpResponseTimeout">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Byte Timeout (ms)</label>
+                                <input type="number" min="10" max="10000" value="100" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpByteTimeout">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Max Retries</label>
+                                <input type="number" min="0" max="10" value="2" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpMaxRetries">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Polling Interval (ms)</label>
+                            <input type="number" min="10" max="10000" value="300" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" id="extTcpPollingInterval">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Panel Actions -->
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+            <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelAddDevice">
+                Cancel
+            </button>
+            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveDeviceBtn">
+                Save Device
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Device Panel - Slides in from right like Add Device -->
+<div class="add-device-panel" id="editDevicePanel">
+    <div class="p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-semibold text-slate-800">Edit Device</h2>
+            <button class="text-slate-400 hover:text-slate-600" id="closeEditPanel">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <!-- Device Info Badge (read-only) -->
+        <div class="mb-5 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <div class="text-xs text-slate-500 mb-1">Device</div>
+                    <span id="editDeviceTypeBadge" class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-blue-50 text-blue-700">—</span>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 mb-1">Protocol</div>
+                    <span id="editDeviceProtocolBadge" class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-green-50 text-green-700">—</span>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500 mb-1">Device ID</div>
+                    <span class="text-xs font-mono text-slate-600" id="editDeviceIdDisplay">—</span>
+                </div>
+            </div>
+            <div class="text-xs text-slate-500 mt-2">
+                <i class="fa-solid fa-info-circle mr-1"></i>
+                <span id="editDeviceAddressHint">Address/ID will be automatically formatted in the table view</span>
+            </div>
+        </div>
+
+        <!-- Device Name Input -->
+        <div class="mb-5">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Device Name <span class="text-red-500">*</span></label>
+            <input type="text" id="editDeviceNameInput" class="w-full rounded-lg border-slate-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Enter device name">
+        </div>
+
+        <!-- Dynamic config fields populated by JS -->
+        <div id="editDeviceConfigFields"></div>
+
+        <!-- Panel Actions -->
+        <div class="mt-8 pt-6 border-t border-slate-200 flex justify-end space-x-3">
+            <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 text-sm" id="cancelEditBtn">
+                Cancel
+            </button>
+            <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm" id="saveEditBtn">
+                <i class="fa-solid fa-floppy-disk mr-1.5"></i> Save Changes
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="main-content-with-sidebar">
+    <main class="flex-grow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold text-slate-900">Device Management</h1>
+                        <p class="text-slate-500 text-sm mt-1">Register, configure, monitor, and manage all Field devices connected to the Univa IoT Gateway.</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button class="px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center" id="addDeviceBtn">
+                            <i class="fa-solid fa-plus mr-2"></i> Add Device
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-8">
+                
+                <!-- SECTION A: Device Overview Table -->
+                <section id="section-devices" class="bg-white rounded-xl shadow-sm border border-border">
+                    <div class="p-6 border-b border-border">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                                <i class="fa-solid fa-list mr-2 text-primary"></i> 
+                                <span class="mr-2">Device Overview </span>
+                                <span class="text-xs font-normal text-slate-500">SECTION A</span>
+                            </h2>
+                            <!-- Refresh button -->
+                            <button id="refreshBtn" class="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg text-sm flex items-center transition-colors" title="Refresh Devices">
+                                <i class="fa-solid fa-rotate mr-2"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <p class="text-slate-500 text-sm mt-2">View all connected devices with communication health and last polled timestamp.</p>
+                    </div>
+                    
+                    <!-- Device Filters -->
+                    <div class="p-4 border-b border-border bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="relative">
+                                <input type="text" placeholder="Search devices..." class="pl-9 pr-4 py-2 text-sm border border-slate-300 rounded-lg w-64 focus:ring-2 focus:ring-primary focus:border-primary" id="searchDevices">
+                                <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-500">
+                            <i class="fa-solid fa-circle-info mr-1"></i>
+                            Address/ID column shows: Serial Port for RTU, IP:Port for TCP, Channel for Loadcell
+                        </div>
+                    </div>
+                    
+                    <!-- Devices Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full" id="devicesTable">
+                            <thead class="bg-slate-50 border-b border-border">
+    <tr class="text-left text-xs text-slate-500 uppercase tracking-wider">
+        <th class="p-4 font-medium">Sl.No</th>
+        <th class="p-4 font-medium">Device ID</th>
+        <th class="p-4 font-medium">Device Name</th>
+        <th class="p-4 font-medium">Device </th>
+        <th class="p-4 font-medium">Device Type</th>
+        <th class="p-4 font-medium">Protocol</th>
+        <th class="p-4 font-medium">Address/ID</th>
+        <th class="p-4 font-medium">Last Poll</th>
+        <th class="p-4 font-medium text-right">Actions</th>
+    </tr>
+</thead>
+                            <tbody class="divide-y divide-border" id="devicesTableBody">
+                                <!-- Devices will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- SECTION C: Device Details (Inline View) -->
+                <section id="section-details" class="bg-white rounded-xl shadow-sm border border-border p-6" style="display: none;">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <i class="fa-solid fa-microchip text-primary text-sm"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-base font-semibold text-slate-800">Device Details</h2>
+                                <p class="text-xs text-slate-500" id="selectedDeviceName">No device selected</p>
+                            </div>
+                        </div>
+                        <button class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex items-center justify-center" id="closeDetailsBtn" title="Close Details">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="deviceDetailsContent" class="min-h-[200px]">
+                        <!-- Content will be populated by JavaScript -->
+                        <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                            <i class="fa-solid fa-eye-slash text-3xl mb-2"></i>
+                            <p class="text-sm">Select a device to view details</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
+                        
+                        <button class="px-3 py-1.5 text-xs border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors" id="closeViewDetailsBtn">
+                            Close
+                        </button>
+                      
+                    </div>
+                </section>
+
+                <!-- SECTION E: Import / Export - CSV ONLY -->
+                <section id="section-import-export" class="bg-white rounded-xl shadow-sm border border-border p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-file-export mr-2 text-primary"></i> 
+                            <span class="mr-2">Import / Export</span>
+                            <span class="text-xs font-normal text-slate-500">SECTION B</span>
+                        </h2>
+                        <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                            CSV Format
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Export Section -->
+                        <div class="space-y-4">
+                            <h3 class="text-sm font-semibold text-slate-900">Export Devices</h3>
+                            <p class="text-sm text-slate-600">Export device configuration for backup or deployment to other gateways.</p>
+                            
+                            <div class="space-y-3">
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="export-all-devices" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked disabled>
+                                        <label for="export-all-devices" class="ml-2 text-sm text-slate-700">Export all devices</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="export-configuration" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked disabled>
+                                        <label for="export-configuration" class="ml-2 text-sm text-slate-700">Include device configuration</label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="export-timestamp" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded" checked disabled>
+                                        <label for="export-timestamp" class="ml-2 text-sm text-slate-700">Include timestamp in filename</label>
+                                    </div>
+                                </div>
+                                
+                                <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center" id="exportBtn">
+                                    <i class="fa-solid fa-download mr-2"></i> Export to CSV
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Import Section -->
+                        <div class="space-y-4">
+                            <h3 class="text-sm font-semibold text-slate-900">Import Devices</h3>
+                            <p class="text-sm text-slate-600">Import device configuration from CSV file.</p>
+                            
+                            <div class="space-y-3">
+                                <!-- File Upload Area -->
+                                <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:bg-slate-50 transition-colors cursor-pointer" id="dropArea">
+                                    <input type="file" id="fileInput" accept=".csv" class="hidden">
+                                    <i class="fa-solid fa-file-csv text-2xl text-slate-400 mb-3"></i>
+                                    <p class="text-sm text-slate-600 mb-1">Drag & drop CSV file here</p>
+                                    <p class="text-xs text-slate-500">or</p>
+                                    <button type="button" class="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm" id="browseFilesBtn">
+                                        Browse Files
+                                    </button>
+                                    <p class="text-xs text-slate-400 mt-2">Supports: CSV files only</p>
+                                </div>
+                                
+                                <!-- Import Options -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" id="import-overwrite" class="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded">
+                                        <label for="import-overwrite" class="ml-2 text-sm text-slate-700">Create new devices (IDs will be auto-generated)</label>
+                                    </div>
+                                </div>
+                                
+                                <button class="w-full px-4 py-2 bg-primary hover:bg-primaryHover text-white rounded-lg font-medium text-sm flex items-center justify-center disabled:bg-slate-300 disabled:cursor-not-allowed" id="importBtn" disabled>
+                                    <i class="fa-solid fa-upload mr-2"></i> Import from CSV
+                                </button>
+                                
+                                <!-- Quick Template -->
+                                <div class="mt-4">
+                                    <p class="text-xs text-slate-500 mb-2">Need a template?</p>
+                                    <button type="button" class="text-xs px-3 py-1 border border-slate-300 text-slate-700 hover:bg-slate-50 rounded" id="downloadCsvTemplateBtn">
+                                        <i class="fa-solid fa-file-arrow-down mr-1"></i> Download CSV Template
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Import Status -->
+                    <div id="importStatus" class="hidden mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-slate-700" id="statusText">Importing...</span>
+                            <span class="text-xs text-slate-500" id="statusCount">0/0 devices</span>
+                        </div>
+                        <div class="mt-2">
+                            <div class="h-1 bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-primary transition-all duration-300" id="progressBar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm text-slate-500 mt-4">Export device configuration in CSV format for easy spreadsheet editing and import.</p>
+                </section>
+            </div>
+        </div>
+    </main>
+</div>

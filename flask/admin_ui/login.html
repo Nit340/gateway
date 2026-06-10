@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Admin Login</title>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--border:#2e2b28;--border2:#3a3632;
+  --accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.18);
+  --text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;
+  --green:#4ade80;--red:#f87171;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;line-height:1;}
+
+/* Ambient background elements */
+.bg-orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none;}
+.orb1{width:500px;height:500px;background:rgba(249,115,22,0.06);top:-150px;right:-100px;}
+.orb2{width:400px;height:400px;background:rgba(249,115,22,0.04);bottom:-120px;left:-80px;}
+.grid-bg{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:40px 40px;opacity:0.25;pointer-events:none;}
+.vignette{position:absolute;inset:0;background:radial-gradient(ellipse 70% 70% at 50% 50%,transparent 40%,rgba(15,14,13,0.85) 100%);pointer-events:none;}
+
+/* Card */
+.card{position:relative;z-index:10;width:100%;max-width:420px;margin:20px;background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:40px;box-shadow:0 40px 100px rgba(0,0,0,0.6);}
+
+/* Logo */
+.logo-wrap{text-align:center;margin-bottom:36px;}
+.logo-icon{width:64px;height:64px;background:var(--accent);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(249,115,22,0.4),0 0 80px rgba(249,115,22,0.15);margin-bottom:16px;}
+.logo-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:11px;color:var(--text3);font-weight:500;letter-spacing:0.1em;text-transform:uppercase;margin-top:4px;}
+
+/* Error */
+#errBanner{display:none;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.25);color:var(--red);font-size:12.5px;font-weight:500;margin-bottom:20px;}
+
+/* Form */
+.form-group{margin-bottom:16px;}
+label.lbl{display:block;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:7px;}
+.input-wrap{position:relative;}
+.input-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:18px !important;color:var(--text3);pointer-events:none;transition:color .15s;}
+input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:13.5px;font-family:'Inter',sans-serif;padding:12px 14px 12px 42px;outline:none;transition:border-color .15s,box-shadow .15s;}
+input::placeholder{color:var(--text3);}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+input:focus + .focus-icon,input:focus ~ .input-icon{color:var(--accent);}
+
+/* Submit */
+.btn-login{width:100%;margin-top:8px;padding:13px;background:var(--accent);color:white;border:none;border-radius:10px;font-family:'Inter',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 20px rgba(249,115,22,0.3);}
+.btn-login:hover{background:var(--accent2);box-shadow:0 4px 24px rgba(249,115,22,0.45);}
+.btn-login:active{transform:scale(0.98);}
+.btn-login:disabled{opacity:0.55;cursor:default;}
+
+/* Status strip */
+.status-strip{display:flex;justify-content:center;gap:10px;margin-top:20px;position:relative;z-index:10;}
+.status-pill{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text3);font-size:10.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--green);position:relative;}
+.pulse-dot::after{content:'';position:absolute;inset:-2px;border-radius:50%;background:var(--green);opacity:0.4;animation:pulse 1.5s ease-in-out infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:0.4;}50%{transform:scale(1.8);opacity:0;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner{animation:spin 0.7s linear infinite;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+.card{animation:fadeUp 0.4s ease both;}
+</style>
+</head>
+<body>
+<div class="bg-orb orb1"></div>
+<div class="bg-orb orb2"></div>
+<div class="grid-bg"></div>
+<div class="vignette"></div>
+
+<main>
+  <div class="card">
+    <div class="logo-wrap">
+      <div class="logo-icon">
+        <span class="mat text-white" style="font-size:32px;">precision_manufacturing</span>
+      </div>
+      <div class="logo-title">UNIVA</div>
+      <div class="logo-sub">Admin Console</div>
+    </div>
+
+    <div id="errBanner">
+      <span class="mat" style="font-size:16px;flex-shrink:0;">error</span>
+      <span id="errMsg">Invalid credentials.</span>
+    </div>
+
+    <div class="form-group">
+      <label class="lbl">Username</label>
+      <div class="input-wrap">
+        <span class="mat input-icon" id="icon-u">badge</span>
+        <input id="username" type="text" autocomplete="username" placeholder="admin"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="lbl">Password</label>
+      <div class="input-wrap">
+        <span class="mat input-icon" id="icon-p">vpn_key</span>
+        <input id="password" type="password" autocomplete="current-password" placeholder="••••••••"/>
+      </div>
+    </div>
+
+    <button id="loginBtn" class="btn-login" onclick="doLogin()">
+      <span id="btnText">Access Admin Panel</span>
+      <span id="btnIcon" class="mat" style="font-size:17px;">arrow_forward</span>
+      <svg id="spinner" class="spinner" style="display:none;" width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" stroke-dasharray="32" stroke-dashoffset="12"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="status-strip">
+    <div class="status-pill">
+      <span class="pulse-dot"></span>
+      System Online
+    </div>
+    <div class="status-pill">
+      <span class="mat" style="font-size:13px;">sensors</span>
+      Server Connected
+    </div>
+  </div>
+</main>
+
+<script>
+  // Focus glow effect on icons
+  document.getElementById('username').addEventListener('focus', () => document.getElementById('icon-u').style.color = 'var(--accent)');
+  document.getElementById('username').addEventListener('blur', () => document.getElementById('icon-u').style.color = 'var(--text3)');
+  document.getElementById('password').addEventListener('focus', () => document.getElementById('icon-p').style.color = 'var(--accent)');
+  document.getElementById('password').addEventListener('blur', () => document.getElementById('icon-p').style.color = 'var(--text3)');
+
+  document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('username').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('password').focus(); });
+
+  async function doLogin() {
+    const btn  = document.getElementById('loginBtn');
+    const errB = document.getElementById('errBanner');
+    const errM = document.getElementById('errMsg');
+    const u    = document.getElementById('username').value.trim();
+    const p    = document.getElementById('password').value;
+
+    errB.style.display = 'none';
+    if (!u || !p) {
+      errM.textContent = 'Please enter username and password.';
+      errB.style.display = 'flex';
+      return;
+    }
+
+    btn.disabled = true;
+    document.getElementById('btnText').style.display = 'none';
+    document.getElementById('btnIcon').style.display = 'none';
+    document.getElementById('spinner').style.display = 'block';
+
+    try {
+      const res  = await fetch('/admin/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: u, password: p})
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.replace('/admin');
+      } else {
+        errM.textContent = data.error || 'Invalid credentials.';
+        errB.style.display = 'flex';
+        document.getElementById('password').value = '';
+      }
+    } catch(e) {
+      errM.textContent = 'Could not reach server. Please try again.';
+      errB.style.display = 'flex';
+    } finally {
+      btn.disabled = false;
+      document.getElementById('btnText').style.display = '';
+      document.getElementById('btnIcon').style.display = '';
+      document.getElementById('spinner').style.display = 'none';
+    }
+  }
+</script>
+</body>
+</html>

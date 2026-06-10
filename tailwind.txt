@@ -1,0 +1,7 @@
+npm init -y
+npm install -D tailwindcss@3
+npx tailwindcss init
+echo @tailwind base; > assets\css\tailwind-input.css
+echo @tailwind components; >> assets\css\tailwind-input.css
+echo @tailwind utilities; >> assets\css\tailwind-input.css
+npx tailwindcss -i ./assets/css/tailwind-input.css -o ./assets/css/tailwind.css --minify

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Access Control</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{--bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;--border:#2e2b28;--border2:#3a3632;--accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;--green:#4ade80;--red:#f87171;--yellow:#fbbf24;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.sidebar-link{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.sidebar-link:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.sidebar-link.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.sidebar-link.active .mat{color:var(--accent);}
+.sidebar-link:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+/* User card */
+.user-card{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;cursor:pointer;transition:all .15s;border:1px solid transparent;}
+.user-card:hover{background:var(--surface3);border-color:var(--border);}
+.user-card.selected{background:var(--accent-glow);border-color:rgba(249,115,22,0.25);}
+.user-avatar{width:30px;height:30px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;font-weight:800;color:white;}
+/* Tab buttons */
+.tab-btn{padding:6px 14px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--text3);border:none;background:transparent;font-family:'Inter',sans-serif;}
+.tab-btn.active{background:var(--accent-glow);color:var(--accent);}
+.tab-btn:not(.active):hover{background:var(--surface3);color:var(--text);}
+/* Toggle */
+.toggle{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--surface3);border:1px solid var(--border2);border-radius:20px;transition:.2s;}
+.toggle-slider:before{content:"";position:absolute;width:14px;height:14px;left:2px;top:2px;background:var(--text3);border-radius:50%;transition:.2s;}
+.toggle input:checked + .toggle-slider{background:var(--accent);border-color:var(--accent);}
+.toggle input:checked + .toggle-slider:before{transform:translateX(16px);background:white;}
+/* Num input */
+.num-input{width:60px;text-align:center;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;font-size:14px;font-weight:700;color:var(--text);padding:5px 8px;outline:none;transition:border-color .15s;font-family:'Inter',monospace;}
+.num-input:focus{border-color:var(--accent);}
+/* Session dot */
+.session-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
+/* Buttons */
+.btn-sm{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif;}
+.btn-orange{background:var(--accent);color:white;border:none;}
+.btn-orange:hover{background:var(--accent2);}
+.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--text2);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger-sm{background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);color:var(--red);}
+.btn-danger-sm:hover{background:rgba(248,113,113,0.15);}
+::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spin{animation:spin 0.7s linear infinite;display:inline-block;}
+</style>
+</head>
+<body>
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon"><span class="mat" style="font-size:20px;color:white;">precision_manufacturing</span></div>
+    <div><div class="logo-name">Univa</div><div class="logo-sub">Admin Panel</div></div>
+  </div>
+  <nav>
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
+    <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
+    <a href="/admin/database" class="sidebar-link"><span class="mat">table_chart</span> Database</a>
+    <a href="/admin/logs" class="sidebar-link"><span class="mat">terminal</span>Logs</a>
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="sidebar-link"><span class="mat">settings_overscan</span>Modal Config</a>
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
+    <a href="/admin/access-control" class="sidebar-link active"><span class="mat">shield_lock</span> Access Control</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button onclick="logout()" class="sidebar-link" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);"><span class="mat">logout</span> Logout</button>
+  </div>
+</aside>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:100vh;">
+  <header>
+    <h1 class="topbar-title">WebUI Access Control</h1>
+    <div id="saveStatus" style="display:none;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--green);">
+      <span class="mat" style="font-size:14px;">check_circle</span> Saved
+    </div>
+  </header>
+
+  <div style="flex:1;display:flex;min-height:0;overflow:hidden;">
+    <!-- User list -->
+    <div style="width:220px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;">
+      <div style="padding:12px 14px 8px;">
+        <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:5px;">Operator Accounts</div>
+        <p style="font-size:10.5px;color:var(--text3);line-height:1.4;">Select a user to configure access and session settings.</p>
+      </div>
+      <div id="userList" style="flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:2px;">
+        <div style="font-size:11px;color:var(--text3);text-align:center;padding:24px;">Loading…</div>
+      </div>
+      <!-- Sessions footer -->
+      <div style="border-top:1px solid var(--border);padding:12px 14px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <div style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;">Live Sessions</div>
+          <button onclick="loadSessions()" style="background:none;border:none;color:var(--text3);cursor:pointer;display:flex;" title="Refresh">
+            <span class="mat" style="font-size:15px;" id="refreshIcon">refresh</span>
+          </button>
+        </div>
+        <div id="sessionsSummary" style="font-size:10.5px;color:var(--text3);">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Detail panel -->
+    <div style="flex:1;overflow:auto;padding:20px;">
+
+      <div id="noUserState" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:240px;text-align:center;">
+        <span class="mat" style="font-size:48px;color:var(--surface3);">person_search</span>
+        <div style="font-size:13px;font-weight:600;color:var(--text3);margin-top:10px;">Select a user on the left</div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:3px;">to manage their access and sessions</div>
+      </div>
+
+      <div id="userPagesPanel" style="display:none;max-width:650px;">
+        <!-- User header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div id="selectedAvatar" style="width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:14px;background:var(--accent);flex-shrink:0;"></div>
+          <div>
+            <div id="selectedName" style="font-size:13.5px;font-weight:700;color:var(--text);"></div>
+            <div id="selectedUsername" style="font-size:11px;color:var(--text3);font-family:'Inter',monospace;"></div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:2px;background:var(--surface2);padding:4px;border-radius:9px;width:fit-content;margin-bottom:16px;border:1px solid var(--border);">
+          <button class="tab-btn active" id="tab-pages" onclick="switchTab('pages')">
+            <span style="display:flex;align-items:center;gap:5px;"><span class="mat" style="font-size:13px;">visibility</span> Page Access</span>
+          </button>
+          <button class="tab-btn" id="tab-sessions" onclick="switchTab('sessions')">
+            <span style="display:flex;align-items:center;gap:5px;"><span class="mat" style="font-size:13px;">devices</span> Sessions</span>
+          </button>
+        </div>
+
+        <!-- Page Access tab -->
+        <div id="pane-pages">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+            <button onclick="setAllPages(true)" class="btn-sm btn-outline" style="font-size:11px;">
+              <span class="mat" style="font-size:13px;">visibility</span> Allow All
+            </button>
+            <button onclick="setAllPages(false)" class="btn-sm btn-danger-sm" style="font-size:11px;">
+              <span class="mat" style="font-size:13px;">visibility_off</span> Block All
+            </button>
+          </div>
+          <div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:9px;padding:10px 14px;font-size:11.5px;color:var(--text2);line-height:1.5;margin-bottom:10px;">
+            <strong style="color:var(--accent);">Blocked</strong> pages are hidden from this user's sidebar.
+          </div>
+          <div id="pageToggles" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <div style="padding:32px;text-align:center;color:var(--text3);font-size:12px;">Loading…</div>
+          </div>
+        </div>
+
+        <!-- Sessions tab -->
+        <div id="pane-sessions" style="display:none;">
+          <!-- Active sessions -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px;">
+            <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);display:flex;align-items:center;gap:7px;">
+                <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;"></span>Active Sessions
+              </div>
+              <button onclick="loadUserSessions()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;font-weight:600;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:4px;">
+                <span class="mat" style="font-size:13px;">refresh</span> Refresh
+              </button>
+            </div>
+            <div id="userSessionsList">
+              <div style="font-size:11px;color:var(--text3);padding:32px;text-align:center;">Loading…</div>
+            </div>
+          </div>
+
+          <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:9px;padding:10px 14px;font-size:11.5px;color:var(--text2);line-height:1.5;">
+            <strong style="color:var(--yellow);">Force Logout</strong> immediately invalidates that session cookie.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" style="display:none;position:fixed;bottom:22px;right:22px;padding:11px 16px;border-radius:9px;font-size:12px;font-weight:600;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.4);color:white;"></div>
+
+<script>
+  async function logout() { await fetch('/admin/logout'); window.location.href = '/admin/login'; }
+
+  function toast(msg, ok=true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = ok ? '#16a34a' : '#dc2626';
+    t.style.display = 'block';
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>t.style.display='none', 3200);
+  }
+
+  function showSaved() {
+    const el = document.getElementById('saveStatus');
+    el.style.display = 'flex';
+    clearTimeout(el._t);
+    el._t = setTimeout(()=>el.style.display='none', 2000);
+  }
+
+  let users = [];
+  let selectedUserId = null;
+  let currentPages = [];
+  let allSessions = [];
+  let currentTab = 'pages';
+
+  function switchTab(tab) {
+    currentTab = tab;
+    ['pages','sessions'].forEach(t => {
+      document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+      document.getElementById('pane-'+t).style.display = t===tab?'block':'none';
+    });
+    if (tab === 'sessions' && selectedUserId) { loadUserSessions(); }
+  }
+
+  async function loadUsers() {
+    try {
+      const d = await fetch('/api/admin/users/webui').then(r=>r.json());
+      users = d.users || [];
+      renderUserList();
+    } catch(e) {
+      document.getElementById('userList').innerHTML = '<div style="font-size:11px;color:var(--red);text-align:center;padding:16px;">Error: '+e.message+'</div>';
+    }
+  }
+
+  function renderUserList() {
+    const container = document.getElementById('userList');
+    if (!users.length) {
+      container.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:16px;line-height:1.5;">No operator accounts found.<br><a href="/admin/users" style="color:var(--accent);">Add users</a></div>';
+      return;
+    }
+    container.innerHTML = users.map(u => {
+      const initials = (u.display_name || u.username).slice(0,2).toUpperCase();
+      const sessCount = allSessions.filter(s => s.username === u.username).length;
+      const isSelected = selectedUserId === u.id;
+      const dot = u.enabled
+        ? '<span style="width:5px;height:5px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0;"></span>'
+        : '<span style="width:5px;height:5px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0;"></span>';
+      const sessIndicator = sessCount > 0
+        ? `<span style="width:15px;height:15px;border-radius:50%;background:rgba(74,222,128,0.15);color:var(--green);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid rgba(74,222,128,0.25);">${sessCount}</span>`
+        : '';
+      return `<div class="user-card ${isSelected?'selected':''}" id="user-card-${u.id}" onclick="selectUser(${u.id})">
+        <div class="user-avatar">${initials}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.display_name||u.username}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'Inter',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@${u.username}</div>
+        </div>${dot}${sessIndicator}</div>`;
+    }).join('');
+  }
+
+  async function selectUser(userId) {
+    selectedUserId = userId;
+    document.querySelectorAll('.user-card').forEach(c=>c.classList.remove('selected'));
+    document.getElementById('user-card-'+userId)?.classList.add('selected');
+    const user = users.find(u=>u.id===userId);
+    if (!user) return;
+    const initials = (user.display_name||user.username).slice(0,2).toUpperCase();
+    document.getElementById('selectedAvatar').textContent = initials;
+    document.getElementById('selectedName').textContent = user.display_name||user.username;
+    document.getElementById('selectedUsername').textContent = '@'+user.username;
+    document.getElementById('noUserState').style.display = 'none';
+    document.getElementById('userPagesPanel').style.display = 'block';
+    document.getElementById('pageToggles').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:11px;">Loading…</div>';
+    try {
+      const d = await fetch('/api/admin/webui-pages?user_id='+userId).then(r=>r.json());
+      currentPages = d.pages || [];
+      renderPageToggles();
+    } catch(e) {
+      document.getElementById('pageToggles').innerHTML = '<div style="padding:16px;text-align:center;color:var(--red);font-size:11px;">Error: '+e.message+'</div>';
+    }
+    if (currentTab === 'sessions') { loadUserSessions(); }
+  }
+
+  function renderPageToggles() {
+    const container = document.getElementById('pageToggles');
+    if (!currentPages.length) {
+      container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px;">No pages configured</div>';
+      return;
+    }
+    container.innerHTML = currentPages.map(p => `
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:600;color:var(--text);">${p.label}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'Inter',monospace;margin-top:2px;">${p.page_key}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <span style="font-size:10.5px;font-weight:700;" class="${p.visible?'text-allowed':'text-blocked'}" id="lbl-${p.page_key}"
+            style="color:${p.visible?'var(--green)':'var(--red)'};">
+            ${p.visible?'Allowed':'Blocked'}
+          </span>
+          <label class="toggle">
+            <input type="checkbox" id="tog-${p.page_key}" ${p.visible?'checked':''}
+              onchange="togglePage('${p.page_key}', this.checked)"/>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>`).join('');
+    // Fix colors after render
+    currentPages.forEach(p => {
+      const lbl = document.getElementById('lbl-'+p.page_key);
+      if (lbl) lbl.style.color = p.visible ? 'var(--green)' : 'var(--red)';
+    });
+  }
+
+  async function togglePage(pageKey, visible) {
+    const lbl = document.getElementById('lbl-'+pageKey);
+    if (lbl) { lbl.textContent = visible?'Allowed':'Blocked'; lbl.style.color = visible?'var(--green)':'var(--red)'; }
+    const p = currentPages.find(x=>x.page_key===pageKey);
+    if (p) p.visible = visible;
+    try {
+      const d = await fetch('/api/admin/webui-pages', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({user_id: selectedUserId, page_key: pageKey, hidden: !visible})
+      }).then(r=>r.json());
+      if (d.success) showSaved();
+      else {
+        toast('Save failed: '+(d.error||''), false);
+        const tog = document.getElementById('tog-'+pageKey);
+        if (tog) tog.checked = !visible;
+        if (p) p.visible = !visible;
+        if (lbl) { lbl.textContent = !visible?'Allowed':'Blocked'; lbl.style.color = !visible?'var(--green)':'var(--red)'; }
+      }
+    } catch(e) { toast('Network error: '+e.message, false); }
+  }
+
+  async function setAllPages(visible) {
+    if (!selectedUserId) return;
+    if (!confirm('Are you sure you want to '+(visible?'allow':'block')+' all pages for this user?')) return;
+    for (const p of currentPages) {
+      if (p.visible !== visible) {
+        const tog = document.getElementById('tog-'+p.page_key);
+        if (tog) tog.checked = visible;
+        await togglePage(p.page_key, visible);
+        await new Promise(r=>setTimeout(r,20));
+      }
+    }
+    toast(visible?'All pages allowed':'All pages blocked');
+  }
+
+  async function loadSessions() {
+    const icon = document.getElementById('refreshIcon');
+    if (icon) icon.classList.add('spin');
+    try {
+      const d = await fetch('/api/admin/webui-sessions').then(r=>r.json());
+      allSessions = d.sessions || [];
+      renderSessionsSummary();
+      renderUserList();
+      if (selectedUserId && currentTab === 'sessions') renderUserSessionsList();
+    } catch(e) {}
+    if (icon) icon.classList.remove('spin');
+  }
+
+  function renderSessionsSummary() {
+    const el = document.getElementById('sessionsSummary');
+    if (!allSessions.length) { el.innerHTML = '<span style="color:var(--text3);">No active sessions</span>'; return; }
+    const unames = [...new Set(allSessions.map(s=>s.username))];
+    el.innerHTML = '<strong style="color:var(--text);">'+allSessions.length+'</strong> session'+(allSessions.length!==1?'s':'')+
+      ' · <strong style="color:var(--text);">'+unames.length+'</strong> user'+(unames.length!==1?'s':'');
+  }
+
+  async function loadUserSessions() {
+    if (!selectedUserId) return;
+    await loadSessions();
+    renderUserSessionsList();
+  }
+
+  function renderUserSessionsList() {
+    const container = document.getElementById('userSessionsList');
+    const user = users.find(u=>u.id===selectedUserId);
+    if (!user) return;
+    const userSess = allSessions.filter(s => s.username === user.username);
+    if (!userSess.length) {
+      container.innerHTML = `<div style="text-align:center;padding:28px 16px;">
+        <span class="mat" style="font-size:28px;color:var(--surface3);display:block;margin-bottom:6px;">desktop_access_disabled</span>
+        <div style="font-size:11.5px;color:var(--text3);font-weight:600;">No active sessions</div>
+      </div>`;
+      return;
+    }
+    container.innerHTML = userSess.map((s,i) => {
+      const timeStr = s.logged_in_at ? formatRelTime(s.logged_in_at) : 'unknown time';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);">
+        <div class="session-dot"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:var(--text);">Window ${i+1}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'Inter',monospace;margin-top:2px;">Token: ${s.token_prefix}… · Active since ${timeStr}</div>
+        </div>
+        <button onclick="killSession('${s.token}')" class="btn-sm btn-danger-sm">
+          <span class="mat" style="font-size:13px;">logout</span> Force Logout
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  async function killSession(token) {
+    if (!confirm('Force-logout this session?')) return;
+    try {
+      const d = await fetch('/api/admin/webui-sessions/'+token, {method:'DELETE'}).then(r=>r.json());
+      if (d.success) { toast('Session terminated.'); await loadSessions(); renderUserSessionsList(); }
+      else { toast('Failed: '+(d.error||''), false); }
+    } catch(e) { toast('Error: '+e.message, false); }
+  }
+
+  function formatRelTime(isoStr) {
+    try {
+      const diff = Math.floor((Date.now() - new Date(isoStr+'Z').getTime()) / 1000);
+      if (isNaN(diff) || diff < 0) return 'just now';
+      if (diff < 60) return diff+'s ago';
+      if (diff < 3600) return Math.floor(diff/60)+'m ago';
+      if (diff < 86400) return Math.floor(diff/3600)+'h ago';
+      return Math.floor(diff/86400)+'d ago';
+    } catch(e) { return 'recently'; }
+  }
+
+  loadUsers();
+  loadSessions();
+  setInterval(loadSessions, 15000);
+</script>
+</body>
+</html>

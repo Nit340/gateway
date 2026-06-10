@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Database</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{
+  --bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;
+  --border:#2e2b28;--border2:#3a3632;
+  --accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--accent-glow2:rgba(249,115,22,0.07);
+  --text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;
+  --green:#4ade80;--red:#f87171;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.sidebar-link{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.sidebar-link:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.sidebar-link.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.sidebar-link.active .mat{color:var(--accent);}
+.sidebar-link:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+
+/* Table list */
+.table-pill{display:flex;align-items:center;padding:7px 11px;border-radius:7px;font-size:11.5px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;border:1px solid transparent;font-family:'Inter',monospace;}
+.table-pill:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.table-pill.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+
+/* Data table */
+.data-table{width:100%;border-collapse:collapse;}
+.data-table thead tr{border-bottom:1px solid var(--border2);}
+.data-table th{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;padding:10px 14px;text-align:left;background:var(--surface2);white-space:nowrap;}
+.data-table td{font-size:12px;color:var(--text2);padding:9px 14px;border-bottom:1px solid var(--border);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Inter',monospace;}
+.data-table tr:hover td{background:var(--surface2);color:var(--text);}
+
+/* Input */
+input.field,select.field{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'Inter',sans-serif;padding:9px 12px;outline:none;width:100%;transition:border-color .15s;}
+input.field:focus,select.field:focus{border-color:var(--accent);}
+input.field::placeholder{color:var(--text3);}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:50;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,0.6);}
+
+/* Buttons */
+.btn-primary{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:transparent;color:var(--text2);border:1px solid var(--border2);border-radius:8px;font-size:12px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Toast */
+#toast{position:fixed;bottom:22px;right:22px;padding:11px 16px;border-radius:9px;font-size:12px;font-weight:600;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.4);}
+
+::-webkit-scrollbar{width:4px;height:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <span class="mat" style="font-size:20px;color:white;">precision_manufacturing</span>
+    </div>
+    <div>
+      <div class="logo-name">Univa</div>
+      <div class="logo-sub">Admin Panel</div>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="sidebar-link"><span class="mat">dashboard</span> Dashboard</a>
+    <a href="/admin/pipeline" class="sidebar-link"><span class="mat">device_hub</span> Pipeline</a>
+    <a href="/admin/database" class="sidebar-link active"><span class="mat">table_chart</span> Database</a>
+    <a href="/admin/logs" class="sidebar-link"><span class="mat">terminal</span>Logs</a>
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="sidebar-link"><span class="mat">settings_overscan</span>Modal Config</a>
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="sidebar-link"><span class="mat">manage_accounts</span> Users</a>
+    <a href="/admin/access-control" class="sidebar-link"><span class="mat">shield_lock</span> Access Control</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button onclick="logout()" class="sidebar-link" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);">
+      <span class="mat">logout</span> Logout
+    </button>
+  </div>
+</aside>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+  <header>
+    <h1 class="topbar-title">Database Manager</h1>
+    <button onclick="saveFactoryReset()" id="saveFactoryBtn" class="btn-primary" style="margin-right: 10px; background: var(--red);">
+      <span class="mat" style="font-size:16px;">save</span> Save Factory DB
+    </button>
+    <button onclick="openInsertModal()" id="insertBtn" style="display:none;" class="btn-primary">
+      <span class="mat" style="font-size:16px;">add</span> Insert Row
+    </button>
+  </header>
+
+  <div style="flex:1;display:flex;min-height:0;overflow:hidden;">
+    <!-- Table list -->
+    <div style="width:190px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:12px 8px;">
+      <div style="font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:8px;">Tables</div>
+      <div id="tableList" style="display:flex;flex-direction:column;gap:2px;"></div>
+    </div>
+
+    <!-- Table data -->
+    <div style="flex:1;overflow:auto;padding:18px;">
+      <div id="tableArea" style="font-size:13px;color:var(--text3);padding-top:40px;text-align:center;">
+        Select a table from the left panel.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h2 style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--text);" id="modalTitle">Insert Row</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--text3);cursor:pointer;"><span class="mat">close</span></button>
+    </div>
+    <div id="modalFields" style="display:flex;flex-direction:column;gap:12px;"></div>
+    <div style="display:flex;gap:10px;margin-top:22px;">
+      <button onclick="submitModal()" class="btn-primary" style="flex:1;justify-content:center;" id="modalSubmitBtn">Save</button>
+      <button onclick="closeModal()" class="btn-ghost" style="flex:1;justify-content:center;">Cancel</button>
+    </div>
+    <div id="modalErr" style="display:none;margin-top:10px;font-size:11.5px;color:var(--red);font-weight:600;"></div>
+  </div>
+</div>
+
+<div id="toast" style="display:none;"></div>
+
+<script>
+  let currentTable = null;
+  let currentColumns = [];
+  let currentRows = [];
+  let editRowId = null;
+
+  async function logout() { await fetch('/admin/logout'); window.location.href='/admin/login'; }
+
+  async function saveFactoryReset() {
+    if (!confirm('Save the current database configuration as the factory default? Future firmware factory resets will revert the gateway to this database state.')) return;
+    try {
+      const r = await fetch('/api/admin/save-factory-default', { method: 'POST' });
+      const d = await r.json();
+      if (d.success) toast('Factory default database saved successfully!');
+      else toast('Failed to save factory default: ' + (d.error || 'Unknown error'), false);
+    } catch(e) {
+      toast('Error saving factory default: ' + e.message, false);
+    }
+  }
+
+  function toast(msg, ok=true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.cssText = `position:fixed;bottom:22px;right:22px;padding:11px 16px;border-radius:9px;font-size:12px;font-weight:600;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.4);background:${ok?'#16a34a':'#dc2626'};color:white;`;
+    t.style.display = 'block';
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>t.style.display='none', 3000);
+  }
+
+  async function loadTables() {
+    const r = await fetch('/api/admin/db/tables');
+    const d = await r.json();
+    const list = document.getElementById('tableList');
+    list.innerHTML = (d.tables||[]).map(t =>
+      `<div class="table-pill" onclick="selectTable('${t}')" id="pill-${t}">${t}</div>`
+    ).join('');
+  }
+
+  async function selectTable(name) {
+    currentTable = name;
+    document.querySelectorAll('.table-pill').forEach(p => p.classList.remove('active'));
+    document.getElementById('pill-'+name)?.classList.add('active');
+    document.getElementById('insertBtn').style.display = 'inline-flex';
+    await loadTableData();
+  }
+
+  async function loadTableData() {
+    if (!currentTable) return;
+    document.getElementById('tableArea').innerHTML = '<div style="color:var(--text3);font-size:13px;">Loading…</div>';
+    try {
+      const r = await fetch('/api/admin/db/table/'+currentTable);
+      const d = await r.json();
+      currentColumns = d.columns || [];
+      currentRows    = d.rows    || [];
+      renderTable();
+    } catch(e) {
+      document.getElementById('tableArea').innerHTML = '<div style="color:var(--red);">Error: '+e.message+'</div>';
+    }
+  }
+
+  function renderTable() {
+    if (!currentRows.length) {
+      document.getElementById('tableArea').innerHTML = `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">${currentTable}</div>
+          <div style="padding:40px;text-align:center;color:var(--text3);font-size:13px;">No records found</div>
+        </div>`;
+      return;
+    }
+    const cols = currentColumns;
+    let html = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div style="padding:12px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">${currentTable}</div>
+        <div style="font-size:11px;color:var(--text3);">${currentRows.length} row${currentRows.length!==1?'s':''}</div>
+      </div>
+      <div style="overflow-x:auto;">
+      <table class="data-table"><thead><tr>`;
+    cols.forEach(c => { html += `<th>${c}</th>`; });
+    html += '<th style="text-align:right;">Actions</th></tr></thead><tbody>';
+    currentRows.forEach(row => {
+      html += '<tr>';
+      cols.forEach(c => {
+        const v = row[c] === null || row[c] === undefined ? '' : String(row[c]);
+        html += `<td title="${v.replace(/"/g,'&quot;')}">${v.length>50?v.slice(0,50)+'…':v}</td>`;
+      });
+      html += `<td style="text-align:right;white-space:nowrap;">
+        <button onclick='openEditModal(${JSON.stringify(row)})' style="color:var(--blue);background:none;border:none;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;margin-right:10px;">Edit</button>
+        <button onclick='deleteRow("${row.id}")' style="color:var(--red);background:none;border:none;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;">Delete</button>
+      </td></tr>`;
+    });
+    html += '</tbody></table></div></div>';
+    document.getElementById('tableArea').innerHTML = html;
+  }
+
+  function openInsertModal() {
+    editRowId = null;
+    document.getElementById('modalTitle').textContent = 'Insert Row — ' + currentTable;
+    document.getElementById('modalSubmitBtn').textContent = 'Insert';
+    const fields = document.getElementById('modalFields');
+    fields.innerHTML = currentColumns.filter(c=>c!=='id'&&c!=='created_at'&&c!=='updated_at').map(c =>
+      `<div><label style="display:block;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">${c}</label>
+       <input class="field" id="mf-${c}" type="text" placeholder="${c}"/></div>`
+    ).join('');
+    document.getElementById('modalErr').style.display = 'none';
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function openEditModal(row) {
+    editRowId = row.id;
+    document.getElementById('modalTitle').textContent = 'Edit Row #' + row.id;
+    document.getElementById('modalSubmitBtn').textContent = 'Update';
+    const fields = document.getElementById('modalFields');
+    fields.innerHTML = currentColumns.filter(c=>c!=='id'&&c!=='created_at'&&c!=='updated_at').map(c =>
+      `<div><label style="display:block;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;">${c}</label>
+       <input class="field" id="mf-${c}" type="text" value="${row[c]===null||row[c]===undefined?'':String(row[c]).replace(/"/g,'&quot;')}"/></div>`
+    ).join('');
+    document.getElementById('modalErr').style.display = 'none';
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+    editRowId = null;
+  }
+
+  async function submitModal() {
+    const errEl = document.getElementById('modalErr');
+    errEl.style.display = 'none';
+    const data = {};
+    currentColumns.filter(c=>c!=='id'&&c!=='created_at'&&c!=='updated_at').forEach(c => {
+      const el = document.getElementById('mf-'+c);
+      if (el) data[c] = el.value.trim() || null;
+    });
+    try {
+      let r;
+      if (editRowId !== null) {
+        r = await fetch(`/api/admin/db/table/${currentTable}/${editRowId}`, {
+          method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+        });
+      } else {
+        r = await fetch(`/api/admin/db/table/${currentTable}`, {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+        });
+      }
+      const d = await r.json();
+      if (d.success) {
+        closeModal();
+        toast(editRowId ? 'Row updated!' : 'Row inserted!');
+        await loadTableData();
+      } else {
+        errEl.textContent = d.error || 'Operation failed.';
+        errEl.style.display = 'block';
+      }
+    } catch(e) {
+      errEl.textContent = e.message;
+      errEl.style.display = 'block';
+    }
+  }
+
+  async function deleteRow(id) {
+    if (!confirm('Delete row #'+id+' from '+currentTable+'?')) return;
+    try {
+      const r = await fetch(`/api/admin/db/table/${currentTable}/${id}`, {method:'DELETE'});
+      const d = await r.json();
+      if (d.success) { toast('Row deleted.'); await loadTableData(); }
+      else toast('Delete failed: '+(d.error||''), false);
+    } catch(e) { toast('Error: '+e.message, false); }
+  }
+
+  loadTables();
+</script>
+</body>
+</html>

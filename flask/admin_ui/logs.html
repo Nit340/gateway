@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Univa – Logs</title>
+<link href="/css/tailwind.css" rel="stylesheet"/>
+<link href="/css/fonts.css" rel="stylesheet"/>
+<link href="/css/material-icons.css" rel="stylesheet"/>
+  <link href="/css/admin.css" rel="stylesheet"/>
+<link href="/css/animations.css" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;}
+:root{--bg:#0f0e0d;--surface:#171614;--surface2:#1e1c1a;--surface3:#252220;--border:#2e2b28;--border2:#3a3632;--accent:#f97316;--accent2:#ea580c;--accent-glow:rgba(249,115,22,0.15);--text:#f5f0eb;--text2:#a89f96;--text3:#6b6460;--green:#4ade80;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;margin:0;}
+.mat{font-family:'Material Symbols Outlined';font-style:normal;font-size:20px;line-height:1;}
+aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.35);}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);letter-spacing:-0.02em;}
+.logo-sub{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;}
+nav{flex:1;padding:12px 8px;}
+.nav-section{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;margin-bottom:3px;margin-top:14px;}
+.nav-section:first-child{margin-top:0;}
+.slink{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;cursor:pointer;border:1px solid transparent;}
+.slink:hover{background:var(--surface3);color:var(--text);border-color:var(--border);}
+.slink.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.25);}
+.slink.active .mat{color:var(--accent);}
+.slink:hover .mat{color:var(--text);}
+.sidebar-footer{padding:10px 8px;border-top:1px solid var(--border);}
+header{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;color:var(--text);flex:1;letter-spacing:-0.01em;}
+/* Level badges */
+.lv{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Inter',monospace;}
+.lv-DEBUG{background:rgba(96,165,250,0.1);color:var(--blue);}
+.lv-INFO{background:rgba(74,222,128,0.1);color:var(--green);}
+.lv-WARNING{background:rgba(251,191,36,0.12);color:var(--yellow);}
+.lv-ERROR{background:rgba(248,113,113,0.12);color:var(--red);}
+.lv-CRITICAL{background:rgba(192,132,252,0.12);color:#c084fc;}
+/* Row tint */
+.rw-WARNING{background:rgba(251,191,36,0.03) !important;}
+.rw-ERROR{background:rgba(248,113,113,0.04) !important;}
+.rw-CRITICAL{background:rgba(192,132,252,0.04) !important;}
+/* Filter buttons */
+.fbt{padding:3px 10px;border-radius:6px;font-size:10.5px;font-weight:600;background:var(--surface2);color:var(--text3);border:1px solid var(--border);cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif;}
+.fbt:hover{border-color:var(--accent);color:var(--accent);}
+.fbt.on{background:var(--accent-glow);color:var(--accent);border-color:rgba(249,115,22,0.3);}
+/* Toggle */
+.tog{position:relative;display:inline-block;width:32px;height:17px;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-sl{position:absolute;cursor:pointer;inset:0;background:var(--surface3);border:1px solid var(--border2);border-radius:20px;transition:.2s;}
+.tog-sl:before{content:'';position:absolute;height:11px;width:11px;left:2px;bottom:2px;background:var(--text3);border-radius:50%;transition:.2s;}
+input:checked + .tog-sl{background:var(--accent);border-color:var(--accent);}
+input:checked + .tog-sl:before{transform:translateX(15px);background:white;}
+/* Log table */
+.log-table{width:100%;border-collapse:collapse;}
+.log-table th{font-size:9.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;padding:8px 12px;text-align:left;background:var(--surface2);position:sticky;top:0;z-index:5;border-bottom:1px solid var(--border2);}
+.log-table td{font-size:11.5px;color:var(--text2);padding:6px 12px;border-bottom:1px solid rgba(46,43,40,0.6);}
+.log-table tr:hover td{background:var(--surface2);}
+.logmsg{font-family:'Inter',monospace;font-size:11px;word-break:break-all;line-height:1.5;color:var(--text2);}
+/* Select */
+select{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text2);font-size:11.5px;font-family:'Inter',sans-serif;padding:5px 9px;outline:none;}
+select:focus{border-color:var(--accent);}
+select option{background:var(--surface2);}
+input[type=text]{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:11.5px;font-family:'Inter',sans-serif;padding:5px 10px;outline:none;}
+input[type=text]:focus{border-color:var(--accent);}
+input[type=text]::placeholder{color:var(--text3);}
+::-webkit-scrollbar{width:4px;height:4px;} ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spin{animation:spin 0.7s linear infinite;display:inline-block;}
+</style>
+</head>
+<body>
+<aside>
+  <div class="sidebar-logo">
+    <div class="logo-icon"><span class="mat" style="font-size:20px;color:white;">precision_manufacturing</span></div>
+    <div><div class="logo-name">Univa</div><div class="logo-sub">Admin Panel</div></div>
+  </div>
+  <nav> 
+    <div class="nav-section">Main</div>
+    <a href="/admin" class="slink"><span class="mat">dashboard</span>Dashboard</a>
+    <a href="/admin/pipeline" class="slink"><span class="mat">device_hub</span>Pipeline</a>
+    <a href="/admin/database" class="slink"><span class="mat">table_chart</span>Database</a>
+    <a href="/admin/logs" class="slink active"><span class="mat">terminal</span>Logs</a>
+    <div class="nav-section">Configuration</div>
+    <a href="/admin/modal" class="slink"><span class="mat">settings_overscan</span>Modal Config</a>
+    <div class="nav-section">Users</div>
+    <a href="/admin/users" class="slink"><span class="mat">manage_accounts</span>Users</a>
+    <a href="/admin/access-control" class="slink"><span class="mat">shield_lock</span>Access Control</a>
+  </nav>
+  <div class="sidebar-footer">
+    <button onclick="doLogout()" class="slink" style="width:100%;background:none;border:none;text-align:left;color:var(--text3);"><span class="mat">logout</span>Logout</button>
+  </div>
+</aside>
+
+<div style="flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;">
+  <header>
+    <span class="mat" style="color:var(--text3);">terminal</span>
+    <h1 class="topbar-title">Server Logs</h1>
+    <button id="liveBtn" onclick="toggleLive()"
+      style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:7px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);color:var(--green);cursor:pointer;">
+      <span id="liveDot" style="position:relative;display:inline-flex;width:7px;height:7px;">
+        <span style="position:absolute;inset:0;border-radius:50%;background:var(--green);opacity:0.5;animation:ping 1.2s ease-in-out infinite;"></span>
+        <span style="position:relative;width:7px;height:7px;border-radius:50%;background:var(--green);display:block;"></span>
+      </span>
+      <span id="liveLabel">Live</span>
+    </button>
+    <button onclick="clearLogs()"
+      style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:7px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.18);color:var(--red);cursor:pointer;">
+      <span class="mat" style="font-size:15px;">delete_sweep</span>Clear
+    </button>
+  </header>
+
+  <div style="flex:1;display:flex;overflow:hidden;">
+    <!-- Module settings panel -->
+    <div style="width:200px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;overflow-y:auto;">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--border);">
+        <div style="font-size:9.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Module Controls</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.4;">Toggle to stop logs from that module.</div>
+      </div>
+      <div id="settingsPanel" style="flex:1;padding:8px 10px;display:flex;flex-direction:column;gap:1px;">
+        <div style="color:var(--text3);font-size:11px;text-align:center;padding:16px;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Log area -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <!-- Filter bar -->
+      <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+          <span style="font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.12em;margin-right:4px;">View</span>
+          <button class="fbt on" onclick="setCat(this,'ALL')">All</button>
+          <button class="fbt" onclick="setCat(this,'main')">main</button>
+          <button class="fbt" onclick="setCat(this,'database')">db</button>
+          <button class="fbt" onclick="setCat(this,'pipeline')">pipeline</button>
+          <button class="fbt" onclick="setCat(this,'general')">general</button>
+          <button class="fbt" onclick="setCat(this,'device_management')">device</button>
+          <button class="fbt" onclick="setCat(this,'tag_mapping')">tag</button>
+          <button class="fbt" onclick="setCat(this,'mqtt_cloud')">mqtt</button>
+          <button class="fbt" onclick="setCat(this,'rules')">rules</button>
+          <button class="fbt" onclick="setCat(this,'auth')">auth</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+          <select id="lvlSel" onchange="fetchLogs()">
+            <option value="ALL">All levels</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+            <option value="CRITICAL">CRITICAL</option>
+          </select>
+          <input type="text" id="searchBox" placeholder="Search…" oninput="fetchLogs()" style="width:130px;"/>
+          <select id="limitSel" onchange="fetchLogs()">
+            <option value="200">200</option>
+            <option value="500" selected>500</option>
+            <option value="1000">1000</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Log table -->
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px;gap:8px;">
+        <div id="logWrap" style="flex:1;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th style="width:140px;">Time</th>
+                <th style="width:80px;">Level</th>
+                <th style="width:120px;">Module</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody id="logBody">
+              <tr><td colspan="4" style="padding:40px;text-align:center;color:var(--text3);">Waiting for logs…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span id="statusBar" style="font-size:11px;color:var(--text3);"></span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);cursor:pointer;">
+            <input type="checkbox" id="autoScroll" checked style="accent-color:var(--accent);"/> Auto-scroll
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MODULES = ['main','database','pipeline','general','device_management','tag_mapping','mqtt_cloud','rules','auth'];
+const LEVELS  = ['DEBUG','INFO','WARNING','ERROR','CRITICAL'];
+let catFilter = 'ALL';
+let liveMode  = true;
+let liveTimer = null;
+let settings  = {};
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/admin/log-settings', {credentials:'include'});
+    if (!r.ok) { if (r.status === 401) window.location.href = '/admin/login'; return; }
+    const d = await r.json();
+    (d.settings||[]).forEach(s => { settings[s.module] = {enabled: s.enabled, level: s.level}; });
+    renderSettings();
+  } catch(e) {}
+}
+
+function renderSettings() {
+  const panel = document.getElementById('settingsPanel');
+  panel.innerHTML = MODULES.map(mod => {
+    const s = settings[mod] || {enabled:true, level:'DEBUG'};
+    const ck = s.enabled ? 'checked' : '';
+    const opts = LEVELS.map(l => `<option value="${l}" ${l===s.level?'selected':''}>${l}</option>`).join('');
+    return `<div style="display:flex;align-items:center;gap:7px;padding:7px 6px;border-radius:6px;border-bottom:1px solid var(--border);">
+      <label class="tog flex-shrink-0">
+        <input type="checkbox" ${ck} onchange="setSetting('${mod}',this.checked,null)"/>
+        <span class="tog-sl"></span>
+      </label>
+      <span style="font-size:11px;font-weight:500;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${mod}</span>
+      <select onchange="setSetting('${mod}',null,this.value)"
+        style="font-size:9.5px;background:var(--surface3);border:1px solid var(--border2);border-radius:5px;padding:2px 4px;color:var(--text3);font-family:'Inter',sans-serif;width:60px;flex-shrink:0;">
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+async function setSetting(module, enabled, level) {
+  const body = {module};
+  if (enabled !== null) { body.enabled = enabled; if(settings[module]) settings[module].enabled = enabled; }
+  if (level   !== null) { body.level   = level;   if(settings[module]) settings[module].level   = level;   }
+  renderSettings();
+  try { await fetch('/api/admin/log-settings', {method:'PUT', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); } catch(e) {}
+}
+
+async function fetchLogs() {
+  const limit  = document.getElementById('limitSel').value;
+  const level  = document.getElementById('lvlSel').value;
+  const search = document.getElementById('searchBox').value.trim();
+  let url = `/api/admin/logs?limit=${limit}&module=${catFilter}&level=${level}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  try {
+    const r = await fetch(url, {credentials:'include'});
+    if (!r.ok) return;
+    const d = await r.json();
+    renderTable(d.logs || []);
+  } catch(e) {}
+}
+
+function renderTable(rows) {
+  const body = document.getElementById('logBody');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="4" style="padding:40px;text-align:center;color:var(--text3);">No log entries.</td></tr>';
+    document.getElementById('statusBar').textContent = '';
+    return;
+  }
+  body.innerHTML = rows.map(r => {
+    const lvl = r.level || 'INFO';
+    const rc  = {WARNING:'rw-WARNING',ERROR:'rw-ERROR',CRITICAL:'rw-CRITICAL'}[lvl]||'';
+    return `<tr class="${rc}">
+      <td style="font-family:'Inter',monospace;font-size:10.5px;color:var(--text3);white-space:nowrap;">${esc(r.timestamp||'')}</td>
+      <td style="white-space:nowrap;"><span class="lv lv-${lvl}">${lvl}</span></td>
+      <td style="font-size:10.5px;font-weight:600;color:var(--accent);white-space:nowrap;">${esc(r.module||'')}</td>
+      <td class="logmsg">${esc(r.message||'')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('statusBar').textContent = rows.length + ' entries';
+  if (document.getElementById('autoScroll').checked) {
+    const w = document.getElementById('logWrap');
+    w.scrollTop = w.scrollHeight;
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function scheduleLive() {
+  if (liveTimer) clearTimeout(liveTimer);
+  if (!liveMode) return;
+  liveTimer = setTimeout(async () => { await fetchLogs(); scheduleLive(); }, 2000);
+}
+
+function toggleLive() {
+  liveMode = !liveMode;
+  const btn = document.getElementById('liveBtn');
+  const lbl = document.getElementById('liveLabel');
+  if (liveMode) {
+    btn.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:7px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);color:var(--green);cursor:pointer;';
+    document.getElementById('liveDot').innerHTML = '<span style="position:absolute;inset:0;border-radius:50%;background:var(--green);opacity:0.5;animation:ping 1.2s ease-in-out infinite;"></span><span style="position:relative;width:7px;height:7px;border-radius:50%;background:var(--green);display:block;"></span>';
+    lbl.textContent = 'Live';
+    scheduleLive();
+  } else {
+    btn.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:7px;background:var(--surface2);border:1px solid var(--border);color:var(--text3);cursor:pointer;';
+    document.getElementById('liveDot').innerHTML = '<span style="position:relative;width:7px;height:7px;border-radius:50%;background:var(--text3);display:block;"></span>';
+    lbl.textContent = 'Paused';
+    if (liveTimer) clearTimeout(liveTimer);
+  }
+}
+
+function setCat(btn, cat) {
+  catFilter = cat;
+  document.querySelectorAll('.fbt').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  fetchLogs();
+}
+
+async function clearLogs() {
+  if (!confirm('Clear all buffered logs?')) return;
+  await fetch('/api/admin/logs', {method:'DELETE', credentials:'include'});
+  renderTable([]);
+}
+
+async function doLogout() { await fetch('/admin/logout'); window.location.href = '/admin/login'; }
+
+loadSettings();
+fetchLogs();
+scheduleLive();
+</script>
+<style>
+@keyframes ping{0%,100%{transform:scale(1);opacity:0.5;}50%{transform:scale(2.2);opacity:0;}}
+</style>
+</body>
+</html>

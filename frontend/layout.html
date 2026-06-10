@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Univa Gateway</title>
+    <link href="assets/css/tailwind.css" rel="stylesheet">
+    <script src="assets/js/fontawesome.js"></script>
+    <link href="assets/css/fonts.css" rel="stylesheet">
+    <script src="assets/js/plotly.min.js"></script>
+    <link rel="icon" href="assets/images/favicon.png">
+
+    <style>
+        /* Your existing styles from the working version */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F1F5F9;
+            color: #1E293B;
+        }
+
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #2563EB;
+        }
+
+        .toggle-checkbox:checked+.toggle-label {
+            background-color: #2563EB;
+        }
+
+        .radio-checkbox:checked {
+            background-color: #2563EB;
+            border-color: #2563EB;
+        }
+
+        /* Layout Container */
+        .layout-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 240px;
+            background: white;
+            border-right: 1px solid #E2E8F0;
+            height: 100vh;
+            overflow-y: auto;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-logo {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #E2E8F0;
+            background: white;
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 18px;
+            color: #2563EB;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748B;
+            padding: 0 20px 8px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 8px 20px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            gap: 12px;
+        }
+
+        .nav-link:hover {
+            background: #F8FAFC;
+            color: #2563EB;
+        }
+
+        .nav-link.active {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-left-color: #2563EB;
+            font-weight: 600;
+        }
+
+        .nav-link i {
+            width: 20px;
+            margin-right: 0;
+            font-size: 14px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-link-count {
+            margin-left: auto;
+            background: #E2E8F0;
+            color: #475569;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #E2E8F0;
+            background: white;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .user-info h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1E293B;
+            margin-bottom: 2px;
+        }
+
+        .user-info p {
+            font-size: 12px;
+            color: #64748B;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .content-wrapper {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* Mobile Responsive */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #64748B;
+            font-size: 20px;
+            cursor: pointer;
+            margin-right: 12px;
+        }
+
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 45;
+        }
+
+        @media (max-width: 1024px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .sidebar {
+                position: fixed;
+                left: -260px;
+                transition: left 0.3s ease;
+                box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            }
+
+            .sidebar.active {
+                left: 0;
+            }
+
+            .mobile-overlay.active {
+                display: block;
+            }
+        }
+
+        /* Loading Indicator */
+        .loading-indicator {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-indicator.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #E2E8F0;
+            border-top-color: #2563EB;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ── Viewer Mode: invisible blocker only, no visual fade ───── */
+        #viewerOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 8000;
+            pointer-events: none;
+        }
+
+        #viewerOverlay.show {
+            display: block;
+        }
+
+        /* Transparent blocker over main content only (sidebar unaffected) */
+        #viewerFrost {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 240px;
+            right: 0;
+            background: transparent;
+            z-index: 8001;
+            pointer-events: all;
+            cursor: default;
+        }
+
+        @media (max-width: 1024px) {
+            #viewerFrost {
+                left: 0;
+            }
+        }
+
+        /* ── Viewer info banner (top-right corner badge, not fullscreen) */
+        #viewerBanner {
+            display: none;
+            position: fixed;
+            top: 72px;
+            right: 20px;
+            z-index: 9100;
+            animation: vbSlideIn 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+        }
+
+        #viewerBanner.show {
+            display: block;
+        }
+
+        @keyframes vbSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        .vb-card {
+            background: white;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            padding: 20px 22px 18px;
+            width: 300px;
+        }
+
+        .vb-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .vb-icon-wrap {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: #FEF3C7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            flex-shrink: 0;
+        }
+
+        .vb-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1E293B;
+        }
+
+        .vb-subtitle {
+            font-size: 11px;
+            color: #F59E0B;
+            font-weight: 600;
+        }
+
+        .vb-editor-row {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .vb-editor-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 7px;
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .vb-editor-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1E293B;
+        }
+
+        .vb-editor-label {
+            font-size: 11px;
+            color: #64748B;
+        }
+
+        .vb-queue-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #64748B;
+            margin-bottom: 14px;
+        }
+
+        .vb-queue-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #F59E0B;
+            flex-shrink: 0;
+            animation: vbPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes vbPulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(0.8);
+            }
+        }
+
+        .vb-close {
+            width: 100%;
+            padding: 8px 0;
+            background: transparent;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 8px;
+            color: #64748B;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .vb-close:hover {
+            background: #F8FAFC;
+            border-color: #CBD5E1;
+            color: #1E293B;
+        }
+
+        /* ── Viewer mode pill in header ──────────────────────────── */
+        #viewerModePill {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            background: #FEF3C7;
+            border: 1px solid #FDE68A;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #92400E;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #viewerModePill.show {
+            display: flex;
+        }
+
+        #viewerModePill:hover {
+            background: #FDE68A;
+        }
+
+        /* ── Handover Modal (shown to next viewer when editor logs out) */
+        #handoverModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        #handoverModal.show {
+            display: flex;
+        }
+
+        .ho-card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.22);
+            padding: 44px 40px 36px;
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+            animation: hoPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes hoPopIn {
+            from {
+                opacity: 0;
+                transform: scale(0.88) translateY(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .ho-icon {
+            width: 76px;
+            height: 76px;
+            background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+            color: #059669;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            margin: 0 auto 22px;
+            box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.1);
+        }
+
+        .ho-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 10px;
+        }
+
+        .ho-desc {
+            font-size: 14px;
+            color: #4B5563;
+            line-height: 1.7;
+            margin-bottom: 10px;
+        }
+
+        .ho-prev-user {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: #F3F4F6;
+            border-radius: 8px;
+            padding: 7px 14px;
+            margin-bottom: 28px;
+            font-size: 13px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .ho-prev-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 5px;
+            background: linear-gradient(135deg, #6B7280, #4B5563);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .ho-btn {
+            background: linear-gradient(135deg, #2563EB, #1D4ED8);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 36px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .ho-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.45);
+        }
+
+        .ho-countdown {
+            font-size: 12px;
+            color: #9CA3AF;
+            margin-top: 16px;
+        }
+
+        /* ── Network Connection Overlay ───────────────────────────── */
+        #networkOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            align-items: center;
+            justify-content: center;
+            animation: netFadeIn 0.25s ease;
+        }
+
+        #networkOverlay.show {
+            display: flex;
+        }
+
+        @keyframes netFadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .net-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.28);
+            padding: 44px 40px 36px;
+            max-width: 380px;
+            width: 92%;
+            text-align: center;
+            animation: netSlideUp 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+        }
+
+        @keyframes netSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Animated radio-wave icon */
+        .net-icon-wrap {
+            position: relative;
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 24px;
+        }
+
+        .net-icon-bg {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: #FEF3C7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .net-icon-bg i {
+            font-size: 28px;
+            color: #D97706;
+        }
+
+        /* Pulse rings */
+        .net-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2px solid #F59E0B;
+            opacity: 0;
+            animation: netRing 2s ease-out infinite;
+        }
+
+        .net-ring:nth-child(1) {
+            width: 72px;
+            height: 72px;
+            animation-delay: 0s;
+        }
+
+        .net-ring:nth-child(2) {
+            width: 100px;
+            height: 100px;
+            animation-delay: 0.5s;
+        }
+
+        .net-ring:nth-child(3) {
+            width: 128px;
+            height: 128px;
+            animation-delay: 1s;
+        }
+
+        @keyframes netRing {
+            0% {
+                opacity: 0.6;
+                transform: translate(-50%, -50%) scale(0.85);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(1.15);
+            }
+        }
+
+        /* Connected state – turns green */
+        #networkOverlay.connected .net-icon-bg {
+            background: #D1FAE5;
+        }
+
+        #networkOverlay.connected .net-icon-bg i {
+            color: #059669;
+        }
+
+        #networkOverlay.connected .net-ring {
+            border-color: #10B981;
+            animation: none;
+            opacity: 0;
+        }
+
+        .net-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1E293B;
+            margin-bottom: 8px;
+        }
+
+        .net-desc {
+            font-size: 13px;
+            color: #64748B;
+            line-height: 1.65;
+            margin-bottom: 28px;
+        }
+
+        /* Dot-dot-dot spinner for status line */
+        .net-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #94A3B8;
+            margin: 0 2px;
+            animation: netDot 1.4s ease-in-out infinite;
+        }
+
+        .net-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .net-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes netDot {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0.7);
+                opacity: 0.4;
+            }
+
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Progress bar */
+        .net-progress-track {
+            height: 4px;
+            background: #E2E8F0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .net-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #F59E0B, #FBBF24);
+            border-radius: 4px;
+            transition: width 0.4s ease, background 0.4s ease;
+        }
+
+        #networkOverlay.connected .net-progress-bar {
+            width: 100% !important;
+            background: linear-gradient(90deg, #10B981, #34D399);
+        }
+
+        /* Attempt counter */
+        .net-attempt {
+            font-size: 11px;
+            color: #94A3B8;
+            margin-top: 8px;
+            letter-spacing: 0.3px;
+        }
+
+        /* ── Top status bar (shown instead of overlay after 1st reconnect) */
+        #netStatusBar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 99998;
+            background: #F59E0B;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            padding: 8px 16px;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+            letter-spacing: 0.2px;
+            animation: barSlideDown 0.25s ease;
+        }
+
+        #netStatusBar.show {
+            display: flex;
+        }
+
+        #netStatusBar.restored {
+            background: #10B981;
+            animation: barRestored 2s ease forwards;
+        }
+
+        @keyframes barSlideDown {
+            from {
+                transform: translateY(-100%);
+            }
+
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes barRestored {
+            0% {
+                opacity: 1;
+            }
+
+            70% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ── Network Disconnected / Reconnecting Overlay ───────────── -->
+    <div id="networkOverlay">
+        <div class="net-card">
+            <!-- Animated icon -->
+            <div class="net-icon-wrap">
+                <div class="net-ring"></div>
+                <div class="net-ring"></div>
+                <div class="net-ring"></div>
+                <div class="net-icon-bg">
+                    <i class="fa-solid fa-wifi" id="netIcon"></i>
+                </div>
+            </div>
+
+            <div class="net-title" id="netTitle">Reconnecting…</div>
+            <div class="net-desc" id="netDesc">
+                Connection to the gateway was lost.<br>
+                Your session is safe — reconnecting now.
+            </div>
+
+            <!-- Progress bar -->
+            <div class="net-progress-track">
+                <div class="net-progress-bar" id="netProgressBar"></div>
+            </div>
+
+            <!-- Animated dots status -->
+            <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:6px;">
+                <div class="net-dots">
+                    <span></span><span></span><span></span>
+                </div>
+                <span id="netStatus" style="font-size:12px; color:#64748B; font-weight:500;">Waiting for gateway</span>
+            </div>
+
+            <div class="net-attempt" id="netAttempt"></div>
+        </div>
+    </div>
+
+    <!-- ── Thin status bar (shown briefly after connection restored) -->
+    <div id="netStatusBar">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>Connection restored — you're back online.</span>
+    </div>
+
+    <!-- ── Viewer Frost Overlay (blocks clicks in content area) ──── -->
+    <div id="viewerOverlay">
+        <div id="viewerFrost"></div>
+    </div>
+
+    <!-- ── Viewer Info Banner (corner card, dismissible) ─────────── -->
+    <div id="viewerBanner">
+        <div class="vb-card">
+            <div class="vb-header">
+                <div class="vb-icon-wrap">👁</div>
+                <div>
+                    <div class="vb-title">View-Only Mode</div>
+                    <div class="vb-subtitle">WAITING IN QUEUE</div>
+                </div>
+            </div>
+            <div class="vb-editor-row">
+                <div class="vb-editor-avatar" id="vbEditorAvatar">?</div>
+                <div>
+                    <div class="vb-editor-name" id="vbEditorName">—</div>
+                    <div class="vb-editor-label">Currently editing</div>
+                </div>
+            </div>
+            <div class="vb-queue-row">
+                <div class="vb-queue-dot"></div>
+                <span id="vbQueueText">You will get access when they log out.</span>
+            </div>
+            <button class="vb-close" onclick="document.getElementById('viewerBanner').classList.remove('show')">
+                <i class="fa-solid fa-eye"></i> Got it — I'll watch
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Viewer mode pill in header ────────────────────────────── -->
+    <!-- injected into header by JS -->
+
+    <!-- ── Handover Modal (shown to next viewer when editor logs out) -->
+    <div id="handoverModal">
+        <div class="ho-card">
+            <div class="ho-icon"><i class="fa-solid fa-pen-to-square"></i></div>
+            <div class="ho-title">Your Turn to Edit!</div>
+            <div class="ho-desc">The previous editor has logged out.<br>You are now the active editor.</div>
+            <div class="ho-prev-user" id="hoPrevUser" style="display:none;">
+                <div class="ho-prev-avatar" id="hoPrevAvatar">?</div>
+                <span id="hoPrevName">—</span>
+                <span style="color:#9CA3AF;">has left</span>
+            </div>
+            <button class="ho-btn" onclick="window.location.reload()">
+                <i class="fa-solid fa-rotate"></i> Start Editing
+            </button>
+            <div class="ho-countdown" id="hoCountdown">Auto-refreshing in <span id="hoCountSec">10</span>s…</div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <!-- Layout Container -->
+    <div class="layout-container">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <img src="assets/images/logo.png" alt="Innospace" style="height:36px; width:auto; object-fit:contain;">
+            </div>
+            <nav class="sidebar-nav" id="sidebarNav">
+                <!-- Configuration Section -->
+                <div class="nav-section">
+                    <div class="section-title">Configuration</div>
+                    <a href="#" data-page="general-configuration" class="nav-link active">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>General Configuration</span>
+                    </a>
+                    <a href="#" data-page="device-management" class="nav-link">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Device Management</span>
+                    </a>
+                    <a href="#" data-page="port-config" class="nav-link">
+                        <i class="fa-solid fa-plug"></i>
+                        <span>Port Configuration</span>
+                    </a>
+                </div>
+
+                <!-- Protocols & Integrations Section -->
+                <div class="nav-section">
+                    <div class="section-title">Protocols & Integrations</div>
+                    <a href="#" data-page="field-integration" class="nav-link">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Field Integration</span>
+                    </a>
+                    <a href="#" data-page="mqtt-cloud" class="nav-link">
+                        <i class="fa-solid fa-cloud"></i>
+                        <span>Cloud Integration</span>
+                    </a>
+                </div>
+
+                <!-- OTA Firmware Management Section -->
+                <div class="nav-section">
+                    <div class="section-title">OTA Firmware Management</div>
+                    <a href="#" data-page="ota-gateway" class="nav-link">
+                        <i class="fa-solid fa-server"></i>
+                        <span>Gateway OTA & Recovery</span>
+                    </a>
+                </div>
+
+                <!-- CraneIQ Suite Section -->
+                <div class="nav-section">
+                    <div class="section-title">CraneIQ Suite</div>
+                    <a href="#" data-page="craneiq" class="nav-link">
+                        <i class="fa-solid fa-weight-hanging"></i>
+                        <span>CraneIQ</span>
+                        <span class="nav-link-count"></span>
+                    </a>
+                </div>
+
+                <!-- Data & Diagnostics Section -->
+                <div class="nav-section">
+                    <div class="section-title">Data & Diagnostics</div>
+                    <a href="#" data-page="data-retention" class="nav-link">
+                        <i class="fa-solid fa-database"></i>
+                        <span>Data Retention</span>
+                    </a>
+                    <a href="#" data-page="logging" class="nav-link">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span>Logging</span>
+                    </a>
+                    <a href="#" data-page="diagnostics" class="nav-link">
+                        <i class="fa-solid fa-bug"></i>
+                        <span>Diagnostics & Live Terminal</span>
+                    </a>
+                </div>
+
+                <!-- Security & Access Section -->
+                <div class="nav-section">
+                    <div class="section-title">Security & Access</div>
+                    <a href="#" data-page="security" class="nav-link">
+                        <i class="fa-solid fa-lock"></i>
+                        <span>Security & Access Control</span>
+                    </a>
+                    <a href="#" data-page="license" class="nav-link">
+                        <i class="fa-solid fa-key"></i>
+                        <span>Licensing & Subscriptions</span>
+                    </a>
+                </div>
+
+                <!-- Automation Section -->
+                <div class="nav-section">
+                    <div class="section-title">Automation</div>
+                    <a href="#" data-page="automation" class="nav-link">
+                        <i class="fa-solid fa-clock"></i>
+                        <span>Scheduler / Automation Jobs</span>
+                    </a>
+                    <a href="#" data-page="alerts" class="nav-link">
+                        <i class="fa-solid fa-bell"></i>
+                        <span>Alerts & Event Classes</span>
+                    </a>
+                    <a href="#" data-page="rules" class="nav-link">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Rule Engine</span>
+                    </a>
+                </div>
+
+                <!-- System Section -->
+                <div class="nav-section">
+                    <div class="section-title">System</div>
+                    <a href="#" data-page="backup" class="nav-link">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Backup & Restore</span>
+                    </a>
+                    <a href="#" data-page="notification" class="nav-link">
+                        <i class="fa-solid fa-message"></i>
+                        <span>Notification</span>
+                    </a>
+                </div>
+            </nav>
+
+            <!-- Footer / User Profile -->
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <div class="user-info">
+                        <h4 id="sidebarUsername">User</h4>
+                        <p id="sidebarUserRole">system user</p>
+                    </div>
+                    <button onclick="handleLogout()" title="Logout"
+                        style="margin-left:auto; width:32px; height:32px; border-radius:8px; border:1.5px solid #E2E8F0; background:transparent; color:#94A3B8; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; transition:all 0.2s;"
+                        onmouseover="this.style.background='#FEF2F2';this.style.borderColor='#FCA5A5';this.style.color='#EF4444';"
+                        onmouseout="this.style.background='transparent';this.style.borderColor='#E2E8F0';this.style.color='#94A3B8';">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="bg-white border-b border-border sticky top-0 z-30 shadow-sm">
+                <div class="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <button class="mobile-menu-btn" id="mobileMenuBtn">
+                            <i class="fa-solid fa-bars"></i>
+                        </button>
+                        <div class="flex items-center text-sm text-slate-500 h-6">
+                            <span><i class="fa-solid fa-plug mr-2"></i>Univa Gateway</span>
+                            <i class="fa-solid fa-chevron-right text-xs mx-2"></i>
+                            <span class="text-slate-900 font-medium" id="pageTitle">General Configuration</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div
+                            class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+                            <i class="fa-solid fa-server text-slate-400 text-sm"></i>
+                            <span id="header-gateway-name" class="text-sm font-medium text-slate-700">Loading...</span>
+                        </div>
+                        <div class="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+                        <!-- Viewer mode pill -->
+                        <div id="viewerModePill"
+                            onclick="document.getElementById('viewerBanner').classList.toggle('show')"
+                            title="View-Only Mode — click for details">
+                            <i class="fa-solid fa-eye" style="font-size:11px;"></i>
+                            <span>View Only</span>
+                        </div>
+                        <button
+                            class="text-slate-500 hover:text-slate-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                            <i class="fa-solid fa-circle-question mr-2"></i> Help
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dynamic Content Area -->
+            <div class="content-wrapper" id="contentArea">
+                <div id="pageContent">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div class="mb-8">
+                            <h1 class="text-2xl font-bold text-slate-800 mb-2">General Configuration</h1>
+                            <p class="text-slate-600">Loading gateway configuration...</p>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                            <div class="animate-pulse">
+                                <div class="h-4 bg-slate-200 rounded w-1/4 mb-4"></div>
+                                <div class="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+                                <div class="h-4 bg-slate-200 rounded w-2/3"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts - Using correct paths from your structure -->
+    <script src="pages/js/common.js"></script>
+    <script src="pages/js/general-config.js"></script>
+    <script src="pages/js/device-management.js"></script>
+    <script src="pages/js/modbus-mapping.js"></script>
+    <script src="pages/js/mqtt-cloud.js"></script>
+    <script src="pages/js/ota-gateway.js"></script>
+    <script src="pages/js/data-retention.js"></script>
+    <script src="pages/js/loggar.js"></script>
+    <script src="pages/js/security.js"></script>
+    <script src="pages/js/diagnostics.js"></script>
+    <script src="pages/js/license.js"></script>
+    <script src="pages/js/mqtt-form-logic.js"></script>
+    <script src="pages/js/ftp-form-logic.js"></script>
+    <script src="pages/js/automation.js"></script>
+    <script src="pages/js/craneiq.js"></script>
+    <script src="pages/js/backup.js"></script>
+    <script src="pages/js/notification.js"></script>
+    <script src="pages/js/alerts.js"></script>
+    <script src="pages/js/rules.js"></script>
+    <script src="pages/js/router.js"></script>
+
+    <script>
+        // ── Cookie helper ────────────────────────────────────────────
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? match[2] : null;
+        }
+
+        // Display logged-in username in sidebar
+        const storedUser = getCookie('gw_user');
+        if (storedUser) {
+            const el = document.getElementById('sidebarUsername');
+            if (el) el.textContent = storedUser.charAt(0).toUpperCase() + storedUser.slice(1);
+        }
+
+        // ── Logout handler ───────────────────────────────────────────
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } catch (e) { }
+            document.cookie = 'gw_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'gw_webui_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            window.location.replace('/');
+        }
+        window.handleLogout = handleLogout;
+
+        // ── Gateway name in header ───────────────────────────────────
+        (function () {
+            function updateHeaderGatewayName() {
+                fetch('/api/general-configuration', { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (cfg) {
+                        if (!cfg) return;
+                        var name = (cfg.gateway_identity && cfg.gateway_identity.name) ? cfg.gateway_identity.name : '';
+                        if (!name) return;
+                        var el = document.getElementById('header-gateway-name');
+                        if (el) el.textContent = name;
+                    })
+                    .catch(function () { });
+            }
+            updateHeaderGatewayName();
+            setInterval(updateHeaderGatewayName, 30000);
+            window.addEventListener('gateway-config-saved', updateHeaderGatewayName);
+        })();
+
+        // ════════════════════════════════════════════════════════════
+        //  EDITOR LOCK  –  Single-editor, viewer queue
+        //
+        //  Logic:
+        //  • Poll /api/auth/editor-lock every 3 s
+        //  • If is_editor=true  → normal editing mode
+        //  • If is_editor=false → viewer mode: frost overlay + corner banner
+        //  • When editor logs out (is_editor becomes true for this session)
+        //    → show handover modal with 10-s auto-reload countdown
+        //  • Sidebar navigation always works; only the main content area is blocked
+        // ════════════════════════════════════════════════════════════
+        (function () {
+            const POLL_MS = 3000;
+
+            const frost = document.getElementById('viewerOverlay');
+            const banner = document.getElementById('viewerBanner');
+            const pill = document.getElementById('viewerModePill');
+            const handover = document.getElementById('handoverModal');
+            const vbEditorName = document.getElementById('vbEditorName');
+            const vbEditorAv = document.getElementById('vbEditorAvatar');
+            const vbQueueText = document.getElementById('vbQueueText');
+            const hoPrevUser = document.getElementById('hoPrevUser');
+            const hoPrevName = document.getElementById('hoPrevName');
+            const hoPrevAv = document.getElementById('hoPrevAvatar');
+            const hoCountSec = document.getElementById('hoCountSec');
+
+            let wasViewer = null;    // null=unknown, true=viewer, false=editor
+            let lastEditorUser = '';
+            let countdownTimer = null;
+            let pollTimer = null;
+            let handoverShown = false;
+
+            function initials(name) {
+                return (name || '?').charAt(0).toUpperCase();
+            }
+
+            function enterViewerMode(editorUsername, queuePos, viewerCount) {
+                // Show frost + pill
+                frost.classList.add('show');
+                pill.classList.add('show');
+
+                // Update banner editor info
+                vbEditorName.textContent = editorUsername || 'Unknown';
+                vbEditorAv.textContent = initials(editorUsername);
+
+                // Queue message
+                if (viewerCount <= 1) {
+                    vbQueueText.textContent = 'You will get edit access when they log out.';
+                } else {
+                    vbQueueText.textContent = 'You are #' + (queuePos + 1) + ' in queue (' + viewerCount + ' waiting).';
+                }
+
+                // Show banner on first entry only (don't re-show if dismissed)
+                if (wasViewer === null || wasViewer === false) {
+                    banner.classList.add('show');
+                }
+
+                lastEditorUser = editorUsername;
+                wasViewer = true;
+            }
+
+            function enterEditorMode() {
+                // Remove frost + pill
+                frost.classList.remove('show');
+                pill.classList.remove('show');
+                banner.classList.remove('show');
+                wasViewer = false;
+            }
+
+            function showHandoverModal(prevEditor) {
+                if (handoverShown) return;
+                handoverShown = true;
+
+                // Fill in who left
+                if (prevEditor) {
+                    hoPrevName.textContent = prevEditor;
+                    hoPrevAv.textContent = initials(prevEditor);
+                    hoPrevUser.style.display = 'inline-flex';
+                }
+
+                handover.classList.add('show');
+
+                // Countdown + auto reload
+                let secs = 10;
+                hoCountSec.textContent = secs;
+                clearInterval(countdownTimer);
+                countdownTimer = setInterval(() => {
+                    secs--;
+                    hoCountSec.textContent = secs;
+                    if (secs <= 0) {
+                        clearInterval(countdownTimer);
+                        window.location.reload();
+                    }
+                }, 1000);
+            }
+
+            async function pollLock() {
+                try {
+                    const res = await fetch('/api/auth/editor-lock', {
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(4000)
+                    });
+
+                    if (res.status === 401) return; // handled by network monitor
+
+                    const data = await res.json();
+
+                    if (!data.authenticated) return;
+
+                    if (data.is_editor) {
+                        // We are now the editor
+                        if (wasViewer === true && !handoverShown) {
+                            // Just got promoted — show handover modal
+                            showHandoverModal(lastEditorUser);
+                        } else if (wasViewer === null) {
+                            // First check, already editor
+                            enterEditorMode();
+                        }
+                        // If handover shown don't change state until reload
+                    } else {
+                        // We are a viewer
+                        enterViewerMode(data.editor_username, data.viewer_position, data.viewer_count);
+                    }
+
+                } catch (e) {
+                    // Network error handled by separate monitor — ignore here
+                }
+
+                if (!handoverShown) {
+                    pollTimer = setTimeout(pollLock, POLL_MS);
+                }
+            }
+
+            // Kick off immediately
+            pollLock();
+        })();
+        if (typeof Router !== 'undefined') {
+            const router = new Router();
+            window.router = router;
+        }
+
+        // ── Mobile menu ──────────────────────────────────────────────
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('active');
+                mobileOverlay.classList.toggle('active');
+            });
+        }
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('active');
+                mobileOverlay.classList.remove('active');
+            });
+        }
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1024) {
+                sidebar.classList.remove('active');
+                mobileOverlay.classList.remove('active');
+            }
+        });
+
+        // ── Page visibility by role ──────────────────────────────────
+        (async function applyPageVisibility() {
+            try {
+                const res = await fetch('/api/auth/status', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                window.__userRole = (data.role || data.user_role || 'user').toLowerCase();
+                const roleLabel = document.getElementById('sidebarUserRole');
+                if (roleLabel) {
+                    roleLabel.textContent = window.__userRole === 'admin' ? 'administrator' : 'system user';
+                }
+                const hidden = data.hidden_pages || [];
+                hidden.forEach(pageKey => {
+                    document.querySelectorAll('[data-page="' + pageKey + '"]').forEach(el => {
+                        (el.closest('li') || el).style.display = 'none';
+                    });
+                });
+            } catch (e) { }
+        })();
+
+        // ════════════════════════════════════════════════════════════
+        //  NETWORK MONITOR
+        //  – Polls /api/auth/status every 4 s (lightweight endpoint)
+        //  – On failure: shows the reconnecting overlay immediately
+        //  – Uses exponential back-off: 2s → 4s → 8s → max 30s
+        //  – Session cookie survives across network changes (mDNS),
+        //    so we never log the user out; we just wait and retry.
+        //  – On 401: the session itself expired → redirect to login
+        // ════════════════════════════════════════════════════════════
+        (function () {
+            const overlay = document.getElementById('networkOverlay');
+            const statusBar = document.getElementById('netStatusBar');
+            const netTitle = document.getElementById('netTitle');
+            const netDesc = document.getElementById('netDesc');
+            const netStatus = document.getElementById('netStatus');
+            const netAttempt = document.getElementById('netAttempt');
+            const netBar = document.getElementById('netProgressBar');
+            const netIcon = document.getElementById('netIcon');
+
+            // Timing config
+            const POLL_INTERVAL_MS = 4000;   // how often to check when connected
+            const BASE_RETRY_MS = 2000;   // first retry wait
+            const MAX_RETRY_MS = 30000;  // max retry wait
+            const RESTORE_SHOW_MS = 2200;   // how long to show "restored" bar
+
+            let isConnected = true;
+            let attempt = 0;
+            let retryTimer = null;
+            let pollTimer = null;
+            let hasDisconnected = false;  // did we ever show the overlay?
+
+            // ── Helpers ──────────────────────────────────────────────
+            function retryDelay(n) {
+                return Math.min(BASE_RETRY_MS * Math.pow(1.6, n), MAX_RETRY_MS);
+            }
+
+            function setProgress(pct) {
+                netBar.style.width = pct + '%';
+            }
+
+            function updateOverlay(phase) {
+                // phase: 'connecting' | 'waiting' | 'connected'
+                if (phase === 'connecting') {
+                    netTitle.textContent = 'Reconnecting…';
+                    netDesc.innerHTML = 'Connection to the gateway was lost.<br>Your session is safe — reconnecting now.';
+                    netStatus.textContent = 'Contacting gateway';
+                    netIcon.className = 'fa-solid fa-wifi';
+                    overlay.classList.remove('connected');
+                    setProgress(Math.min(20 + attempt * 12, 80));
+                } else if (phase === 'waiting') {
+                    const secs = Math.round(retryDelay(attempt) / 1000);
+                    netStatus.textContent = 'Retrying in ' + secs + 's…';
+                    netAttempt.textContent = 'Attempt ' + attempt + ' — network change detected';
+                } else if (phase === 'connected') {
+                    netTitle.textContent = 'Connection Restored';
+                    netDesc.innerHTML = 'Gateway is back online.<br>Resuming your session…';
+                    netStatus.textContent = 'Connected';
+                    netIcon.className = 'fa-solid fa-circle-check';
+                    netAttempt.textContent = '';
+                    overlay.classList.add('connected');
+                    setProgress(100);
+                }
+            }
+
+            function showOverlay() {
+                overlay.classList.add('show');
+                statusBar.classList.remove('show', 'restored');
+            }
+
+            function hideOverlay() {
+                overlay.classList.remove('show');
+                overlay.classList.remove('connected');
+                setProgress(0);
+            }
+
+            function showRestoredBar() {
+                statusBar.classList.remove('restored');
+                statusBar.classList.add('show');
+                // Trigger reflow so animation restarts cleanly
+                void statusBar.offsetWidth;
+                statusBar.classList.add('restored');
+                setTimeout(() => {
+                    statusBar.classList.remove('show', 'restored');
+                }, RESTORE_SHOW_MS);
+            }
+
+            // ── Core check ───────────────────────────────────────────
+            async function checkConnection() {
+                try {
+                    const res = await fetch('/api/auth/status', {
+                        credentials: 'same-origin',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(5000)
+                    });
+
+                    if (res.status === 401) {
+                        // Parse the reason so we can show the right message
+                        let reason = 'session_expired';
+                        try { const j = await res.json(); reason = j.reason || reason; } catch (e) { }
+
+                        // Show a clear message before redirecting
+                        if (overlay) {
+                            netTitle.textContent = reason === 'idle_timeout' ? 'Session Timed Out' : 'Session Expired';
+                            netDesc.innerHTML = reason === 'idle_timeout'
+                                ? 'You were logged out due to inactivity.<br>Redirecting to login…'
+                                : 'Your session has expired.<br>Redirecting to login…';
+                            netStatus.textContent = 'Logging out…';
+                            netIcon.className = 'fa-solid fa-clock';
+                            overlay.classList.remove('connected');
+                            overlay.classList.add('show');
+                            setProgress(100);
+                        }
+                        setTimeout(() => {
+                            window.location.replace('/?expired=1&reason=' + reason);
+                        }, 1800);
+                        return;
+                    }
+
+                    // Any 2xx/3xx means server is reachable
+                    onConnected();
+
+                } catch (err) {
+                    onDisconnected();
+                }
+            }
+
+            function onConnected() {
+                if (!isConnected) {
+                    // We just came back online
+                    isConnected = true;
+                    attempt = 0;
+                    updateOverlay('connected');
+
+                    // Show "connected" state briefly, then hide overlay
+                    setTimeout(() => {
+                        hideOverlay();
+                        if (hasDisconnected) {
+                            showRestoredBar();
+                        }
+                    }, 1200);
+                }
+                // Schedule next routine poll
+                schedulePoll();
+            }
+
+            function onDisconnected() {
+                attempt++;
+                hasDisconnected = true;
+
+                if (isConnected) {
+                    // First failure — show overlay immediately
+                    isConnected = false;
+                    showOverlay();
+                }
+
+                updateOverlay('connecting');
+
+                // Show "waiting N seconds" after a brief pause
+                const delay = retryDelay(attempt);
+                let elapsed = 0;
+                const tickMs = 400;
+                const ticker = setInterval(() => {
+                    elapsed += tickMs;
+                    const remaining = Math.max(0, Math.round((delay - elapsed) / 1000));
+                    netStatus.textContent = remaining > 0
+                        ? 'Retrying in ' + remaining + 's\u2026'
+                        : 'Contacting gateway\u2026';
+                    netAttempt.textContent = 'Attempt ' + attempt;
+                    setProgress(Math.min(20 + attempt * 10, 75));
+
+                    if (elapsed >= delay) {
+                        clearInterval(ticker);
+                    }
+                }, tickMs);
+
+                retryTimer = setTimeout(() => {
+                    clearInterval(ticker);
+                    updateOverlay('connecting');
+                    checkConnection();
+                }, delay);
+            }
+
+            function schedulePoll() {
+                clearTimeout(retryTimer);
+                clearTimeout(pollTimer);
+                pollTimer = setTimeout(checkConnection, POLL_INTERVAL_MS);
+            }
+
+            // ── browser online / offline events (instant response) ───
+            window.addEventListener('offline', () => {
+                clearTimeout(pollTimer);
+                clearTimeout(retryTimer);
+                if (isConnected) {
+                    isConnected = false;
+                    hasDisconnected = true;
+                    attempt = 0;
+                    showOverlay();
+                    updateOverlay('connecting');
+                    // Still try to reach server even if browser says offline
+                    // (useful for mDNS / local network where browser event is unreliable)
+                    retryTimer = setTimeout(checkConnection, BASE_RETRY_MS);
+                }
+            });
+
+            window.addEventListener('online', () => {
+                // Browser thinks we're back — probe immediately
+                clearTimeout(retryTimer);
+                clearTimeout(pollTimer);
+                netStatus.textContent = 'Network detected, checking gateway…';
+                attempt = Math.max(attempt - 1, 0);
+                retryTimer = setTimeout(checkConnection, 600);
+            });
+
+            // ── Start polling ────────────────────────────────────────
+            schedulePoll();
+
+        })();
+    </script>
+</body>
+
+</html>
